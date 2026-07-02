@@ -64,6 +64,26 @@ export default function ZlegendsBot() {
   if (!audioRef.current) audioRef.current = createAudio(loadSetting("trackIdx", 0), volume / 100);
   const audio = audioRef.current;
 
+  /* engine search runs in a worker so it never blocks the audio scheduler or UI */
+  const workerRef = useRef(null);
+  const pendingSearchesRef = useRef(new Map());
+  const searchIdRef = useRef(0);
+  if (!workerRef.current) {
+    workerRef.current = new Worker(new URL("./engine/engineWorker.js", import.meta.url), { type: "module" });
+    workerRef.current.onmessage = (e) => {
+      const { id, result } = e.data;
+      const resolve = pendingSearchesRef.current.get(id);
+      if (resolve) { pendingSearchesRef.current.delete(id); resolve(result); }
+    };
+  }
+  const runSearch = useCallback((searchMoveList, timeMs, blunderChance = 0) => {
+    const id = ++searchIdRef.current;
+    return new Promise((resolve) => {
+      pendingSearchesRef.current.set(id, resolve);
+      workerRef.current.postMessage({ id, moveList: searchMoveList, timeMs, blunderChance });
+    });
+  }, []);
+
   const [, force] = useState(0);
   const rerender = () => force(n => n + 1);
   const [mode, setMode] = useState(initialShared ? "replay" : "play");
@@ -81,6 +101,8 @@ export default function ZlegendsBot() {
     return { from: mFrom(last), to: mTo(last) };
   });
   const [moveList, setMoveList] = useState(() => initialShared ? initialShared.moveList : []);
+  const moveListRef = useRef(moveList);
+  moveListRef.current = moveList;
   const [thinking, setThinking] = useState(false);
   const [info, setInfo] = useState(null);
   const [result, setResult] = useState(null);
@@ -96,6 +118,7 @@ export default function ZlegendsBot() {
   const [analyzing, setAnalyzing] = useState(false);
   const [bestArrow, setBestArrow] = useState(null);
   const [analysisBusy, setAnalysisBusy] = useState(false);
+  const [analysisExtra, setAnalysisExtra] = useState([]);
   const [posVersion, setPosVersion] = useState(0);
   const [shareToast, setShareToast] = useState(null);
   const [pgnToast, setPgnToast] = useState(null);
@@ -152,8 +175,9 @@ export default function ZlegendsBot() {
   const reviewing = mode === "play" && !!result && reviewIndex !== null;
   const reviewFirstRun = useRef(true);
   useEffect(() => {
-    if (!reviewing) { reviewFirstRun.current = true; setAnalyzing(false); setBestArrow(null); return; }
+    if (!reviewing) { reviewFirstRun.current = true; setAnalyzing(false); setBestArrow(null); setAnalysisExtra([]); return; }
     eng.reset();
+    setAnalysisExtra([]);
     const { applied, lastCaptured } = replayIntoEngine(eng, moveList.slice(0, reviewIndex));
     if (applied.length) {
       const last = applied[applied.length - 1];
@@ -176,30 +200,34 @@ export default function ZlegendsBot() {
   useEffect(() => {
     if (!reviewing || !analyzing) return;
     setAnalysisBusy(true);
-    const t = setTimeout(() => {
-      const res = eng.search(800);
+    let cancelled = false;
+    const fullLine = moveList.slice(0, reviewIndex).concat(analysisExtra);
+    runSearch(fullLine, 800).then((res) => {
+      if (cancelled) return;
       if (res && res.move) {
         setBestArrow({ from: mFrom(res.move), to: mTo(res.move) });
         const whiteScore = eng.getSide() === 1 ? -res.score : res.score;
-        setInfo({ depth: res.depth, score: whiteScore, nodes: res.nodes, time: res.time, pv: eng.pvLine(8) });
+        setInfo({ depth: res.depth, score: whiteScore, nodes: res.nodes, time: res.time, pv: res.pv });
       } else {
         setBestArrow(null);
       }
       setAnalysisBusy(false);
-    }, 20);
-    return () => clearTimeout(t);
-  }, [reviewing, analyzing, posVersion, eng]);
+    });
+    return () => { cancelled = true; };
+  }, [reviewing, analyzing, posVersion, moveList, reviewIndex, analysisExtra, eng, runSearch]);
 
   const isCaptureMove = m => eng.pieceAt(M120TO64[mTo(m)]) !== EMPTY || (mFlags(m) & 1);
 
   const analysisMove = useCallback((m) => {
     const cap = isCaptureMove(m);
+    const san = eng.sanOf(m);
     eng.make(m);
     try { cap ? audio.sfxCapture() : audio.sfxMove(); } catch { /* audio unavailable */ }
     setLastMove({ from: mFrom(m), to: mTo(m) });
     setSelected(-1); setTargets([]);
     setEvalCp(eng.evalWhite());
     setBestArrow(null);
+    setAnalysisExtra(prev => [...prev, san]);
     setPosVersion(v => v + 1);
     rerender();
   }, [eng, audio]);
@@ -210,29 +238,28 @@ export default function ZlegendsBot() {
     setSelected(-1); setTargets([]); setBestArrow(null);
   };
 
-  const engineMove = useCallback(() => {
+  const engineMove = useCallback((currentMoveList) => {
     setThinking(true);
-    setTimeout(() => {
-      const res = eng.search(difficultyRef.current.ms, difficultyRef.current.blunderChance || 0);
+    runSearch(currentMoveList, difficultyRef.current.ms, difficultyRef.current.blunderChance || 0).then((res) => {
       if (res && res.move) {
         const cap = isCaptureMove(res.move);
-        const san = eng.sanOf(res.move);
-        const pv = eng.pvLine(8);
         eng.make(res.move);
         try { cap ? audio.sfxCapture() : audio.sfxMove(); } catch { /* audio unavailable */ }
         setLastMove({ from: mFrom(res.move), to: mTo(res.move) });
-        setMoveList(l => [...l, san]);
+        const newMoveList = [...currentMoveList, res.san];
+        moveListRef.current = newMoveList;
+        setMoveList(newMoveList);
         const whiteScore = eng.getSide() === 1 ? -res.score : res.score;
         setEvalCp(whiteScore);
-        setInfo({ depth: res.depth, score: whiteScore, nodes: res.nodes, time: res.time, pv });
+        setInfo({ depth: res.depth, score: whiteScore, nodes: res.nodes, time: res.time, pv: res.pv });
         const over = checkGameOver();
         setResult(over);
         if (over) setReviewIndex(eng.plyCount());
       }
       setThinking(false);
       rerender();
-    }, 30);
-  }, [eng, audio, checkGameOver]);
+    });
+  }, [eng, audio, checkGameOver, runSearch]);
   const engineMoveRef = useRef(engineMove);
   engineMoveRef.current = engineMove;
 
@@ -242,14 +269,16 @@ export default function ZlegendsBot() {
     eng.make(m);
     try { cap ? audio.sfxCapture() : audio.sfxMove(); } catch { /* audio unavailable */ }
     setLastMove({ from: mFrom(m), to: mTo(m) });
-    setMoveList(l => [...l, san]);
+    const newMoveList = [...moveListRef.current, san];
+    moveListRef.current = newMoveList;
+    setMoveList(newMoveList);
     setSelected(-1); setTargets([]); setHintMove(null);
     setEvalCp(eng.evalWhite());
     const over = checkGameOver();
     setResult(over);
     if (over) setReviewIndex(eng.plyCount());
     rerender();
-    if (!over) engineMoveRef.current();
+    if (!over) engineMoveRef.current(newMoveList);
   }, [eng, audio, checkGameOver]);
 
   const onSquare = (i64) => {
@@ -281,11 +310,12 @@ export default function ZlegendsBot() {
       setReplayPlaying(false);
     }
     eng.reset();
+    moveListRef.current = [];
     setPlayerColor(color);
     setSelected(-1); setTargets([]); setLastMove(null); setHintMove(null);
     setMoveList([]); setInfo(null); setResult(null); setPromo(null); setEvalCp(0); setReviewIndex(null);
     rerender();
-    if (color === -1) setTimeout(() => engineMoveRef.current(), 60);
+    if (color === -1) setTimeout(() => engineMoveRef.current([]), 60);
   };
 
   const undo = () => {
@@ -293,21 +323,22 @@ export default function ZlegendsBot() {
     let n;
     if (eng.getSide() === playerColor && eng.plyCount() >= 2) n = 2; else n = 1;
     for (let i = 0; i < n; i++) eng.unmake();
-    setMoveList(l => l.slice(0, l.length - n));
+    const newMoveList = moveListRef.current.slice(0, moveListRef.current.length - n);
+    moveListRef.current = newMoveList;
+    setMoveList(newMoveList);
     setSelected(-1); setTargets([]); setLastMove(null); setResult(null); setPromo(null); setHintMove(null); setReviewIndex(null);
     setEvalCp(eng.evalWhite());
     rerender();
-    if (eng.getSide() !== playerColor) setTimeout(() => engineMoveRef.current(), 60);
+    if (eng.getSide() !== playerColor) setTimeout(() => engineMoveRef.current(newMoveList), 60);
   };
 
   const onHint = () => {
     if (mode === "replay" || thinking || hinting || result || promo || eng.getSide() !== playerColor) return;
     setHinting(true);
-    setTimeout(() => {
-      const res = eng.search(800);
+    runSearch(moveList, 800).then((res) => {
       if (res && res.move) setHintMove({ from: mFrom(res.move), to: mTo(res.move) });
       setHinting(false);
-    }, 20);
+    });
   };
 
   const onDifficultyChange = (idx) => {
