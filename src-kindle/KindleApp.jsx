@@ -48,16 +48,51 @@ const TIPS = [
   "Every game teaches you something new, win or lose. Have fun!",
 ];
 
-function BunnyIcon({ size = 46 }) {
+function AnimalIcon({ kind, size = 46 }) {
+  const isOwl = kind === "Owl";
+  const isLion = kind === "Lion";
   return (
-    <svg viewBox="0 0 48 48" width={size} height={size} className="kBunny">
-      <rect x="12" y="2" width="7" height="22" rx="3.5" fill="#fff" stroke="#000" strokeWidth="2" />
-      <rect x="29" y="2" width="7" height="22" rx="3.5" fill="#fff" stroke="#000" strokeWidth="2" />
+    <svg viewBox="0 0 48 48" width={size} height={size} className="kAnimal">
+      {isLion && (
+        <circle cx="24" cy="30" r="21" fill="none" stroke="#000" strokeWidth="2" strokeDasharray="4 3" />
+      )}
+      {kind === "Bunny" && (<>
+        <rect x="12" y="2" width="7" height="22" rx="3.5" fill="#fff" stroke="#000" strokeWidth="2" />
+        <rect x="29" y="2" width="7" height="22" rx="3.5" fill="#fff" stroke="#000" strokeWidth="2" />
+      </>)}
+      {kind === "Cat" && (<>
+        <path d="M10 16 L16 2 L22 16 Z" fill="#fff" stroke="#000" strokeWidth="2" strokeLinejoin="round" />
+        <path d="M26 16 L32 2 L38 16 Z" fill="#fff" stroke="#000" strokeWidth="2" strokeLinejoin="round" />
+      </>)}
+      {kind === "Dog" && (<>
+        <ellipse cx="9" cy="28" rx="7" ry="12" fill="#fff" stroke="#000" strokeWidth="2" />
+        <ellipse cx="39" cy="28" rx="7" ry="12" fill="#fff" stroke="#000" strokeWidth="2" />
+      </>)}
+      {kind === "Fox" && (<>
+        <path d="M9 18 L16 3 L21 18 Z" fill="#fff" stroke="#000" strokeWidth="2" strokeLinejoin="round" />
+        <path d="M27 18 L32 3 L39 18 Z" fill="#fff" stroke="#000" strokeWidth="2" strokeLinejoin="round" />
+      </>)}
+      {isOwl && (<>
+        <path d="M13 11 L18 3 L20 12 Z" fill="#fff" stroke="#000" strokeWidth="2" strokeLinejoin="round" />
+        <path d="M35 11 L30 3 L28 12 Z" fill="#fff" stroke="#000" strokeWidth="2" strokeLinejoin="round" />
+      </>)}
+      {isLion && (<>
+        <path d="M8 20 L14 8 L18 20 Z" fill="#fff" stroke="#000" strokeWidth="2" strokeLinejoin="round" />
+        <path d="M40 20 L34 8 L30 20 Z" fill="#fff" stroke="#000" strokeWidth="2" strokeLinejoin="round" />
+      </>)}
       <circle cx="24" cy="30" r="15" fill="#fff" stroke="#000" strokeWidth="2" />
-      <circle cx="19" cy="27" r="2" fill="#000" />
-      <circle cx="29" cy="27" r="2" fill="#000" />
-      <path d="M22 33 L26 33 L24 36 Z" fill="#000" />
-      <path d="M24 36 L24 39 M24 39 L20 41 M24 39 L28 41" stroke="#000" strokeWidth="1.5" fill="none" />
+      {isOwl ? (<>
+        <circle cx="17" cy="28" r="5" fill="#fff" stroke="#000" strokeWidth="2" />
+        <circle cx="31" cy="28" r="5" fill="#fff" stroke="#000" strokeWidth="2" />
+        <circle cx="17" cy="28" r="1.6" fill="#000" />
+        <circle cx="31" cy="28" r="1.6" fill="#000" />
+        <path d="M22 33 L26 33 L24 38 Z" fill="#000" />
+      </>) : (<>
+        <circle cx="19" cy="27" r="2" fill="#000" />
+        <circle cx="29" cy="27" r="2" fill="#000" />
+        <path d="M22 33 L26 33 L24 36 Z" fill="#000" />
+        <path d="M24 36 L24 39 M24 39 L20 41 M24 39 L28 41" stroke="#000" strokeWidth="1.5" fill="none" />
+      </>)}
     </svg>
   );
 }
@@ -168,7 +203,7 @@ export default function KindleApp() {
     return (
       <div className="kRoot">
         <div className="kHdr">
-          <BunnyIcon />
+          <AnimalIcon kind={DIFFICULTIES[difficultyIdx].label} />
           <h1>Kinnda Chess</h1>
         </div>
         <h2 className="kLessonTitle">How the Pieces Move</h2>
@@ -233,7 +268,7 @@ export default function KindleApp() {
   return (
     <div className="kRoot">
       <div className="kHdr">
-        <BunnyIcon />
+        <AnimalIcon kind={DIFFICULTIES[difficultyIdx].label} />
         <h1>Kinnda Chess</h1>
       </div>
       <div className="kStatus">{status}</div>

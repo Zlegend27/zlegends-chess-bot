@@ -41,7 +41,7 @@ body {
 }
 .kCtrls button:disabled { opacity: 0.5; }
 
-.kBunny { flex: none; }
+.kAnimal { flex: none; }
 
 .kLessonTitle { font-size: 20px; margin: 14px 0 8px; width: 380px; }
 .kLessons { width: 380px; display: flex; flex-direction: column; gap: 10px; }
