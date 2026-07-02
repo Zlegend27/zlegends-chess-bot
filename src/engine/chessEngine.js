@@ -1,5 +1,5 @@
 /* ================================================================
-   ZLEGEND'S BOT — chess engine
+   ZLEGEND'S CHESS BOT — chess engine
    10x12 mailbox, iterative deepening negamax + alpha-beta,
    quiescence, transposition table, killer/history ordering,
    tapered piece-square evaluation.
@@ -17,8 +17,8 @@ const B_OFF = [-11, -9, 9, 11];
 const R_OFF = [-10, -1, 1, 10];
 const K_OFF = [-11, -10, -9, -1, 1, 9, 10, 11];
 const VAL = [0, 100, 320, 330, 500, 900, 20000];
-const rankOf = s => ((s / 10) | 0) - 2;
-const fileOf = s => (s % 10) - 1;
+export const rankOf = s => ((s / 10) | 0) - 2;
+export const fileOf = s => (s % 10) - 1;
 
 function xorshift(seed) {
   let x = seed >>> 0;
@@ -381,13 +381,17 @@ export function createEngine() {
     return bestScore;
   }
 
-  function search(timeMs) {
+  function search(timeMs, blunderChance = 0) {
     nodes = 0; stopped = false; stopAt = Date.now() + timeMs;
     for (let i = 0; i < 64; i++) { killers[i][0] = 0; killers[i][1] = 0; }
     const t0 = Date.now();
     let best = 0, bestScore = 0, completedDepth = 0;
     const rootMoves = legalMoves();
     if (rootMoves.length === 0) return null;
+    if (blunderChance > 0 && Math.random() < blunderChance) {
+      const randomMove = rootMoves[(Math.random() * rootMoves.length) | 0];
+      return { move: randomMove, score: 0, depth: 0, nodes: 0, time: 0 };
+    }
     best = rootMoves[0];
     for (let depth = 1; depth <= 60; depth++) {
       let iterBest = 0, iterScore = -Infinity;

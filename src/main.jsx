@@ -13,7 +13,7 @@ class ErrorBoundary extends React.Component {
       return (
         <div className="errBox">
           <h1>Something went sideways</h1>
-          <p>Zlegend's Bot hit a snag. Reloading usually fixes it.</p>
+          <p>Zlegend's Chess Bot hit a snag. Reloading usually fixes it.</p>
           <button className="btn" onClick={() => window.location.reload()}>Reload</button>
         </div>
       );

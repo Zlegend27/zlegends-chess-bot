@@ -12,6 +12,18 @@ const TRACKS = [
     bass: [40, 40, 47, 40, 43, 43, 50, 43, 45, 45, 52, 45, 38, 38, 45, 43],
     arp:  [64, 67, 71, 76, 74, 71, 67, 64, 69, 72, 76, 79, 76, 74, 71, 67],
     pad:  [52, 55, 59] },
+  { name: "Check by Wire", bpm: 140, bassWave: "sawtooth", arpWave: "square",
+    bass: [47, 47, 54, 47, 50, 50, 57, 50, 45, 45, 52, 45, 49, 49, 56, 50],
+    arp:  [71, 74, 78, 83, 81, 78, 74, 71, 69, 74, 78, 86, 85, 81, 78, 73],
+    pad:  [59, 62, 66] },
+  { name: "Sicilian Sunrise", bpm: 116, bassWave: "triangle", arpWave: "triangle",
+    bass: [43, 43, 50, 43, 47, 47, 54, 47, 45, 45, 52, 45, 48, 48, 55, 50],
+    arp:  [67, 71, 74, 79, 76, 74, 71, 67, 69, 74, 78, 86, 83, 79, 76, 72],
+    pad:  [55, 59, 62] },
+  { name: "Blitz Mode", bpm: 156, bassWave: "square", arpWave: "sawtooth",
+    bass: [33, 33, 40, 33, 36, 36, 43, 36, 35, 35, 38, 35, 41, 41, 43, 40],
+    arp:  [69, 72, 76, 81, 79, 76, 72, 69, 71, 76, 79, 84, 83, 79, 76, 72],
+    pad:  [45, 48, 52] },
 ];
 
 export function createAudio(initialTrackIdx = 0, initialVolume = 0.6) {

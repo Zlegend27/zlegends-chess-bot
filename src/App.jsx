@@ -1,16 +1,19 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import {
   createEngine, EMPTY, WN, WB, WR, WQ, WK, M64TO120, M120TO64,
-  mFrom, mTo, mPromo, mFlags, MATE,
+  mFrom, mTo, mPromo, mFlags, MATE, fileOf, rankOf,
 } from "./engine/chessEngine";
 import { createAudio } from "./audio/chiptune";
-import PixelAvatar, { ZPAL, ZPIX, UPAL, UPIX, JPAL, JPIX } from "./components/PixelAvatar";
+import PixelAvatar, { ZPAL, ZPIX, JPAL, JPIX } from "./components/PixelAvatar";
+import SocialLinks from "./components/SocialLinks";
+import StarField from "./components/StarField";
 import { loadSetting, saveSetting } from "./utils/storage";
 import { buildPgn } from "./utils/pgn";
 import { encodeGame, decodeGame, getSharedHash, replayIntoEngine } from "./utils/share";
 import "./App.css";
 
 const DIFFICULTIES = [
+  { label: "Idiot", ms: 250, blunderChance: 0.6 },
   { label: "Casual", ms: 600 },
   { label: "Normal", ms: 2000 },
   { label: "Hard", ms: 5000 },
@@ -51,7 +54,7 @@ export default function ZlegendsBot() {
   const initRef = useRef(null);
   if (!initRef.current) {
     const engine = createEngine();
-    const applied = initialShared ? replayIntoEngine(engine, initialShared.moveList) : [];
+    const applied = initialShared ? replayIntoEngine(engine, initialShared.moveList).applied : [];
     initRef.current = { engine, applied };
   }
   const eng = initRef.current.engine;
@@ -82,16 +85,22 @@ export default function ZlegendsBot() {
   const [info, setInfo] = useState(null);
   const [result, setResult] = useState(null);
   const [promo, setPromo] = useState(null);
-  const [difficultyIdx, setDifficultyIdx] = useState(() => loadSetting("difficultyIdx", 1));
+  const [colorPick, setColorPick] = useState(false);
+  const [difficultyIdx, setDifficultyIdx] = useState(() => loadSetting("difficultyIdx", 2));
   const [evalCp, setEvalCp] = useState(() => eng.evalWhite());
   const [musicOn, setMusicOn] = useState(false);
   const [trackName, setTrackName] = useState(audioRef.current.trackName());
   const [hintMove, setHintMove] = useState(null);
   const [hinting, setHinting] = useState(false);
+  const [reviewIndex, setReviewIndex] = useState(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [bestArrow, setBestArrow] = useState(null);
+  const [analysisBusy, setAnalysisBusy] = useState(false);
+  const [posVersion, setPosVersion] = useState(0);
   const [shareToast, setShareToast] = useState(null);
   const [pgnToast, setPgnToast] = useState(null);
-  const thinkTimeRef = useRef(DIFFICULTIES[difficultyIdx].ms);
-  thinkTimeRef.current = DIFFICULTIES[difficultyIdx].ms;
+  const difficultyRef = useRef(DIFFICULTIES[difficultyIdx]);
+  difficultyRef.current = DIFFICULTIES[difficultyIdx];
 
   const checkGameOver = useCallback(() => {
     const legal = eng.legalMoves();
@@ -109,16 +118,21 @@ export default function ZlegendsBot() {
   }, [eng]);
 
   /* replay mode: rebuild the position from the shared move list whenever the step changes */
+  const replayFirstRun = useRef(true);
   useEffect(() => {
     if (mode !== "replay") return;
     eng.reset();
-    const applied = replayIntoEngine(eng, replayFull.slice(0, replayIndex));
+    const { applied, lastCaptured } = replayIntoEngine(eng, replayFull.slice(0, replayIndex));
     if (applied.length) {
       const last = applied[applied.length - 1];
       setLastMove({ from: mFrom(last), to: mTo(last) });
+      if (!replayFirstRun.current) {
+        try { lastCaptured ? audio.sfxCapture() : audio.sfxMove(); } catch { /* audio unavailable */ }
+      }
     } else {
       setLastMove(null);
     }
+    replayFirstRun.current = false;
     setMoveList(replayFull.slice(0, replayIndex));
     setEvalCp(eng.evalWhite());
     setSelected(-1); setTargets([]); setHintMove(null);
@@ -134,12 +148,72 @@ export default function ZlegendsBot() {
     return () => clearTimeout(t);
   }, [replayPlaying, replayIndex, replayFull.length]);
 
+  /* post-game review: step through the just-finished game without altering its record */
+  const reviewing = mode === "play" && !!result && reviewIndex !== null;
+  const reviewFirstRun = useRef(true);
+  useEffect(() => {
+    if (!reviewing) { reviewFirstRun.current = true; setAnalyzing(false); setBestArrow(null); return; }
+    eng.reset();
+    const { applied, lastCaptured } = replayIntoEngine(eng, moveList.slice(0, reviewIndex));
+    if (applied.length) {
+      const last = applied[applied.length - 1];
+      setLastMove({ from: mFrom(last), to: mTo(last) });
+      if (!reviewFirstRun.current) {
+        try { lastCaptured ? audio.sfxCapture() : audio.sfxMove(); } catch { /* audio unavailable */ }
+      }
+    } else {
+      setLastMove(null);
+    }
+    reviewFirstRun.current = false;
+    setEvalCp(eng.evalWhite());
+    setSelected(-1); setTargets([]);
+    setPosVersion(v => v + 1);
+    rerender();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviewing, reviewIndex, moveList, eng]);
+
+  /* analysis mode: while reviewing, continuously suggest the engine's best move as an arrow */
+  useEffect(() => {
+    if (!reviewing || !analyzing) return;
+    setAnalysisBusy(true);
+    const t = setTimeout(() => {
+      const res = eng.search(800);
+      if (res && res.move) {
+        setBestArrow({ from: mFrom(res.move), to: mTo(res.move) });
+        const whiteScore = eng.getSide() === 1 ? -res.score : res.score;
+        setInfo({ depth: res.depth, score: whiteScore, nodes: res.nodes, time: res.time, pv: eng.pvLine(8) });
+      } else {
+        setBestArrow(null);
+      }
+      setAnalysisBusy(false);
+    }, 20);
+    return () => clearTimeout(t);
+  }, [reviewing, analyzing, posVersion, eng]);
+
   const isCaptureMove = m => eng.pieceAt(M120TO64[mTo(m)]) !== EMPTY || (mFlags(m) & 1);
+
+  const analysisMove = useCallback((m) => {
+    const cap = isCaptureMove(m);
+    eng.make(m);
+    try { cap ? audio.sfxCapture() : audio.sfxMove(); } catch { /* audio unavailable */ }
+    setLastMove({ from: mFrom(m), to: mTo(m) });
+    setSelected(-1); setTargets([]);
+    setEvalCp(eng.evalWhite());
+    setBestArrow(null);
+    setPosVersion(v => v + 1);
+    rerender();
+  }, [eng, audio]);
+
+  const toggleAnalyze = () => {
+    if (!reviewing) return;
+    setAnalyzing(a => !a);
+    setSelected(-1); setTargets([]); setBestArrow(null);
+  };
 
   const engineMove = useCallback(() => {
     setThinking(true);
     setTimeout(() => {
-      const res = eng.search(thinkTimeRef.current);
+      const res = eng.search(difficultyRef.current.ms, difficultyRef.current.blunderChance || 0);
       if (res && res.move) {
         const cap = isCaptureMove(res.move);
         const san = eng.sanOf(res.move);
@@ -151,7 +225,9 @@ export default function ZlegendsBot() {
         const whiteScore = eng.getSide() === 1 ? -res.score : res.score;
         setEvalCp(whiteScore);
         setInfo({ depth: res.depth, score: whiteScore, nodes: res.nodes, time: res.time, pv });
-        setResult(checkGameOver());
+        const over = checkGameOver();
+        setResult(over);
+        if (over) setReviewIndex(eng.plyCount());
       }
       setThinking(false);
       rerender();
@@ -171,26 +247,28 @@ export default function ZlegendsBot() {
     setEvalCp(eng.evalWhite());
     const over = checkGameOver();
     setResult(over);
+    if (over) setReviewIndex(eng.plyCount());
     rerender();
     if (!over) engineMoveRef.current();
   }, [eng, audio, checkGameOver]);
 
   const onSquare = (i64) => {
-    if (mode === "replay" || thinking || result || promo) return;
-    if (eng.getSide() !== playerColor) return;
+    if (mode === "replay" || thinking || promo) return;
     const legal = eng.legalMoves();
     const sq120 = M64TO120[i64];
+    const sideToMove = analyzing ? eng.getSide() : playerColor;
+    if (!analyzing && (result || eng.getSide() !== playerColor)) return;
     if (selected >= 0) {
       const from120 = M64TO120[selected];
       const candidates = legal.filter(m => mFrom(m) === from120 && mTo(m) === sq120);
       if (candidates.length > 0) {
         if (candidates.length > 1) { setPromo({ from: from120, to: sq120, moves: candidates }); return; }
-        playMove(candidates[0]);
+        analyzing ? analysisMove(candidates[0]) : playMove(candidates[0]);
         return;
       }
     }
     const p = eng.pieceAt(i64);
-    if (p !== EMPTY && p * playerColor > 0) {
+    if (p !== EMPTY && p * sideToMove > 0) {
       setSelected(i64);
       setTargets(legal.filter(m => mFrom(m) === sq120).map(m => M120TO64[mTo(m)]));
     } else { setSelected(-1); setTargets([]); }
@@ -205,18 +283,18 @@ export default function ZlegendsBot() {
     eng.reset();
     setPlayerColor(color);
     setSelected(-1); setTargets([]); setLastMove(null); setHintMove(null);
-    setMoveList([]); setInfo(null); setResult(null); setPromo(null); setEvalCp(0);
+    setMoveList([]); setInfo(null); setResult(null); setPromo(null); setEvalCp(0); setReviewIndex(null);
     rerender();
     if (color === -1) setTimeout(() => engineMoveRef.current(), 60);
   };
 
   const undo = () => {
-    if (mode === "replay" || thinking || eng.plyCount() === 0) return;
+    if (mode === "replay" || thinking || result || eng.plyCount() === 0) return;
     let n;
     if (eng.getSide() === playerColor && eng.plyCount() >= 2) n = 2; else n = 1;
     for (let i = 0; i < n; i++) eng.unmake();
     setMoveList(l => l.slice(0, l.length - n));
-    setSelected(-1); setTargets([]); setLastMove(null); setResult(null); setPromo(null); setHintMove(null);
+    setSelected(-1); setTargets([]); setLastMove(null); setResult(null); setPromo(null); setHintMove(null); setReviewIndex(null);
     setEvalCp(eng.evalWhite());
     rerender();
     if (eng.getSide() !== playerColor) setTimeout(() => engineMoveRef.current(), 60);
@@ -280,9 +358,15 @@ export default function ZlegendsBot() {
   /* captures */
   const mat = materialState(eng);
   const botColor = -playerColor;
+  const botAdvantage = (botColor === 1 ? evalCp : -evalCp) / 100;
+  const botMood = botAdvantage < -1 ? "angry" : botAdvantage >= 1 ? "happy" : "neutral";
   const botTaken = botColor === 1 ? mat.capturedBlack : mat.capturedWhite;
   const youTaken = playerColor === 1 ? mat.capturedBlack : mat.capturedWhite;
   const youDiff = playerColor === 1 ? mat.diff : -mat.diff;
+
+  const lastMoverColor = lastMove ? Math.sign(eng.pieceAt(M120TO64[lastMove.to])) : 0;
+  const isBotLastMove = !analyzing && lastMove && lastMoverColor === botColor;
+  const isPlayerLastMove = !analyzing && lastMove && lastMoverColor === playerColor;
 
   const flipped = playerColor === -1;
   const rows = [];
@@ -298,12 +382,15 @@ export default function ZlegendsBot() {
       const isSel = selected === i64;
       const isTarget = targets.includes(i64);
       const isLast = lastMove && (lastMove.from === sq120 || lastMove.to === sq120);
+      const isBotLast = isBotLastMove && isLast;
+      const isPlayerLast = isPlayerLastMove && isLast;
       const isHintFrom = hintMove && hintMove.from === sq120;
       const isHintTo = hintMove && hintMove.to === sq120;
       const kingInCheck = p * eng.getSide() === WK && eng.inCheckNow();
       cells.push(
         <div key={i64} onClick={() => onSquare(i64)}
           className={"sq " + (light ? "light" : "dark") + (isSel ? " sel" : "") + (isLast ? " last" : "") +
+            (isBotLast ? " botLast" : "") + (isPlayerLast ? " playerLast" : "") +
             (kingInCheck ? " chk" : "") + (isHintFrom ? " hintFrom" : "") + (isHintTo ? " hintTo" : "")}>
           {p !== EMPTY && <span className={"pc " + (p > 0 ? "w" : "b")}>{GLYPH[Math.abs(p)]}</span>}
           {isTarget && <span className={"dot" + (p !== EMPTY ? " ring" : "")} />}
@@ -317,14 +404,32 @@ export default function ZlegendsBot() {
 
   const pairs = [];
   for (let i = 0; i < moveList.length; i += 2) pairs.push([moveList[i], moveList[i + 1]]);
+  const shownPly = reviewing ? reviewIndex : moveList.length;
+  const curMoveIdx = shownPly - 1;
 
   const inChk = eng.inCheckNow() && !result;
   const status = mode === "replay"
     ? (replayIndex === 0 ? "Shared game — start of the line" : replayIndex === replayFull.length ? "Shared game — final position" : `Shared game — move ${replayIndex}`)
     : result
     ? `${result.reason} · ${result.text}`
-    : thinking ? "Zlegend's Bot is calculating…"
+    : thinking ? "Zlegend2700 is calculating…"
     : eng.getSide() === playerColor ? "Your move, challenger" : "Bot to move";
+
+  const arrowPoint = (sq120) => {
+    const f = fileOf(sq120), r = rankOf(sq120);
+    const visCol = flipped ? 7 - f : f;
+    const visRow = flipped ? r : 7 - r;
+    return { x: visCol + 0.5, y: visRow + 0.5 };
+  };
+  const arrowLine = (() => {
+    if (!bestArrow || bestArrow.from === bestArrow.to) return null;
+    const a = arrowPoint(bestArrow.from), b = arrowPoint(bestArrow.to);
+    const dx = b.x - a.x, dy = b.y - a.y;
+    let bend = null;
+    if (Math.abs(dx) === 2 && Math.abs(dy) === 1) bend = { x: a.x + dx, y: a.y };
+    else if (Math.abs(dy) === 2 && Math.abs(dx) === 1) bend = { x: a.x, y: a.y + dy };
+    return { a, b, bend };
+  })();
 
   const Tray = ({ pieces, colorClass }) => (
     <div className="tray">
@@ -336,18 +441,23 @@ export default function ZlegendsBot() {
 
   return (
     <div className="root">
+      <StarField />
       <div className="hdr">
-        <div className="eyebrow"><span className="live" />{"Live · Viewer Challenge"}</div>
-        <h1>Zlegend's Bot</h1>
+        <div className="eyebrow"><span className="live" />{"Zlegend27"}<SocialLinks /></div>
+        <h1>Zlegend's Chess Bot</h1>
         <div className="sub">can you beat it??</div>
       </div>
 
       <div className="layout">
         <div className="boardCol">
           <div className={"card" + (mode === "play" && !result && !thinking && eng.getSide() === botColor ? " turnGlow" : "")}>
-            <div className="avatarBox"><PixelAvatar rows={ZPIX} pal={ZPAL} size={44} /></div>
+            <div className={"avatarBox" + (botMood !== "neutral" ? " reactionBox " + botMood : "")}>
+              {botMood === "angry" && <img src="/bot-angry.webp" alt="Zlegend2700 is furious" className="reactionImg" />}
+              {botMood === "happy" && <img src="/bot-happy.webp" alt="Zlegend2700 is thrilled" className="reactionImg" />}
+              {botMood === "neutral" && <PixelAvatar rows={ZPIX} pal={ZPAL} size={44} />}
+            </div>
             <div className="cardMeta">
-              <div className="cardName bot">Zlegend's Bot</div>
+              <div className="cardName bot">Zlegend2700</div>
               <Tray pieces={botTaken} colorClass={playerColor === 1 ? "wpc" : "bpc"} />
             </div>
             {youDiff < 0 && <div className="lead">+{-youDiff}</div>}
@@ -361,6 +471,26 @@ export default function ZlegendsBot() {
             <div style={{ position: "relative", flex: 1 }}>
               <div className="board">
                 {rows}
+                {arrowLine && (
+                  <svg className="arrowLayer" viewBox="0 0 8 8" preserveAspectRatio="none">
+                    <defs>
+                      <marker id="bestArrowHead" markerWidth="3.2" markerHeight="3.2" refX="1.5" refY="1.6" orient="auto">
+                        <path d="M0,0 L3.2,1.6 L0,3.2 Z" fill="#F5D93E" />
+                      </marker>
+                    </defs>
+                    {arrowLine.bend ? (
+                      <>
+                        <line x1={arrowLine.a.x} y1={arrowLine.a.y} x2={arrowLine.bend.x} y2={arrowLine.bend.y}
+                          stroke="#F5D93E" strokeOpacity="0.85" strokeWidth="0.14" strokeLinecap="round" />
+                        <line x1={arrowLine.bend.x} y1={arrowLine.bend.y} x2={arrowLine.b.x} y2={arrowLine.b.y}
+                          stroke="#F5D93E" strokeOpacity="0.85" strokeWidth="0.14" strokeLinecap="round" markerEnd="url(#bestArrowHead)" />
+                      </>
+                    ) : (
+                      <line x1={arrowLine.a.x} y1={arrowLine.a.y} x2={arrowLine.b.x} y2={arrowLine.b.y}
+                        stroke="#F5D93E" strokeOpacity="0.85" strokeWidth="0.14" strokeLinecap="round" markerEnd="url(#bestArrowHead)" />
+                    )}
+                  </svg>
+                )}
                 {promo && (
                   <div className="promoOv">
                     <div className="promoBox">
@@ -368,11 +498,23 @@ export default function ZlegendsBot() {
                         <button key={pp} onClick={() => {
                           const m = promo.moves.find(x => mPromo(x) === pp);
                           setPromo(null);
-                          if (m) playMove(m);
+                          if (m) (analyzing ? analysisMove(m) : playMove(m));
                         }}>
-                          <span className={"pc " + (playerColor === 1 ? "w" : "b")} style={{ fontSize: 32 }}>{GLYPH[pp]}</span>
+                          <span className={"pc " + (eng.getSide() === 1 ? "w" : "b")} style={{ fontSize: 32 }}>{GLYPH[pp]}</span>
                         </button>
                       ))}
+                    </div>
+                  </div>
+                )}
+                {colorPick && (
+                  <div className="promoOv">
+                    <div className="promoBox">
+                      <button onClick={() => { setColorPick(false); newGame(1); }} title="Play as White">
+                        <span className="pc w" style={{ fontSize: 32 }}>{GLYPH[1]}</span>
+                      </button>
+                      <button onClick={() => { setColorPick(false); newGame(-1); }} title="Play as Black">
+                        <span className="pc b" style={{ fontSize: 32 }}>{GLYPH[1]}</span>
+                      </button>
                     </div>
                   </div>
                 )}
@@ -381,7 +523,7 @@ export default function ZlegendsBot() {
           </div>
 
           <div className={"card" + (mode === "play" && !result && !thinking && eng.getSide() === playerColor ? " turnGlow" : "")}>
-            <div className="avatarBox"><PixelAvatar rows={UPIX} pal={UPAL} size={44} /></div>
+            <div className="avatarBox"><img src="/you-avatar.webp" alt="You (Challenger)" className="youAvatarImg" /></div>
             <div className="cardMeta">
               <div className="cardName you">You (Challenger)</div>
               <Tray pieces={youTaken} colorClass={playerColor === 1 ? "bpc" : "wpc"} />
@@ -393,6 +535,7 @@ export default function ZlegendsBot() {
             <span className={"status" + (result ? " over" : "")}>{status}</span>
             {inChk && <span className="bang">!!</span>}
             {mode === "replay" && <span className="replayBadge">Replay</span>}
+            {reviewing && <span className="replayBadge">Move {reviewIndex}/{moveList.length}</span>}
           </div>
 
           {mode === "replay" && (
@@ -405,6 +548,23 @@ export default function ZlegendsBot() {
               <button className="btn ghost" onClick={() => replayStep(1)} disabled={replayIndex >= replayFull.length}>{"▶"}</button>
               <button className="btn ghost" onClick={() => setReplayIndex(replayFull.length)} disabled={replayIndex >= replayFull.length}>{"▶|"}</button>
               <button className="btn gold" onClick={exitReplay}>Start your own game</button>
+            </div>
+          )}
+
+          {reviewing && (
+            <div className="ctrls" style={{ justifyContent: "center" }}>
+              <button className="btn ghost" onClick={() => setReviewIndex(0)} disabled={reviewIndex === 0}>{"|◀"}</button>
+              <button className="btn ghost" onClick={() => setReviewIndex(i => Math.max(0, i - 1))} disabled={reviewIndex === 0}>{"◀"}</button>
+              <button className="btn ghost" onClick={() => setReviewIndex(i => Math.min(moveList.length, i + 1))} disabled={reviewIndex === moveList.length}>{"▶"}</button>
+              <button className="btn ghost" onClick={() => setReviewIndex(moveList.length)} disabled={reviewIndex === moveList.length}>{"▶|"}</button>
+              <button className={"btn" + (analyzing ? "" : " ghost")} onClick={toggleAnalyze}>
+                {analyzing ? (analysisBusy ? "Analyzing…" : "Analyzing") : "Analyze"}
+              </button>
+            </div>
+          )}
+          {analyzing && (
+            <div className="status" style={{ fontSize: 11, opacity: 0.8 }}>
+              Move any piece to explore — yellow arrow shows the bot's top pick
             </div>
           )}
         </div>
@@ -442,8 +602,14 @@ export default function ZlegendsBot() {
               {pairs.map(([w, b], i) => (
                 <div className="mrow" key={i}>
                   <span className="num">{i + 1}.</span>
-                  <span className={i === pairs.length - 1 && !b ? "cur" : ""}>{w}</span>
-                  <span className={i === pairs.length - 1 && b ? "cur" : ""}>{b || ""}</span>
+                  <span
+                    className={curMoveIdx === i * 2 ? "cur" : ""}
+                    style={reviewing ? { cursor: "pointer" } : undefined}
+                    onClick={reviewing ? () => setReviewIndex(i * 2 + 1) : undefined}>{w}</span>
+                  <span
+                    className={curMoveIdx === i * 2 + 1 ? "cur" : ""}
+                    style={reviewing && b ? { cursor: "pointer" } : undefined}
+                    onClick={reviewing && b ? () => setReviewIndex(i * 2 + 2) : undefined}>{b || ""}</span>
                 </div>
               ))}
             </div>
@@ -469,9 +635,8 @@ export default function ZlegendsBot() {
 
           {mode === "play" && (
             <div className="ctrls">
-              <button className="btn" onClick={() => newGame(1)}>New &middot; White</button>
-              <button className="btn" onClick={() => newGame(-1)}>New &middot; Black</button>
-              <button className="btn" onClick={undo} disabled={thinking || eng.plyCount() === 0}>Undo</button>
+              <button className="btn" onClick={() => { setPromo(null); setColorPick(true); }}>New</button>
+              <button className="btn" onClick={undo} disabled={thinking || !!result || eng.plyCount() === 0}>Undo</button>
               <button className="btn ghost" onClick={onHint}
                 disabled={thinking || hinting || !!result || !!promo || eng.getSide() !== playerColor}>
                 {hinting ? "Thinking…" : "Hint"}

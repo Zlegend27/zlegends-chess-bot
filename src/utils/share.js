@@ -24,8 +24,9 @@ export function getSharedHash() {
   return match ? match[1] : null;
 }
 
-/** Replays SAN moves into `eng` one at a time. Returns the list of applied
- *  move objects (engine move ints) up to the first mismatch. */
+/** Replays SAN moves into `eng` one at a time. Returns the applied move ints
+ *  (engine move objects) up to the first mismatch, plus whether the last
+ *  applied move was a capture (SAN captures always contain "x"). */
 export function replayIntoEngine(eng, moveList) {
   const applied = [];
   for (const san of moveList) {
@@ -35,5 +36,6 @@ export function replayIntoEngine(eng, moveList) {
     eng.make(move);
     applied.push(move);
   }
-  return applied;
+  const lastCaptured = applied.length > 0 && moveList[applied.length - 1].includes("x");
+  return { applied, lastCaptured };
 }
