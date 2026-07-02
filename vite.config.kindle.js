@@ -2,10 +2,13 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import legacy from '@vitejs/plugin-legacy';
 
-// Separate build for the jailbroken-Kindle target: old WebKit "Experimental
-// Browser", so this transpiles/polyfills much further down than the main
-// web build and produces its own isolated output directory.
+// Kindle/Fire-tablet build: served as a normal static site (Vercel), so the
+// entry lives in its own kindle-web/index.html rather than sharing the
+// project root with the main app's index.html. The legacy plugin is kept
+// as a safety margin in case the device's browser is older than expected,
+// even though a Fire tablet's Silk browser is far newer than a Kindle's.
 export default defineConfig({
+  root: 'kindle-web',
   plugins: [
     react(),
     legacy({
@@ -15,9 +18,7 @@ export default defineConfig({
     }),
   ],
   build: {
-    outDir: 'dist-kindle',
-    rollupOptions: {
-      input: 'kindle.html',
-    },
+    outDir: '../dist-kindle',
+    emptyOutDir: true,
   },
 });
