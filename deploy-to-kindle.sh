@@ -23,6 +23,9 @@ ssh "root@$IP" "mkdir -p $REMOTE_DIR"
 echo "==> Uploading build output..."
 scp -r dist-kindle/* "root@$IP:$REMOTE_DIR/"
 
+echo "==> Renaming kindle.html to index.html (so localhost:8000 works directly)..."
+ssh "root@$IP" "mv $REMOTE_DIR/kindle.html $REMOTE_DIR/index.html"
+
 echo "==> Uploading server scripts..."
 scp kindle-server.py kindle-boot.sh "root@$IP:$REMOTE_DIR/"
 
