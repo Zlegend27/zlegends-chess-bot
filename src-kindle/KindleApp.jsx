@@ -10,12 +10,18 @@ import {
    This is a single dedicated device for one child, so the theme leans
    cute/playful rather than trying to match the web app's look at all. */
 
+/* A ladder of animal opponents from beginner to strong club-level. The elo
+   numbers are a best-effort approximation (mostly driven by blunderChance,
+   which controls how often it plays a random legal move instead of its
+   real search) — there's no way to calibrate this against real rated
+   games from here, so treat these as "roughly this strength", not exact. */
 const DIFFICULTIES = [
-  { label: "Idiot", ms: 250, blunderChance: 0.6 },
-  { label: "Casual", ms: 600 },
-  { label: "Normal", ms: 2000 },
-  { label: "Hard", ms: 5000 },
-  { label: "Master", ms: 12000 },
+  { label: "Bunny", elo: 300, ms: 150, blunderChance: 0.85 },
+  { label: "Cat", elo: 600, ms: 300, blunderChance: 0.55 },
+  { label: "Dog", elo: 900, ms: 600, blunderChance: 0.3 },
+  { label: "Fox", elo: 1200, ms: 1200, blunderChance: 0.12 },
+  { label: "Owl", elo: 1600, ms: 3000, blunderChance: 0.03 },
+  { label: "Lion", elo: 2000, ms: 8000, blunderChance: 0 },
 ];
 
 /* The rarer "outline" chess Unicode code points (white pieces) aren't
@@ -218,10 +224,11 @@ export default function KindleApp() {
   for (let i = 0; i < moveList.length; i += 2) pairs.push([i / 2 + 1, moveList[i], moveList[i + 1]]);
   const moveText = pairs.map(([n, w, b]) => `${n}.${w}${b ? " " + b : ""}`).join("  ");
 
+  const opponentName = DIFFICULTIES[difficultyIdx].label;
   const status = result
     ? `${result.reason} - ${result.text}`
-    : thinking ? "Bunny bot is thinking..."
-    : eng.getSide() === playerColor ? "Your move!" : "Bunny bot's move";
+    : thinking ? `${opponentName} is thinking...`
+    : eng.getSide() === playerColor ? "Your move!" : `${opponentName}'s move`;
 
   return (
     <div className="kRoot">
@@ -253,7 +260,7 @@ export default function KindleApp() {
         <button onClick={() => newGame(-1)}>Play Black</button>
         <button onClick={undo} disabled={thinking || !!result || eng.plyCount() === 0}>Undo</button>
         <select value={difficultyIdx} onChange={e => setDifficultyIdx(Number(e.target.value))}>
-          {DIFFICULTIES.map((d, i) => <option key={i} value={i}>{d.label}</option>)}
+          {DIFFICULTIES.map((d, i) => <option key={i} value={i}>{d.label} ({d.elo})</option>)}
         </select>
         <button onClick={() => setView("lessons")}>How to Play</button>
         {result && <button onClick={() => newGame(playerColor)}>Play Again!</button>}
