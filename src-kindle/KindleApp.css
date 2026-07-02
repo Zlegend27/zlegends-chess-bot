@@ -1,37 +1,55 @@
-/* Flat, high-contrast, e-ink-friendly. No gradients, shadows, or animation. */
+/* Flat, high-contrast, e-ink-friendly, but rounded and playful for a kid's
+   dedicated chess device. Still no gradients, shadows, or animation. */
 * { box-sizing: border-box; }
-body { margin: 0; font-family: Georgia, "Times New Roman", serif; background: #fff; color: #000; }
+body {
+  margin: 0; background: #fff; color: #000;
+  font-family: "Comic Sans MS", "Chalkboard SE", Verdana, sans-serif;
+}
 
 .kRoot { display: flex; flex-direction: column; align-items: center; padding: 12px; }
-.kRoot h1 { font-size: 22px; margin: 4px 0; }
-.kStatus { font-size: 16px; font-weight: bold; margin-bottom: 10px; text-align: center; }
+.kHdr { display: flex; align-items: center; gap: 10px; }
+.kRoot h1 { font-size: 26px; margin: 4px 0; }
+.kStatus { font-size: 18px; font-weight: bold; margin: 6px 0 10px; text-align: center; }
 
 .kBoardWrap { position: relative; }
-.kBoard { width: 320px; height: 320px; border: 3px solid #000; display: flex; flex-direction: column; }
+.kBoard { width: 380px; height: 380px; border: 4px solid #000; border-radius: 10px; display: flex; flex-direction: column; overflow: hidden; }
 .kRow { flex: 1; display: flex; }
 .kSq { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; border: 1px solid #999; }
 .kSq.kLight { background: #fff; }
 .kSq.kDark { background: #bbb; }
-.kSq.kSel { border: 2px solid #000; }
+.kSq.kSel { border: 3px solid #000; }
 .kSq.kChk { background: #666; }
-.kPc { font-size: 22px; display: inline-block; line-height: 1; }
+.kPc { font-size: 30px; display: inline-block; line-height: 1; }
 .kPc.kPcW { border: 2px solid #000; border-radius: 50%; background: #fff; padding: 3px; }
 .kPc.kPcB { padding: 5px; }
-.kDot { position: absolute; width: 10px; height: 10px; border-radius: 50%; background: #000; opacity: 0.6; }
-.kCoord { position: absolute; font-size: 9px; }
-.kCoord.kRk { top: 1px; left: 2px; }
-.kCoord.kFl { bottom: 1px; right: 2px; }
+.kDot { position: absolute; width: 14px; height: 14px; border-radius: 50%; background: #000; opacity: 0.6; }
+.kCoord { position: absolute; font-size: 10px; }
+.kCoord.kRk { top: 1px; left: 3px; }
+.kCoord.kFl { bottom: 1px; right: 3px; }
 
-.kPromoOv { position: absolute; inset: 0; background: #fff; border: 2px solid #000;
+.kPromoOv { position: absolute; inset: 0; background: #fff; border: 3px solid #000; border-radius: 10px;
   display: flex; align-items: center; justify-content: center; gap: 6px; }
-.kPromoOv button { font-size: 28px; padding: 6px 10px; border: 1px solid #000; background: #fff; }
+.kPromoOv button { font-size: 32px; padding: 6px 10px; border: 2px solid #000; border-radius: 8px; background: #fff; }
 
-.kMoves { width: 320px; margin-top: 10px; font-size: 13px; border: 1px solid #999; padding: 6px;
+.kMoves { width: 380px; margin-top: 12px; font-size: 14px; border: 2px solid #999; border-radius: 8px; padding: 8px;
   min-height: 40px; max-height: 100px; overflow-y: auto; }
 
-.kCtrls { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; width: 320px; justify-content: center; }
-.kCtrls button, .kCtrls select { font-size: 14px; padding: 8px 10px; border: 1px solid #000; background: #fff; color: #000; }
+.kCtrls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; width: 380px; justify-content: center; }
+.kCtrls button, .kCtrls select {
+  font-family: inherit; font-size: 15px; padding: 10px 12px; border: 2px solid #000; border-radius: 10px;
+  background: #fff; color: #000;
+}
 .kCtrls button:disabled { opacity: 0.5; }
 
+.kBunny { flex: none; }
+
+.kLessonTitle { font-size: 20px; margin: 14px 0 8px; width: 380px; }
+.kLessons { width: 380px; display: flex; flex-direction: column; gap: 10px; }
+.kLessonCard { display: flex; align-items: center; gap: 12px; border: 2px solid #999; border-radius: 10px; padding: 8px 10px; }
+.kLessonPc { font-size: 34px; flex: none; }
+.kLessonName { font-size: 16px; font-weight: bold; margin-bottom: 2px; }
+.kLessonText { font-size: 13px; line-height: 1.35; }
+.kTips { width: 380px; font-size: 14px; line-height: 1.5; padding-left: 22px; margin: 0 0 10px; }
+
 .kErrBox { padding: 24px; text-align: center; }
-.kErrBox button { font-size: 14px; padding: 8px 14px; border: 1px solid #000; background: #fff; margin-top: 10px; }
+.kErrBox button { font-family: inherit; font-size: 14px; padding: 8px 14px; border: 2px solid #000; border-radius: 10px; background: #fff; margin-top: 10px; }

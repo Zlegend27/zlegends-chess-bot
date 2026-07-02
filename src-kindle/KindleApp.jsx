@@ -6,7 +6,9 @@ import {
 
 /* Minimal, no-animation, no-audio, no-worker UI for a jailbroken Kindle's
    old Experimental Browser. Runs the search synchronously on the main
-   thread — acceptable since e-ink itself already refreshes at ~500ms. */
+   thread — acceptable since e-ink itself already refreshes at ~500ms.
+   This is a single dedicated device for one child, so the theme leans
+   cute/playful rather than trying to match the web app's look at all. */
 
 const DIFFICULTIES = [
   { label: "Idiot", ms: 250, blunderChance: 0.6 },
@@ -25,6 +27,35 @@ const GLYPH = { 1: "♟︎", 2: "♞︎", 3: "♝︎", 4: "♜︎", 5: "♛︎",
 const glyphFor = (piece) => GLYPH[Math.abs(piece)];
 const FILES = "abcdefgh";
 
+const LESSONS = [
+  { piece: 1, name: "Pawn", text: "Marches straight ahead, one square at a time (two on its very first move!). It can only capture another piece diagonally, one square forward." },
+  { piece: 2, name: "Knight", text: "Hops in an L-shape: two squares one way, then one square sideways. The only piece that can jump right over others!" },
+  { piece: 3, name: "Bishop", text: "Glides diagonally, as far as it wants. Each bishop stays on the same color square its whole life." },
+  { piece: 4, name: "Rook", text: "Looks like a little castle tower! Moves in straight lines - up, down, left, or right - as far as it wants." },
+  { piece: 5, name: "Queen", text: "The most powerful piece on the board. Moves like a rook AND a bishop combined - any direction, any distance." },
+  { piece: 6, name: "King", text: "Only moves one square at a time, but keep it extra safe! If your king can't escape capture, that's checkmate and the game is over." },
+];
+
+const TIPS = [
+  "Try moving your knights and bishops out early - get them into the game!",
+  "Castle your king to safety before the middle of the board gets busy.",
+  "Every game teaches you something new, win or lose. Have fun!",
+];
+
+function BunnyIcon({ size = 46 }) {
+  return (
+    <svg viewBox="0 0 48 48" width={size} height={size} className="kBunny">
+      <rect x="12" y="2" width="7" height="22" rx="3.5" fill="#fff" stroke="#000" strokeWidth="2" />
+      <rect x="29" y="2" width="7" height="22" rx="3.5" fill="#fff" stroke="#000" strokeWidth="2" />
+      <circle cx="24" cy="30" r="15" fill="#fff" stroke="#000" strokeWidth="2" />
+      <circle cx="19" cy="27" r="2" fill="#000" />
+      <circle cx="29" cy="27" r="2" fill="#000" />
+      <path d="M22 33 L26 33 L24 36 Z" fill="#000" />
+      <path d="M24 36 L24 39 M24 39 L20 41 M24 39 L28 41" stroke="#000" strokeWidth="1.5" fill="none" />
+    </svg>
+  );
+}
+
 export default function KindleApp() {
   const engRef = useRef(null);
   if (!engRef.current) engRef.current = createEngine();
@@ -33,6 +64,7 @@ export default function KindleApp() {
   const [, force] = useState(0);
   const rerender = () => force(n => n + 1);
 
+  const [view, setView] = useState("play");
   const [playerColor, setPlayerColor] = useState(1);
   const [selected, setSelected] = useState(-1);
   const [targets, setTargets] = useState([]);
@@ -126,6 +158,36 @@ export default function KindleApp() {
     rerender();
   };
 
+  if (view === "lessons") {
+    return (
+      <div className="kRoot">
+        <div className="kHdr">
+          <BunnyIcon />
+          <h1>Kinnda Chess</h1>
+        </div>
+        <h2 className="kLessonTitle">How the Pieces Move</h2>
+        <div className="kLessons">
+          {LESSONS.map(l => (
+            <div className="kLessonCard" key={l.name}>
+              <span className="kPc kPcB kLessonPc">{GLYPH[l.piece]}</span>
+              <div>
+                <div className="kLessonName">{l.name}</div>
+                <div className="kLessonText">{l.text}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <h2 className="kLessonTitle">A Few Tips</h2>
+        <ul className="kTips">
+          {TIPS.map((t, i) => <li key={i}>{t}</li>)}
+        </ul>
+        <div className="kCtrls">
+          <button onClick={() => setView("play")}>Back to the Game</button>
+        </div>
+      </div>
+    );
+  }
+
   const flipped = playerColor === -1;
   const rows = [];
   for (let vr = 0; vr < 8; vr++) {
@@ -158,12 +220,15 @@ export default function KindleApp() {
 
   const status = result
     ? `${result.reason} - ${result.text}`
-    : thinking ? "Bot is thinking..."
-    : eng.getSide() === playerColor ? "Your move" : "Bot to move";
+    : thinking ? "Bunny bot is thinking..."
+    : eng.getSide() === playerColor ? "Your move!" : "Bunny bot's move";
 
   return (
     <div className="kRoot">
-      <h1>Kindle Chess</h1>
+      <div className="kHdr">
+        <BunnyIcon />
+        <h1>Kinnda Chess</h1>
+      </div>
       <div className="kStatus">{status}</div>
 
       <div className="kBoardWrap">
@@ -181,16 +246,17 @@ export default function KindleApp() {
         )}
       </div>
 
-      <div className="kMoves">{moveText || "No moves yet."}</div>
+      <div className="kMoves">{moveText || "No moves yet - good luck!"}</div>
 
       <div className="kCtrls">
-        <button onClick={() => newGame(1)}>New (White)</button>
-        <button onClick={() => newGame(-1)}>New (Black)</button>
+        <button onClick={() => newGame(1)}>Play White</button>
+        <button onClick={() => newGame(-1)}>Play Black</button>
         <button onClick={undo} disabled={thinking || !!result || eng.plyCount() === 0}>Undo</button>
         <select value={difficultyIdx} onChange={e => setDifficultyIdx(Number(e.target.value))}>
           {DIFFICULTIES.map((d, i) => <option key={i} value={i}>{d.label}</option>)}
         </select>
-        {result && <button onClick={() => newGame(playerColor)}>Rematch</button>}
+        <button onClick={() => setView("lessons")}>How to Play</button>
+        {result && <button onClick={() => newGame(playerColor)}>Play Again!</button>}
       </div>
     </div>
   );
