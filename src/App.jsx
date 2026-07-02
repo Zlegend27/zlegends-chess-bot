@@ -20,7 +20,10 @@ const DIFFICULTIES = [
   { label: "Master", ms: 12000 },
 ];
 
-const GLYPH = { 1: "♟", 2: "♞", 3: "♝", 4: "♜", 5: "♛", 6: "♚" };
+/* U+FE0E forces text presentation instead of emoji presentation — without it,
+   iOS/mobile browsers can render these as colorful fixed-size emoji glyphs
+   that ignore the CSS color used to distinguish white/black pieces. */
+const GLYPH = { 1: "♟︎", 2: "♞︎", 3: "♝︎", 4: "♜︎", 5: "♛︎", 6: "♚︎" };
 const FILES = "abcdefgh";
 const PTS = { 1: 1, 2: 3, 3: 3, 4: 5, 5: 9 };
 const START_COUNT = { 1: 8, 2: 2, 3: 2, 4: 2, 5: 1 };
