@@ -39,9 +39,13 @@
   text-shadow:0 0 12px #F5D93E66, 2px 2px 0 #150C24; transform:rotate(-1deg); }
 .layout{ display:flex; gap:22px; flex-wrap:wrap; justify-content:center; align-items:flex-start; z-index:1; width:100%; }
 .boardCol{ display:flex; flex-direction:column; gap:10px; }
+/* Card's box matches the board row's full footprint (evalbar 14px + 10px gap
+   + board), and its left padding matches that same 24px so the avatar lines
+   up with the board's left edge rather than the evalbar's — otherwise the
+   board reads as shifted right relative to the cards above/below it. */
 .card{ display:flex; align-items:center; gap:10px; background:#1D1038CC;
-  border:1px solid #8B2FC966; border-radius:10px; padding:8px 12px;
-  box-shadow:0 0 18px #8B2FC922, inset 0 0 22px #8B2FC91A; width:min(88vw,472px); box-sizing:border-box; }
+  border:1px solid #8B2FC966; border-radius:10px; padding:8px 12px 8px 24px;
+  box-shadow:0 0 18px #8B2FC922, inset 0 0 22px #8B2FC91A; width:calc(min(88vw,440px) + 24px); box-sizing:border-box; }
 .card.turnGlow{ border-color:var(--cyan); box-shadow:0 0 18px #3EE7F544, inset 0 0 22px #3EE7F51A; }
 .avatarBox{ background:#120A26; border-radius:8px; padding:4px; border:1px solid #ffffff18; flex:none; }
 .avatarBox.reactionBox{ padding:6px; transition:box-shadow .3s ease, border-color .3s ease; }
