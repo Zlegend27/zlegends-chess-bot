@@ -11,6 +11,7 @@ import { loadSetting, saveSetting } from "./utils/storage";
 import { buildPgn } from "./utils/pgn";
 import { encodeGame, decodeGame, getSharedHash, replayIntoEngine } from "./utils/share";
 import { pixelGlyphUrl } from "./utils/pixelGlyph";
+import { saveGame, fetchStats } from "./utils/gameHistory";
 import "./App.css";
 
 const DIFFICULTIES = [
@@ -135,8 +136,12 @@ export default function ZlegendsBot() {
   const [posVersion, setPosVersion] = useState(0);
   const [shareToast, setShareToast] = useState(null);
   const [pgnToast, setPgnToast] = useState(null);
+  const [statsOpen, setStatsOpen] = useState(false);
+  const [stats, setStats] = useState(null);
   const difficultyRef = useRef(DIFFICULTIES[difficultyIdx]);
   difficultyRef.current = DIFFICULTIES[difficultyIdx];
+  const playerColorRef = useRef(playerColor);
+  playerColorRef.current = playerColor;
 
   const checkGameOver = useCallback(() => {
     const legal = eng.legalMoves();
@@ -267,7 +272,10 @@ export default function ZlegendsBot() {
         setInfo({ depth: res.depth, score: whiteScore, nodes: res.nodes, time: res.time, pv: res.pv });
         const over = checkGameOver();
         setResult(over);
-        if (over) setReviewIndex(eng.plyCount());
+        if (over) {
+          setReviewIndex(eng.plyCount());
+          saveGame({ difficultyLabel: difficultyRef.current.label, playerColor: playerColorRef.current, moveList: newMoveList, result: over, finalEval: whiteScore });
+        }
       }
       setThinking(false);
       rerender();
@@ -289,7 +297,10 @@ export default function ZlegendsBot() {
     setEvalCp(eng.evalWhite());
     const over = checkGameOver();
     setResult(over);
-    if (over) setReviewIndex(eng.plyCount());
+    if (over) {
+      setReviewIndex(eng.plyCount());
+      saveGame({ difficultyLabel: difficultyRef.current.label, playerColor: playerColorRef.current, moveList: newMoveList, result: over, finalEval: eng.evalWhite() });
+    }
     rerender();
     if (!over) engineMoveRef.current(newMoveList);
   }, [eng, audio, checkGameOver]);
@@ -373,6 +384,12 @@ export default function ZlegendsBot() {
       window.prompt("Copy PGN:", pgn);
     }
     setTimeout(() => setPgnToast(null), 2000);
+  };
+
+  const openStats = () => {
+    setStatsOpen(true);
+    setStats(null);
+    fetchStats().then(setStats);
   };
 
   const onShare = async () => {
@@ -690,11 +707,33 @@ export default function ZlegendsBot() {
               </select>
               {moveList.length > 0 && <button className="btn ghost" onClick={onShare}>Share</button>}
               {result && <button className="btn gold" onClick={() => newGame(playerColor)}>Rematch!</button>}
+              <button className="btn ghost" onClick={openStats}>Stats</button>
               {shareToast && <div className="toast">{shareToast}</div>}
             </div>
           )}
         </div>
       </div>
+
+      {statsOpen && (
+        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }}>
+          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 220, padding: "20px 24px" }}>
+            <div className="boxHead">Your Stats</div>
+            {stats === null ? (
+              <div className="pv">Loading…</div>
+            ) : stats.error ? (
+              <div className="pv">{stats.message}</div>
+            ) : (
+              <div className="astats">
+                <div><b>{stats.total}</b><span>games</span></div>
+                <div><b>{stats.wins}</b><span>wins</span></div>
+                <div><b>{stats.losses}</b><span>losses</span></div>
+                <div><b>{stats.draws}</b><span>draws</span></div>
+              </div>
+            )}
+            <button className="btn gold" onClick={() => setStatsOpen(false)}>Close</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
