@@ -4,13 +4,28 @@
    by replaying the same SAN move list rather than sharing state directly. */
 import { createEngine } from "./chessEngine";
 import { replayIntoEngine } from "../utils/share";
+import { getBookMove } from "../utils/openingBook";
 
 const eng = createEngine();
+const MAX_BOOK_PLIES = 20; // ~10 full moves; opening theory thins out past this anyway
 
-self.onmessage = (e) => {
-  const { id, moveList, timeMs, blunderChance } = e.data;
+self.onmessage = async (e) => {
+  const { id, moveList, timeMs, blunderChance, personality, useBook } = e.data;
   eng.reset();
   replayIntoEngine(eng, moveList);
+  eng.setPersonality(personality);
+
+  if (useBook && moveList.length < MAX_BOOK_PLIES) {
+    const bookSan = await getBookMove(eng.fen(), moveList, { timeoutMs: 2500 });
+    const legal = bookSan ? eng.legalMoves() : [];
+    const bookMove = legal.find(m => eng.sanOf(m) === bookSan);
+    if (bookMove) {
+      const sideScore = eng.getSide() === 1 ? eng.evalWhite() : -eng.evalWhite();
+      self.postMessage({ id, result: { move: bookMove, score: sideScore, depth: 0, nodes: 0, time: 0, san: bookSan, pv: [], book: true } });
+      return;
+    }
+  }
+
   const result = eng.search(timeMs, blunderChance || 0);
   if (!result || !result.move) {
     self.postMessage({ id, result: null });

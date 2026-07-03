@@ -15,12 +15,39 @@ import { saveGame, fetchStats } from "./utils/gameHistory";
 import "./App.css";
 
 const DIFFICULTIES = [
-  { label: "Idiot", ms: 250, blunderChance: 0.6 },
-  { label: "Casual", ms: 600 },
-  { label: "Normal", ms: 2000 },
-  { label: "Hard", ms: 5000 },
-  { label: "Master", ms: 12000 },
+  { label: "Idiot", ms: 250, blunderChance: 0.6, book: false },
+  { label: "Casual", ms: 600, book: true },
+  { label: "Normal", ms: 2000, book: true },
+  { label: "Hard", ms: 5000, book: true },
+  { label: "Master", ms: 12000, book: true },
 ];
+
+/* Named weight presets on evaluate()'s existing material/position/king-safety
+   terms — same eval function, different personality, no engine duplication.
+   The bot picks and adapts its own style (see pickPersonality below) rather
+   than exposing it as a player-facing setting. */
+const PERSONALITIES = [
+  { label: "Balanced", material: 1, pawnValue: 1, position: 1, kingSafety: 1 },
+  { label: "Aggressive", material: 0.95, pawnValue: 1, position: 1.3, kingSafety: 0.6 },
+  { label: "Positional", material: 1, pawnValue: 1, position: 1.35, kingSafety: 1 },
+  { label: "Defensive", material: 1.15, pawnValue: 1.05, position: 0.85, kingSafety: 1.7 },
+  { label: "Tactical", material: 0.9, pawnValue: 0.85, position: 1.15, kingSafety: 0.9 },
+  { label: "Gambit", material: 1, pawnValue: 0.65, position: 1.2, kingSafety: 0.8 },
+  { label: "Endgame", material: 1.05, pawnValue: 1.15, position: 1.1, kingSafety: 0.9 },
+];
+const byStyle = label => PERSONALITIES.find(p => p.label === label);
+const BALANCED = byStyle("Balanced");
+/* One style is rolled per game (its "personality of the day"), then nudged
+   situationally: complicate when losing badly, play it safe when winning
+   big, switch to technique once the game reaches a long endgame. */
+const GAME_STYLES = ["Aggressive", "Positional", "Defensive", "Tactical", "Gambit"];
+const randomStyle = () => byStyle(GAME_STYLES[(Math.random() * GAME_STYLES.length) | 0]);
+function pickPersonality(baseStyle, plyCount, botAdvantagePawns) {
+  if (plyCount > 40) return byStyle("Endgame");
+  if (botAdvantagePawns <= -2.5) return byStyle("Tactical");
+  if (botAdvantagePawns >= 3) return byStyle("Defensive");
+  return baseStyle;
+}
 
 /* Pieces render as pixel-art images (see utils/pixelGlyph.js) rather than
    plain text glyphs — bigger, chunkier, and easier to read at a glance,
@@ -90,11 +117,14 @@ export default function ZlegendsBot() {
       if (resolve) { pendingSearchesRef.current.delete(id); resolve(result); }
     };
   }
-  const runSearch = useCallback((searchMoveList, timeMs, blunderChance = 0) => {
+  const runSearch = useCallback((searchMoveList, timeMs, blunderChance = 0, opts = {}) => {
     const id = ++searchIdRef.current;
     return new Promise((resolve) => {
       pendingSearchesRef.current.set(id, resolve);
-      workerRef.current.postMessage({ id, moveList: searchMoveList, timeMs, blunderChance });
+      workerRef.current.postMessage({
+        id, moveList: searchMoveList, timeMs, blunderChance,
+        personality: opts.personality, useBook: !!opts.useBook,
+      });
     });
   }, []);
 
@@ -123,6 +153,7 @@ export default function ZlegendsBot() {
   const [promo, setPromo] = useState(null);
   const [colorPick, setColorPick] = useState(false);
   const [difficultyIdx, setDifficultyIdx] = useState(() => loadSetting("difficultyIdx", 2));
+  const [gameStyle, setGameStyle] = useState(() => randomStyle());
   const [evalCp, setEvalCp] = useState(() => eng.evalWhite());
   const [musicOn, setMusicOn] = useState(false);
   const [trackName, setTrackName] = useState(audioRef.current.trackName());
@@ -140,6 +171,8 @@ export default function ZlegendsBot() {
   const [stats, setStats] = useState(null);
   const difficultyRef = useRef(DIFFICULTIES[difficultyIdx]);
   difficultyRef.current = DIFFICULTIES[difficultyIdx];
+  const gameStyleRef = useRef(gameStyle);
+  gameStyleRef.current = gameStyle;
   const playerColorRef = useRef(playerColor);
   playerColorRef.current = playerColor;
 
@@ -220,7 +253,7 @@ export default function ZlegendsBot() {
     setAnalysisBusy(true);
     let cancelled = false;
     const fullLine = moveList.slice(0, reviewIndex).concat(analysisExtra);
-    runSearch(fullLine, 800).then((res) => {
+    runSearch(fullLine, 800, 0, { personality: BALANCED, useBook: false }).then((res) => {
       if (cancelled) return;
       if (res && res.move) {
         setBestArrow({ from: mFrom(res.move), to: mTo(res.move) });
@@ -258,7 +291,13 @@ export default function ZlegendsBot() {
 
   const engineMove = useCallback((currentMoveList) => {
     setThinking(true);
-    runSearch(currentMoveList, difficultyRef.current.ms, difficultyRef.current.blunderChance || 0).then((res) => {
+    const botColorNow = -playerColorRef.current;
+    const whiteEvalNow = eng.evalWhite();
+    const botAdvantagePawns = (botColorNow === 1 ? whiteEvalNow : -whiteEvalNow) / 100;
+    const personality = pickPersonality(gameStyleRef.current, eng.plyCount(), botAdvantagePawns);
+    runSearch(currentMoveList, difficultyRef.current.ms, difficultyRef.current.blunderChance || 0, {
+      personality, useBook: difficultyRef.current.book,
+    }).then((res) => {
       if (res && res.move) {
         const cap = isCaptureMove(res.move);
         eng.make(res.move);
@@ -269,7 +308,7 @@ export default function ZlegendsBot() {
         setMoveList(newMoveList);
         const whiteScore = eng.getSide() === 1 ? -res.score : res.score;
         setEvalCp(whiteScore);
-        setInfo({ depth: res.depth, score: whiteScore, nodes: res.nodes, time: res.time, pv: res.pv });
+        setInfo({ depth: res.depth, score: whiteScore, nodes: res.nodes, time: res.time, pv: res.pv, book: res.book });
         const over = checkGameOver();
         setResult(over);
         if (over) {
@@ -336,6 +375,7 @@ export default function ZlegendsBot() {
     eng.reset();
     moveListRef.current = [];
     setPlayerColor(color);
+    setGameStyle(randomStyle());
     setSelected(-1); setTargets([]); setLastMove(null); setHintMove(null);
     setMoveList([]); setInfo(null); setResult(null); setPromo(null); setEvalCp(0); setReviewIndex(null);
     rerender();
@@ -359,7 +399,7 @@ export default function ZlegendsBot() {
   const onHint = () => {
     if (mode === "replay" || thinking || hinting || result || promo || eng.getSide() !== playerColor) return;
     setHinting(true);
-    runSearch(moveList, 800).then((res) => {
+    runSearch(moveList, 800, 0, { personality: BALANCED, useBook: true }).then((res) => {
       if (res && res.move) setHintMove({ from: mFrom(res.move), to: mTo(res.move) });
       setHinting(false);
     });
@@ -519,6 +559,7 @@ export default function ZlegendsBot() {
             </div>
             <div className="cardMeta">
               <div className="cardName bot">Zlegend2700</div>
+              <div className="trayEmpty">{gameStyle.label} today</div>
               <Tray pieces={botTaken} colorClass={playerColor === 1 ? "wpc" : "bpc"} />
             </div>
             {youDiff < 0 && <div className="lead">+{-youDiff}</div>}
@@ -680,15 +721,19 @@ export default function ZlegendsBot() {
           <div className="box">
             <div className="boxHead">Bot Analysis</div>
             {info ? (
-              <>
-                <div className="astats">
-                  <div><b>{evalLabel}</b><span>eval</span></div>
-                  <div><b>{info.depth}</b><span>depth</span></div>
-                  <div><b>{(info.nodes / 1000).toFixed(0)}k</b><span>nodes</span></div>
-                  <div><b>{(info.time / 1000).toFixed(1)}s</b><span>time</span></div>
-                </div>
-                {info.pv.length > 0 && <div className="pv">line: {info.pv.join(" ")}</div>}
-              </>
+              info.book ? (
+                <div className="pv">Playing from the opening book.</div>
+              ) : (
+                <>
+                  <div className="astats">
+                    <div><b>{evalLabel}</b><span>eval</span></div>
+                    <div><b>{info.depth}</b><span>depth</span></div>
+                    <div><b>{(info.nodes / 1000).toFixed(0)}k</b><span>nodes</span></div>
+                    <div><b>{(info.time / 1000).toFixed(1)}s</b><span>time</span></div>
+                  </div>
+                  {info.pv.length > 0 && <div className="pv">line: {info.pv.join(" ")}</div>}
+                </>
+              )
             ) : (
               <div className="pv">After each of its moves, the bot posts its eval, search depth, node count, and the line it expects.</div>
             )}

@@ -123,6 +123,15 @@ export function createEngine() {
   const killers = Array.from({ length: 64 }, () => [0, 0]);
   const histH = Array.from({ length: 13 }, () => new Int32Array(120));
   let nodes = 0, stopAt = 0, stopped = false;
+  /* Personality: named weight presets on the material/position/king-safety
+     terms evaluate() already computes, so different "styles" reuse the same
+     eval instead of duplicating it. See utils/openingBook.js's caller for
+     the named presets. */
+  let personality = { material: 1, pawnValue: 1, position: 1, kingSafety: 1 };
+  function setPersonality(p) {
+    personality = p ? { material: 1, pawnValue: 1, position: 1, kingSafety: 1, ...p }
+                     : { material: 1, pawnValue: 1, position: 1, kingSafety: 1 };
+  }
 
   function reset() {
     board.fill(OFF);
@@ -268,6 +277,27 @@ export function createEngine() {
     return out;
   }
 
+  /* Cheap O(1) pawn-shield/open-file check around a king — no move
+     generation needed. Fades out via the mg/eg taper below, same as PST_K. */
+  function kingSafety(kSq, kSide) {
+    const kf = fileOf(kSq), kr = rankOf(kSq);
+    let shield = 0, openFiles = 0;
+    for (let df = -1; df <= 1; df++) {
+      const f = kf + df;
+      if (f < 0 || f > 7) continue;
+      let hasShieldPawn = false, fileHasPawn = false;
+      for (let r = 0; r < 8; r++) {
+        if (board[M64TO120[r * 8 + f]] !== kSide * WP) continue;
+        fileHasPawn = true;
+        const dist = kSide === 1 ? r - kr : kr - r;
+        if (dist >= 1 && dist <= 2) hasShieldPawn = true;
+      }
+      if (hasShieldPawn) shield++;
+      if (!fileHasPawn) openFiles++;
+    }
+    return shield * 8 - openFiles * 12;
+  }
+
   function evaluate() {
     let mg = 0, eg = 0, phase = 0, wb = 0, bb = 0;
     for (let i = 0; i < 64; i++) {
@@ -277,12 +307,14 @@ export function createEngine() {
       phase += PHASE_W[a];
       const idx = p > 0 ? (7 - r) * 8 + f : r * 8 + f;
       const s = p > 0 ? 1 : -1;
-      mg += s * (VAL[a] + PST_MG[a][idx]);
-      eg += s * (VAL[a] + PST_EG[a][idx]);
+      const matW = a === WP ? personality.pawnValue : personality.material;
+      mg += s * (VAL[a] * matW + PST_MG[a][idx] * personality.position);
+      eg += s * (VAL[a] * matW + PST_EG[a][idx] * personality.position);
       if (p === WB) wb++; else if (p === -WB) bb++;
     }
     if (wb >= 2) { mg += 30; eg += 40; }
     if (bb >= 2) { mg -= 30; eg -= 40; }
+    mg += (kingSafety(wk, 1) - kingSafety(bk, -1)) * personality.kingSafety;
     if (phase > 24) phase = 24;
     let score = ((mg * phase + eg * (24 - phase)) / 24) | 0;
     score += side === 1 ? 10 : -10;
@@ -497,6 +529,33 @@ export function createEngine() {
     key = computeKey();
   }
 
+  /* Inverse of loadFen — used by the opening book to query the Lichess
+     Explorer API for the current position. */
+  function fen() {
+    const PIECE_CHAR_FEN = "-PNBRQK";
+    let rows = [];
+    for (let r = 7; r >= 0; r--) {
+      let row = "", run = 0;
+      for (let f = 0; f < 8; f++) {
+        const p = board[M64TO120[r * 8 + f]];
+        if (p === EMPTY) { run++; continue; }
+        if (run) { row += run; run = 0; }
+        const ch = PIECE_CHAR_FEN[Math.abs(p)];
+        row += p > 0 ? ch : ch.toLowerCase();
+      }
+      if (run) row += run;
+      rows.push(row);
+    }
+    let castleStr = "";
+    if (castle & 1) castleStr += "K";
+    if (castle & 2) castleStr += "Q";
+    if (castle & 4) castleStr += "k";
+    if (castle & 8) castleStr += "q";
+    if (!castleStr) castleStr = "-";
+    const fullmove = ((hist.length / 2) | 0) + 1;
+    return `${rows.join("/")} ${side === 1 ? "w" : "b"} ${castleStr} ${ep ? sqName(ep) : "-"} ${half} ${fullmove}`;
+  }
+
   function repetitionCount() {
     let c = 1;
     for (const h of hist) if (h.key === key) c++;
@@ -514,7 +573,7 @@ export function createEngine() {
 
   reset();
   return {
-    reset, legalMoves, make, unmake, search, sanOf, pvLine, loadFen,
+    reset, legalMoves, make, unmake, search, sanOf, pvLine, loadFen, fen, setPersonality,
     inCheckNow: () => inCheck(side),
     getSide: () => side,
     pieceAt: i64 => board[M64TO120[i64]],
