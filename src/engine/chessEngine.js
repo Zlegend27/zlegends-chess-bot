@@ -457,6 +457,46 @@ export function createEngine() {
     return san;
   }
 
+  function loadFen(fen) {
+    const [placement, sideChar, castleStr, epStr, halfStr] = fen.trim().split(/\s+/);
+    board.fill(OFF);
+    for (let i = 0; i < 64; i++) board[M64TO120[i]] = EMPTY;
+    const CHAR_TO_PIECE = { p: WP, n: WN, b: WB, r: WR, q: WQ, k: WK };
+    const rows = placement.split("/");
+    for (let rIdx = 0; rIdx < 8; rIdx++) {
+      const rank = 7 - rIdx;
+      let file = 0;
+      for (const ch of rows[rIdx]) {
+        if (/\d/.test(ch)) { file += Number(ch); continue; }
+        const isWhite = ch === ch.toUpperCase();
+        const val = CHAR_TO_PIECE[ch.toLowerCase()];
+        const sq120 = M64TO120[rank * 8 + file];
+        board[sq120] = isWhite ? val : -val;
+        if (val === WK) { if (isWhite) wk = sq120; else bk = sq120; }
+        file++;
+      }
+    }
+    side = sideChar === "b" ? -1 : 1;
+    castle = 0;
+    if (castleStr && castleStr !== "-") {
+      if (castleStr.includes("K")) castle |= 1;
+      if (castleStr.includes("Q")) castle |= 2;
+      if (castleStr.includes("k")) castle |= 4;
+      if (castleStr.includes("q")) castle |= 8;
+    }
+    if (epStr && epStr !== "-") {
+      const file = epStr.charCodeAt(0) - 97;
+      const rank = Number(epStr[1]) - 1;
+      ep = M64TO120[rank * 8 + file];
+    } else {
+      ep = 0;
+    }
+    half = halfStr ? Number(halfStr) : 0;
+    hist.length = 0;
+    tt = new Map();
+    key = computeKey();
+  }
+
   function repetitionCount() {
     let c = 1;
     for (const h of hist) if (h.key === key) c++;
@@ -474,7 +514,7 @@ export function createEngine() {
 
   reset();
   return {
-    reset, legalMoves, make, unmake, search, sanOf, pvLine,
+    reset, legalMoves, make, unmake, search, sanOf, pvLine, loadFen,
     inCheckNow: () => inCheck(side),
     getSide: () => side,
     pieceAt: i64 => board[M64TO120[i64]],

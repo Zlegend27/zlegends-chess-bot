@@ -3,6 +3,7 @@ import {
   createEngine, EMPTY, WN, WB, WR, WQ, WK, M64TO120, M120TO64,
   mFrom, mTo, mPromo, mFlags,
 } from "../src/engine/chessEngine";
+import { replayIntoEngine } from "../src/utils/share";
 import { createKidAudio } from "./kidTune";
 
 /* Runs the search synchronously on the main thread (no Worker) — this is
@@ -72,6 +73,28 @@ const TIPS = [
   "Castle your king to safety before the middle of the board gets busy.",
   "Every game teaches you something new, win or lose. Have fun!",
 ];
+
+/* Each puzzle is white-to-move; every FEN and its solution SAN has been
+   checked against the actual engine (loadFen + legalMoves + sanOf), not
+   just eyeballed, since a wrong "correct answer" would just confuse a
+   kid trying to learn from it. */
+const PUZZLES = {
+  easy: [
+    { fen: "4k3/8/8/8/3q4/8/2N5/4K3 w - - 0 1", solution: "Nxd4", hint: "A black piece is just sitting there undefended - can you capture it for free?" },
+    { fen: "6k1/5ppp/8/8/8/8/8/3R2K1 w - - 0 1", solution: "Rd8#", hint: "The black king has no room to escape along the back row. Checkmate in one!" },
+    { fen: "k7/4P3/8/8/8/8/8/K7 w - - 0 1", solution: "e8=Q+", hint: "Your pawn is one step away from becoming a queen!" },
+  ],
+  medium: [
+    { fen: "r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1", solution: "Nc7+", hint: "Your knight can jump to a square that attacks two pieces at once!" },
+    { fen: "q3k3/8/8/1N6/8/8/8/4K3 w - - 0 1", solution: "Nc7+", hint: "Your knight can fork the king and the queen at the same time!" },
+    { fen: "7k/5ppp/8/8/8/8/8/Q3K3 w - - 0 1", solution: "Qa8#", hint: "The black king's own pawns are blocking its escape. Find checkmate!" },
+  ],
+  hard: [
+    { fen: "6k1/5p1p/7Q/8/8/8/1B6/4K3 w - - 0 1", solution: "Qg7#", hint: "Your queen and bishop are teaming up. Where can the queen go safely to deliver mate?" },
+    { fen: "1r2nk2/8/8/8/8/3Q4/8/4K3 w - - 0 1", solution: "Qb5", hint: "One quiet queen move attacks two undefended black pieces at once - can you spot it?" },
+    { fen: "q1r1k3/8/8/3N4/8/8/8/4K3 w - - 0 1", solution: "Nb6", hint: "Your knight can jump to a square that forks two valuable black pieces!" },
+  ],
+};
 
 const PALETTE = {
   Bunny: { body: "#FFD8EA", ear: "#FFB6D9", accent: "#FF6FA5", blush: "#FFA6C9" },
@@ -164,6 +187,11 @@ export default function KindleApp() {
   const [result, setResult] = useState(null);
   const [promo, setPromo] = useState(null);
   const [difficultyIdx, setDifficultyIdx] = useState(1);
+  const [botLastMove, setBotLastMove] = useState(null);
+
+  const [puzzleTier, setPuzzleTier] = useState(null);
+  const [activePuzzle, setActivePuzzle] = useState(null);
+  const [puzzleFeedback, setPuzzleFeedback] = useState(null);
 
   const isCaptureMove = m => eng.pieceAt(M120TO64[mTo(m)]) !== EMPTY || (mFlags(m) & 1);
 
@@ -201,6 +229,7 @@ export default function KindleApp() {
         eng.make(res.move);
         cap ? audio.sfxCapture() : audio.sfxMove();
         setMoveList(l => [...l, san]);
+        setBotLastMove({ from: mFrom(res.move), to: mTo(res.move) });
         const over = checkGameOver();
         setResult(over);
         announceResult(over);
@@ -217,6 +246,7 @@ export default function KindleApp() {
     eng.make(m);
     cap ? audio.sfxCapture() : audio.sfxMove();
     setMoveList(l => [...l, san]);
+    setBotLastMove(null);
     setSelected(-1); setTargets([]);
     const over = checkGameOver();
     setResult(over);
@@ -249,7 +279,7 @@ export default function KindleApp() {
   const newGame = (color) => {
     eng.reset();
     setPlayerColor(color);
-    setSelected(-1); setTargets([]); setMoveList([]); setResult(null); setPromo(null);
+    setSelected(-1); setTargets([]); setMoveList([]); setResult(null); setPromo(null); setBotLastMove(null);
     rerender();
     if (color === -1) setTimeout(() => engineMoveRef.current(), 30);
   };
@@ -260,9 +290,135 @@ export default function KindleApp() {
     if (eng.getSide() === playerColor && eng.plyCount() >= 2) n = 2; else n = 1;
     for (let i = 0; i < n; i++) eng.unmake();
     setMoveList(l => l.slice(0, l.length - n));
-    setSelected(-1); setTargets([]); setResult(null); setPromo(null);
+    setSelected(-1); setTargets([]); setResult(null); setPromo(null); setBotLastMove(null);
     rerender();
   };
+
+  const startPuzzle = (tier) => {
+    if (thinking) return;
+    const list = PUZZLES[tier];
+    const puzzle = list[(Math.random() * list.length) | 0];
+    eng.loadFen(puzzle.fen);
+    setActivePuzzle(puzzle);
+    setPuzzleTier(tier);
+    setPuzzleFeedback(null);
+    setSelected(-1); setTargets([]); setBotLastMove(null);
+    rerender();
+  };
+
+  const onPuzzleSquare = (i64) => {
+    if (puzzleFeedback) return;
+    const legal = eng.legalMoves();
+    const sq120 = M64TO120[i64];
+    if (selected >= 0) {
+      const from120 = M64TO120[selected];
+      const candidates = legal.filter(m => mFrom(m) === from120 && mTo(m) === sq120);
+      if (candidates.length > 0) {
+        const move = candidates.find(m => mPromo(m) === 0 || mPromo(m) === WQ) || candidates[0];
+        const san = eng.sanOf(move);
+        const correct = san === activePuzzle.solution;
+        eng.make(move);
+        if (correct) audio.sfxWin(); else audio.sfxLose();
+        setPuzzleFeedback(correct ? "correct" : "wrong");
+        setSelected(-1); setTargets([]);
+        rerender();
+        return;
+      }
+    }
+    const p = eng.pieceAt(i64);
+    if (p > 0) {
+      setSelected(i64);
+      setTargets(legal.filter(m => mFrom(m) === sq120).map(m => M120TO64[mTo(m)]));
+    } else { setSelected(-1); setTargets([]); }
+  };
+
+  const retryPuzzle = () => {
+    eng.unmake();
+    setPuzzleFeedback(null);
+    setSelected(-1); setTargets([]);
+    rerender();
+  };
+
+  const exitPuzzle = () => {
+    eng.reset();
+    replayIntoEngine(eng, moveList);
+    setActivePuzzle(null); setPuzzleTier(null); setPuzzleFeedback(null);
+    setSelected(-1); setTargets([]);
+    setView("play");
+    rerender();
+  };
+
+  const buildBoardRows = (flippedFlag, clickHandler) => {
+    const rows = [];
+    for (let vr = 0; vr < 8; vr++) {
+      const r = flippedFlag ? vr : 7 - vr;
+      const cells = [];
+      for (let vf = 0; vf < 8; vf++) {
+        const f = flippedFlag ? 7 - vf : vf;
+        const i64 = r * 8 + f;
+        const sq120 = M64TO120[i64];
+        const p = eng.pieceAt(i64);
+        const light = (r + f) % 2 === 1;
+        const isSel = selected === i64;
+        const isTarget = targets.includes(i64);
+        const isBotLast = botLastMove && (botLastMove.from === sq120 || botLastMove.to === sq120);
+        const kingInCheck = p * eng.getSide() === WK && eng.inCheckNow();
+        cells.push(
+          <div key={i64} onClick={() => clickHandler(i64)}
+            className={"kSq " + (light ? "kLight" : "kDark") + (isSel ? " kSel" : "") + (isBotLast ? " kLast" : "") + (kingInCheck ? " kChk" : "")}>
+            {p !== EMPTY && <span className={"kPc " + (p > 0 ? "kPcW" : "kPcB")}>{glyphFor(p)}</span>}
+            {isTarget && <span className="kDot" />}
+            {vf === 0 && <span className="kCoord kRk">{r + 1}</span>}
+            {vr === 7 && <span className="kCoord kFl">{FILES[f]}</span>}
+          </div>
+        );
+      }
+      rows.push(<div key={vr} className="kRow">{cells}</div>);
+    }
+    return rows;
+  };
+
+  if (view === "puzzle") {
+    const tierLabel = puzzleTier ? puzzleTier[0].toUpperCase() + puzzleTier.slice(1) : "";
+    return (
+      <div className="kRoot">
+        <div className="kHdr">
+          <AnimalIcon kind={DIFFICULTIES[difficultyIdx].label} />
+          <h1>Kinnda Chess</h1>
+        </div>
+        {!activePuzzle ? (
+          <>
+            <div className="kStatus">Pick a puzzle level!</div>
+            <div className="kCtrls">
+              <button onClick={() => startPuzzle("easy")}>Easy</button>
+              <button onClick={() => startPuzzle("medium")}>Medium</button>
+              <button onClick={() => startPuzzle("hard")}>Hard</button>
+            </div>
+            <div className="kCtrls">
+              <button onClick={exitPuzzle}>Back to the Game</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="kStatus">
+              {puzzleFeedback === "correct" ? "You got it! Great puzzle solving!"
+                : puzzleFeedback === "wrong" ? "Not quite - give it another try!"
+                : `${tierLabel} puzzle - find White's best move!`}
+            </div>
+            {!puzzleFeedback && <div className="kMoves">{activePuzzle.hint}</div>}
+            <div className="kBoardWrap">
+              <div className="kBoard">{buildBoardRows(false, onPuzzleSquare)}</div>
+            </div>
+            <div className="kCtrls">
+              {puzzleFeedback === "wrong" && <button onClick={retryPuzzle}>Try Again</button>}
+              {puzzleFeedback === "correct" && <button onClick={() => startPuzzle(puzzleTier)}>Next Puzzle</button>}
+              <button onClick={exitPuzzle}>Back to the Game</button>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
 
   if (view === "lessons") {
     return (
@@ -295,30 +451,7 @@ export default function KindleApp() {
   }
 
   const flipped = playerColor === -1;
-  const rows = [];
-  for (let vr = 0; vr < 8; vr++) {
-    const r = flipped ? vr : 7 - vr;
-    const cells = [];
-    for (let vf = 0; vf < 8; vf++) {
-      const f = flipped ? 7 - vf : vf;
-      const i64 = r * 8 + f;
-      const p = eng.pieceAt(i64);
-      const light = (r + f) % 2 === 1;
-      const isSel = selected === i64;
-      const isTarget = targets.includes(i64);
-      const kingInCheck = p * eng.getSide() === WK && eng.inCheckNow();
-      cells.push(
-        <div key={i64} onClick={() => onSquare(i64)}
-          className={"kSq " + (light ? "kLight" : "kDark") + (isSel ? " kSel" : "") + (kingInCheck ? " kChk" : "")}>
-          {p !== EMPTY && <span className={"kPc " + (p > 0 ? "kPcW" : "kPcB")}>{glyphFor(p)}</span>}
-          {isTarget && <span className="kDot" />}
-          {vf === 0 && <span className="kCoord kRk">{r + 1}</span>}
-          {vr === 7 && <span className="kCoord kFl">{FILES[f]}</span>}
-        </div>
-      );
-    }
-    rows.push(<div key={vr} className="kRow">{cells}</div>);
-  }
+  const rows = buildBoardRows(flipped, onSquare);
 
   const pairs = [];
   for (let i = 0; i < moveList.length; i += 2) pairs.push([i / 2 + 1, moveList[i], moveList[i + 1]]);
@@ -392,6 +525,7 @@ export default function KindleApp() {
           {DIFFICULTIES.map((d, i) => <option key={i} value={i}>{d.label} ({d.elo})</option>)}
         </select>
         <button onClick={() => setView("lessons")}>How to Play</button>
+        <button onClick={() => setView("puzzle")} disabled={thinking}>Puzzles</button>
         {result && <button onClick={() => newGame(playerColor)}>Play Again!</button>}
       </div>
     </div>

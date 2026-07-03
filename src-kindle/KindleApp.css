@@ -38,6 +38,8 @@ body {
 .kSq.kDark { background: #BFE6C7; }
 .kSq.kSel { box-shadow: inset 0 0 0 4px #4EA8DE; }
 .kSq.kChk { background: #FF8F8F; }
+.kSq.kLast { background: #FFE79A; }
+.kSq.kLast.kDark { background: #E0D27A; }
 .kPc { font-size: 32px; display: inline-block; line-height: 1; }
 .kPc.kPcW { border-radius: 50%; background: #FFF2C2; box-shadow: 0 0 0 3px #F2A65A, 0 2px 3px #00000030; padding: 3px; color: #7A4A17; }
 .kPc.kPcB { border-radius: 50%; background: #CDB6E8; box-shadow: 0 0 0 3px #7C5CBF, 0 2px 3px #00000030; padding: 5px; color: #3B2C5C; }
