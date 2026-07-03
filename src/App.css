@@ -55,9 +55,9 @@
 .cardName.you{ color:var(--cyan); text-shadow:0 0 8px #3EE7F555; }
 .cardMeta{ flex:1; min-width:0; }
 .tray{ display:flex; flex-wrap:wrap; gap:1px; margin-top:2px; min-height:20px; align-items:center; }
-.trayPc{ font-size:18px; line-height:1; }
-.trayPc.wpc{ color:#EAFBFF; text-shadow:0 0 5px #3EE7F5AA, 0 1px 0 #0B1B2E; }
-.trayPc.bpc{ color:#3a2a5c; -webkit-text-stroke:1px #C9C2E8; text-shadow:0 0 5px #D94BF0CC; }
+.trayPc{ width:20px; height:20px; image-rendering:pixelated; }
+.trayPc.wpc{ filter:drop-shadow(0 0 3px #3EE7F5AA); }
+.trayPc.bpc{ filter:drop-shadow(0 0 3px #D94BF0CC); }
 .trayEmpty{ font-size:11px; color:var(--dim); font-style:italic; }
 .lead{ font-family:'Arial Black',Impact,sans-serif; font-size:15px; color:var(--yellow);
   text-shadow:0 0 8px #F5D93E77, 1px 1px 0 #150C24; flex:none; }
@@ -88,9 +88,9 @@
 .sq.chk.light{ background:radial-gradient(circle, #F0534899 15%, transparent 75%), var(--liliac); }
 .sq.hintFrom::after{ content:""; position:absolute; inset:0; box-shadow:inset 0 0 0 3px var(--yellow), inset 0 0 16px #F5D93E99; }
 .sq.hintTo::after{ content:""; position:absolute; inset:0; box-shadow:inset 0 0 0 3px var(--yellow), inset 0 0 16px #F5D93E99; }
-.pc{ font-size:clamp(22px,6vw,37px); line-height:1; z-index:2; }
-.pc.w{ color:#EAFBFF; text-shadow:0 0 7px #3EE7F5CC, 0 0 2px #3EE7F5, 0 2px 0 #0B1B2E; }
-.pc.b{ color:#241640; text-shadow:0 0 7px #D94BF099, 0 1px 1px #ffffff22, 0 2px 0 #000000AA; }
+.pc{ width:clamp(28px,7.5vw,48px); height:clamp(28px,7.5vw,48px); z-index:2; image-rendering:pixelated; pointer-events:none; }
+.pc.w{ filter:drop-shadow(0 0 5px #3EE7F5CC) drop-shadow(0 2px 0 #0B1B2E); }
+.pc.b{ filter:drop-shadow(0 0 5px #D94BF099) drop-shadow(0 2px 0 #000000AA); }
 .dot{ position:absolute; width:26%; height:26%; border-radius:50%; background:#3EE7F566; box-shadow:0 0 8px #3EE7F566; z-index:1; }
 .dot.ring{ width:88%; height:88%; background:transparent; border:4px solid #3EE7F566; box-shadow:none; }
 .coord{ position:absolute; font-size:10px; font-weight:700; opacity:.6; font-family:ui-monospace,Consolas,monospace; color:#150C24; }

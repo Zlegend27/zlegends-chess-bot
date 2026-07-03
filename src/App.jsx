@@ -10,6 +10,7 @@ import StarField from "./components/StarField";
 import { loadSetting, saveSetting } from "./utils/storage";
 import { buildPgn } from "./utils/pgn";
 import { encodeGame, decodeGame, getSharedHash, replayIntoEngine } from "./utils/share";
+import { pixelGlyphUrl } from "./utils/pixelGlyph";
 import "./App.css";
 
 const DIFFICULTIES = [
@@ -20,10 +21,19 @@ const DIFFICULTIES = [
   { label: "Master", ms: 12000 },
 ];
 
-/* U+FE0E forces text presentation instead of emoji presentation — without it,
-   iOS/mobile browsers can render these as colorful fixed-size emoji glyphs
-   that ignore the CSS color used to distinguish white/black pieces. */
-const GLYPH = { 1: "♟︎", 2: "♞︎", 3: "♝︎", 4: "♜︎", 5: "♛︎", 6: "♚︎" };
+/* Pieces render as pixel-art images (see utils/pixelGlyph.js) rather than
+   plain text glyphs — bigger, chunkier, and easier to read at a glance,
+   while still built on the same universally-recognizable chess symbols. */
+const PIECE_CHAR = { 1: "♟", 2: "♞", 3: "♝", 4: "♜", 5: "♛", 6: "♚" };
+const PIECE_COLOR = { w: "#EAFBFF", b: "#241640" };
+const pieceImgSrc = (type, isWhite) => pixelGlyphUrl(
+  PIECE_CHAR[type],
+  isWhite ? PIECE_COLOR.w : PIECE_COLOR.b,
+  {
+    outline: isWhite ? null : "#C9C2E8",
+    accent: type === 6 ? (isWhite ? "#0B1B2E" : "#EAFBFF") : null,
+  }
+);
 const FILES = "abcdefgh";
 const PTS = { 1: 1, 2: 3, 3: 3, 4: 5, 5: 9 };
 const START_COUNT = { 1: 8, 2: 2, 3: 2, 4: 2, 5: 1 };
@@ -426,7 +436,7 @@ export default function ZlegendsBot() {
           className={"sq " + (light ? "light" : "dark") + (isSel ? " sel" : "") + (isLast ? " last" : "") +
             (isBotLast ? " botLast" : "") + (isPlayerLast ? " playerLast" : "") +
             (kingInCheck ? " chk" : "") + (isHintFrom ? " hintFrom" : "") + (isHintTo ? " hintTo" : "")}>
-          {p !== EMPTY && <span className={"pc " + (p > 0 ? "w" : "b")}>{GLYPH[Math.abs(p)]}</span>}
+          {p !== EMPTY && <img className={"pc " + (p > 0 ? "w" : "b")} src={pieceImgSrc(Math.abs(p), p > 0)} alt="" draggable="false" />}
           {isTarget && <span className={"dot" + (p !== EMPTY ? " ring" : "")} />}
           {vf === 0 && <span className="coord rk">{r + 1}</span>}
           {vr === 7 && <span className="coord fl">{FILES[f]}</span>}
@@ -469,7 +479,7 @@ export default function ZlegendsBot() {
     <div className="tray">
       {pieces.length === 0
         ? <span className="trayEmpty">no captures yet</span>
-        : pieces.map((t, i) => <span key={i} className={"trayPc " + colorClass}>{GLYPH[t]}</span>)}
+        : pieces.map((t, i) => <img key={i} className={"trayPc " + colorClass} src={pieceImgSrc(t, colorClass === "wpc")} alt="" draggable="false" />)}
     </div>
   );
 
@@ -534,7 +544,7 @@ export default function ZlegendsBot() {
                           setPromo(null);
                           if (m) (analyzing ? analysisMove(m) : playMove(m));
                         }}>
-                          <span className={"pc " + (eng.getSide() === 1 ? "w" : "b")} style={{ fontSize: 32 }}>{GLYPH[pp]}</span>
+                          <img className={"pc " + (eng.getSide() === 1 ? "w" : "b")} style={{ width: 44, height: 44 }} src={pieceImgSrc(pp, eng.getSide() === 1)} alt="" draggable="false" />
                         </button>
                       ))}
                     </div>
@@ -544,10 +554,10 @@ export default function ZlegendsBot() {
                   <div className="promoOv">
                     <div className="promoBox">
                       <button onClick={() => { setColorPick(false); newGame(1); }} title="Play as White">
-                        <span className="pc w" style={{ fontSize: 32 }}>{GLYPH[1]}</span>
+                        <img className="pc w" style={{ width: 44, height: 44 }} src={pieceImgSrc(1, true)} alt="" draggable="false" />
                       </button>
                       <button onClick={() => { setColorPick(false); newGame(-1); }} title="Play as Black">
-                        <span className="pc b" style={{ fontSize: 32 }}>{GLYPH[1]}</span>
+                        <img className="pc b" style={{ width: 44, height: 44 }} src={pieceImgSrc(1, false)} alt="" draggable="false" />
                       </button>
                     </div>
                   </div>
