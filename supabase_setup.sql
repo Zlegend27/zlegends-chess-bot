@@ -4,6 +4,7 @@ create table games (
   created_at timestamptz not null default now(),
   engine_version text,
   difficulty_label text,
+  style text,
   player_color int,
   moves jsonb,
   pgn text,
@@ -31,3 +32,8 @@ create policy "Allow anonymous select" on games
   for select
   to anon
   using (true);
+
+-- Migration for a table created before the `style` column existed
+-- (the `games` table on this project was already live): run just this
+-- line in the SQL Editor instead of the CREATE TABLE above.
+-- alter table games add column style text;

@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 5173
+    },
+    {
+      "name": "kinnda-chess-preview",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "preview:kindle"],
+      "port": 5174
     }
   ]
 }

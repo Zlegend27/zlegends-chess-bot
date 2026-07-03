@@ -12,6 +12,7 @@ import { buildPgn } from "./utils/pgn";
 import { encodeGame, decodeGame, getSharedHash, replayIntoEngine } from "./utils/share";
 import { pixelGlyphUrl } from "./utils/pixelGlyph";
 import { saveGame, fetchStats } from "./utils/gameHistory";
+import { ENGINE_VERSION } from "./utils/version";
 import "./App.css";
 
 const DIFFICULTIES = [
@@ -313,7 +314,7 @@ export default function ZlegendsBot() {
         setResult(over);
         if (over) {
           setReviewIndex(eng.plyCount());
-          saveGame({ difficultyLabel: difficultyRef.current.label, playerColor: playerColorRef.current, moveList: newMoveList, result: over, finalEval: whiteScore });
+          saveGame({ difficultyLabel: difficultyRef.current.label, playerColor: playerColorRef.current, moveList: newMoveList, result: over, finalEval: whiteScore, style: gameStyleRef.current.label, engineVersion: ENGINE_VERSION });
         }
       }
       setThinking(false);
@@ -338,7 +339,7 @@ export default function ZlegendsBot() {
     setResult(over);
     if (over) {
       setReviewIndex(eng.plyCount());
-      saveGame({ difficultyLabel: difficultyRef.current.label, playerColor: playerColorRef.current, moveList: newMoveList, result: over, finalEval: eng.evalWhite() });
+      saveGame({ difficultyLabel: difficultyRef.current.label, playerColor: playerColorRef.current, moveList: newMoveList, result: over, finalEval: eng.evalWhite(), style: gameStyleRef.current.label, engineVersion: ENGINE_VERSION });
     }
     rerender();
     if (!over) engineMoveRef.current(newMoveList);

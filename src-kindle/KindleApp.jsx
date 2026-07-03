@@ -4,6 +4,7 @@ import {
   mFrom, mTo, mPromo, mFlags,
 } from "../src/engine/chessEngine";
 import { replayIntoEngine } from "../src/utils/share";
+import { getBookMove } from "../src/utils/openingBook";
 import { createKidAudio } from "./kidTune";
 
 /* Runs the search synchronously on the main thread (no Worker) — this is
@@ -42,13 +43,14 @@ function materialState(eng) {
    real search) — there's no way to calibrate this against real rated
    games from here, so treat these as "roughly this strength", not exact. */
 const DIFFICULTIES = [
-  { label: "Bunny", elo: 300, ms: 150, blunderChance: 0.85 },
-  { label: "Cat", elo: 600, ms: 300, blunderChance: 0.55 },
-  { label: "Dog", elo: 900, ms: 600, blunderChance: 0.3 },
-  { label: "Fox", elo: 1200, ms: 1200, blunderChance: 0.12 },
-  { label: "Owl", elo: 1600, ms: 3000, blunderChance: 0.03 },
-  { label: "Lion", elo: 2000, ms: 8000, blunderChance: 0 },
+  { label: "Bunny", elo: 300, ms: 150, blunderChance: 0.85, book: false },
+  { label: "Cat", elo: 600, ms: 300, blunderChance: 0.55, book: true },
+  { label: "Dog", elo: 900, ms: 600, blunderChance: 0.3, book: true },
+  { label: "Fox", elo: 1200, ms: 1200, blunderChance: 0.12, book: true },
+  { label: "Owl", elo: 1600, ms: 3000, blunderChance: 0.03, book: true },
+  { label: "Lion", elo: 2000, ms: 8000, blunderChance: 0, book: true },
 ];
+const MAX_BOOK_PLIES = 20; // ~10 full moves; matches the main bot's cutoff
 
 /* The rarer "outline" chess Unicode code points (white pieces) aren't
    reliably present in every font, and Kindle's font set is an unknown —
@@ -183,6 +185,7 @@ export default function KindleApp() {
   const [selected, setSelected] = useState(-1);
   const [targets, setTargets] = useState([]);
   const [moveList, setMoveList] = useState([]);
+  const moveListRef = useRef(moveList);
   const [thinking, setThinking] = useState(false);
   const [result, setResult] = useState(null);
   const [promo, setPromo] = useState(null);
@@ -218,17 +221,23 @@ export default function KindleApp() {
   };
 
   const engineMoveRef = useRef(null);
-  const engineMove = useCallback(() => {
+  const engineMove = useCallback(async () => {
     setThinking(true);
     const diff = DIFFICULTIES[difficultyIdx];
+    let move = null;
+    if (diff.book && eng.plyCount() < MAX_BOOK_PLIES) {
+      const bookSan = await getBookMove(eng.fen(), moveListRef.current, { timeoutMs: 2500 });
+      if (bookSan) move = eng.legalMoves().find(m => eng.sanOf(m) === bookSan) || null;
+    }
     setTimeout(() => {
-      const res = eng.search(diff.ms, diff.blunderChance || 0);
+      const res = move ? { move } : eng.search(diff.ms, diff.blunderChance || 0);
       if (res && res.move) {
         const cap = isCaptureMove(res.move);
         const san = eng.sanOf(res.move);
         eng.make(res.move);
         cap ? audio.sfxCapture() : audio.sfxMove();
-        setMoveList(l => [...l, san]);
+        moveListRef.current = [...moveListRef.current, san];
+        setMoveList(moveListRef.current);
         setBotLastMove({ from: mFrom(res.move), to: mTo(res.move) });
         const over = checkGameOver();
         setResult(over);
@@ -245,7 +254,8 @@ export default function KindleApp() {
     const san = eng.sanOf(m);
     eng.make(m);
     cap ? audio.sfxCapture() : audio.sfxMove();
-    setMoveList(l => [...l, san]);
+    moveListRef.current = [...moveListRef.current, san];
+    setMoveList(moveListRef.current);
     setBotLastMove(null);
     setSelected(-1); setTargets([]);
     const over = checkGameOver();
@@ -279,6 +289,7 @@ export default function KindleApp() {
   const newGame = (color) => {
     eng.reset();
     setPlayerColor(color);
+    moveListRef.current = [];
     setSelected(-1); setTargets([]); setMoveList([]); setResult(null); setPromo(null); setBotLastMove(null);
     rerender();
     if (color === -1) setTimeout(() => engineMoveRef.current(), 30);
@@ -289,7 +300,8 @@ export default function KindleApp() {
     let n;
     if (eng.getSide() === playerColor && eng.plyCount() >= 2) n = 2; else n = 1;
     for (let i = 0; i < n; i++) eng.unmake();
-    setMoveList(l => l.slice(0, l.length - n));
+    moveListRef.current = moveListRef.current.slice(0, moveListRef.current.length - n);
+    setMoveList(moveListRef.current);
     setSelected(-1); setTargets([]); setResult(null); setPromo(null); setBotLastMove(null);
     rerender();
   };
