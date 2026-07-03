@@ -4,7 +4,7 @@ import {
   mFrom, mTo, mPromo, mFlags, MATE, fileOf, rankOf,
 } from "./engine/chessEngine";
 import { createAudio } from "./audio/chiptune";
-import PixelAvatar, { ZPAL, ZPIX, JPAL, JPIX, BPAL, BPIX } from "./components/PixelAvatar";
+import PixelAvatar, { ZPAL, ZPIX, JPAL, JPIX, BPAL, BPIX, PPAL, PPIX } from "./components/PixelAvatar";
 import SocialLinks from "./components/SocialLinks";
 import StarField from "./components/StarField";
 import { loadSetting, saveSetting } from "./utils/storage";
@@ -14,6 +14,7 @@ import { pieceSvgUrl } from "./utils/chessPieceSvg";
 import { saveGame, fetchStats } from "./utils/gameHistory";
 import { ENGINE_VERSION } from "./utils/version";
 import { OPENINGS } from "./utils/openings";
+import { PUZZLES, RATING_BANDS } from "./utils/puzzles";
 import "./App.css";
 
 const DIFFICULTIES = [
@@ -170,6 +171,11 @@ export default function ZlegendsBot() {
   const [quizOpening, setQuizOpening] = useState(null);
   const [quizFeedback, setQuizFeedback] = useState(null);
   const [quizDoneToast, setQuizDoneToast] = useState(null);
+  const [puzzlesOpen, setPuzzlesOpen] = useState(false);
+  const [puzzleBand, setPuzzleBand] = useState(null);
+  const [activePuzzle, setActivePuzzle] = useState(null);
+  const [puzzleFeedback, setPuzzleFeedback] = useState(null);
+  const [puzzleSolved, setPuzzleSolved] = useState(false);
   const difficultyRef = useRef(DIFFICULTIES[difficultyIdx]);
   difficultyRef.current = DIFFICULTIES[difficultyIdx];
   const gameStyleRef = useRef(gameStyle);
@@ -348,6 +354,8 @@ export default function ZlegendsBot() {
   const onSquare = (i64) => {
     if (mode === "replay" || thinking || promo) return;
     const inQuiz = !!quizOpening;
+    const inPuzzle = !!activePuzzle;
+    if (inPuzzle && puzzleSolved) return;
     const legal = eng.legalMoves();
     const sq120 = M64TO120[i64];
     const sideToMove = (analyzing || inQuiz) ? eng.getSide() : playerColor;
@@ -358,7 +366,7 @@ export default function ZlegendsBot() {
       const candidates = legal.filter(m => mFrom(m) === from120 && mTo(m) === sq120);
       if (candidates.length > 0) {
         if (candidates.length > 1) { setPromo({ from: from120, to: sq120, moves: candidates }); return; }
-        inQuiz ? quizMove(candidates[0]) : (analyzing ? analysisMove(candidates[0]) : playMove(candidates[0]));
+        inPuzzle ? puzzleMove(candidates[0]) : inQuiz ? quizMove(candidates[0]) : (analyzing ? analysisMove(candidates[0]) : playMove(candidates[0]));
         return;
       }
     }
@@ -391,6 +399,9 @@ export default function ZlegendsBot() {
     setActiveOpening(null);
     setQuizOpening(null);
     setQuizFeedback(null);
+    setActivePuzzle(null);
+    setPuzzleFeedback(null);
+    setPuzzleSolved(false);
     setSelected(-1); setTargets([]); setLastMove(null); setHintMove(null);
     setMoveList([]); setInfo(null); setResult(null); setPromo(null); setEvalCp(0); setReviewIndex(null);
     rerender();
@@ -451,6 +462,76 @@ export default function ZlegendsBot() {
     }
     rerender();
   }, [eng, audio, quizOpening, checkGameOver]);
+
+  const puzzlesInBand = (band) => band ? PUZZLES.filter(p => p.rating >= band.min && p.rating < band.max) : PUZZLES;
+
+  const startPuzzle = (puzzle) => {
+    eng.loadFen(puzzle.fen);
+    moveListRef.current = [];
+    setActivePuzzle(puzzle);
+    setPuzzleSolved(false);
+    setPuzzleFeedback(null);
+    setActiveOpening(null);
+    setQuizOpening(null);
+    setPlayerColor(eng.getSide());
+    setMode("play");
+    setSelected(-1); setTargets([]); setLastMove(null); setHintMove(null);
+    setMoveList([]); setInfo(null); setResult(null); setPromo(null);
+    setEvalCp(eng.evalWhite()); setReviewIndex(null);
+    rerender();
+  };
+
+  const nextPuzzle = () => {
+    const pool = puzzlesInBand(puzzleBand);
+    startPuzzle(pool[(Math.random() * pool.length) | 0]);
+  };
+
+  const exitPuzzle = () => newGame(1);
+
+  const puzzleMove = useCallback((m) => {
+    const idx = moveListRef.current.length;
+    const expectedSan = activePuzzle.moves[idx];
+    const attemptedSan = eng.sanOf(m);
+    if (attemptedSan !== expectedSan) {
+      setPuzzleFeedback("Not quite — try again!");
+      setSelected(-1); setTargets([]);
+      setTimeout(() => setPuzzleFeedback(null), 1400);
+      return;
+    }
+    const cap = isCaptureMove(m);
+    eng.make(m);
+    try { cap ? audio.sfxCapture() : audio.sfxMove(); } catch { /* audio unavailable */ }
+    setLastMove({ from: mFrom(m), to: mTo(m) });
+    const newMoveList = [...moveListRef.current, attemptedSan];
+    moveListRef.current = newMoveList;
+    setMoveList(newMoveList);
+    setSelected(-1); setTargets([]);
+    setEvalCp(eng.evalWhite());
+    setPuzzleFeedback(null);
+
+    if (newMoveList.length === activePuzzle.moves.length) {
+      setPuzzleSolved(true);
+      try { audio.sfxCapture(); } catch { /* audio unavailable */ }
+      rerender();
+      return;
+    }
+    const replySan = activePuzzle.moves[newMoveList.length];
+    setTimeout(() => {
+      const legal = eng.legalMoves();
+      const replyMove = legal.find(mv => eng.sanOf(mv) === replySan);
+      if (replyMove) {
+        const replyCap = isCaptureMove(replyMove);
+        eng.make(replyMove);
+        try { replyCap ? audio.sfxCapture() : audio.sfxMove(); } catch { /* audio unavailable */ }
+        setLastMove({ from: mFrom(replyMove), to: mTo(replyMove) });
+        const afterReply = [...moveListRef.current, replySan];
+        moveListRef.current = afterReply;
+        setMoveList(afterReply);
+        rerender();
+      }
+    }, 500);
+    rerender();
+  }, [eng, audio, activePuzzle]);
 
   const undo = () => {
     if (mode === "replay" || thinking || result || eng.plyCount() === 0) return;
@@ -693,7 +774,7 @@ export default function ZlegendsBot() {
                         <button key={pp} onClick={() => {
                           const m = promo.moves.find(x => mPromo(x) === pp);
                           setPromo(null);
-                          if (m) (quizOpening ? quizMove(m) : analyzing ? analysisMove(m) : playMove(m));
+                          if (m) (activePuzzle ? puzzleMove(m) : quizOpening ? quizMove(m) : analyzing ? analysisMove(m) : playMove(m));
                         }}>
                           <img className={"pc " + (eng.getSide() === 1 ? "w" : "b")} style={{ width: 44, height: 44 }} src={pieceImgSrc(pp, eng.getSide() === 1)} alt="" draggable="false" />
                         </button>
@@ -793,7 +874,16 @@ export default function ZlegendsBot() {
           </div>
 
           <div className="box analysisBox">
-            {quizOpening ? (
+            {activePuzzle ? (
+              <>
+                <div className="boxHead">Puzzle · rated {activePuzzle.rating}</div>
+                <div className="pv">
+                  {puzzleSolved
+                    ? "Solved! Nice work."
+                    : puzzleFeedback || `Find the best move for ${eng.getSide() === 1 ? "White" : "Black"}.`}
+                </div>
+              </>
+            ) : quizOpening ? (
               <>
                 <div className="boxHead">Quiz: {quizOpening.name}</div>
                 <div className="pv">
@@ -831,7 +921,7 @@ export default function ZlegendsBot() {
             )}
           </div>
 
-          {mode === "play" && (
+          {mode === "play" && !activePuzzle && (
             <div className="ctrls playCtrls">
               <button className="btn" onClick={() => { setPromo(null); setColorPick(true); }}>New</button>
               <button className="btn" onClick={undo} disabled={thinking || !!result || eng.plyCount() === 0}>Undo</button>
@@ -850,6 +940,14 @@ export default function ZlegendsBot() {
             </div>
           )}
 
+          {activePuzzle && (
+            <div className="ctrls puzzleCtrls">
+              <button className="btn ghost" onClick={() => startPuzzle(activePuzzle)}>Retry</button>
+              <button className="btn gold" onClick={nextPuzzle}>Next Puzzle</button>
+              <button className="btn ghost" onClick={exitPuzzle}>Exit</button>
+            </div>
+          )}
+
           <div className="ctrls iconRow">
             <button className="btn ghost" style={{ display: "flex", alignItems: "center", gap: 6 }} onClick={() => setMusicOpen(true)} title="Juice Box">
               <PixelAvatar rows={JPIX} pal={JPAL} size={16} />
@@ -858,6 +956,10 @@ export default function ZlegendsBot() {
             <button className="btn ghost" style={{ display: "flex", alignItems: "center", gap: 6 }} onClick={() => setOpeningsOpen(true)}>
               <PixelAvatar rows={BPIX} pal={BPAL} size={16} />
               Openings
+            </button>
+            <button className="btn ghost" style={{ display: "flex", alignItems: "center", gap: 6 }} onClick={() => setPuzzlesOpen(true)}>
+              <PixelAvatar rows={PPIX} pal={PPAL} size={16} />
+              Puzzles
             </button>
           </div>
         </div>
@@ -926,6 +1028,35 @@ export default function ZlegendsBot() {
               ))}
             </div>
             <button className="btn gold" onClick={() => setOpeningsOpen(false)}>Close</button>
+          </div>
+        </div>
+      )}
+
+      {puzzlesOpen && (
+        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }}>
+          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
+            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <PixelAvatar rows={PPIX} pal={PPAL} size={18} />
+              Puzzles — Pick a Rating
+            </div>
+            <div className="rows" style={{ maxHeight: "none" }}>
+              {RATING_BANDS.map(band => {
+                const pool = puzzlesInBand(band);
+                return (
+                  <div key={band.id} style={{ cursor: pool.length ? "pointer" : "default", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E", opacity: pool.length ? 1 : 0.4 }}
+                    onClick={() => {
+                      if (!pool.length) return;
+                      setPuzzleBand(band);
+                      setPuzzlesOpen(false);
+                      startPuzzle(pool[(Math.random() * pool.length) | 0]);
+                    }}>
+                    <div style={{ fontWeight: 700 }}>{band.label} <span style={{ opacity: 0.6, fontWeight: "normal" }}>({band.min}–{band.max === 9999 ? "2000+" : band.max})</span></div>
+                    <div style={{ fontSize: 11, opacity: 0.75 }}>{pool.length} puzzle{pool.length === 1 ? "" : "s"}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <button className="btn gold" onClick={() => setPuzzlesOpen(false)}>Close</button>
           </div>
         </div>
       )}

@@ -64,6 +64,22 @@ export const BPIX = [
   "oooooo.oooooo",
 ];
 
+/* ---------------- pixel star icon (Puzzles button) ---------------- */
+export const PPAL = { o: "#F5D93E" };
+export const PPIX = [
+  ".....o.....",
+  ".....o.....",
+  "....ooo....",
+  "..o.ooo.o..",
+  ".o..ooo..o.",
+  "oo.ooooo.oo",
+  ".o..ooo..o.",
+  "..o.ooo.o..",
+  "....ooo....",
+  ".....o.....",
+  ".....o.....",
+];
+
 export default function PixelAvatar({ rows, pal, size }) {
   const rects = [];
   let cols = 0;

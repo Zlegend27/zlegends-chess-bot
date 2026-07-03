@@ -174,7 +174,7 @@ select{ font-family:inherit; font-size:12px; font-weight:700; border-radius:6px;
   .youCard{ order:3; }
   .statusRow{ order:4; }
   .replayCtrls, .reviewCtrls, .analyzeHint{ order:5; }
-  .playCtrls{ order:6; }
+  .playCtrls, .puzzleCtrls{ order:6; }
   .scoreBox{ order:7; }
   .analysisBox{ order:8; }
   .iconRow{ order:9; }
