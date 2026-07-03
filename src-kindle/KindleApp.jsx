@@ -1,14 +1,39 @@
 import { useState, useRef, useCallback } from "react";
 import {
   createEngine, EMPTY, WN, WB, WR, WQ, WK, M64TO120, M120TO64,
-  mFrom, mTo, mPromo,
+  mFrom, mTo, mPromo, mFlags,
 } from "../src/engine/chessEngine";
+import { createKidAudio } from "./kidTune";
 
-/* Minimal, no-animation, no-audio, no-worker UI for a jailbroken Kindle's
-   old Experimental Browser. Runs the search synchronously on the main
-   thread — acceptable since e-ink itself already refreshes at ~500ms.
-   This is a single dedicated device for one child, so the theme leans
-   cute/playful rather than trying to match the web app's look at all. */
+/* Runs the search synchronously on the main thread (no Worker) — this is
+   fine here since a Fire tablet's browser is modern enough not to need
+   the Kindle e-ink workarounds, and the search is short at kid-friendly
+   difficulty levels anyway. Full color and animation now that we're not
+   targeting e-ink. */
+
+const PTS = { 1: 1, 2: 3, 3: 3, 4: 5, 5: 9 };
+const START_COUNT = { 1: 8, 2: 2, 3: 2, 4: 2, 5: 1 };
+
+function materialState(eng) {
+  const rem = { 1: {}, "-1": {} };
+  for (const t of [1, 2, 3, 4, 5]) { rem[1][t] = 0; rem[-1][t] = 0; }
+  for (let i = 0; i < 64; i++) {
+    const p = eng.pieceAt(i);
+    if (p === EMPTY) continue;
+    const a = Math.abs(p);
+    if (a === WK) continue;
+    if (p > 0) rem[1][a]++; else rem[-1][a]++;
+  }
+  const taken = color => {
+    const out = [];
+    for (const t of [5, 4, 3, 2, 1]) {
+      const missing = Math.max(0, START_COUNT[t] - rem[color][t]);
+      for (let k = 0; k < missing; k++) out.push(t);
+    }
+    return out;
+  };
+  return { capturedWhite: taken(1), capturedBlack: taken(-1) };
+}
 
 /* A ladder of animal opponents from beginner to strong club-level. The elo
    numbers are a best-effort approximation (mostly driven by blunderChance,
@@ -48,50 +73,70 @@ const TIPS = [
   "Every game teaches you something new, win or lose. Have fun!",
 ];
 
+const PALETTE = {
+  Bunny: { body: "#FFD8EA", ear: "#FFB6D9", accent: "#FF6FA5", blush: "#FFA6C9" },
+  Cat: { body: "#FFC98B", ear: "#FFB35C", accent: "#E8853B", blush: "#FF9E9E" },
+  Dog: { body: "#E8C08E", ear: "#B9803F", accent: "#8B5E34", blush: "#FFA6A6" },
+  Fox: { body: "#FF9955", ear: "#FF7A2E", accent: "#C24E00", blush: "#FFC2C2", muzzle: "#FFF3E4" },
+  Owl: { body: "#D9B45C", ear: "#C99A3B", accent: "#7B5218", blush: "#FFC9A0", eye: "#7B4B12" },
+  Lion: { body: "#FFDD77", ear: "#F7A531", accent: "#E8790A", blush: "#FFB98A" },
+};
+
 function AnimalIcon({ kind, size = 46 }) {
   const isOwl = kind === "Owl";
   const isLion = kind === "Lion";
+  const isFox = kind === "Fox";
+  const pal = PALETTE[kind] || PALETTE.Bunny;
   return (
     <svg viewBox="0 0 48 48" width={size} height={size} className="kAnimal">
       {isLion && (
-        <circle cx="24" cy="30" r="21" fill="none" stroke="#000" strokeWidth="2" strokeDasharray="4 3" />
+        <circle cx="24" cy="30" r="21" fill="none" stroke={pal.ear} strokeWidth="4" strokeDasharray="5 4" />
       )}
       {kind === "Bunny" && (<>
-        <rect x="12" y="2" width="7" height="22" rx="3.5" fill="#fff" stroke="#000" strokeWidth="2" />
-        <rect x="29" y="2" width="7" height="22" rx="3.5" fill="#fff" stroke="#000" strokeWidth="2" />
+        <rect x="12" y="2" width="7" height="22" rx="3.5" fill={pal.body} stroke={pal.accent} strokeWidth="2" />
+        <rect x="29" y="2" width="7" height="22" rx="3.5" fill={pal.body} stroke={pal.accent} strokeWidth="2" />
+        <rect x="14" y="6" width="3" height="14" rx="1.5" fill={pal.ear} />
+        <rect x="31" y="6" width="3" height="14" rx="1.5" fill={pal.ear} />
       </>)}
       {kind === "Cat" && (<>
-        <path d="M10 16 L16 2 L22 16 Z" fill="#fff" stroke="#000" strokeWidth="2" strokeLinejoin="round" />
-        <path d="M26 16 L32 2 L38 16 Z" fill="#fff" stroke="#000" strokeWidth="2" strokeLinejoin="round" />
+        <path d="M10 16 L16 2 L22 16 Z" fill={pal.body} stroke={pal.accent} strokeWidth="2" strokeLinejoin="round" />
+        <path d="M26 16 L32 2 L38 16 Z" fill={pal.body} stroke={pal.accent} strokeWidth="2" strokeLinejoin="round" />
+        <path d="M13 13 L16 6 L19 13 Z" fill={pal.ear} />
+        <path d="M29 13 L32 6 L35 13 Z" fill={pal.ear} />
       </>)}
       {kind === "Dog" && (<>
-        <ellipse cx="9" cy="28" rx="7" ry="12" fill="#fff" stroke="#000" strokeWidth="2" />
-        <ellipse cx="39" cy="28" rx="7" ry="12" fill="#fff" stroke="#000" strokeWidth="2" />
+        <ellipse cx="9" cy="28" rx="7" ry="12" fill={pal.body} stroke={pal.accent} strokeWidth="2" />
+        <ellipse cx="39" cy="28" rx="7" ry="12" fill={pal.body} stroke={pal.accent} strokeWidth="2" />
       </>)}
-      {kind === "Fox" && (<>
-        <path d="M9 18 L16 3 L21 18 Z" fill="#fff" stroke="#000" strokeWidth="2" strokeLinejoin="round" />
-        <path d="M27 18 L32 3 L39 18 Z" fill="#fff" stroke="#000" strokeWidth="2" strokeLinejoin="round" />
+      {isFox && (<>
+        <path d="M9 18 L16 3 L21 18 Z" fill={pal.body} stroke={pal.accent} strokeWidth="2" strokeLinejoin="round" />
+        <path d="M27 18 L32 3 L39 18 Z" fill={pal.body} stroke={pal.accent} strokeWidth="2" strokeLinejoin="round" />
+        <path d="M12 15 L16 8 L19 15 Z" fill={pal.muzzle} />
+        <path d="M29 15 L32 8 L36 15 Z" fill={pal.muzzle} />
       </>)}
       {isOwl && (<>
-        <path d="M13 11 L18 3 L20 12 Z" fill="#fff" stroke="#000" strokeWidth="2" strokeLinejoin="round" />
-        <path d="M35 11 L30 3 L28 12 Z" fill="#fff" stroke="#000" strokeWidth="2" strokeLinejoin="round" />
+        <path d="M13 11 L18 3 L20 12 Z" fill={pal.body} stroke={pal.accent} strokeWidth="2" strokeLinejoin="round" />
+        <path d="M35 11 L30 3 L28 12 Z" fill={pal.body} stroke={pal.accent} strokeWidth="2" strokeLinejoin="round" />
       </>)}
       {isLion && (<>
-        <path d="M8 20 L14 8 L18 20 Z" fill="#fff" stroke="#000" strokeWidth="2" strokeLinejoin="round" />
-        <path d="M40 20 L34 8 L30 20 Z" fill="#fff" stroke="#000" strokeWidth="2" strokeLinejoin="round" />
+        <path d="M8 20 L14 8 L18 20 Z" fill={pal.ear} stroke={pal.accent} strokeWidth="2" strokeLinejoin="round" />
+        <path d="M40 20 L34 8 L30 20 Z" fill={pal.ear} stroke={pal.accent} strokeWidth="2" strokeLinejoin="round" />
       </>)}
-      <circle cx="24" cy="30" r="15" fill="#fff" stroke="#000" strokeWidth="2" />
+      <circle cx="24" cy="30" r="15" fill={pal.body} stroke={pal.accent} strokeWidth="2" />
+      <circle cx="15" cy="34" r="3" fill={pal.blush} opacity="0.85" />
+      <circle cx="33" cy="34" r="3" fill={pal.blush} opacity="0.85" />
+      {isFox && <ellipse cx="24" cy="34" rx="7" ry="8" fill={pal.muzzle} />}
       {isOwl ? (<>
-        <circle cx="17" cy="28" r="5" fill="#fff" stroke="#000" strokeWidth="2" />
-        <circle cx="31" cy="28" r="5" fill="#fff" stroke="#000" strokeWidth="2" />
-        <circle cx="17" cy="28" r="1.6" fill="#000" />
-        <circle cx="31" cy="28" r="1.6" fill="#000" />
-        <path d="M22 33 L26 33 L24 38 Z" fill="#000" />
+        <circle cx="17" cy="28" r="5.5" fill="#fff" stroke={pal.accent} strokeWidth="2" />
+        <circle cx="31" cy="28" r="5.5" fill="#fff" stroke={pal.accent} strokeWidth="2" />
+        <circle cx="17" cy="28" r="2.2" fill={pal.eye} />
+        <circle cx="31" cy="28" r="2.2" fill={pal.eye} />
+        <path d="M22 33 L26 33 L24 38 Z" fill="#F2A65A" />
       </>) : (<>
-        <circle cx="19" cy="27" r="2" fill="#000" />
-        <circle cx="29" cy="27" r="2" fill="#000" />
-        <path d="M22 33 L26 33 L24 36 Z" fill="#000" />
-        <path d="M24 36 L24 39 M24 39 L20 41 M24 39 L28 41" stroke="#000" strokeWidth="1.5" fill="none" />
+        <circle cx="19" cy="27" r="2" fill="#3a2a1a" />
+        <circle cx="29" cy="27" r="2" fill="#3a2a1a" />
+        <path d="M22 33 L26 33 L24 36 Z" fill="#3a2a1a" />
+        <path d="M24 36 L24 39 M24 39 L20 41 M24 39 L28 41" stroke="#3a2a1a" strokeWidth="1.5" fill="none" />
       </>)}
     </svg>
   );
@@ -105,6 +150,11 @@ export default function KindleApp() {
   const [, force] = useState(0);
   const rerender = () => force(n => n + 1);
 
+  const audioRef = useRef(null);
+  if (!audioRef.current) audioRef.current = createKidAudio();
+  const audio = audioRef.current;
+  const [musicOn, setMusicOn] = useState(false);
+
   const [view, setView] = useState("play");
   const [playerColor, setPlayerColor] = useState(1);
   const [selected, setSelected] = useState(-1);
@@ -115,20 +165,29 @@ export default function KindleApp() {
   const [promo, setPromo] = useState(null);
   const [difficultyIdx, setDifficultyIdx] = useState(1);
 
+  const isCaptureMove = m => eng.pieceAt(M120TO64[mTo(m)]) !== EMPTY || (mFlags(m) & 1);
+
   const checkGameOver = useCallback(() => {
     const legal = eng.legalMoves();
     if (legal.length === 0) {
       if (eng.inCheckNow()) {
         const winner = -eng.getSide();
-        return { text: winner === 1 ? "1-0" : "0-1", reason: "Checkmate" };
+        return { text: winner === 1 ? "1-0" : "0-1", reason: "Checkmate", winner };
       }
-      return { text: "1/2-1/2", reason: "Stalemate" };
+      return { text: "1/2-1/2", reason: "Stalemate", winner: 0 };
     }
-    if (eng.halfClock() >= 100) return { text: "1/2-1/2", reason: "Fifty-move rule" };
-    if (eng.repetitionCount() >= 3) return { text: "1/2-1/2", reason: "Threefold repetition" };
-    if (eng.insufficientMaterial()) return { text: "1/2-1/2", reason: "Insufficient material" };
+    if (eng.halfClock() >= 100) return { text: "1/2-1/2", reason: "Fifty-move rule", winner: 0 };
+    if (eng.repetitionCount() >= 3) return { text: "1/2-1/2", reason: "Threefold repetition", winner: 0 };
+    if (eng.insufficientMaterial()) return { text: "1/2-1/2", reason: "Insufficient material", winner: 0 };
     return null;
   }, [eng]);
+
+  const announceResult = (over) => {
+    if (!over) return;
+    if (over.winner === playerColor) audio.sfxWin();
+    else if (over.winner === 0) { /* draw: no stinger, keep it neutral */ }
+    else audio.sfxLose();
+  };
 
   const engineMoveRef = useRef(null);
   const engineMove = useCallback(() => {
@@ -137,11 +196,14 @@ export default function KindleApp() {
     setTimeout(() => {
       const res = eng.search(diff.ms, diff.blunderChance || 0);
       if (res && res.move) {
+        const cap = isCaptureMove(res.move);
         const san = eng.sanOf(res.move);
         eng.make(res.move);
+        cap ? audio.sfxCapture() : audio.sfxMove();
         setMoveList(l => [...l, san]);
         const over = checkGameOver();
         setResult(over);
+        announceResult(over);
       }
       setThinking(false);
       rerender();
@@ -150,12 +212,15 @@ export default function KindleApp() {
   engineMoveRef.current = engineMove;
 
   const playMove = (m) => {
+    const cap = isCaptureMove(m);
     const san = eng.sanOf(m);
     eng.make(m);
+    cap ? audio.sfxCapture() : audio.sfxMove();
     setMoveList(l => [...l, san]);
     setSelected(-1); setTargets([]);
     const over = checkGameOver();
     setResult(over);
+    announceResult(over);
     rerender();
     if (!over) engineMoveRef.current();
   };
@@ -259,19 +324,43 @@ export default function KindleApp() {
   for (let i = 0; i < moveList.length; i += 2) pairs.push([i / 2 + 1, moveList[i], moveList[i + 1]]);
   const moveText = pairs.map(([n, w, b]) => `${n}.${w}${b ? " " + b : ""}`).join("  ");
 
+  const mat = materialState(eng);
+  const youCaptured = playerColor === 1 ? mat.capturedBlack : mat.capturedWhite;
+  const opponentCaptured = playerColor === 1 ? mat.capturedWhite : mat.capturedBlack;
+
   const opponentName = DIFFICULTIES[difficultyIdx].label;
   const status = result
-    ? `${result.reason} - ${result.text}`
+    ? (result.winner === 0
+        ? "It's a tie - great game!"
+        : result.winner === playerColor
+          ? "Good job, you win!"
+          : "Nice try! Better luck next time!")
     : thinking ? `${opponentName} is thinking...`
     : eng.getSide() === playerColor ? "Your move!" : `${opponentName}'s move`;
+
+  const Tray = ({ pieces }) => (
+    <div className="kTray">
+      {pieces.length === 0
+        ? <span className="kTrayEmpty">no captures yet</span>
+        : pieces.map((t, i) => <span key={i} className="kTrayPc">{GLYPH[t]}</span>)}
+    </div>
+  );
 
   return (
     <div className="kRoot">
       <div className="kHdr">
         <AnimalIcon kind={DIFFICULTIES[difficultyIdx].label} />
         <h1>Kinnda Chess</h1>
+        <button className="kMusicBtn" onClick={() => setMusicOn(audio.toggle())} title={musicOn ? "Pause music" : "Play music"}>
+          {musicOn ? "♪⏸" : "♪▶"}
+        </button>
       </div>
       <div className="kStatus">{status}</div>
+
+      <div className="kCaptureRow">
+        <span className="kCaptureLabel">{opponentName}'s captures:</span>
+        <Tray pieces={opponentCaptured} />
+      </div>
 
       <div className="kBoardWrap">
         <div className="kBoard">{rows}</div>
@@ -286,6 +375,11 @@ export default function KindleApp() {
             ))}
           </div>
         )}
+      </div>
+
+      <div className="kCaptureRow">
+        <span className="kCaptureLabel">Your captures:</span>
+        <Tray pieces={youCaptured} />
       </div>
 
       <div className="kMoves">{moveText || "No moves yet - good luck!"}</div>

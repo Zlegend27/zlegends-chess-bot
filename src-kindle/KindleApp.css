@@ -1,55 +1,93 @@
-/* Flat, high-contrast, e-ink-friendly, but rounded and playful for a kid's
-   dedicated chess device. Still no gradients, shadows, or animation. */
+/* Colorful, cute, animated theme for a Fire tablet — a real screen that
+   can handle gradients, shadows, and animation, unlike the e-ink Kindle
+   this started life as. */
 * { box-sizing: border-box; }
 body {
-  margin: 0; background: #fff; color: #000;
+  margin: 0; color: #4a3728;
   font-family: "Comic Sans MS", "Chalkboard SE", Verdana, sans-serif;
+  background: linear-gradient(160deg, #FFF3D6 0%, #FFE1EC 45%, #DFF3FF 100%);
+  min-height: 100vh;
 }
 
-.kRoot { display: flex; flex-direction: column; align-items: center; padding: 12px; }
+.kRoot { display: flex; flex-direction: column; align-items: center; padding: 14px; }
 .kHdr { display: flex; align-items: center; gap: 10px; }
-.kRoot h1 { font-size: 26px; margin: 4px 0; }
-.kStatus { font-size: 18px; font-weight: bold; margin: 6px 0 10px; text-align: center; }
+.kRoot h1 { font-size: 28px; margin: 4px 0; color: #E8622C; text-shadow: 2px 2px 0 #FFD8A8; }
+.kStatus { font-size: 19px; font-weight: bold; margin: 8px 0 10px; text-align: center; color: #5B3E27; }
+
+.kMusicBtn {
+  font-family: inherit; font-size: 16px; padding: 6px 10px; border: none; border-radius: 50%;
+  background: #FFD166; color: #5B3E27; box-shadow: 0 3px 0 #E8A93B; cursor: pointer;
+}
+.kMusicBtn:active { box-shadow: 0 1px 0 #E8A93B; transform: translateY(2px); }
+
+.kCaptureRow { display: flex; align-items: center; gap: 8px; width: 380px; margin: 4px 0; }
+.kCaptureLabel { font-size: 12px; font-weight: bold; color: #8A6A4B; flex: none; }
+.kTray { display: flex; flex-wrap: wrap; gap: 2px; min-height: 22px; align-items: center; }
+.kTrayPc { font-size: 18px; line-height: 1; }
+.kTrayEmpty { font-size: 11px; color: #B69A7E; font-style: italic; }
 
 .kBoardWrap { position: relative; }
-.kBoard { width: 380px; height: 380px; border: 4px solid #000; border-radius: 10px; display: flex; flex-direction: column; overflow: hidden; }
+.kBoard {
+  width: 380px; height: 380px; border: 6px solid #E8622C; border-radius: 16px;
+  display: flex; flex-direction: column; overflow: hidden;
+  box-shadow: 0 6px 14px #00000022;
+}
 .kRow { flex: 1; display: flex; }
-.kSq { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; border: 1px solid #999; }
-.kSq.kLight { background: #fff; }
-.kSq.kDark { background: #bbb; }
-.kSq.kSel { border: 3px solid #000; }
-.kSq.kChk { background: #666; }
-.kPc { font-size: 30px; display: inline-block; line-height: 1; }
-.kPc.kPcW { border: 2px solid #000; border-radius: 50%; background: #fff; padding: 3px; }
-.kPc.kPcB { padding: 5px; }
-.kDot { position: absolute; width: 14px; height: 14px; border-radius: 50%; background: #000; opacity: 0.6; }
-.kCoord { position: absolute; font-size: 10px; }
+.kSq { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; }
+.kSq.kLight { background: #FFF7E6; }
+.kSq.kDark { background: #BFE6C7; }
+.kSq.kSel { box-shadow: inset 0 0 0 4px #4EA8DE; }
+.kSq.kChk { background: #FF8F8F; }
+.kPc { font-size: 32px; display: inline-block; line-height: 1; }
+.kPc.kPcW { border-radius: 50%; background: #FFF2C2; box-shadow: 0 0 0 3px #F2A65A, 0 2px 3px #00000030; padding: 3px; color: #7A4A17; }
+.kPc.kPcB { border-radius: 50%; background: #CDB6E8; box-shadow: 0 0 0 3px #7C5CBF, 0 2px 3px #00000030; padding: 5px; color: #3B2C5C; }
+.kDot { position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #4EA8DE; opacity: 0.7; }
+.kCoord { position: absolute; font-size: 10px; color: #00000066; }
 .kCoord.kRk { top: 1px; left: 3px; }
 .kCoord.kFl { bottom: 1px; right: 3px; }
 
-.kPromoOv { position: absolute; inset: 0; background: #fff; border: 3px solid #000; border-radius: 10px;
-  display: flex; align-items: center; justify-content: center; gap: 6px; }
-.kPromoOv button { font-size: 32px; padding: 6px 10px; border: 2px solid #000; border-radius: 8px; background: #fff; }
+.kPromoOv {
+  position: absolute; inset: 0; background: #FFF7E6ee; border: 4px solid #E8622C; border-radius: 16px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.kPromoOv button {
+  font-size: 34px; padding: 6px 10px; border: none; border-radius: 10px;
+  background: #FFD166; box-shadow: 0 3px 0 #E8A93B; cursor: pointer;
+}
 
-.kMoves { width: 380px; margin-top: 12px; font-size: 14px; border: 2px solid #999; border-radius: 8px; padding: 8px;
-  min-height: 40px; max-height: 100px; overflow-y: auto; }
+.kMoves {
+  width: 380px; margin-top: 12px; font-size: 14px; border: 2px solid #F2C48A; border-radius: 12px; padding: 8px;
+  min-height: 40px; max-height: 100px; overflow-y: auto; background: #FFFDF7;
+}
 
 .kCtrls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; width: 380px; justify-content: center; }
 .kCtrls button, .kCtrls select {
-  font-family: inherit; font-size: 15px; padding: 10px 12px; border: 2px solid #000; border-radius: 10px;
-  background: #fff; color: #000;
+  font-family: inherit; font-size: 15px; padding: 10px 14px; border: none; border-radius: 14px;
+  background: #6FCF97; color: #1E4620; box-shadow: 0 3px 0 #4F9E6E; cursor: pointer;
 }
-.kCtrls button:disabled { opacity: 0.5; }
+.kCtrls button:nth-of-type(2) { background: #4EA8DE; color: #10314A; box-shadow: 0 3px 0 #35789E; }
+.kCtrls button:nth-of-type(3) { background: #FFD166; color: #5B3E27; box-shadow: 0 3px 0 #E8A93B; }
+.kCtrls select { background: #F5C6EC; color: #5B2A50; box-shadow: 0 3px 0 #D18FC0; }
+.kCtrls button:last-of-type { background: #FF8FA3; color: #5C1626; box-shadow: 0 3px 0 #E85D77; }
+.kCtrls button:active { transform: translateY(2px); box-shadow: none; }
+.kCtrls button:disabled { opacity: 0.45; box-shadow: none; transform: none; }
 
-.kAnimal { flex: none; }
+.kAnimal { flex: none; animation: kBounce 2.2s ease-in-out infinite; }
+@keyframes kBounce {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-3px) rotate(-3deg); }
+}
 
-.kLessonTitle { font-size: 20px; margin: 14px 0 8px; width: 380px; }
+.kLessonTitle { font-size: 21px; margin: 14px 0 8px; width: 380px; color: #E8622C; }
 .kLessons { width: 380px; display: flex; flex-direction: column; gap: 10px; }
-.kLessonCard { display: flex; align-items: center; gap: 12px; border: 2px solid #999; border-radius: 10px; padding: 8px 10px; }
-.kLessonPc { font-size: 34px; flex: none; }
-.kLessonName { font-size: 16px; font-weight: bold; margin-bottom: 2px; }
+.kLessonCard {
+  display: flex; align-items: center; gap: 12px; border-radius: 14px; padding: 10px 12px;
+  background: #FFFDF7; box-shadow: 0 3px 8px #00000014;
+}
+.kLessonPc { font-size: 36px; flex: none; }
+.kLessonName { font-size: 16px; font-weight: bold; margin-bottom: 2px; color: #E8622C; }
 .kLessonText { font-size: 13px; line-height: 1.35; }
 .kTips { width: 380px; font-size: 14px; line-height: 1.5; padding-left: 22px; margin: 0 0 10px; }
 
 .kErrBox { padding: 24px; text-align: center; }
-.kErrBox button { font-family: inherit; font-size: 14px; padding: 8px 14px; border: 2px solid #000; border-radius: 10px; background: #fff; margin-top: 10px; }
+.kErrBox button { font-family: inherit; font-size: 14px; padding: 8px 14px; border: none; border-radius: 12px; background: #FFD166; margin-top: 10px; }
