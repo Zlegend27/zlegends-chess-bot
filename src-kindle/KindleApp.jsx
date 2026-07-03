@@ -4,14 +4,13 @@ import {
   mFrom, mTo, mPromo, mFlags,
 } from "../src/engine/chessEngine";
 import { replayIntoEngine } from "../src/utils/share";
-import { getBookMove } from "../src/utils/openingBook";
 import { createKidAudio } from "./kidTune";
 
-/* Runs the search synchronously on the main thread (no Worker) — this is
-   fine here since a Fire tablet's browser is modern enough not to need
-   the Kindle e-ink workarounds, and the search is short at kid-friendly
-   difficulty levels anyway. Full color and animation now that we're not
-   targeting e-ink. */
+/* Search runs in the same shared Worker the main bot uses (see
+   src/engine/engineWorker.js) — the hardest tier ("Lion", 8s of search)
+   used to freeze the whole UI on the main thread, which is a bad time for
+   a kid mashing buttons waiting for their opponent to move. Full color and
+   animation now that we're not targeting e-ink. */
 
 const PTS = { 1: 1, 2: 3, 3: 3, 4: 5, 5: 9 };
 const START_COUNT = { 1: 8, 2: 2, 3: 2, 4: 2, 5: 1 };
@@ -50,7 +49,6 @@ const DIFFICULTIES = [
   { label: "Owl", elo: 1600, ms: 3000, blunderChance: 0.03, book: true },
   { label: "Lion", elo: 2000, ms: 8000, blunderChance: 0, book: true },
 ];
-const MAX_BOOK_PLIES = 20; // ~10 full moves; matches the main bot's cutoff
 
 /* The rarer "outline" chess Unicode code points (white pieces) aren't
    reliably present in every font, and Kindle's font set is an unknown —
@@ -172,6 +170,25 @@ export default function KindleApp() {
   if (!engRef.current) engRef.current = createEngine();
   const eng = engRef.current;
 
+  const workerRef = useRef(null);
+  const pendingSearchesRef = useRef(new Map());
+  const searchIdRef = useRef(0);
+  if (!workerRef.current) {
+    workerRef.current = new Worker(new URL("../src/engine/engineWorker.js", import.meta.url), { type: "module" });
+    workerRef.current.onmessage = (e) => {
+      const { id, result } = e.data;
+      const resolve = pendingSearchesRef.current.get(id);
+      if (resolve) { pendingSearchesRef.current.delete(id); resolve(result); }
+    };
+  }
+  const runSearch = useCallback((searchMoveList, timeMs, blunderChance = 0, useBook = false) => {
+    const id = ++searchIdRef.current;
+    return new Promise((resolve) => {
+      pendingSearchesRef.current.set(id, resolve);
+      workerRef.current.postMessage({ id, moveList: searchMoveList, timeMs, blunderChance, useBook });
+    });
+  }, []);
+
   const [, force] = useState(0);
   const rerender = () => force(n => n + 1);
 
@@ -221,22 +238,15 @@ export default function KindleApp() {
   };
 
   const engineMoveRef = useRef(null);
-  const engineMove = useCallback(async () => {
+  const engineMove = useCallback(() => {
     setThinking(true);
     const diff = DIFFICULTIES[difficultyIdx];
-    let move = null;
-    if (diff.book && eng.plyCount() < MAX_BOOK_PLIES) {
-      const bookSan = await getBookMove(eng.fen(), moveListRef.current, { timeoutMs: 2500 });
-      if (bookSan) move = eng.legalMoves().find(m => eng.sanOf(m) === bookSan) || null;
-    }
-    setTimeout(() => {
-      const res = move ? { move } : eng.search(diff.ms, diff.blunderChance || 0);
+    runSearch(moveListRef.current, diff.ms, diff.blunderChance || 0, diff.book).then((res) => {
       if (res && res.move) {
         const cap = isCaptureMove(res.move);
-        const san = eng.sanOf(res.move);
         eng.make(res.move);
         cap ? audio.sfxCapture() : audio.sfxMove();
-        moveListRef.current = [...moveListRef.current, san];
+        moveListRef.current = [...moveListRef.current, res.san];
         setMoveList(moveListRef.current);
         setBotLastMove({ from: mFrom(res.move), to: mTo(res.move) });
         const over = checkGameOver();
@@ -245,8 +255,8 @@ export default function KindleApp() {
       }
       setThinking(false);
       rerender();
-    }, 0);
-  }, [eng, difficultyIdx, checkGameOver]);
+    });
+  }, [eng, audio, difficultyIdx, checkGameOver, runSearch]);
   engineMoveRef.current = engineMove;
 
   const playMove = (m) => {
