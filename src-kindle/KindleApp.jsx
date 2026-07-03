@@ -57,6 +57,7 @@ const DIFFICULTIES = [
    nothing font-dependent). */
 const GLYPH = { 1: "♟︎", 2: "♞︎", 3: "♝︎", 4: "♜︎", 5: "♛︎", 6: "♚︎" };
 const glyphFor = (piece) => GLYPH[Math.abs(piece)];
+const PIECE_NAME = { 1: "pawn", 2: "knight", 3: "bishop", 4: "rook", 5: "queen", 6: "king" };
 const FILES = "abcdefgh";
 
 const LESSONS = [
@@ -385,8 +386,14 @@ export default function KindleApp() {
         const isTarget = targets.includes(i64);
         const isBotLast = botLastMove && (botLastMove.from === sq120 || botLastMove.to === sq120);
         const kingInCheck = p * eng.getSide() === WK && eng.inCheckNow();
+        const squareName = FILES[f] + (r + 1);
+        const pieceLabel = p !== EMPTY ? `${p > 0 ? "White" : "Black"} ${PIECE_NAME[Math.abs(p)]}` : "empty";
+        const stateBits = [isSel && "selected", isTarget && "legal move", kingInCheck && "in check"].filter(Boolean);
+        const ariaLabel = `${squareName}, ${pieceLabel}` + (stateBits.length ? `, ${stateBits.join(", ")}` : "");
         cells.push(
-          <div key={i64} onClick={() => clickHandler(i64)}
+          <div key={i64} role="gridcell" tabIndex={0} aria-label={ariaLabel}
+            onClick={() => clickHandler(i64)}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); clickHandler(i64); } }}
             className={"kSq " + (light ? "kLight" : "kDark") + (isSel ? " kSel" : "") + (isBotLast ? " kLast" : "") + (kingInCheck ? " kChk" : "")}>
             {p !== EMPTY && <span className={"kPc " + (p > 0 ? "kPcW" : "kPcB")}>{glyphFor(p)}</span>}
             {isTarget && <span className="kDot" />}
@@ -395,7 +402,7 @@ export default function KindleApp() {
           </div>
         );
       }
-      rows.push(<div key={vr} className="kRow">{cells}</div>);
+      rows.push(<div key={vr} role="row" className="kRow">{cells}</div>);
     }
     return rows;
   };
@@ -429,7 +436,7 @@ export default function KindleApp() {
             </div>
             {!puzzleFeedback && <div className="kMoves">{activePuzzle.hint}</div>}
             <div className="kBoardWrap">
-              <div className="kBoard">{buildBoardRows(false, onPuzzleSquare)}</div>
+              <div className="kBoard" role="grid" aria-label="Chess board">{buildBoardRows(false, onPuzzleSquare)}</div>
             </div>
             <div className="kCtrls">
               {puzzleFeedback === "wrong" && <button onClick={retryPuzzle}>Try Again</button>}
@@ -518,7 +525,7 @@ export default function KindleApp() {
       </div>
 
       <div className="kBoardWrap">
-        <div className="kBoard">{rows}</div>
+        <div className="kBoard" role="grid" aria-label="Chess board">{rows}</div>
         {promo && (
           <div className="kPromoOv">
             {[WQ, WR, WB, WN].map(pp => (

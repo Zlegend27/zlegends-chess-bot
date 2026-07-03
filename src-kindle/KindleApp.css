@@ -34,6 +34,7 @@ body {
 }
 .kRow { flex: 1; display: flex; }
 .kSq { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; }
+.kSq:focus-visible { outline: 4px solid #4EA8DE; outline-offset: -4px; z-index: 3; }
 .kSq.kLight { background: #FFF7E6; }
 .kSq.kDark { background: #BFE6C7; }
 .kSq.kSel { box-shadow: inset 0 0 0 4px #4EA8DE; }

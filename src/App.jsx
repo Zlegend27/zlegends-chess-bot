@@ -57,6 +57,7 @@ function pickPersonality(baseStyle, plyCount, botAdvantagePawns) {
    plain, and instantly readable. */
 const pieceImgSrc = (type, isWhite) => pieceSvgUrl(type, isWhite);
 const FILES = "abcdefgh";
+const PIECE_NAME = { 1: "pawn", 2: "knight", 3: "bishop", 4: "rook", 5: "queen", 6: "king" };
 const PTS = { 1: 1, 2: 3, 3: 3, 4: 5, 5: 9 };
 const START_COUNT = { 1: 8, 2: 2, 3: 2, 4: 2, 5: 1 };
 
@@ -548,8 +549,14 @@ export default function ZlegendsBot() {
       const isHintFrom = hintMove && hintMove.from === sq120;
       const isHintTo = hintMove && hintMove.to === sq120;
       const kingInCheck = p * eng.getSide() === WK && eng.inCheckNow();
+      const squareName = FILES[f] + (r + 1);
+      const pieceLabel = p !== EMPTY ? `${p > 0 ? "White" : "Black"} ${PIECE_NAME[Math.abs(p)]}` : "empty";
+      const stateBits = [isSel && "selected", isTarget && "legal move", kingInCheck && "in check"].filter(Boolean);
+      const ariaLabel = `${squareName}, ${pieceLabel}` + (stateBits.length ? `, ${stateBits.join(", ")}` : "");
       cells.push(
-        <div key={i64} onClick={() => onSquare(i64)}
+        <div key={i64} role="gridcell" tabIndex={0} aria-label={ariaLabel}
+          onClick={() => onSquare(i64)}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSquare(i64); } }}
           className={"sq " + (light ? "light" : "dark") + (isSel ? " sel" : "") + (isLast ? " last" : "") +
             (isBotLast ? " botLast" : "") + (isPlayerLast ? " playerLast" : "") +
             (kingInCheck ? " chk" : "") + (isHintFrom ? " hintFrom" : "") + (isHintTo ? " hintTo" : "")}>
@@ -560,7 +567,7 @@ export default function ZlegendsBot() {
         </div>
       );
     }
-    rows.push(<div key={vr} className="brow">{cells}</div>);
+    rows.push(<div key={vr} role="row" className="brow">{cells}</div>);
   }
 
   const pairs = [];
@@ -634,7 +641,7 @@ export default function ZlegendsBot() {
               <div className="tick" />
             </div>
             <div style={{ position: "relative", flex: 1 }}>
-              <div className="board">
+              <div className="board" role="grid" aria-label="Chess board">
                 {rows}
                 {arrowLine && (
                   <svg className="arrowLayer" viewBox="0 0 8 8" preserveAspectRatio="none">

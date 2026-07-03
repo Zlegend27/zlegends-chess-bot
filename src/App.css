@@ -76,6 +76,7 @@
   filter:drop-shadow(0 0 4px #F5D93E88); }
 .brow{ flex:1; display:flex; }
 .sq{ flex:1; position:relative; display:flex; align-items:center; justify-content:center; cursor:pointer; touch-action:manipulation; }
+.sq:focus-visible{ outline:3px solid var(--yellow); outline-offset:-3px; z-index:3; }
 .sq.light{ background:var(--liliac); } .sq.dark{ background:var(--sqdark); }
 .sq.last::after{ content:""; position:absolute; inset:0; background:#D94BF03D; }
 .sq.botLast::before{ content:""; position:absolute; inset:0; z-index:1; pointer-events:none;
