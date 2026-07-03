@@ -164,6 +164,7 @@ export default function ZlegendsBot() {
   const [pgnToast, setPgnToast] = useState(null);
   const [statsOpen, setStatsOpen] = useState(false);
   const [stats, setStats] = useState(null);
+  const [musicOpen, setMusicOpen] = useState(false);
   const [openingsOpen, setOpeningsOpen] = useState(false);
   const [activeOpening, setActiveOpening] = useState(null);
   const [quizOpening, setQuizOpening] = useState(null);
@@ -643,7 +644,7 @@ export default function ZlegendsBot() {
 
       <div className="layout">
         <div className="boardCol">
-          <div className={"card" + (mode === "play" && !result && !thinking && eng.getSide() === botColor ? " turnGlow" : "")}>
+          <div className={"card botCard" + (mode === "play" && !result && !thinking && eng.getSide() === botColor ? " turnGlow" : "")}>
             <div className={"avatarBox" + (botMood !== "neutral" ? " reactionBox " + botMood : "")}>
               {botMood === "angry" && <img src="/bot-angry.webp" alt="Zlegend2700 is furious" className="reactionImg" />}
               {botMood === "happy" && <img src="/bot-happy.webp" alt="Zlegend2700 is thrilled" className="reactionImg" />}
@@ -716,7 +717,7 @@ export default function ZlegendsBot() {
             </div>
           </div>
 
-          <div className={"card" + (mode === "play" && !result && !thinking && eng.getSide() === playerColor ? " turnGlow" : "")}>
+          <div className={"card youCard" + (mode === "play" && !result && !thinking && eng.getSide() === playerColor ? " turnGlow" : "")}>
             <div className="avatarBox"><img src="/you-avatar.webp" alt="You (Challenger)" className="youAvatarImg" /></div>
             <div className="cardMeta">
               <div className="cardName you">You (Challenger)</div>
@@ -733,7 +734,7 @@ export default function ZlegendsBot() {
           </div>
 
           {mode === "replay" && (
-            <div className="ctrls" style={{ justifyContent: "center" }}>
+            <div className="ctrls replayCtrls" style={{ justifyContent: "center" }}>
               <button className="btn ghost" onClick={() => setReplayIndex(0)} disabled={replayIndex === 0}>{"|◀"}</button>
               <button className="btn ghost" onClick={() => replayStep(-1)} disabled={replayIndex === 0}>{"◀"}</button>
               <button className="btn" onClick={toggleReplayPlay} disabled={replayIndex >= replayFull.length && !replayPlaying}>
@@ -747,7 +748,7 @@ export default function ZlegendsBot() {
           )}
 
           {reviewing && (
-            <div className="ctrls" style={{ justifyContent: "center" }}>
+            <div className="ctrls reviewCtrls" style={{ justifyContent: "center" }}>
               <button className="btn ghost" onClick={() => setReviewIndex(0)} disabled={reviewIndex === 0}>{"|◀"}</button>
               <button className="btn ghost" onClick={() => setReviewIndex(i => Math.max(0, i - 1))} disabled={reviewIndex === 0}>{"◀"}</button>
               <button className="btn ghost" onClick={() => setReviewIndex(i => Math.min(moveList.length, i + 1))} disabled={reviewIndex === moveList.length}>{"▶"}</button>
@@ -758,34 +759,14 @@ export default function ZlegendsBot() {
             </div>
           )}
           {analyzing && (
-            <div className="status" style={{ fontSize: 11, opacity: 0.8 }}>
+            <div className="status analyzeHint" style={{ fontSize: 11, opacity: 0.8 }}>
               Move any piece to explore — yellow arrow shows the bot's top pick
             </div>
           )}
         </div>
 
         <div className="panel">
-          <div className="box">
-            <div className="boxHead jbHead">
-              <PixelAvatar rows={JPIX} pal={JPAL} size={20} />
-              <span>Juice Box</span>
-            </div>
-            <div className="trackRow">
-              <span className="trackName">{"♪ " + trackName}</span>
-              {trackName === "Neon Gambit" && <span className="trackTag">default</span>}
-            </div>
-            <div className="audioRow">
-              <button className="playBtn sm" onClick={prevTrack} title="Previous track">{"◀◀"}</button>
-              <button className="playBtn" onClick={toggleMusic} title={musicOn ? "Pause music" : "Play music"}>
-                {musicOn ? "❚❚" : "▶"}
-              </button>
-              <button className="playBtn sm" onClick={nextTrack} title="Next track">{"▶▶"}</button>
-              <input type="range" min="0" max="100" value={volume} onChange={e => onVolume(Number(e.target.value))} />
-              <span className="volPct">{volume}%</span>
-            </div>
-          </div>
-
-          <div className="box">
+          <div className="box scoreBox">
             <div className="boxHead" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span>Scoresheet</span>
               {moveList.length > 0 && (
@@ -811,7 +792,7 @@ export default function ZlegendsBot() {
             {pgnToast && <div className="toast">{pgnToast}</div>}
           </div>
 
-          <div className="box">
+          <div className="box analysisBox">
             {quizOpening ? (
               <>
                 <div className="boxHead">Quiz: {quizOpening.name}</div>
@@ -851,7 +832,7 @@ export default function ZlegendsBot() {
           </div>
 
           {mode === "play" && (
-            <div className="ctrls">
+            <div className="ctrls playCtrls">
               <button className="btn" onClick={() => { setPromo(null); setColorPick(true); }}>New</button>
               <button className="btn" onClick={undo} disabled={thinking || !!result || eng.plyCount() === 0}>Undo</button>
               <button className="btn ghost" onClick={onHint}
@@ -864,16 +845,48 @@ export default function ZlegendsBot() {
               {moveList.length > 0 && <button className="btn ghost" onClick={onShare}>Share</button>}
               {result && <button className="btn gold" onClick={() => newGame(playerColor)}>Rematch!</button>}
               <button className="btn ghost" onClick={openStats}>Stats</button>
-              <button className="btn ghost" style={{ display: "flex", alignItems: "center", gap: 6 }} onClick={() => setOpeningsOpen(true)}>
-                <PixelAvatar rows={BPIX} pal={BPAL} size={16} />
-                Openings
-              </button>
               {shareToast && <div className="toast">{shareToast}</div>}
               {quizDoneToast && <div className="toast">{quizDoneToast}</div>}
             </div>
           )}
+
+          <div className="ctrls iconRow">
+            <button className="btn ghost" style={{ display: "flex", alignItems: "center", gap: 6 }} onClick={() => setMusicOpen(true)} title="Juice Box">
+              <PixelAvatar rows={JPIX} pal={JPAL} size={16} />
+              Juice Box
+            </button>
+            <button className="btn ghost" style={{ display: "flex", alignItems: "center", gap: 6 }} onClick={() => setOpeningsOpen(true)}>
+              <PixelAvatar rows={BPIX} pal={BPAL} size={16} />
+              Openings
+            </button>
+          </div>
         </div>
       </div>
+
+      {musicOpen && (
+        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }}>
+          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 220, padding: "20px 24px" }}>
+            <div className="boxHead jbHead">
+              <PixelAvatar rows={JPIX} pal={JPAL} size={20} />
+              <span>Juice Box</span>
+            </div>
+            <div className="trackRow">
+              <span className="trackName">{"♪ " + trackName}</span>
+              {trackName === "Neon Gambit" && <span className="trackTag">default</span>}
+            </div>
+            <div className="audioRow">
+              <button className="playBtn sm" onClick={prevTrack} title="Previous track">{"◀◀"}</button>
+              <button className="playBtn" onClick={toggleMusic} title={musicOn ? "Pause music" : "Play music"}>
+                {musicOn ? "❚❚" : "▶"}
+              </button>
+              <button className="playBtn sm" onClick={nextTrack} title="Next track">{"▶▶"}</button>
+              <input type="range" min="0" max="100" value={volume} onChange={e => onVolume(Number(e.target.value))} />
+              <span className="volPct">{volume}%</span>
+            </div>
+            <button className="btn gold" onClick={() => setMusicOpen(false)}>Close</button>
+          </div>
+        </div>
+      )}
 
       {statsOpen && (
         <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }}>

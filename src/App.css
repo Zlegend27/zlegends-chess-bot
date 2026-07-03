@@ -161,4 +161,21 @@ select{ font-family:inherit; font-size:12px; font-weight:700; border-radius:6px;
 .errBox{ min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
   gap:12px; background:var(--void,#0E0620); color:#F4EFFF; font-family:'Trebuchet MS','Segoe UI',system-ui,sans-serif;
   text-align:center; padding:24px; }
-@media (max-width:700px){ .layout{ flex-direction:column; align-items:center; } }
+/* Mobile: board first, then action buttons, then scoresheet/analysis, then
+   the Juice Box + Openings icon row. boardCol/panel go display:contents so
+   their children become direct flex items of .layout and can be reordered
+   independently of the desktop two-column grouping those wrappers exist
+   for — this is mobile-only, desktop's layout is untouched. */
+@media (max-width:700px){
+  .layout{ flex-direction:column; align-items:center; }
+  .boardCol, .panel{ display:contents; }
+  .botCard{ order:1; }
+  .boardWrap{ order:2; }
+  .youCard{ order:3; }
+  .statusRow{ order:4; }
+  .replayCtrls, .reviewCtrls, .analyzeHint{ order:5; }
+  .playCtrls{ order:6; }
+  .scoreBox{ order:7; }
+  .analysisBox{ order:8; }
+  .iconRow{ order:9; }
+}
