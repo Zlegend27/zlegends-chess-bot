@@ -10,7 +10,7 @@ import StarField from "./components/StarField";
 import { loadSetting, saveSetting } from "./utils/storage";
 import { buildPgn } from "./utils/pgn";
 import { encodeGame, decodeGame, getSharedHash, replayIntoEngine } from "./utils/share";
-import { pixelGlyphUrl } from "./utils/pixelGlyph";
+import { pieceSvgUrl } from "./utils/chessPieceSvg";
 import { saveGame, fetchStats } from "./utils/gameHistory";
 import { ENGINE_VERSION } from "./utils/version";
 import { OPENINGS } from "./utils/openings";
@@ -51,19 +51,11 @@ function pickPersonality(baseStyle, plyCount, botAdvantagePawns) {
   return baseStyle;
 }
 
-/* Pieces render as pixel-art images (see utils/pixelGlyph.js) rather than
-   plain text glyphs — bigger, chunkier, and easier to read at a glance,
-   while still built on the same universally-recognizable chess symbols. */
-const PIECE_CHAR = { 1: "♟", 2: "♞", 3: "♝", 4: "♜", 5: "♛", 6: "♚" };
-const PIECE_COLOR = { w: "#EAFBFF", b: "#241640" };
-const pieceImgSrc = (type, isWhite) => pixelGlyphUrl(
-  PIECE_CHAR[type],
-  isWhite ? PIECE_COLOR.w : PIECE_COLOR.b,
-  {
-    outline: isWhite ? null : "#C9C2E8",
-    accent: type === 6 ? (isWhite ? "#0B1B2E" : "#EAFBFF") : null,
-  }
-);
+/* Pieces render as classic bold black/white Staunton silhouettes (see
+   utils/chessPieceSvg.js) rather than a stylized look — the rest of the UI
+   already carries plenty of neon color, so the pieces themselves stay big,
+   plain, and instantly readable. */
+const pieceImgSrc = (type, isWhite) => pieceSvgUrl(type, isWhite);
 const FILES = "abcdefgh";
 const PTS = { 1: 1, 2: 3, 3: 3, 4: 5, 5: 9 };
 const START_COUNT = { 1: 8, 2: 2, 3: 2, 4: 2, 5: 1 };
