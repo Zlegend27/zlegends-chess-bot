@@ -6,7 +6,7 @@
    to repeat on every re-render. */
 
 const cache = new Map();
-const SIZE = 20;
+const SIZE = 28;
 
 export function pixelGlyphUrl(glyph, fillColor, { outline, accent } = {}) {
   const key = glyph + "|" + fillColor + "|" + (outline || "") + "|" + (accent || "");
@@ -18,10 +18,11 @@ export function pixelGlyphUrl(glyph, fillColor, { outline, accent } = {}) {
   ctx.textBaseline = "middle";
   ctx.font = `bold ${Math.floor(SIZE * 0.9)}px sans-serif`;
   const x = SIZE / 2, y = SIZE / 2 + SIZE * 0.05, text = glyph + "︎";
+  const outlineOffset = Math.max(1, Math.round(SIZE / 20));
   if (outline) {
     ctx.fillStyle = outline;
     for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
-      ctx.fillText(text, x + dx, y + dy);
+      ctx.fillText(text, x + dx * outlineOffset, y + dy * outlineOffset);
     }
   }
   ctx.fillStyle = fillColor;
