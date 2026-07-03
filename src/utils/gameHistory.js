@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { getSupabase } from "./supabase";
 import { getClientId } from "./clientId";
 import { buildPgn } from "./pgn";
 
@@ -6,6 +6,7 @@ import { buildPgn } from "./pgn";
  *  No-ops entirely if Supabase isn't configured (e.g. local dev without
  *  a .env file). */
 export async function saveGame({ difficultyLabel, playerColor, moveList, result, finalEval, style, engineVersion }) {
+  const supabase = await getSupabase();
   if (!supabase) return;
   try {
     await supabase.from("games").insert({
@@ -30,6 +31,7 @@ export async function saveGame({ difficultyLabel, playerColor, moveList, result,
  *  if Supabase isn't configured or the fetch fails, so the UI can show a
  *  real message instead of spinning forever. */
 export async function fetchStats() {
+  const supabase = await getSupabase();
   if (!supabase) return { error: true, message: "Stats aren't set up on this deployment yet." };
   try {
     const { data, error } = await supabase
