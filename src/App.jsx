@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import {
   createEngine, EMPTY, WN, WB, WR, WQ, WK, M64TO120, M120TO64,
   mFrom, mTo, mPromo, mFlags, MATE, fileOf, rankOf,
@@ -367,6 +367,15 @@ export default function ZlegendsBot() {
       setTargets(legal.filter(m => mFrom(m) === sq120).map(m => M120TO64[mTo(m)]));
     } else { setSelected(-1); setTargets([]); }
   };
+  /* The memoized board below only rebuilds when position-relevant state
+     changes, so its onClick/onKeyDown closures can't safely capture
+     onSquare directly — it also reads thinking/promo/quizOpening/result/
+     analyzing, none of which are in that memo's deps. Routing through a
+     ref that's always reassigned to the latest onSquare keeps clicks
+     correct without needing to rebuild all 64 cells whenever any of those
+     change. */
+  const onSquareRef = useRef(onSquare);
+  onSquareRef.current = onSquare;
 
   const newGame = (color) => {
     if (mode === "replay") {
@@ -531,44 +540,57 @@ export default function ZlegendsBot() {
   const isPlayerLastMove = !analyzing && lastMove && lastMoverColor === playerColor;
 
   const flipped = playerColor === -1;
-  const rows = [];
-  for (let vr = 0; vr < 8; vr++) {
-    const r = flipped ? vr : 7 - vr;
-    const cells = [];
-    for (let vf = 0; vf < 8; vf++) {
-      const f = flipped ? 7 - vf : vf;
-      const i64 = r * 8 + f;
-      const sq120 = M64TO120[i64];
-      const p = eng.pieceAt(i64);
-      const light = (r + f) % 2 === 1;
-      const isSel = selected === i64;
-      const isTarget = targets.includes(i64);
-      const isLast = lastMove && (lastMove.from === sq120 || lastMove.to === sq120);
-      const isBotLast = isBotLastMove && isLast;
-      const isPlayerLast = isPlayerLastMove && isLast;
-      const isHintFrom = hintMove && hintMove.from === sq120;
-      const isHintTo = hintMove && hintMove.to === sq120;
-      const kingInCheck = p * eng.getSide() === WK && eng.inCheckNow();
-      const squareName = FILES[f] + (r + 1);
-      const pieceLabel = p !== EMPTY ? `${p > 0 ? "White" : "Black"} ${PIECE_NAME[Math.abs(p)]}` : "empty";
-      const stateBits = [isSel && "selected", isTarget && "legal move", kingInCheck && "in check"].filter(Boolean);
-      const ariaLabel = `${squareName}, ${pieceLabel}` + (stateBits.length ? `, ${stateBits.join(", ")}` : "");
-      cells.push(
-        <div key={i64} role="gridcell" tabIndex={0} aria-label={ariaLabel}
-          onClick={() => onSquare(i64)}
-          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSquare(i64); } }}
-          className={"sq " + (light ? "light" : "dark") + (isSel ? " sel" : "") + (isLast ? " last" : "") +
-            (isBotLast ? " botLast" : "") + (isPlayerLast ? " playerLast" : "") +
-            (kingInCheck ? " chk" : "") + (isHintFrom ? " hintFrom" : "") + (isHintTo ? " hintTo" : "")}>
-          {p !== EMPTY && <img className={"pc " + (p > 0 ? "w" : "b")} src={pieceImgSrc(Math.abs(p), p > 0)} alt="" draggable="false" />}
-          {isTarget && <span className={"dot" + (p !== EMPTY ? " ring" : "")} />}
-          {vf === 0 && <span className="coord rk">{r + 1}</span>}
-          {vr === 7 && <span className="coord fl">{FILES[f]}</span>}
-        </div>
-      );
+  /* The 64-cell board is the most expensive thing this component renders,
+     and eng is a mutable object (its reference never changes even when the
+     position does) — so this list must cover everything that actually
+     drives eng's position or the cells' own display, or a move could apply
+     without the board visually updating. Rebuilding it only when one of
+     these actually changes means unrelated state (volume, toasts, track
+     name, quiz feedback text, ...) no longer forces React to re-diff all
+     64 squares on every render. */
+  const rows = useMemo(() => {
+    const built = [];
+    for (let vr = 0; vr < 8; vr++) {
+      const r = flipped ? vr : 7 - vr;
+      const cells = [];
+      for (let vf = 0; vf < 8; vf++) {
+        const f = flipped ? 7 - vf : vf;
+        const i64 = r * 8 + f;
+        const sq120 = M64TO120[i64];
+        const p = eng.pieceAt(i64);
+        const light = (r + f) % 2 === 1;
+        const isSel = selected === i64;
+        const isTarget = targets.includes(i64);
+        const isLast = lastMove && (lastMove.from === sq120 || lastMove.to === sq120);
+        const isBotLast = isBotLastMove && isLast;
+        const isPlayerLast = isPlayerLastMove && isLast;
+        const isHintFrom = hintMove && hintMove.from === sq120;
+        const isHintTo = hintMove && hintMove.to === sq120;
+        const kingInCheck = p * eng.getSide() === WK && eng.inCheckNow();
+        const squareName = FILES[f] + (r + 1);
+        const pieceLabel = p !== EMPTY ? `${p > 0 ? "White" : "Black"} ${PIECE_NAME[Math.abs(p)]}` : "empty";
+        const stateBits = [isSel && "selected", isTarget && "legal move", kingInCheck && "in check"].filter(Boolean);
+        const ariaLabel = `${squareName}, ${pieceLabel}` + (stateBits.length ? `, ${stateBits.join(", ")}` : "");
+        cells.push(
+          <div key={i64} role="gridcell" tabIndex={0} aria-label={ariaLabel}
+            onClick={() => onSquareRef.current(i64)}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSquareRef.current(i64); } }}
+            className={"sq " + (light ? "light" : "dark") + (isSel ? " sel" : "") + (isLast ? " last" : "") +
+              (isBotLast ? " botLast" : "") + (isPlayerLast ? " playerLast" : "") +
+              (kingInCheck ? " chk" : "") + (isHintFrom ? " hintFrom" : "") + (isHintTo ? " hintTo" : "")}>
+            {p !== EMPTY && <img className={"pc " + (p > 0 ? "w" : "b")} src={pieceImgSrc(Math.abs(p), p > 0)} alt="" draggable="false" />}
+            {isTarget && <span className={"dot" + (p !== EMPTY ? " ring" : "")} />}
+            {vf === 0 && <span className="coord rk">{r + 1}</span>}
+            {vr === 7 && <span className="coord fl">{FILES[f]}</span>}
+          </div>
+        );
+      }
+      built.push(<div key={vr} role="row" className="brow">{cells}</div>);
     }
-    rows.push(<div key={vr} role="row" className="brow">{cells}</div>);
-  }
+    return built;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eng, flipped, selected, targets, lastMove, hintMove, isBotLastMove, isPlayerLastMove,
+      moveList, reviewIndex, replayIndex, replayFull, analysisExtra, mode]);
 
   const pairs = [];
   for (let i = 0; i < moveList.length; i += 2) pairs.push([moveList[i], moveList[i + 1]]);
