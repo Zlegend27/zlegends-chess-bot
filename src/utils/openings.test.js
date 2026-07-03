@@ -17,5 +17,9 @@ describe("openings library", () => {
     test(`${opening.name}: has one description per move`, () => {
       expect(opening.steps.length).toBe(opening.moves.length);
     });
+
+    test(`${opening.name}: 'for' is a valid side`, () => {
+      expect(["white", "black"]).toContain(opening.for);
+    });
   }
 });

@@ -173,6 +173,9 @@ export default function ZlegendsBot() {
   const [stats, setStats] = useState(null);
   const [openingsOpen, setOpeningsOpen] = useState(false);
   const [activeOpening, setActiveOpening] = useState(null);
+  const [quizOpening, setQuizOpening] = useState(null);
+  const [quizFeedback, setQuizFeedback] = useState(null);
+  const [quizDoneToast, setQuizDoneToast] = useState(null);
   const difficultyRef = useRef(DIFFICULTIES[difficultyIdx]);
   difficultyRef.current = DIFFICULTIES[difficultyIdx];
   const gameStyleRef = useRef(gameStyle);
@@ -350,16 +353,18 @@ export default function ZlegendsBot() {
 
   const onSquare = (i64) => {
     if (mode === "replay" || thinking || promo) return;
+    const inQuiz = !!quizOpening;
     const legal = eng.legalMoves();
     const sq120 = M64TO120[i64];
-    const sideToMove = analyzing ? eng.getSide() : playerColor;
-    if (!analyzing && (result || eng.getSide() !== playerColor)) return;
+    const sideToMove = (analyzing || inQuiz) ? eng.getSide() : playerColor;
+    if (!analyzing && !inQuiz && (result || eng.getSide() !== playerColor)) return;
+    if (inQuiz && result) return;
     if (selected >= 0) {
       const from120 = M64TO120[selected];
       const candidates = legal.filter(m => mFrom(m) === from120 && mTo(m) === sq120);
       if (candidates.length > 0) {
         if (candidates.length > 1) { setPromo({ from: from120, to: sq120, moves: candidates }); return; }
-        analyzing ? analysisMove(candidates[0]) : playMove(candidates[0]);
+        inQuiz ? quizMove(candidates[0]) : (analyzing ? analysisMove(candidates[0]) : playMove(candidates[0]));
         return;
       }
     }
@@ -381,6 +386,8 @@ export default function ZlegendsBot() {
     setPlayerColor(color);
     setGameStyle(randomStyle());
     setActiveOpening(null);
+    setQuizOpening(null);
+    setQuizFeedback(null);
     setSelected(-1); setTargets([]); setLastMove(null); setHintMove(null);
     setMoveList([]); setInfo(null); setResult(null); setPromo(null); setEvalCp(0); setReviewIndex(null);
     rerender();
@@ -390,24 +397,71 @@ export default function ZlegendsBot() {
   const startOpening = (opening) => {
     setOpeningsOpen(false);
     setActiveOpening(opening);
+    setPlayerColor(opening.for === "black" ? -1 : 1);
     setMode("replay");
     setReplayFull(opening.moves);
     setReplayIndex(0);
     setReplayPlaying(false);
   };
 
+  const startQuiz = (opening) => {
+    eng.reset();
+    moveListRef.current = [];
+    setQuizOpening(opening);
+    setActiveOpening(null);
+    setPlayerColor(opening.for === "black" ? -1 : 1);
+    setMode("play");
+    setSelected(-1); setTargets([]); setLastMove(null); setHintMove(null);
+    setMoveList([]); setInfo(null); setResult(null); setPromo(null); setEvalCp(0); setReviewIndex(null);
+    setQuizFeedback(null);
+    rerender();
+  };
+
+  const quizMove = useCallback((m) => {
+    const idx = moveListRef.current.length;
+    const expectedSan = quizOpening.moves[idx];
+    const attemptedSan = eng.sanOf(m);
+    if (attemptedSan !== expectedSan) {
+      setQuizFeedback("Not quite — try again!");
+      setSelected(-1); setTargets([]);
+      setTimeout(() => setQuizFeedback(null), 1400);
+      return;
+    }
+    const cap = isCaptureMove(m);
+    eng.make(m);
+    try { cap ? audio.sfxCapture() : audio.sfxMove(); } catch { /* audio unavailable */ }
+    setLastMove({ from: mFrom(m), to: mTo(m) });
+    const newMoveList = [...moveListRef.current, attemptedSan];
+    moveListRef.current = newMoveList;
+    setMoveList(newMoveList);
+    setSelected(-1); setTargets([]);
+    setEvalCp(eng.evalWhite());
+    const over = checkGameOver();
+    if (newMoveList.length === quizOpening.moves.length) {
+      const forColor = quizOpening.for === "black" ? -1 : 1;
+      setQuizOpening(null);
+      setQuizFeedback(null);
+      setQuizDoneToast(over ? null : "Opening complete! Now try to beat the bot from here.");
+      if (over) { setResult(over); setReviewIndex(eng.plyCount()); }
+      else if (eng.getSide() !== forColor) engineMoveRef.current(newMoveList);
+      setTimeout(() => setQuizDoneToast(null), 3000);
+    }
+    rerender();
+  }, [eng, audio, quizOpening, checkGameOver]);
+
   const undo = () => {
     if (mode === "replay" || thinking || result || eng.plyCount() === 0) return;
     let n;
-    if (eng.getSide() === playerColor && eng.plyCount() >= 2) n = 2; else n = 1;
+    if (quizOpening) n = 1; // quiz: the player supplies every ply, so always step back exactly one
+    else if (eng.getSide() === playerColor && eng.plyCount() >= 2) n = 2; else n = 1;
     for (let i = 0; i < n; i++) eng.unmake();
     const newMoveList = moveListRef.current.slice(0, moveListRef.current.length - n);
     moveListRef.current = newMoveList;
     setMoveList(newMoveList);
-    setSelected(-1); setTargets([]); setLastMove(null); setResult(null); setPromo(null); setHintMove(null); setReviewIndex(null);
+    setSelected(-1); setTargets([]); setLastMove(null); setResult(null); setPromo(null); setHintMove(null); setReviewIndex(null); setQuizFeedback(null);
     setEvalCp(eng.evalWhite());
     rerender();
-    if (eng.getSide() !== playerColor) setTimeout(() => engineMoveRef.current(newMoveList), 60);
+    if (!quizOpening && eng.getSide() !== playerColor) setTimeout(() => engineMoveRef.current(newMoveList), 60);
   };
 
   const onHint = () => {
@@ -526,6 +580,8 @@ export default function ZlegendsBot() {
   const replayLabel = activeOpening ? activeOpening.name : "Shared game";
   const status = mode === "replay"
     ? (replayIndex === 0 ? `${replayLabel} — starting position` : replayIndex === replayFull.length ? `${replayLabel} — final position` : `${replayLabel} — move ${replayIndex}`)
+    : quizOpening
+    ? `Quiz: ${quizOpening.name} — move ${moveList.length + 1} of ${quizOpening.moves.length}`
     : result
     ? `${result.reason} · ${result.text}`
     : thinking ? "Zlegend2700 is calculating…"
@@ -615,7 +671,7 @@ export default function ZlegendsBot() {
                         <button key={pp} onClick={() => {
                           const m = promo.moves.find(x => mPromo(x) === pp);
                           setPromo(null);
-                          if (m) (analyzing ? analysisMove(m) : playMove(m));
+                          if (m) (quizOpening ? quizMove(m) : analyzing ? analysisMove(m) : playMove(m));
                         }}>
                           <img className={"pc " + (eng.getSide() === 1 ? "w" : "b")} style={{ width: 44, height: 44 }} src={pieceImgSrc(pp, eng.getSide() === 1)} alt="" draggable="false" />
                         </button>
@@ -664,6 +720,7 @@ export default function ZlegendsBot() {
               </button>
               <button className="btn ghost" onClick={() => replayStep(1)} disabled={replayIndex >= replayFull.length}>{"▶"}</button>
               <button className="btn ghost" onClick={() => setReplayIndex(replayFull.length)} disabled={replayIndex >= replayFull.length}>{"▶|"}</button>
+              {activeOpening && <button className="btn gold" onClick={() => startQuiz(activeOpening)}>Try the Opening</button>}
               <button className="btn gold" onClick={exitReplay}>Start your own game</button>
             </div>
           )}
@@ -734,7 +791,14 @@ export default function ZlegendsBot() {
           </div>
 
           <div className="box">
-            {activeOpening ? (
+            {quizOpening ? (
+              <>
+                <div className="boxHead">Quiz: {quizOpening.name}</div>
+                <div className="pv">
+                  {quizFeedback || `Play ${eng.getSide() === 1 ? "White" : "Black"}'s move ${moveList.length + 1} of ${quizOpening.moves.length} from memory.`}
+                </div>
+              </>
+            ) : activeOpening ? (
               <>
                 <div className="boxHead">{activeOpening.name} · {activeOpening.eco}</div>
                 <div className="pv">
@@ -770,7 +834,7 @@ export default function ZlegendsBot() {
               <button className="btn" onClick={() => { setPromo(null); setColorPick(true); }}>New</button>
               <button className="btn" onClick={undo} disabled={thinking || !!result || eng.plyCount() === 0}>Undo</button>
               <button className="btn ghost" onClick={onHint}
-                disabled={thinking || hinting || !!result || !!promo || eng.getSide() !== playerColor}>
+                disabled={thinking || hinting || !!result || !!promo || !!quizOpening || eng.getSide() !== playerColor}>
                 {hinting ? "Thinking…" : "Hint"}
               </button>
               <select value={difficultyIdx} onChange={e => onDifficultyChange(Number(e.target.value))}>
@@ -784,6 +848,7 @@ export default function ZlegendsBot() {
                 Openings
               </button>
               {shareToast && <div className="toast">{shareToast}</div>}
+              {quizDoneToast && <div className="toast">{quizDoneToast}</div>}
             </div>
           )}
         </div>

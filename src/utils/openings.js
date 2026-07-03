@@ -4,13 +4,16 @@
    the engine actually generates, not just typed by hand and trusted.
    `steps[i]` describes the move that was just played to reach the position
    after moves[i], at a beginner level (no notation jargon beyond the move
-   itself, one core idea per step). */
+   itself, one core idea per step). `for` is which side the opening is
+   named/played from — used to orient the board and to decide which color
+   the player keeps after finishing the "Try the Opening" quiz. */
 
 export const OPENINGS = [
   {
     id: "italian",
     name: "Italian Game",
     eco: "C50",
+    for: "white",
     summary: "Fast, natural development aimed straight at f7.",
     moves: ["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5", "c3", "Nf6"],
     steps: [
@@ -28,6 +31,7 @@ export const OPENINGS = [
     id: "ruy-lopez",
     name: "Ruy Lopez (Spanish)",
     eco: "C60",
+    for: "white",
     summary: "One of the oldest openings — a quiet pin with long-term pressure.",
     moves: ["e4", "e5", "Nf3", "Nc6", "Bb5", "a6", "Ba4", "Nf6"],
     steps: [
@@ -45,6 +49,7 @@ export const OPENINGS = [
     id: "sicilian",
     name: "Sicilian Defense",
     eco: "B20",
+    for: "black",
     summary: "Black fights for the center from the side instead of the middle.",
     moves: ["e4", "c5", "Nf3", "d6", "d4", "cxd4", "Nxd4", "Nf6"],
     steps: [
@@ -62,6 +67,7 @@ export const OPENINGS = [
     id: "french",
     name: "French Defense",
     eco: "C00",
+    for: "black",
     summary: "Solid and slightly cramped at first, but very hard to attack.",
     moves: ["e4", "e6", "d4", "d5", "Nc3", "Nf6", "Bg5", "Be7"],
     steps: [
@@ -79,6 +85,7 @@ export const OPENINGS = [
     id: "caro-kann",
     name: "Caro-Kann Defense",
     eco: "B10",
+    for: "black",
     summary: "Like the French, but keeps the light-squared bishop free.",
     moves: ["e4", "c6", "d4", "d5", "Nc3", "dxe4", "Nxe4", "Bf5"],
     steps: [
@@ -96,6 +103,7 @@ export const OPENINGS = [
     id: "queens-gambit",
     name: "Queen's Gambit",
     eco: "D06",
+    for: "white",
     summary: "A slower, positional opening built around offering a pawn.",
     moves: ["d4", "d5", "c4", "e6", "Nc3", "Nf6", "Bg5", "Be7"],
     steps: [
@@ -113,6 +121,7 @@ export const OPENINGS = [
     id: "kings-indian",
     name: "King's Indian Defense",
     eco: "E60",
+    for: "black",
     summary: "Black lets White take the center, planning to strike back later.",
     moves: ["d4", "Nf6", "c4", "g6", "Nc3", "Bg7", "e4", "d6"],
     steps: [
@@ -130,6 +139,7 @@ export const OPENINGS = [
     id: "london",
     name: "London System",
     eco: "D02",
+    for: "white",
     summary: "A flexible, low-theory setup White can play against almost anything.",
     moves: ["d4", "d5", "Nf3", "Nf6", "Bf4", "e6", "e3", "Bd6"],
     steps: [
@@ -147,6 +157,7 @@ export const OPENINGS = [
     id: "scholars-mate",
     name: "Scholar's Mate",
     eco: "C20",
+    for: "white",
     summary: "A classic four-move checkmate trap — a lesson in why f7/f2 matter early on.",
     moves: ["e4", "e5", "Qh5", "Nc6", "Bc4", "Nf6", "Qxf7#"],
     steps: [
@@ -163,6 +174,7 @@ export const OPENINGS = [
     id: "fried-liver",
     name: "Fried Liver Attack",
     eco: "C57",
+    for: "white",
     summary: "A sharp knight sacrifice that drags the enemy king into the open.",
     moves: ["e4", "e5", "Nf3", "Nc6", "Bc4", "Nf6", "Ng5", "d5", "exd5", "Nxd5", "Nxf7", "Kxf7", "Qf3+", "Ke6", "Nc3"],
     steps: [
@@ -187,6 +199,7 @@ export const OPENINGS = [
     id: "hyper-accelerated-dragon",
     name: "Hyper-Accelerated Dragon",
     eco: "B27",
+    for: "black",
     summary: "Reaches the Dragon's fianchetto setup in the fewest possible moves.",
     moves: ["e4", "c5", "Nf3", "g6", "d4", "cxd4", "Nxd4", "Bg7"],
     steps: [
