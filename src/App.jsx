@@ -4,7 +4,7 @@ import {
   mFrom, mTo, mPromo, mFlags, MATE, fileOf, rankOf,
 } from "./engine/chessEngine";
 import { createAudio } from "./audio/chiptune";
-import PixelAvatar, { ZPAL, ZPIX, JPAL, JPIX } from "./components/PixelAvatar";
+import PixelAvatar, { ZPAL, ZPIX, JPAL, JPIX, BPAL, BPIX } from "./components/PixelAvatar";
 import SocialLinks from "./components/SocialLinks";
 import StarField from "./components/StarField";
 import { loadSetting, saveSetting } from "./utils/storage";
@@ -13,6 +13,7 @@ import { encodeGame, decodeGame, getSharedHash, replayIntoEngine } from "./utils
 import { pixelGlyphUrl } from "./utils/pixelGlyph";
 import { saveGame, fetchStats } from "./utils/gameHistory";
 import { ENGINE_VERSION } from "./utils/version";
+import { OPENINGS } from "./utils/openings";
 import "./App.css";
 
 const DIFFICULTIES = [
@@ -170,6 +171,8 @@ export default function ZlegendsBot() {
   const [pgnToast, setPgnToast] = useState(null);
   const [statsOpen, setStatsOpen] = useState(false);
   const [stats, setStats] = useState(null);
+  const [openingsOpen, setOpeningsOpen] = useState(false);
+  const [activeOpening, setActiveOpening] = useState(null);
   const difficultyRef = useRef(DIFFICULTIES[difficultyIdx]);
   difficultyRef.current = DIFFICULTIES[difficultyIdx];
   const gameStyleRef = useRef(gameStyle);
@@ -377,10 +380,20 @@ export default function ZlegendsBot() {
     moveListRef.current = [];
     setPlayerColor(color);
     setGameStyle(randomStyle());
+    setActiveOpening(null);
     setSelected(-1); setTargets([]); setLastMove(null); setHintMove(null);
     setMoveList([]); setInfo(null); setResult(null); setPromo(null); setEvalCp(0); setReviewIndex(null);
     rerender();
     if (color === -1) setTimeout(() => engineMoveRef.current([]), 60);
+  };
+
+  const startOpening = (opening) => {
+    setOpeningsOpen(false);
+    setActiveOpening(opening);
+    setMode("replay");
+    setReplayFull(opening.moves);
+    setReplayIndex(0);
+    setReplayPlaying(false);
   };
 
   const undo = () => {
@@ -510,8 +523,9 @@ export default function ZlegendsBot() {
   const curMoveIdx = shownPly - 1;
 
   const inChk = eng.inCheckNow() && !result;
+  const replayLabel = activeOpening ? activeOpening.name : "Shared game";
   const status = mode === "replay"
-    ? (replayIndex === 0 ? "Shared game — start of the line" : replayIndex === replayFull.length ? "Shared game — final position" : `Shared game — move ${replayIndex}`)
+    ? (replayIndex === 0 ? `${replayLabel} — starting position` : replayIndex === replayFull.length ? `${replayLabel} — final position` : `${replayLabel} — move ${replayIndex}`)
     : result
     ? `${result.reason} · ${result.text}`
     : thinking ? "Zlegend2700 is calculating…"
@@ -637,7 +651,7 @@ export default function ZlegendsBot() {
           <div className="statusRow">
             <span className={"status" + (result ? " over" : "")}>{status}</span>
             {inChk && <span className="bang">!!</span>}
-            {mode === "replay" && <span className="replayBadge">Replay</span>}
+            {mode === "replay" && <span className="replayBadge">{activeOpening ? "Opening" : "Replay"}</span>}
             {reviewing && <span className="replayBadge">Move {reviewIndex}/{moveList.length}</span>}
           </div>
 
@@ -720,23 +734,34 @@ export default function ZlegendsBot() {
           </div>
 
           <div className="box">
-            <div className="boxHead">Bot Analysis</div>
-            {info ? (
-              info.book ? (
-                <div className="pv">Playing from the opening book.</div>
-              ) : (
-                <>
-                  <div className="astats">
-                    <div><b>{evalLabel}</b><span>eval</span></div>
-                    <div><b>{info.depth}</b><span>depth</span></div>
-                    <div><b>{(info.nodes / 1000).toFixed(0)}k</b><span>nodes</span></div>
-                    <div><b>{(info.time / 1000).toFixed(1)}s</b><span>time</span></div>
-                  </div>
-                  {info.pv.length > 0 && <div className="pv">line: {info.pv.join(" ")}</div>}
-                </>
-              )
+            {activeOpening ? (
+              <>
+                <div className="boxHead">{activeOpening.name} · {activeOpening.eco}</div>
+                <div className="pv">
+                  {replayIndex === 0 ? activeOpening.summary : activeOpening.steps[replayIndex - 1]}
+                </div>
+              </>
             ) : (
-              <div className="pv">After each of its moves, the bot posts its eval, search depth, node count, and the line it expects.</div>
+              <>
+                <div className="boxHead">Bot Analysis</div>
+                {info ? (
+                  info.book ? (
+                    <div className="pv">Playing from the opening book.</div>
+                  ) : (
+                    <>
+                      <div className="astats">
+                        <div><b>{evalLabel}</b><span>eval</span></div>
+                        <div><b>{info.depth}</b><span>depth</span></div>
+                        <div><b>{(info.nodes / 1000).toFixed(0)}k</b><span>nodes</span></div>
+                        <div><b>{(info.time / 1000).toFixed(1)}s</b><span>time</span></div>
+                      </div>
+                      {info.pv.length > 0 && <div className="pv">line: {info.pv.join(" ")}</div>}
+                    </>
+                  )
+                ) : (
+                  <div className="pv">After each of its moves, the bot posts its eval, search depth, node count, and the line it expects.</div>
+                )}
+              </>
             )}
           </div>
 
@@ -754,6 +779,10 @@ export default function ZlegendsBot() {
               {moveList.length > 0 && <button className="btn ghost" onClick={onShare}>Share</button>}
               {result && <button className="btn gold" onClick={() => newGame(playerColor)}>Rematch!</button>}
               <button className="btn ghost" onClick={openStats}>Stats</button>
+              <button className="btn ghost" style={{ display: "flex", alignItems: "center", gap: 6 }} onClick={() => setOpeningsOpen(true)}>
+                <PixelAvatar rows={BPIX} pal={BPAL} size={16} />
+                Openings
+              </button>
               {shareToast && <div className="toast">{shareToast}</div>}
             </div>
           )}
@@ -777,6 +806,27 @@ export default function ZlegendsBot() {
               </div>
             )}
             <button className="btn gold" onClick={() => setStatsOpen(false)}>Close</button>
+          </div>
+        </div>
+      )}
+
+      {openingsOpen && (
+        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }}>
+          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, maxHeight: "80vh", overflowY: "auto", padding: "20px 24px" }}>
+            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <PixelAvatar rows={BPIX} pal={BPAL} size={18} />
+              Openings Library
+            </div>
+            <div className="rows" style={{ maxHeight: "none" }}>
+              {OPENINGS.map(op => (
+                <div key={op.id} style={{ cursor: "pointer", padding: "6px 2px", borderBottom: "1px solid #8B2FC92E" }}
+                  onClick={() => startOpening(op)}>
+                  <div style={{ fontWeight: 700 }}>{op.name} <span style={{ opacity: 0.6, fontWeight: "normal" }}>({op.eco})</span></div>
+                  <div style={{ fontSize: 11, opacity: 0.75 }}>{op.summary}</div>
+                </div>
+              ))}
+            </div>
+            <button className="btn gold" onClick={() => setOpeningsOpen(false)}>Close</button>
           </div>
         </div>
       )}

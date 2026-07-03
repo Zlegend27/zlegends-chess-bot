@@ -50,6 +50,20 @@ export const JPIX = [
   ".oooooooooo.",
 ];
 
+/* ---------------- pixel book icon (Openings library button) ---------------- */
+export const BPAL = { o: "#8B2FC9", w: "#F4EFFF", t: "#3EE7F5" };
+export const BPIX = [
+  "oooooo.oooooo",
+  "owwwww.wwwwwo",
+  "owtwww.wtwwwo",
+  "owwwww.wwwwwo",
+  "owtwww.wtwwwo",
+  "owwwww.wwwwwo",
+  "owtwww.wtwwwo",
+  "owwwww.wwwwwo",
+  "oooooo.oooooo",
+];
+
 export default function PixelAvatar({ rows, pal, size }) {
   const rects = [];
   let cols = 0;
