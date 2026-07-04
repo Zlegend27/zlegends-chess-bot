@@ -11,7 +11,7 @@ import { loadSetting, saveSetting } from "./utils/storage";
 import { buildPgn } from "./utils/pgn";
 import { encodeGame, decodeGame, getSharedHash, replayIntoEngine } from "./utils/share";
 import { pieceSvgUrl } from "./utils/chessPieceSvg";
-import { saveGame, fetchStats } from "./utils/gameHistory";
+import { saveGame } from "./utils/gameHistory";
 import { ENGINE_VERSION } from "./utils/version";
 import { OPENINGS } from "./utils/openings";
 import { PUZZLES, RATING_BANDS } from "./utils/puzzles";
@@ -163,8 +163,6 @@ export default function ZlegendsBot() {
   const [posVersion, setPosVersion] = useState(0);
   const [shareToast, setShareToast] = useState(null);
   const [pgnToast, setPgnToast] = useState(null);
-  const [statsOpen, setStatsOpen] = useState(false);
-  const [stats, setStats] = useState(null);
   const [musicOpen, setMusicOpen] = useState(false);
   const [openingsOpen, setOpeningsOpen] = useState(false);
   const [activeOpening, setActiveOpening] = useState(null);
@@ -218,6 +216,8 @@ export default function ZlegendsBot() {
     setEvalCp(eng.evalWhite());
     setSelected(-1); setTargets([]); setHintMove(null);
     setResult(replayIndex === replayFull.length ? checkGameOver() : null);
+    setAnalysisExtra([]); setBestArrow(null);
+    setPosVersion(v => v + 1);
     rerender();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, replayIndex, replayFull, eng]);
@@ -231,9 +231,14 @@ export default function ZlegendsBot() {
 
   /* post-game review: step through the just-finished game without altering its record */
   const reviewing = mode === "play" && !!result && reviewIndex !== null;
+  /* Analyze is available both in post-game review and while browsing an
+     opening/shared replay -- anywhere the board is showing a fixed,
+     already-decided position rather than a live game the player is
+     mid-move in. */
+  const canAnalyze = reviewing || mode === "replay";
   const reviewFirstRun = useRef(true);
   useEffect(() => {
-    if (!reviewing) { reviewFirstRun.current = true; setAnalyzing(false); setBestArrow(null); setAnalysisExtra([]); return; }
+    if (!reviewing) { reviewFirstRun.current = true; if (mode !== "replay") { setAnalyzing(false); setBestArrow(null); setAnalysisExtra([]); } return; }
     eng.reset();
     setAnalysisExtra([]);
     const { applied, lastCaptured } = replayIntoEngine(eng, moveList.slice(0, reviewIndex));
@@ -254,12 +259,21 @@ export default function ZlegendsBot() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reviewing, reviewIndex, moveList, eng]);
 
-  /* analysis mode: while reviewing, continuously suggest the engine's best move as an arrow */
+  /* leaving both analyzable modes (e.g. starting a fresh game) should
+     always clear analysis state, even though the effect above only runs
+     on reviewing's own transitions */
   useEffect(() => {
-    if (!reviewing || !analyzing) return;
+    if (canAnalyze) return;
+    setAnalyzing(false); setBestArrow(null); setAnalysisExtra([]);
+  }, [canAnalyze]);
+
+  /* analysis mode: while reviewing or browsing a replay, continuously
+     suggest the engine's best move as an arrow */
+  useEffect(() => {
+    if (!canAnalyze || !analyzing) return;
     setAnalysisBusy(true);
     let cancelled = false;
-    const fullLine = moveList.slice(0, reviewIndex).concat(analysisExtra);
+    const fullLine = (reviewing ? moveList.slice(0, reviewIndex) : moveList).concat(analysisExtra);
     runSearch(fullLine, 800, 0, { personality: BALANCED, useBook: false }).then((res) => {
       if (cancelled) return;
       if (res && res.move) {
@@ -272,7 +286,7 @@ export default function ZlegendsBot() {
       setAnalysisBusy(false);
     });
     return () => { cancelled = true; };
-  }, [reviewing, analyzing, posVersion, moveList, reviewIndex, analysisExtra, eng, runSearch]);
+  }, [canAnalyze, reviewing, analyzing, posVersion, moveList, reviewIndex, analysisExtra, eng, runSearch]);
 
   const isCaptureMove = m => eng.pieceAt(M120TO64[mTo(m)]) !== EMPTY || (mFlags(m) & 1);
 
@@ -291,7 +305,7 @@ export default function ZlegendsBot() {
   }, [eng, audio]);
 
   const toggleAnalyze = () => {
-    if (!reviewing) return;
+    if (!canAnalyze) return;
     setAnalyzing(a => !a);
     setSelected(-1); setTargets([]); setBestArrow(null);
   };
@@ -352,7 +366,7 @@ export default function ZlegendsBot() {
   }, [eng, audio, checkGameOver]);
 
   const onSquare = (i64) => {
-    if (mode === "replay" || thinking || promo) return;
+    if ((mode === "replay" && !analyzing) || thinking || promo) return;
     const inQuiz = !!quizOpening;
     const inPuzzle = !!activePuzzle;
     if (inPuzzle && puzzleSolved) return;
@@ -579,11 +593,6 @@ export default function ZlegendsBot() {
     setTimeout(() => setPgnToast(null), 2000);
   };
 
-  const openStats = () => {
-    setStatsOpen(true);
-    setStats(null);
-    fetchStats().then(setStats);
-  };
 
   const onShare = async () => {
     const hash = encodeGame(playerColor, moveList);
@@ -836,6 +845,9 @@ export default function ZlegendsBot() {
               </button>
               <button className="btn ghost" onClick={() => replayStep(1)} disabled={replayIndex >= replayFull.length}>{"▶"}</button>
               <button className="btn ghost" onClick={() => setReplayIndex(replayFull.length)} disabled={replayIndex >= replayFull.length}>{"▶|"}</button>
+              <button className={"btn" + (analyzing ? "" : " ghost")} onClick={toggleAnalyze}>
+                {analyzing ? (analysisBusy ? "Analyzing…" : "Analyzing") : "Analyze"}
+              </button>
               {activeOpening && <button className="btn gold" onClick={() => startQuiz(activeOpening)}>Try the Opening</button>}
               <button className="btn gold" onClick={exitReplay}>Start your own game</button>
             </div>
@@ -940,14 +952,13 @@ export default function ZlegendsBot() {
               <button className="btn" onClick={undo} disabled={thinking || !!result || eng.plyCount() === 0}>Undo</button>
               <button className="btn ghost" onClick={onHint}
                 disabled={thinking || hinting || !!result || !!promo || !!quizOpening || eng.getSide() !== playerColor}>
-                {hinting ? "Thinking…" : "Hint"}
+                {hinting ? "Thinking…" : "Best Move"}
               </button>
               <select value={difficultyIdx} onChange={e => onDifficultyChange(Number(e.target.value))}>
                 {DIFFICULTIES.map((d, i) => <option key={i} value={i}>{"Level: " + d.label}</option>)}
               </select>
               {moveList.length > 0 && <button className="btn ghost" onClick={onShare}>Share</button>}
               {result && <button className="btn gold" onClick={() => newGame(playerColor)}>Rematch!</button>}
-              <button className="btn ghost" onClick={openStats}>Stats</button>
               {shareToast && <div className="toast">{shareToast}</div>}
               {quizDoneToast && <div className="toast">{quizDoneToast}</div>}
             </div>
@@ -1003,26 +1014,6 @@ export default function ZlegendsBot() {
         </div>
       )}
 
-      {statsOpen && (
-        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }}>
-          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 220, padding: "20px 24px" }}>
-            <div className="boxHead">Your Stats</div>
-            {stats === null ? (
-              <div className="pv">Loading…</div>
-            ) : stats.error ? (
-              <div className="pv">{stats.message}</div>
-            ) : (
-              <div className="astats">
-                <div><b>{stats.total}</b><span>games</span></div>
-                <div><b>{stats.wins}</b><span>wins</span></div>
-                <div><b>{stats.losses}</b><span>losses</span></div>
-                <div><b>{stats.draws}</b><span>draws</span></div>
-              </div>
-            )}
-            <button className="btn gold" onClick={() => setStatsOpen(false)}>Close</button>
-          </div>
-        </div>
-      )}
 
       {openingsOpen && (
         <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }}>

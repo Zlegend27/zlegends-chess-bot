@@ -26,31 +26,3 @@ export async function saveGame({ difficultyLabel, playerColor, moveList, result,
     /* stats are a nice-to-have, not worth surfacing an error over */
   }
 }
-
-/** Aggregate stats for this browser's own games. Returns { error: true }
- *  if Supabase isn't configured or the fetch fails, so the UI can show a
- *  real message instead of spinning forever. */
-export async function fetchStats() {
-  const supabase = await getSupabase();
-  if (!supabase) return { error: true, message: "Stats aren't set up on this deployment yet." };
-  try {
-    const { data, error } = await supabase
-      .from("games")
-      .select("winner, player_color, difficulty_label")
-      .eq("client_id", getClientId());
-    if (error || !data) {
-      return { error: true, message: error?.message || "Couldn't load stats." };
-    }
-    let wins = 0, losses = 0, draws = 0;
-    const byDifficulty = {};
-    for (const g of data) {
-      byDifficulty[g.difficulty_label] = (byDifficulty[g.difficulty_label] || 0) + 1;
-      if (g.winner === null || g.winner === undefined || g.winner === 0) draws++;
-      else if (g.winner === g.player_color) wins++;
-      else losses++;
-    }
-    return { total: data.length, wins, losses, draws, byDifficulty };
-  } catch (e) {
-    return { error: true, message: e?.message || "Couldn't load stats." };
-  }
-}
