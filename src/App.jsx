@@ -67,6 +67,10 @@ const RUSH_DURATIONS = [
   { seconds: 300, label: "5 Minutes" },
 ];
 const formatClock = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+/* Puzzle Rush difficulty ramp: climb one rating band every 3 solves in a
+   row, drop back one band on a miss so a rough patch doesn't strand the
+   player facing puzzles far above what they just missed. */
+const RUSH_STEP_UP_EVERY = 3;
 
 function materialState(eng) {
   const rem = { 1: {}, "-1": {} };
@@ -187,8 +191,11 @@ export default function ZlegendsBot() {
   const [rushMistakes, setRushMistakes] = useState(0);
   const [rushSolved, setRushSolved] = useState(0);
   const [rushResult, setRushResult] = useState(null);
+  const [rushBandIdx, setRushBandIdx] = useState(0);
   const rushSolvedRef = useRef(0);
   const rushMistakesRef = useRef(0);
+  const rushBandIdxRef = useRef(0);
+  const rushStreakRef = useRef(0);
   const difficultyRef = useRef(DIFFICULTIES[difficultyIdx]);
   difficultyRef.current = DIFFICULTIES[difficultyIdx];
   const gameStyleRef = useRef(gameStyle);
@@ -517,21 +524,30 @@ export default function ZlegendsBot() {
 
   const exitPuzzle = () => newGame(1);
 
+  const rushPool = () => puzzlesInBand(RATING_BANDS[rushBandIdxRef.current]);
+
   const startRush = (seconds) => {
     rushSolvedRef.current = 0;
     rushMistakesRef.current = 0;
+    rushBandIdxRef.current = 0;
+    rushStreakRef.current = 0;
     setRushSolved(0);
     setRushMistakes(0);
+    setRushBandIdx(0);
     setRushResult(null);
     setRushDuration(seconds);
     setRushTimeLeft(seconds);
     setRushMode(true);
     setRushOpen(false);
     setPuzzlesOpen(false);
-    startPuzzle(PUZZLES[(Math.random() * PUZZLES.length) | 0]);
+    const pool = puzzlesInBand(RATING_BANDS[0]);
+    startPuzzle(pool[(Math.random() * pool.length) | 0]);
   };
 
-  const nextRushPuzzle = () => startPuzzle(PUZZLES[(Math.random() * PUZZLES.length) | 0]);
+  const nextRushPuzzle = () => {
+    const pool = rushPool();
+    startPuzzle(pool[(Math.random() * pool.length) | 0]);
+  };
 
   const finishRush = (reason) => {
     setRushResult({ reason, solved: rushSolvedRef.current });
@@ -566,6 +582,9 @@ export default function ZlegendsBot() {
       if (rushMode) {
         rushMistakesRef.current += 1;
         setRushMistakes(rushMistakesRef.current);
+        rushStreakRef.current = 0;
+        rushBandIdxRef.current = Math.max(0, rushBandIdxRef.current - 1);
+        setRushBandIdx(rushBandIdxRef.current);
         if (rushMistakesRef.current >= 3) {
           setPuzzleFeedback("Wrong — that's 3 misses!");
           setTimeout(() => finishRush("mistakes"), 400);
@@ -596,6 +615,12 @@ export default function ZlegendsBot() {
       if (rushMode) {
         rushSolvedRef.current += 1;
         setRushSolved(rushSolvedRef.current);
+        rushStreakRef.current += 1;
+        if (rushStreakRef.current >= RUSH_STEP_UP_EVERY && rushBandIdxRef.current < RATING_BANDS.length - 1) {
+          rushBandIdxRef.current += 1;
+          rushStreakRef.current = 0;
+          setRushBandIdx(rushBandIdxRef.current);
+        }
         setTimeout(() => nextRushPuzzle(), 500);
       }
       rerender();
@@ -816,7 +841,7 @@ export default function ZlegendsBot() {
               <div className="cardName bot">Zlegend2700</div>
               {activePuzzle ? (
                 <div className="trayEmpty puzzleMeta">
-                  {rushMode ? `Puzzle Rush · ${formatClock(rushTimeLeft)} left` : `Puzzle · rated ${activePuzzle.rating}`}
+                  {rushMode ? `Puzzle Rush · ${RATING_BANDS[rushBandIdx].label} · ${formatClock(rushTimeLeft)} left` : `Puzzle · rated ${activePuzzle.rating}`}
                 </div>
               ) : (
                 <>
@@ -977,7 +1002,7 @@ export default function ZlegendsBot() {
             {activePuzzle ? (
               rushMode ? (
                 <>
-                  <div className="boxHead">Puzzle Rush · {formatClock(rushTimeLeft)} left</div>
+                  <div className="boxHead">Puzzle Rush · {RATING_BANDS[rushBandIdx].label} · {formatClock(rushTimeLeft)} left</div>
                   <div className="pv">
                     {puzzleFeedback || `Solved ${rushSolved} · Misses ${rushMistakes}/3 · find the best move for ${eng.getSide() === 1 ? "White" : "Black"}.`}
                   </div>

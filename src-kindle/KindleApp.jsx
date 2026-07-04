@@ -26,6 +26,9 @@ const RUSH_DURATIONS = [
   { seconds: 300, label: "5 Minutes" },
 ];
 const formatKidClock = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+/* Same ramp idea as the main app's Puzzle Rush: climb a band every few
+   solves in a row, drop back one on a miss. */
+const RUSH_STEP_UP_EVERY = 3;
 
 function materialState(eng) {
   const rem = { 1: {}, "-1": {} };
@@ -277,8 +280,11 @@ export default function KindleApp() {
   const [rushMistakes, setRushMistakes] = useState(0);
   const [rushSolved, setRushSolved] = useState(0);
   const [rushResult, setRushResult] = useState(null);
+  const [rushBandIdx, setRushBandIdx] = useState(0);
   const rushSolvedRef = useRef(0);
   const rushMistakesRef = useRef(0);
+  const rushBandIdxRef = useRef(0);
+  const rushStreakRef = useRef(0);
 
   const [shop, setShop] = useState(() => loadShopState());
   const [shopOpen, setShopOpen] = useState(false);
@@ -415,7 +421,7 @@ export default function KindleApp() {
   const nextPuzzle = () => startPuzzle(puzzleBand);
 
   const nextRushPuzzle = () => {
-    const pool = kidPuzzlesInBand();
+    const pool = kidPuzzlesInBand(KID_PUZZLE_BANDS[rushBandIdxRef.current].id);
     loadPuzzle(pool[(Math.random() * pool.length) | 0]);
   };
 
@@ -423,8 +429,11 @@ export default function KindleApp() {
     if (!activePuzzle) prevPlayerColorRef.current = playerColor;
     rushSolvedRef.current = 0;
     rushMistakesRef.current = 0;
+    rushBandIdxRef.current = 0;
+    rushStreakRef.current = 0;
     setRushSolved(0);
     setRushMistakes(0);
+    setRushBandIdx(0);
     setRushResult(null);
     setRushDuration(seconds);
     setRushTimeLeft(seconds);
@@ -475,6 +484,9 @@ export default function KindleApp() {
           if (rushMode) {
             rushMistakesRef.current += 1;
             setRushMistakes(rushMistakesRef.current);
+            rushStreakRef.current = 0;
+            rushBandIdxRef.current = Math.max(0, rushBandIdxRef.current - 1);
+            setRushBandIdx(rushBandIdxRef.current);
             if (rushMistakesRef.current >= 3) {
               setPuzzleFeedback("wrong");
               setTimeout(() => finishRush("mistakes"), 400);
@@ -501,6 +513,12 @@ export default function KindleApp() {
           if (rushMode) {
             rushSolvedRef.current += 1;
             setRushSolved(rushSolvedRef.current);
+            rushStreakRef.current += 1;
+            if (rushStreakRef.current >= RUSH_STEP_UP_EVERY && rushBandIdxRef.current < KID_PUZZLE_BANDS.length - 1) {
+              rushBandIdxRef.current += 1;
+              rushStreakRef.current = 0;
+              setRushBandIdx(rushBandIdxRef.current);
+            }
             setShop(s => addCoins(s, 2));
             setTimeout(() => nextRushPuzzle(), 500);
           } else {
@@ -607,7 +625,7 @@ export default function KindleApp() {
           <>
             <div className="kStatus">
               {rushMode
-                ? `Puzzle Rush · ${formatKidClock(rushTimeLeft)} left · Solved ${rushSolved} · Misses ${rushMistakes}/3`
+                ? `Puzzle Rush · ${KID_PUZZLE_BANDS[rushBandIdx].label} · ${formatKidClock(rushTimeLeft)} left · Solved ${rushSolved} · Misses ${rushMistakes}/3`
                 : puzzleSolved ? "You got it! Great puzzle solving! (+5 coins)"
                 : puzzleFeedback === "wrong" ? "Not quite - give it another try!"
                 : `${band ? band.label : ""} puzzle (rated ${activePuzzle.rating}) - find the best move for ${sideLabel}!`}
