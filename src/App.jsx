@@ -61,6 +61,12 @@ const FILES = "abcdefgh";
 const PIECE_NAME = { 1: "pawn", 2: "knight", 3: "bishop", 4: "rook", 5: "queen", 6: "king" };
 const PTS = { 1: 1, 2: 3, 3: 3, 4: 5, 5: 9 };
 const START_COUNT = { 1: 8, 2: 2, 3: 2, 4: 2, 5: 1 };
+const RUSH_DURATIONS = [
+  { seconds: 60, label: "1 Minute" },
+  { seconds: 180, label: "3 Minutes" },
+  { seconds: 300, label: "5 Minutes" },
+];
+const formatClock = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
 function materialState(eng) {
   const rem = { 1: {}, "-1": {} };
@@ -174,6 +180,15 @@ export default function ZlegendsBot() {
   const [activePuzzle, setActivePuzzle] = useState(null);
   const [puzzleFeedback, setPuzzleFeedback] = useState(null);
   const [puzzleSolved, setPuzzleSolved] = useState(false);
+  const [rushOpen, setRushOpen] = useState(false);
+  const [rushMode, setRushMode] = useState(false);
+  const [rushDuration, setRushDuration] = useState(60);
+  const [rushTimeLeft, setRushTimeLeft] = useState(60);
+  const [rushMistakes, setRushMistakes] = useState(0);
+  const [rushSolved, setRushSolved] = useState(0);
+  const [rushResult, setRushResult] = useState(null);
+  const rushSolvedRef = useRef(0);
+  const rushMistakesRef = useRef(0);
   const difficultyRef = useRef(DIFFICULTIES[difficultyIdx]);
   difficultyRef.current = DIFFICULTIES[difficultyIdx];
   const gameStyleRef = useRef(gameStyle);
@@ -502,14 +517,65 @@ export default function ZlegendsBot() {
 
   const exitPuzzle = () => newGame(1);
 
+  const startRush = (seconds) => {
+    rushSolvedRef.current = 0;
+    rushMistakesRef.current = 0;
+    setRushSolved(0);
+    setRushMistakes(0);
+    setRushResult(null);
+    setRushDuration(seconds);
+    setRushTimeLeft(seconds);
+    setRushMode(true);
+    setRushOpen(false);
+    setPuzzlesOpen(false);
+    startPuzzle(PUZZLES[(Math.random() * PUZZLES.length) | 0]);
+  };
+
+  const nextRushPuzzle = () => startPuzzle(PUZZLES[(Math.random() * PUZZLES.length) | 0]);
+
+  const finishRush = (reason) => {
+    setRushResult({ reason, solved: rushSolvedRef.current });
+  };
+
+  const retryRush = () => startRush(rushDuration);
+
+  const exitRush = () => {
+    setRushMode(false);
+    setRushResult(null);
+    exitPuzzle();
+  };
+
+  /* Puzzle Rush countdown -- ticks once a second while a rush is live and
+     hasn't already ended from 3 mistakes, pausing entirely once rushResult
+     is set so a mistake-triggered end and a time-triggered end can't race. */
+  useEffect(() => {
+    if (!rushMode || rushResult) return;
+    if (rushTimeLeft <= 0) { finishRush("time"); return; }
+    const t = setTimeout(() => setRushTimeLeft(s => s - 1), 1000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rushMode, rushResult, rushTimeLeft]);
+
   const puzzleMove = useCallback((m) => {
     const idx = moveListRef.current.length;
     const expectedSan = activePuzzle.moves[idx];
     const attemptedSan = eng.sanOf(m);
     if (attemptedSan !== expectedSan) {
       try { audio.sfxWrong(); } catch { /* audio unavailable */ }
-      setPuzzleFeedback("Not quite — try again!");
       setSelected(-1); setTargets([]);
+      if (rushMode) {
+        rushMistakesRef.current += 1;
+        setRushMistakes(rushMistakesRef.current);
+        if (rushMistakesRef.current >= 3) {
+          setPuzzleFeedback("Wrong — that's 3 misses!");
+          setTimeout(() => finishRush("mistakes"), 400);
+        } else {
+          setPuzzleFeedback("Not quite — next puzzle!");
+          setTimeout(() => nextRushPuzzle(), 700);
+        }
+        return;
+      }
+      setPuzzleFeedback("Not quite — try again!");
       setTimeout(() => setPuzzleFeedback(null), 1400);
       return;
     }
@@ -527,6 +593,11 @@ export default function ZlegendsBot() {
     if (newMoveList.length === activePuzzle.moves.length) {
       setPuzzleSolved(true);
       try { audio.sfxCapture(); } catch { /* audio unavailable */ }
+      if (rushMode) {
+        rushSolvedRef.current += 1;
+        setRushSolved(rushSolvedRef.current);
+        setTimeout(() => nextRushPuzzle(), 500);
+      }
       rerender();
       return;
     }
@@ -546,7 +617,7 @@ export default function ZlegendsBot() {
       }
     }, 500);
     rerender();
-  }, [eng, audio, activePuzzle]);
+  }, [eng, audio, activePuzzle, rushMode]);
 
   const undo = () => {
     if (mode === "replay" || thinking || result || eng.plyCount() === 0) return;
@@ -744,7 +815,9 @@ export default function ZlegendsBot() {
             <div className="cardMeta">
               <div className="cardName bot">Zlegend2700</div>
               {activePuzzle ? (
-                <div className="trayEmpty puzzleMeta">Puzzle · rated {activePuzzle.rating}</div>
+                <div className="trayEmpty puzzleMeta">
+                  {rushMode ? `Puzzle Rush · ${formatClock(rushTimeLeft)} left` : `Puzzle · rated ${activePuzzle.rating}`}
+                </div>
               ) : (
                 <>
                   <div className="trayEmpty">{gameStyle.label} today</div>
@@ -820,7 +893,9 @@ export default function ZlegendsBot() {
               <div className="cardName you">You (Challenger)</div>
               {activePuzzle ? (
                 <div className="trayEmpty puzzleMeta">
-                  {puzzleSolved ? "Solved! Nice work." : puzzleFeedback || `Find the best move for ${eng.getSide() === 1 ? "White" : "Black"}.`}
+                  {rushMode
+                    ? (puzzleFeedback || `Solved ${rushSolved} · Misses ${rushMistakes}/3`)
+                    : (puzzleSolved ? "Solved! Nice work." : puzzleFeedback || `Find the best move for ${eng.getSide() === 1 ? "White" : "Black"}.`)}
                 </div>
               ) : (
                 <Tray pieces={youTaken} colorClass={playerColor === 1 ? "bpc" : "wpc"} />
@@ -900,14 +975,23 @@ export default function ZlegendsBot() {
 
           <div className="box analysisBox">
             {activePuzzle ? (
-              <>
-                <div className="boxHead">Puzzle · rated {activePuzzle.rating}</div>
-                <div className="pv">
-                  {puzzleSolved
-                    ? "Solved! Nice work."
-                    : puzzleFeedback || `Find the best move for ${eng.getSide() === 1 ? "White" : "Black"}.`}
-                </div>
-              </>
+              rushMode ? (
+                <>
+                  <div className="boxHead">Puzzle Rush · {formatClock(rushTimeLeft)} left</div>
+                  <div className="pv">
+                    {puzzleFeedback || `Solved ${rushSolved} · Misses ${rushMistakes}/3 · find the best move for ${eng.getSide() === 1 ? "White" : "Black"}.`}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="boxHead">Puzzle · rated {activePuzzle.rating}</div>
+                  <div className="pv">
+                    {puzzleSolved
+                      ? "Solved! Nice work."
+                      : puzzleFeedback || `Find the best move for ${eng.getSide() === 1 ? "White" : "Black"}.`}
+                  </div>
+                </>
+              )
             ) : quizOpening ? (
               <>
                 <div className="boxHead">Quiz: {quizOpening.name}</div>
@@ -964,11 +1048,17 @@ export default function ZlegendsBot() {
             </div>
           )}
 
-          {activePuzzle && (
+          {activePuzzle && !rushMode && (
             <div className="ctrls puzzleCtrls">
               <button className="btn ghost" onClick={() => startPuzzle(activePuzzle)}>Retry</button>
               <button className="btn gold" onClick={nextPuzzle}>Next Puzzle</button>
               <button className="btn ghost" onClick={exitPuzzle}>Exit</button>
+            </div>
+          )}
+
+          {activePuzzle && rushMode && !rushResult && (
+            <div className="ctrls puzzleCtrls">
+              <button className="btn ghost" onClick={exitRush}>End Rush</button>
             </div>
           )}
 
@@ -1060,7 +1150,47 @@ export default function ZlegendsBot() {
                 );
               })}
             </div>
-            <button className="btn gold" onClick={() => setPuzzlesOpen(false)}>Close</button>
+            <button className="btn gold" onClick={() => { setPuzzlesOpen(false); setRushOpen(true); }}>⚡ Puzzle Rush</button>
+            <button className="btn ghost" onClick={() => setPuzzlesOpen(false)}>Close</button>
+          </div>
+        </div>
+      )}
+
+      {rushOpen && (
+        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }}>
+          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
+            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <PixelAvatar rows={PPIX} pal={PPAL} size={18} />
+              Puzzle Rush
+            </div>
+            <div className="pv" style={{ fontSize: 12, opacity: 0.85 }}>
+              Solve as many puzzles as you can before time runs out. Three wrong answers ends the rush early.
+            </div>
+            <div className="rows" style={{ maxHeight: "none" }}>
+              {RUSH_DURATIONS.map(d => (
+                <div key={d.seconds} style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E" }}
+                  onClick={() => startRush(d.seconds)}>
+                  <div style={{ fontWeight: 700 }}>{d.label}</div>
+                </div>
+              ))}
+            </div>
+            <button className="btn ghost" onClick={() => { setRushOpen(false); setPuzzlesOpen(true); }}>Back</button>
+          </div>
+        </div>
+      )}
+
+      {rushMode && rushResult && (
+        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }}>
+          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
+            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <PixelAvatar rows={PPIX} pal={PPAL} size={18} />
+              {rushResult.reason === "time" ? "Time's up!" : "3 misses — rush over!"}
+            </div>
+            <div className="pv" style={{ fontSize: 15 }}>
+              You solved <b>{rushResult.solved}</b> puzzle{rushResult.solved === 1 ? "" : "s"}.
+            </div>
+            <button className="btn gold" onClick={retryRush}>Try Again</button>
+            <button className="btn ghost" onClick={exitRush}>Exit</button>
           </div>
         </div>
       )}

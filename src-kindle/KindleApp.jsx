@@ -20,6 +20,12 @@ import {
 
 const PTS = { 1: 1, 2: 3, 3: 3, 4: 5, 5: 9 };
 const START_COUNT = { 1: 8, 2: 2, 3: 2, 4: 2, 5: 1 };
+const RUSH_DURATIONS = [
+  { seconds: 60, label: "1 Minute" },
+  { seconds: 180, label: "3 Minutes" },
+  { seconds: 300, label: "5 Minutes" },
+];
+const formatKidClock = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
 function materialState(eng) {
   const rem = { 1: {}, "-1": {} };
@@ -264,6 +270,15 @@ export default function KindleApp() {
   const [activePuzzle, setActivePuzzle] = useState(null);
   const [puzzleFeedback, setPuzzleFeedback] = useState(null);
   const [puzzleSolved, setPuzzleSolved] = useState(false);
+  const [rushOpen, setRushOpen] = useState(false);
+  const [rushMode, setRushMode] = useState(false);
+  const [rushDuration, setRushDuration] = useState(60);
+  const [rushTimeLeft, setRushTimeLeft] = useState(60);
+  const [rushMistakes, setRushMistakes] = useState(0);
+  const [rushSolved, setRushSolved] = useState(0);
+  const [rushResult, setRushResult] = useState(null);
+  const rushSolvedRef = useRef(0);
+  const rushMistakesRef = useRef(0);
 
   const [shop, setShop] = useState(() => loadShopState());
   const [shopOpen, setShopOpen] = useState(false);
@@ -378,15 +393,10 @@ export default function KindleApp() {
   const puzzleProgressRef = useRef([]);
   const prevPlayerColorRef = useRef(1);
 
-  const startPuzzle = (band) => {
-    if (thinking) return;
-    if (!activePuzzle) prevPlayerColorRef.current = playerColor;
-    const pool = kidPuzzlesInBand(band);
-    const puzzle = pool[(Math.random() * pool.length) | 0];
+  const loadPuzzle = (puzzle) => {
     eng.loadFen(puzzle.fen);
     puzzleProgressRef.current = [];
     setActivePuzzle(puzzle);
-    setPuzzleBand(band);
     setPuzzleFeedback(null);
     setPuzzleSolved(false);
     setPlayerColor(eng.getSide());
@@ -394,7 +404,57 @@ export default function KindleApp() {
     rerender();
   };
 
+  const startPuzzle = (band) => {
+    if (thinking) return;
+    if (!activePuzzle) prevPlayerColorRef.current = playerColor;
+    const pool = kidPuzzlesInBand(band);
+    setPuzzleBand(band);
+    loadPuzzle(pool[(Math.random() * pool.length) | 0]);
+  };
+
   const nextPuzzle = () => startPuzzle(puzzleBand);
+
+  const nextRushPuzzle = () => {
+    const pool = kidPuzzlesInBand();
+    loadPuzzle(pool[(Math.random() * pool.length) | 0]);
+  };
+
+  const startRush = (seconds) => {
+    if (!activePuzzle) prevPlayerColorRef.current = playerColor;
+    rushSolvedRef.current = 0;
+    rushMistakesRef.current = 0;
+    setRushSolved(0);
+    setRushMistakes(0);
+    setRushResult(null);
+    setRushDuration(seconds);
+    setRushTimeLeft(seconds);
+    setRushMode(true);
+    setRushOpen(false);
+    nextRushPuzzle();
+  };
+
+  const finishRush = (reason) => {
+    setRushResult({ reason, solved: rushSolvedRef.current });
+  };
+
+  const retryRush = () => startRush(rushDuration);
+
+  const exitRush = () => {
+    setRushMode(false);
+    setRushResult(null);
+    exitPuzzle();
+  };
+
+  /* Puzzle Rush countdown -- ticks once a second while a rush is live and
+     hasn't already ended, pausing once rushResult is set so a mistake-
+     triggered end and a time-triggered end can't race each other. */
+  useEffect(() => {
+    if (!rushMode || rushResult) return;
+    if (rushTimeLeft <= 0) { finishRush("time"); return; }
+    const t = setTimeout(() => setRushTimeLeft(s => s - 1), 1000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rushMode, rushResult, rushTimeLeft]);
 
   const onPuzzleSquare = (i64) => {
     if (puzzleFeedback || puzzleSolved) return;
@@ -411,8 +471,20 @@ export default function KindleApp() {
         const expected = activePuzzle.moves[idx];
         if (san !== expected) {
           audio.sfxLose();
-          setPuzzleFeedback("wrong");
           setSelected(-1); setTargets([]);
+          if (rushMode) {
+            rushMistakesRef.current += 1;
+            setRushMistakes(rushMistakesRef.current);
+            if (rushMistakesRef.current >= 3) {
+              setPuzzleFeedback("wrong");
+              setTimeout(() => finishRush("mistakes"), 400);
+            } else {
+              setPuzzleFeedback("wrong");
+              setTimeout(() => nextRushPuzzle(), 700);
+            }
+            return;
+          }
+          setPuzzleFeedback("wrong");
           setTimeout(() => setPuzzleFeedback(null), 1400);
           return;
         }
@@ -426,7 +498,14 @@ export default function KindleApp() {
         if (puzzleProgressRef.current.length === activePuzzle.moves.length) {
           setPuzzleSolved(true);
           audio.sfxWin();
-          setShop(s => addCoins(s, 5));
+          if (rushMode) {
+            rushSolvedRef.current += 1;
+            setRushSolved(rushSolvedRef.current);
+            setShop(s => addCoins(s, 2));
+            setTimeout(() => nextRushPuzzle(), 500);
+          } else {
+            setShop(s => addCoins(s, 5));
+          }
           rerender();
           return;
         }
@@ -520,13 +599,16 @@ export default function KindleApp() {
               ))}
             </div>
             <div className="kCtrls">
+              <button onClick={() => setRushOpen(true)}>⚡ Puzzle Rush</button>
               <button onClick={exitPuzzle}>Back to the Game</button>
             </div>
           </>
         ) : (
           <>
             <div className="kStatus">
-              {puzzleSolved ? "You got it! Great puzzle solving! (+5 coins)"
+              {rushMode
+                ? `Puzzle Rush · ${formatKidClock(rushTimeLeft)} left · Solved ${rushSolved} · Misses ${rushMistakes}/3`
+                : puzzleSolved ? "You got it! Great puzzle solving! (+5 coins)"
                 : puzzleFeedback === "wrong" ? "Not quite - give it another try!"
                 : `${band ? band.label : ""} puzzle (rated ${activePuzzle.rating}) - find the best move for ${sideLabel}!`}
             </div>
@@ -535,10 +617,42 @@ export default function KindleApp() {
               <div className="kBoard" style={boardVars} role="grid" aria-label="Chess board">{buildBoardRows(false, onPuzzleSquare)}</div>
             </div>
             <div className="kCtrls">
-              {puzzleSolved && <button onClick={nextPuzzle}>Next Puzzle</button>}
-              <button onClick={exitPuzzle}>Back to the Game</button>
+              {!rushMode && puzzleSolved && <button onClick={nextPuzzle}>Next Puzzle</button>}
+              {rushMode ? <button onClick={exitRush}>End Rush</button> : <button onClick={exitPuzzle}>Back to the Game</button>}
             </div>
           </>
+        )}
+
+        {rushOpen && (
+          <div className="kShopOv">
+            <h2 className="kLessonTitle" style={{ textAlign: "center" }}>Puzzle Rush</h2>
+            <div className="kMoves" style={{ width: "min(92vw, 380px)" }}>
+              Solve as many puzzles as you can! Three wrong answers or running out of time ends the rush.
+            </div>
+            <div className="kCtrls" style={{ flexDirection: "column", width: "min(92vw, 380px)" }}>
+              {RUSH_DURATIONS.map(d => (
+                <button key={d.seconds} onClick={() => startRush(d.seconds)}>{d.label}</button>
+              ))}
+            </div>
+            <div className="kCtrls">
+              <button onClick={() => setRushOpen(false)}>Back</button>
+            </div>
+          </div>
+        )}
+
+        {rushMode && rushResult && (
+          <div className="kShopOv">
+            <h2 className="kLessonTitle" style={{ textAlign: "center" }}>
+              {rushResult.reason === "time" ? "Time's up!" : "3 misses — rush over!"}
+            </h2>
+            <div className="kMoves" style={{ width: "min(92vw, 380px)", textAlign: "center", fontSize: 16 }}>
+              You solved <b>{rushResult.solved}</b> puzzle{rushResult.solved === 1 ? "" : "s"}!
+            </div>
+            <div className="kCtrls">
+              <button onClick={retryRush}>Try Again</button>
+              <button onClick={exitRush}>Exit</button>
+            </div>
+          </div>
         )}
       </div>
     );
