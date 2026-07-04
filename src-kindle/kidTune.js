@@ -1,15 +1,22 @@
 /* A tiny, cheerful looping tune plus a few sound effects, built the same
    way the main web app's chiptune player is (raw Web Audio oscillators,
    no audio files) — just much simpler, since this is one background loop
-   instead of a full track list. */
+   instead of a full track list. Shop-unlockable tunes are just alternate
+   note sequences for the same loop player. */
 
-const LOOP_NOTES = [523.25, 587.33, 659.25, 783.99, 659.25, 587.33, 523.25, 659.25];
+export const TUNES = [
+  { id: "classic", label: "Classic Loop", price: 0, notes: [523.25, 587.33, 659.25, 783.99, 659.25, 587.33, 523.25, 659.25] },
+  { id: "jazzy", label: "Jazzy Bounce", price: 100, notes: [392.00, 466.16, 523.25, 392.00, 587.33, 523.25, 466.16, 392.00] },
+  { id: "sparkle", label: "Sparkle Waltz", price: 100, notes: [659.25, 783.99, 880.00, 987.77, 880.00, 783.99, 659.25, 587.33] },
+];
+const DEFAULT_NOTES = TUNES[0].notes;
 
 export function createKidAudio() {
   let ctx = null;
   let playing = false;
   let timer = null;
   let step = 0;
+  let tuneId = "classic";
 
   function ensure() {
     if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -31,11 +38,19 @@ export function createKidAudio() {
     osc.stop(t0 + dur);
   }
 
+  function currentNotes() {
+    const found = TUNES.find(t => t.id === tuneId);
+    return found ? found.notes : DEFAULT_NOTES;
+  }
+
   function tick() {
-    tone(LOOP_NOTES[step % LOOP_NOTES.length], 0.3, "triangle", 0.12);
+    const notes = currentNotes();
+    tone(notes[step % notes.length], 0.3, "triangle", 0.12);
     step++;
     timer = setTimeout(tick, 380);
   }
+
+  function setTune(id) { tuneId = id; }
 
   function toggle() {
     ensure();
@@ -74,5 +89,5 @@ export function createKidAudio() {
     } catch { /* audio unavailable */ }
   }
 
-  return { toggle, stop, sfxMove, sfxCapture, sfxWin, sfxLose, isPlaying: () => playing };
+  return { toggle, stop, setTune, sfxMove, sfxCapture, sfxWin, sfxLose, isPlaying: () => playing };
 }

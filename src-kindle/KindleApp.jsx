@@ -1,14 +1,15 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import {
   createEngine, EMPTY, WN, WB, WR, WQ, WK, M64TO120, M120TO64,
   mFrom, mTo, mPromo, mFlags,
 } from "../src/engine/chessEngine";
 import { replayIntoEngine } from "../src/utils/share";
-import { createKidAudio } from "./kidTune";
+import { createKidAudio, TUNES } from "./kidTune";
 import Critters from "./Critters";
 import { KID_PUZZLE_BANDS, kidPuzzlesInBand } from "./kidPuzzles";
 import {
   loadShopState, addCoins, buyHat, buyBoard, equipHat, equipBoard, HATS, BOARDS,
+  buyTune, equipTune, buyAnimal,
 } from "./kidShop";
 
 /* Search runs in the same shared Worker the main bot uses (see
@@ -46,13 +47,22 @@ function materialState(eng) {
    which controls how often it plays a random legal move instead of its
    real search) — there's no way to calibrate this against real rated
    games from here, so treat these as "roughly this strength", not exact. */
+/* The four "unlockable" opponents (id + price) slot in just above Dog --
+   stronger than the free ladder up to that point, but still well below
+   Fox, so a kid who's been beating Dog can grind toward them without
+   suddenly facing a wall. They're bought once in the shop and then just
+   show up as extra options in the difficulty picker (no equip step). */
 const DIFFICULTIES = [
-  { label: "Bunny", elo: 300, ms: 150, blunderChance: 0.85, book: false },
-  { label: "Cat", elo: 600, ms: 300, blunderChance: 0.55, book: true },
-  { label: "Dog", elo: 900, ms: 600, blunderChance: 0.3, book: true },
-  { label: "Fox", elo: 1200, ms: 1200, blunderChance: 0.12, book: true },
-  { label: "Owl", elo: 1600, ms: 3000, blunderChance: 0.03, book: true },
-  { label: "Lion", elo: 2000, ms: 8000, blunderChance: 0, book: true },
+  { id: "bunny", label: "Bunny", elo: 300, ms: 150, blunderChance: 0.85, book: false },
+  { id: "cat", label: "Cat", elo: 600, ms: 300, blunderChance: 0.55, book: true },
+  { id: "dog", label: "Dog", elo: 900, ms: 600, blunderChance: 0.3, book: true },
+  { id: "panda", label: "Panda", elo: 950, ms: 700, blunderChance: 0.27, book: true, unlockable: true, price: 100 },
+  { id: "raccoon", label: "Raccoon", elo: 1000, ms: 800, blunderChance: 0.24, book: true, unlockable: true, price: 100 },
+  { id: "koala", label: "Koala", elo: 1050, ms: 900, blunderChance: 0.21, book: true, unlockable: true, price: 100 },
+  { id: "otter", label: "Otter", elo: 1100, ms: 1000, blunderChance: 0.18, book: true, unlockable: true, price: 100 },
+  { id: "fox", label: "Fox", elo: 1200, ms: 1200, blunderChance: 0.12, book: true },
+  { id: "owl", label: "Owl", elo: 1600, ms: 3000, blunderChance: 0.03, book: true },
+  { id: "lion", label: "Lion", elo: 2000, ms: 8000, blunderChance: 0, book: true },
 ];
 
 /* The rarer "outline" chess Unicode code points (white pieces) aren't
@@ -88,10 +98,21 @@ const PALETTE = {
   Bunny: { body: "#FFD8EA", ear: "#FFB6D9", accent: "#FF6FA5", blush: "#FFA6C9" },
   Cat: { body: "#FFC98B", ear: "#FFB35C", accent: "#E8853B", blush: "#FF9E9E" },
   Dog: { body: "#E8C08E", ear: "#B9803F", accent: "#8B5E34", blush: "#FFA6A6" },
+  Panda: { body: "#F7F7F7", ear: "#3A3A3A", accent: "#2B2B2B", blush: "#FFB8C6" },
+  Koala: { body: "#C7CAD1", ear: "#9297A3", accent: "#5B5F68", blush: "#FFB6B6" },
+  Raccoon: { body: "#B8B0A6", ear: "#5A5248", accent: "#3A342C", blush: "#FFAFAF" },
+  Otter: { body: "#A8785A", ear: "#7A5138", accent: "#4E331F", blush: "#FFC0A8" },
   Fox: { body: "#FF9955", ear: "#FF7A2E", accent: "#C24E00", blush: "#FFC2C2", muzzle: "#FFF3E4" },
   Owl: { body: "#D9B45C", ear: "#C99A3B", accent: "#7B5218", blush: "#FFC9A0", eye: "#7B4B12" },
   Lion: { body: "#FFDD77", ear: "#F7A531", accent: "#E8790A", blush: "#FFB98A" },
 };
+
+/* Ear shape families for the four new unlockable animals -- rather than
+   hand-drawing a brand-new ear shape for each, they reuse Dog's rounded
+   ears or Cat's triangular ears (just recolored via PALETTE), which is
+   plenty of visual variety for a shop icon at this size. */
+const DOG_EARED = ["Dog", "Panda", "Koala"];
+const CAT_EARED = ["Cat", "Raccoon", "Otter"];
 
 function HatOverlay({ hat }) {
   if (!hat || hat === "none") return null;
@@ -116,6 +137,21 @@ function HatOverlay({ hat }) {
       <path d="M24 3 L25.5 6.5 L29 7 L26.2 9.3 L27 13 L24 11 L21 13 L21.8 9.3 L19 7 L22.5 6.5 Z" fill="#FFD166" />
     </g>
   );
+  if (hat === "ninja") return (
+    <g>
+      <rect x="10" y="8" width="28" height="6" rx="2" fill="#3A3A3A" stroke="#1E1E1E" strokeWidth="1.5" />
+      <path d="M34 11 L44 6 L44 16 Z" fill="#3A3A3A" stroke="#1E1E1E" strokeWidth="1.5" strokeLinejoin="round" />
+    </g>
+  );
+  if (hat === "flower") return (
+    <g>
+      {[0, 60, 120, 180, 240, 300].map(angle => (
+        <ellipse key={angle} cx={24 + 9 * Math.cos((angle * Math.PI) / 180)} cy={9 + 9 * Math.sin((angle * Math.PI) / 180)}
+          rx="4.5" ry="3" fill="#FF9EC4" stroke="#E8679E" strokeWidth="1" transform={`rotate(${angle} ${24 + 9 * Math.cos((angle * Math.PI) / 180)} ${9 + 9 * Math.sin((angle * Math.PI) / 180)})`} />
+      ))}
+      <circle cx="24" cy="9" r="4" fill="#FFD166" stroke="#E8A93B" strokeWidth="1" />
+    </g>
+  );
   return null;
 }
 
@@ -136,13 +172,13 @@ function AnimalIcon({ kind, size = 46, hat }) {
         <rect x="14" y="6" width="3" height="14" rx="1.5" fill={pal.ear} />
         <rect x="31" y="6" width="3" height="14" rx="1.5" fill={pal.ear} />
       </>)}
-      {kind === "Cat" && (<>
+      {CAT_EARED.includes(kind) && (<>
         <path d="M10 16 L16 2 L22 16 Z" fill={pal.body} stroke={pal.accent} strokeWidth="2" strokeLinejoin="round" />
         <path d="M26 16 L32 2 L38 16 Z" fill={pal.body} stroke={pal.accent} strokeWidth="2" strokeLinejoin="round" />
         <path d="M13 13 L16 6 L19 13 Z" fill={pal.ear} />
         <path d="M29 13 L32 6 L35 13 Z" fill={pal.ear} />
       </>)}
-      {kind === "Dog" && (<>
+      {DOG_EARED.includes(kind) && (<>
         <ellipse cx="9" cy="28" rx="7" ry="12" fill={pal.body} stroke={pal.accent} strokeWidth="2" />
         <ellipse cx="39" cy="28" rx="7" ry="12" fill={pal.body} stroke={pal.accent} strokeWidth="2" />
       </>)}
@@ -234,6 +270,7 @@ export default function KindleApp() {
   const equippedHat = shop.equippedHat;
   const boardTheme = BOARDS.find(b => b.id === shop.equippedBoard) || BOARDS[0];
   const boardVars = { "--kBoardLight": boardTheme.light, "--kBoardDark": boardTheme.dark };
+  useEffect(() => { audio.setTune(shop.equippedTune); }, [audio, shop.equippedTune]);
 
   const isCaptureMove = m => eng.pieceAt(M120TO64[mTo(m)]) !== EMPTY || (mFlags(m) & 1);
 
@@ -613,7 +650,8 @@ export default function KindleApp() {
         <button onClick={() => newGame(-1)}>Play Black</button>
         <button onClick={undo} disabled={thinking || !!result || eng.plyCount() === 0}>Undo</button>
         <select value={difficultyIdx} onChange={e => setDifficultyIdx(Number(e.target.value))}>
-          {DIFFICULTIES.map((d, i) => <option key={i} value={i}>{d.label} ({d.elo})</option>)}
+          {DIFFICULTIES.map((d, i) => (!d.unlockable || shop.ownedAnimals.includes(d.id)) &&
+            <option key={i} value={i}>{d.label} ({d.elo})</option>)}
         </select>
         <button onClick={() => setView("lessons")}>How to Play</button>
         <button onClick={() => setView("puzzle")} disabled={thinking}>Puzzles</button>
@@ -654,6 +692,37 @@ export default function KindleApp() {
                     <button onClick={() => setShop(s => equipBoard(s, b.id))}>Use</button>
                   ) : (
                     <button disabled={shop.coins < b.price} onClick={() => setShop(s => buyBoard(s, b.id))}>Buy {b.price}🪙</button>
+                  )}
+                </div>
+              );
+            })}
+            {TUNES.map(t => {
+              const owned = shop.ownedTunes.includes(t.id);
+              const equipped = shop.equippedTune === t.id;
+              return (
+                <div className="kShopItem" key={t.id}>
+                  <span style={{ fontSize: 32 }}>🎵</span>
+                  <div>{t.label}</div>
+                  {equipped ? (
+                    <button className="kEquipped" disabled>Equipped</button>
+                  ) : owned ? (
+                    <button onClick={() => setShop(s => equipTune(s, t.id))}>Play</button>
+                  ) : (
+                    <button disabled={shop.coins < t.price} onClick={() => setShop(s => buyTune(s, t.id))}>Buy {t.price}🪙</button>
+                  )}
+                </div>
+              );
+            })}
+            {DIFFICULTIES.filter(d => d.unlockable).map(d => {
+              const owned = shop.ownedAnimals.includes(d.id);
+              return (
+                <div className="kShopItem" key={d.id}>
+                  <AnimalIcon kind={d.label} size={44} />
+                  <div>{d.label} ({d.elo})</div>
+                  {owned ? (
+                    <button className="kEquipped" disabled>Unlocked</button>
+                  ) : (
+                    <button disabled={shop.coins < d.price} onClick={() => setShop(s => buyAnimal(s, d.id, d.price))}>Buy {d.price}🪙</button>
                   )}
                 </div>
               );
