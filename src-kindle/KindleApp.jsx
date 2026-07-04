@@ -5,6 +5,11 @@ import {
 } from "../src/engine/chessEngine";
 import { replayIntoEngine } from "../src/utils/share";
 import { createKidAudio } from "./kidTune";
+import Critters from "./Critters";
+import { KID_PUZZLE_BANDS, kidPuzzlesInBand } from "./kidPuzzles";
+import {
+  loadShopState, addCoins, buyHat, buyBoard, equipHat, equipBoard, HATS, BOARDS,
+} from "./kidShop";
 
 /* Search runs in the same shared Worker the main bot uses (see
    src/engine/engineWorker.js) — the hardest tier ("Lion", 8s of search)
@@ -75,27 +80,9 @@ const TIPS = [
   "Every game teaches you something new, win or lose. Have fun!",
 ];
 
-/* Each puzzle is white-to-move; every FEN and its solution SAN has been
-   checked against the actual engine (loadFen + legalMoves + sanOf), not
-   just eyeballed, since a wrong "correct answer" would just confuse a
-   kid trying to learn from it. */
-const PUZZLES = {
-  easy: [
-    { fen: "4k3/8/8/8/3q4/8/2N5/4K3 w - - 0 1", solution: "Nxd4", hint: "A black piece is just sitting there undefended - can you capture it for free?" },
-    { fen: "6k1/5ppp/8/8/8/8/8/3R2K1 w - - 0 1", solution: "Rd8#", hint: "The black king has no room to escape along the back row. Checkmate in one!" },
-    { fen: "k7/4P3/8/8/8/8/8/K7 w - - 0 1", solution: "e8=Q+", hint: "Your pawn is one step away from becoming a queen!" },
-  ],
-  medium: [
-    { fen: "r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1", solution: "Nc7+", hint: "Your knight can jump to a square that attacks two pieces at once!" },
-    { fen: "q3k3/8/8/1N6/8/8/8/4K3 w - - 0 1", solution: "Nc7+", hint: "Your knight can fork the king and the queen at the same time!" },
-    { fen: "7k/5ppp/8/8/8/8/8/Q3K3 w - - 0 1", solution: "Qa8#", hint: "The black king's own pawns are blocking its escape. Find checkmate!" },
-  ],
-  hard: [
-    { fen: "6k1/5p1p/7Q/8/8/8/1B6/4K3 w - - 0 1", solution: "Qg7#", hint: "Your queen and bishop are teaming up. Where can the queen go safely to deliver mate?" },
-    { fen: "1r2nk2/8/8/8/8/3Q4/8/4K3 w - - 0 1", solution: "Qb5", hint: "One quiet queen move attacks two undefended black pieces at once - can you spot it?" },
-    { fen: "q1r1k3/8/8/3N4/8/8/8/4K3 w - - 0 1", solution: "Nb6", hint: "Your knight can jump to a square that forks two valuable black pieces!" },
-  ],
-};
+/* Puzzle data now comes from kidPuzzles.js -- a real, kid-rated slice of
+   the Lichess database (see that file's header) instead of a small
+   hand-curated set. */
 
 const PALETTE = {
   Bunny: { body: "#FFD8EA", ear: "#FFB6D9", accent: "#FF6FA5", blush: "#FFA6C9" },
@@ -106,13 +93,40 @@ const PALETTE = {
   Lion: { body: "#FFDD77", ear: "#F7A531", accent: "#E8790A", blush: "#FFB98A" },
 };
 
-function AnimalIcon({ kind, size = 46 }) {
+function HatOverlay({ hat }) {
+  if (!hat || hat === "none") return null;
+  if (hat === "party") return (
+    <g>
+      <path d="M17 14 L24 -2 L31 14 Z" fill="#FF6FA5" stroke="#C2477A" strokeWidth="1.5" strokeLinejoin="round" />
+      <circle cx="24" cy="-3" r="2.6" fill="#FFD166" />
+      <circle cx="21" cy="10" r="1.6" fill="#FFD166" />
+      <circle cx="27" cy="7" r="1.6" fill="#4EA8DE" />
+    </g>
+  );
+  if (hat === "crown") return (
+    <g>
+      <path d="M12 14 L14 3 L20 10 L24 1 L28 10 L34 3 L36 14 Z" fill="#FFD166" stroke="#E8A93B" strokeWidth="1.5" strokeLinejoin="round" />
+      <circle cx="24" cy="2" r="1.8" fill="#FF6FA5" />
+    </g>
+  );
+  if (hat === "wizard") return (
+    <g>
+      <path d="M15 15 L24 -8 L33 15 Z" fill="#7C5CBF" stroke="#4E3A8A" strokeWidth="1.5" strokeLinejoin="round" />
+      <ellipse cx="24" cy="15" rx="12" ry="3" fill="#7C5CBF" stroke="#4E3A8A" strokeWidth="1.5" />
+      <path d="M24 3 L25.5 6.5 L29 7 L26.2 9.3 L27 13 L24 11 L21 13 L21.8 9.3 L19 7 L22.5 6.5 Z" fill="#FFD166" />
+    </g>
+  );
+  return null;
+}
+
+function AnimalIcon({ kind, size = 46, hat }) {
   const isOwl = kind === "Owl";
   const isLion = kind === "Lion";
   const isFox = kind === "Fox";
   const pal = PALETTE[kind] || PALETTE.Bunny;
   return (
     <svg viewBox="0 0 48 48" width={size} height={size} className="kAnimal">
+      <HatOverlay hat={hat} />
       {isLion && (
         <circle cx="24" cy="30" r="21" fill="none" stroke={pal.ear} strokeWidth="4" strokeDasharray="5 4" />
       )}
@@ -210,9 +224,16 @@ export default function KindleApp() {
   const [difficultyIdx, setDifficultyIdx] = useState(1);
   const [botLastMove, setBotLastMove] = useState(null);
 
-  const [puzzleTier, setPuzzleTier] = useState(null);
+  const [puzzleBand, setPuzzleBand] = useState(null);
   const [activePuzzle, setActivePuzzle] = useState(null);
   const [puzzleFeedback, setPuzzleFeedback] = useState(null);
+  const [puzzleSolved, setPuzzleSolved] = useState(false);
+
+  const [shop, setShop] = useState(() => loadShopState());
+  const [shopOpen, setShopOpen] = useState(false);
+  const equippedHat = shop.equippedHat;
+  const boardTheme = BOARDS.find(b => b.id === shop.equippedBoard) || BOARDS[0];
+  const boardVars = { "--kBoardLight": boardTheme.light, "--kBoardDark": boardTheme.dark };
 
   const isCaptureMove = m => eng.pieceAt(M120TO64[mTo(m)]) !== EMPTY || (mFlags(m) & 1);
 
@@ -233,7 +254,7 @@ export default function KindleApp() {
 
   const announceResult = (over) => {
     if (!over) return;
-    if (over.winner === playerColor) audio.sfxWin();
+    if (over.winner === playerColor) { audio.sfxWin(); setShop(s => addCoins(s, 20)); }
     else if (over.winner === 0) { /* draw: no stinger, keep it neutral */ }
     else audio.sfxLose();
   };
@@ -317,20 +338,30 @@ export default function KindleApp() {
     rerender();
   };
 
-  const startPuzzle = (tier) => {
+  const puzzleProgressRef = useRef([]);
+  const prevPlayerColorRef = useRef(1);
+
+  const startPuzzle = (band) => {
     if (thinking) return;
-    const list = PUZZLES[tier];
-    const puzzle = list[(Math.random() * list.length) | 0];
+    if (!activePuzzle) prevPlayerColorRef.current = playerColor;
+    const pool = kidPuzzlesInBand(band);
+    const puzzle = pool[(Math.random() * pool.length) | 0];
     eng.loadFen(puzzle.fen);
+    puzzleProgressRef.current = [];
     setActivePuzzle(puzzle);
-    setPuzzleTier(tier);
+    setPuzzleBand(band);
     setPuzzleFeedback(null);
+    setPuzzleSolved(false);
+    setPlayerColor(eng.getSide());
     setSelected(-1); setTargets([]); setBotLastMove(null);
     rerender();
   };
 
+  const nextPuzzle = () => startPuzzle(puzzleBand);
+
   const onPuzzleSquare = (i64) => {
-    if (puzzleFeedback) return;
+    if (puzzleFeedback || puzzleSolved) return;
+    const sideToMove = eng.getSide();
     const legal = eng.legalMoves();
     const sq120 = M64TO120[i64];
     if (selected >= 0) {
@@ -339,34 +370,59 @@ export default function KindleApp() {
       if (candidates.length > 0) {
         const move = candidates.find(m => mPromo(m) === 0 || mPromo(m) === WQ) || candidates[0];
         const san = eng.sanOf(move);
-        const correct = san === activePuzzle.solution;
+        const idx = puzzleProgressRef.current.length;
+        const expected = activePuzzle.moves[idx];
+        if (san !== expected) {
+          audio.sfxLose();
+          setPuzzleFeedback("wrong");
+          setSelected(-1); setTargets([]);
+          setTimeout(() => setPuzzleFeedback(null), 1400);
+          return;
+        }
+        const cap = isCaptureMove(move);
         eng.make(move);
-        if (correct) audio.sfxWin(); else audio.sfxLose();
-        setPuzzleFeedback(correct ? "correct" : "wrong");
+        cap ? audio.sfxCapture() : audio.sfxMove();
+        setBotLastMove({ from: mFrom(move), to: mTo(move) });
+        puzzleProgressRef.current = [...puzzleProgressRef.current, san];
         setSelected(-1); setTargets([]);
+
+        if (puzzleProgressRef.current.length === activePuzzle.moves.length) {
+          setPuzzleSolved(true);
+          audio.sfxWin();
+          setShop(s => addCoins(s, 5));
+          rerender();
+          return;
+        }
+        const replySan = activePuzzle.moves[puzzleProgressRef.current.length];
+        setTimeout(() => {
+          const replyLegal = eng.legalMoves();
+          const replyMove = replyLegal.find(mv => eng.sanOf(mv) === replySan);
+          if (replyMove) {
+            const replyCap = isCaptureMove(replyMove);
+            eng.make(replyMove);
+            replyCap ? audio.sfxCapture() : audio.sfxMove();
+            setBotLastMove({ from: mFrom(replyMove), to: mTo(replyMove) });
+            puzzleProgressRef.current = [...puzzleProgressRef.current, replySan];
+            rerender();
+          }
+        }, 500);
         rerender();
         return;
       }
     }
     const p = eng.pieceAt(i64);
-    if (p > 0) {
+    if (p !== EMPTY && p * sideToMove > 0) {
       setSelected(i64);
       setTargets(legal.filter(m => mFrom(m) === sq120).map(m => M120TO64[mTo(m)]));
     } else { setSelected(-1); setTargets([]); }
   };
 
-  const retryPuzzle = () => {
-    eng.unmake();
-    setPuzzleFeedback(null);
-    setSelected(-1); setTargets([]);
-    rerender();
-  };
-
   const exitPuzzle = () => {
     eng.reset();
     replayIntoEngine(eng, moveList);
-    setActivePuzzle(null); setPuzzleTier(null); setPuzzleFeedback(null);
-    setSelected(-1); setTargets([]);
+    setActivePuzzle(null); setPuzzleBand(null); setPuzzleFeedback(null); setPuzzleSolved(false);
+    setSelected(-1); setTargets([]); setBotLastMove(null);
+    setPlayerColor(prevPlayerColorRef.current);
     setView("play");
     rerender();
   };
@@ -408,20 +464,23 @@ export default function KindleApp() {
   };
 
   if (view === "puzzle") {
-    const tierLabel = puzzleTier ? puzzleTier[0].toUpperCase() + puzzleTier.slice(1) : "";
+    const band = KID_PUZZLE_BANDS.find(b => b.id === puzzleBand);
+    const sideLabel = activePuzzle ? (eng.getSide() === 1 ? "White" : "Black") : "";
     return (
       <div className="kRoot">
+        <Critters />
         <div className="kHdr">
-          <AnimalIcon kind={DIFFICULTIES[difficultyIdx].label} />
+          <AnimalIcon kind={DIFFICULTIES[difficultyIdx].label} hat={equippedHat} />
           <h1>Kinnda Chess</h1>
+          <span className="kCoinBadge">🪙 {shop.coins}</span>
         </div>
         {!activePuzzle ? (
           <>
             <div className="kStatus">Pick a puzzle level!</div>
             <div className="kCtrls">
-              <button onClick={() => startPuzzle("easy")}>Easy</button>
-              <button onClick={() => startPuzzle("medium")}>Medium</button>
-              <button onClick={() => startPuzzle("hard")}>Hard</button>
+              {KID_PUZZLE_BANDS.map(b => (
+                <button key={b.id} onClick={() => startPuzzle(b.id)}>{b.label} ({kidPuzzlesInBand(b.id).length})</button>
+              ))}
             </div>
             <div className="kCtrls">
               <button onClick={exitPuzzle}>Back to the Game</button>
@@ -430,17 +489,16 @@ export default function KindleApp() {
         ) : (
           <>
             <div className="kStatus">
-              {puzzleFeedback === "correct" ? "You got it! Great puzzle solving!"
+              {puzzleSolved ? "You got it! Great puzzle solving! (+5 coins)"
                 : puzzleFeedback === "wrong" ? "Not quite - give it another try!"
-                : `${tierLabel} puzzle - find White's best move!`}
+                : `${band ? band.label : ""} puzzle (rated ${activePuzzle.rating}) - find the best move for ${sideLabel}!`}
             </div>
-            {!puzzleFeedback && <div className="kMoves">{activePuzzle.hint}</div>}
+            {!puzzleFeedback && !puzzleSolved && <div className="kMoves">{activePuzzle.hint}</div>}
             <div className="kBoardWrap">
-              <div className="kBoard" role="grid" aria-label="Chess board">{buildBoardRows(false, onPuzzleSquare)}</div>
+              <div className="kBoard" style={boardVars} role="grid" aria-label="Chess board">{buildBoardRows(false, onPuzzleSquare)}</div>
             </div>
             <div className="kCtrls">
-              {puzzleFeedback === "wrong" && <button onClick={retryPuzzle}>Try Again</button>}
-              {puzzleFeedback === "correct" && <button onClick={() => startPuzzle(puzzleTier)}>Next Puzzle</button>}
+              {puzzleSolved && <button onClick={nextPuzzle}>Next Puzzle</button>}
               <button onClick={exitPuzzle}>Back to the Game</button>
             </div>
           </>
@@ -452,8 +510,9 @@ export default function KindleApp() {
   if (view === "lessons") {
     return (
       <div className="kRoot">
+        <Critters />
         <div className="kHdr">
-          <AnimalIcon kind={DIFFICULTIES[difficultyIdx].label} />
+          <AnimalIcon kind={DIFFICULTIES[difficultyIdx].label} hat={equippedHat} />
           <h1>Kinnda Chess</h1>
         </div>
         <h2 className="kLessonTitle">How the Pieces Move</h2>
@@ -510,9 +569,12 @@ export default function KindleApp() {
 
   return (
     <div className="kRoot">
+      <Critters />
       <div className="kHdr">
-        <AnimalIcon kind={DIFFICULTIES[difficultyIdx].label} />
+        <AnimalIcon kind={DIFFICULTIES[difficultyIdx].label} hat={equippedHat} />
         <h1>Kinnda Chess</h1>
+        <span className="kCoinBadge">🪙 {shop.coins}</span>
+        <button className="kShopBtn" onClick={() => setShopOpen(true)} title="Shop">🛍️</button>
         <button className="kMusicBtn" onClick={() => setMusicOn(audio.toggle())} title={musicOn ? "Pause music" : "Play music"}>
           {musicOn ? "♪⏸" : "♪▶"}
         </button>
@@ -525,7 +587,7 @@ export default function KindleApp() {
       </div>
 
       <div className="kBoardWrap">
-        <div className="kBoard" role="grid" aria-label="Chess board">{rows}</div>
+        <div className="kBoard" style={boardVars} role="grid" aria-label="Chess board">{rows}</div>
         {promo && (
           <div className="kPromoOv">
             {[WQ, WR, WB, WN].map(pp => (
@@ -557,6 +619,51 @@ export default function KindleApp() {
         <button onClick={() => setView("puzzle")} disabled={thinking}>Puzzles</button>
         {result && <button onClick={() => newGame(playerColor)}>Play Again!</button>}
       </div>
+
+      {shopOpen && (
+        <div className="kPromoOv" style={{ position: "fixed", flexDirection: "column", padding: 16, overflowY: "auto" }}>
+          <h2 className="kLessonTitle" style={{ textAlign: "center" }}>Shop - 🪙 {shop.coins}</h2>
+          <div className="kShopGrid">
+            {HATS.map(h => {
+              const owned = shop.ownedHats.includes(h.id);
+              const equipped = shop.equippedHat === h.id;
+              return (
+                <div className="kShopItem" key={h.id}>
+                  <AnimalIcon kind={DIFFICULTIES[difficultyIdx].label} hat={h.id === "none" ? null : h.id} size={44} />
+                  <div>{h.label}</div>
+                  {equipped ? (
+                    <button className="kEquipped" disabled>Equipped</button>
+                  ) : owned ? (
+                    <button onClick={() => setShop(s => equipHat(s, h.id))}>Wear</button>
+                  ) : (
+                    <button disabled={shop.coins < h.price} onClick={() => setShop(s => buyHat(s, h.id))}>Buy {h.price}🪙</button>
+                  )}
+                </div>
+              );
+            })}
+            {BOARDS.map(b => {
+              const owned = shop.ownedBoards.includes(b.id);
+              const equipped = shop.equippedBoard === b.id;
+              return (
+                <div className="kShopItem" key={b.id}>
+                  <span className="kSwatch" style={{ background: `linear-gradient(135deg, ${b.light} 50%, ${b.dark} 50%)` }} />
+                  <div>{b.label}</div>
+                  {equipped ? (
+                    <button className="kEquipped" disabled>Equipped</button>
+                  ) : owned ? (
+                    <button onClick={() => setShop(s => equipBoard(s, b.id))}>Use</button>
+                  ) : (
+                    <button disabled={shop.coins < b.price} onClick={() => setShop(s => buyBoard(s, b.id))}>Buy {b.price}🪙</button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="kCtrls">
+            <button onClick={() => setShopOpen(false)}>Close</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

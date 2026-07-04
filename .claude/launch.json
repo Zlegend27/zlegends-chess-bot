@@ -12,6 +12,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "preview:kindle"],
       "port": 5174
+    },
+    {
+      "name": "kinnda-chess-dev",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--config", "vite.config.kindle.js", "--port", "5175"],
+      "port": 5175
     }
   ]
 }

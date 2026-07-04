@@ -9,7 +9,45 @@ body {
   min-height: 100vh;
 }
 
-.kRoot { display: flex; flex-direction: column; align-items: center; padding: 14px; }
+.kRoot { position: relative; display: flex; flex-direction: column; align-items: center; padding: 14px; }
+
+.kCritters { position: absolute; inset: 0; overflow: hidden; z-index: 0; pointer-events: none; }
+.kCritter {
+  position: absolute; font-size: 26px; line-height: 1; border: none; background: none; cursor: pointer;
+  padding: 6px; transform: translate(-50%, -50%);
+  animation: kCritterIn 0.5s ease-out, kCritterFloat 5s ease-in-out infinite 0.5s;
+  pointer-events: auto; filter: drop-shadow(0 2px 2px #00000022);
+}
+.kCritter.kCritterPoof { animation: kCritterPoof 0.26s ease-in forwards; }
+@keyframes kCritterIn { from { opacity: 0; transform: translate(-50%, -50%) scale(0.3); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+@keyframes kCritterFloat { 0%, 100% { margin-top: 0; } 50% { margin-top: -8px; } }
+@keyframes kCritterPoof { to { opacity: 0; transform: translate(-50%, -50%) scale(1.8) rotate(20deg); } }
+.kRoot > *:not(.kCritters) { position: relative; z-index: 1; }
+
+.kCoinBadge {
+  display: flex; align-items: center; gap: 4px; font-weight: bold; font-size: 15px;
+  background: #FFF3C4; color: #8A5A00; border-radius: 999px; padding: 5px 10px 5px 6px;
+  box-shadow: 0 2px 0 #E8C46A;
+}
+.kShopBtn {
+  font-family: inherit; font-size: 15px; padding: 6px 10px; border: none; border-radius: 50%;
+  background: #C6E48B; color: #33530F; box-shadow: 0 3px 0 #9CC463; cursor: pointer;
+}
+.kShopBtn:active { box-shadow: 0 1px 0 #9CC463; transform: translateY(2px); }
+
+.kShopGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 380px; margin: 10px 0; }
+.kShopItem {
+  border-radius: 14px; background: #FFFDF7; box-shadow: 0 3px 8px #00000014; padding: 10px;
+  display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;
+}
+.kShopItem .kSwatch { width: 44px; height: 44px; border-radius: 10px; border: 3px solid #0000001a; }
+.kShopItem button {
+  font-family: inherit; font-size: 13px; padding: 6px 10px; border: none; border-radius: 10px;
+  background: #6FCF97; color: #1E4620; box-shadow: 0 2px 0 #4F9E6E; cursor: pointer;
+}
+.kShopItem button.kEquipped { background: #FFD166; color: #5B3E27; box-shadow: 0 2px 0 #E8A93B; }
+.kShopItem button:disabled { opacity: 0.5; box-shadow: none; }
+
 .kHdr { display: flex; align-items: center; gap: 10px; }
 .kRoot h1 { font-size: 28px; margin: 4px 0; color: #E8622C; text-shadow: 2px 2px 0 #FFD8A8; }
 .kStatus { font-size: 19px; font-weight: bold; margin: 8px 0 10px; text-align: center; color: #5B3E27; }
@@ -35,8 +73,8 @@ body {
 .kRow { flex: 1; display: flex; }
 .kSq { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; }
 .kSq:focus-visible { outline: 4px solid #4EA8DE; outline-offset: -4px; z-index: 3; }
-.kSq.kLight { background: #FFF7E6; }
-.kSq.kDark { background: #BFE6C7; }
+.kSq.kLight { background: var(--kBoardLight, #FFF7E6); }
+.kSq.kDark { background: var(--kBoardDark, #BFE6C7); }
 .kSq.kSel { box-shadow: inset 0 0 0 4px #4EA8DE; }
 .kSq.kChk { background: #FF8F8F; }
 .kSq.kLast { background: #FFE79A; }
@@ -75,7 +113,7 @@ body {
 .kCtrls button:active { transform: translateY(2px); box-shadow: none; }
 .kCtrls button:disabled { opacity: 0.45; box-shadow: none; transform: none; }
 
-.kAnimal { flex: none; animation: kBounce 2.2s ease-in-out infinite; }
+.kAnimal { flex: none; animation: kBounce 2.2s ease-in-out infinite; overflow: visible; }
 @keyframes kBounce {
   0%, 100% { transform: translateY(0) rotate(0deg); }
   50% { transform: translateY(-3px) rotate(-3deg); }
