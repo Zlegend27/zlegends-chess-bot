@@ -493,6 +493,7 @@ export default function ZlegendsBot() {
     const expectedSan = activePuzzle.moves[idx];
     const attemptedSan = eng.sanOf(m);
     if (attemptedSan !== expectedSan) {
+      try { audio.sfxWrong(); } catch { /* audio unavailable */ }
       setPuzzleFeedback("Not quite — try again!");
       setSelected(-1); setTargets([]);
       setTimeout(() => setPuzzleFeedback(null), 1400);
@@ -733,8 +734,14 @@ export default function ZlegendsBot() {
             </div>
             <div className="cardMeta">
               <div className="cardName bot">Zlegend2700</div>
-              <div className="trayEmpty">{gameStyle.label} today</div>
-              <Tray pieces={botTaken} colorClass={playerColor === 1 ? "wpc" : "bpc"} />
+              {activePuzzle ? (
+                <div className="trayEmpty puzzleMeta">Puzzle · rated {activePuzzle.rating}</div>
+              ) : (
+                <>
+                  <div className="trayEmpty">{gameStyle.label} today</div>
+                  <Tray pieces={botTaken} colorClass={playerColor === 1 ? "wpc" : "bpc"} />
+                </>
+              )}
             </div>
             {youDiff < 0 && <div className="lead">+{-youDiff}</div>}
           </div>
@@ -802,7 +809,13 @@ export default function ZlegendsBot() {
             <div className="avatarBox"><img src="/you-avatar.webp" alt="You (Challenger)" className="youAvatarImg" /></div>
             <div className="cardMeta">
               <div className="cardName you">You (Challenger)</div>
-              <Tray pieces={youTaken} colorClass={playerColor === 1 ? "bpc" : "wpc"} />
+              {activePuzzle ? (
+                <div className="trayEmpty puzzleMeta">
+                  {puzzleSolved ? "Solved! Nice work." : puzzleFeedback || `Find the best move for ${eng.getSide() === 1 ? "White" : "Black"}.`}
+                </div>
+              ) : (
+                <Tray pieces={youTaken} colorClass={playerColor === 1 ? "bpc" : "wpc"} />
+              )}
             </div>
             {youDiff > 0 && <div className="lead">+{youDiff}</div>}
           </div>

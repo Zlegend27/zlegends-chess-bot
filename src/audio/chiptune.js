@@ -103,5 +103,17 @@ export function createAudio(initialTrackIdx = 0, initialVolume = 0.6) {
     o.connect(g); g.connect(st.master);
     o.start(t); o.stop(t + 0.2);
   };
+  st.sfxWrong = () => {
+    ensure();
+    const t = st.ctx.currentTime;
+    const o = st.ctx.createOscillator(), g = st.ctx.createGain();
+    o.type = "square";
+    o.frequency.setValueAtTime(180, t);
+    o.frequency.exponentialRampToValueAtTime(90, t + 0.22);
+    g.gain.setValueAtTime(0.14, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
+    o.connect(g); g.connect(st.master);
+    o.start(t); o.stop(t + 0.26);
+  };
   return st;
 }
