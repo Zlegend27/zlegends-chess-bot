@@ -76,3 +76,26 @@ describe("special moves", () => {
     expect(sans).toContain("O-O-O");
   });
 });
+
+describe("moveFromUci", () => {
+  test("finds a plain move by UCI", () => {
+    const eng = createEngine();
+    const m = eng.moveFromUci("e2e4");
+    expect(m).toBeDefined();
+    expect(eng.sanOf(m)).toBe("e4");
+  });
+
+  test("distinguishes promotion pieces", () => {
+    const eng = createEngine();
+    eng.loadFen("4k3/P7/8/8/8/8/8/4K3 w - - 0 1");
+    const q = eng.moveFromUci("a7a8q");
+    const n = eng.moveFromUci("a7a8n");
+    expect(eng.sanOf(q)).toBe("a8=Q+");
+    expect(eng.sanOf(n)).toBe("a8=N");
+  });
+
+  test("returns undefined for a move that isn't legal", () => {
+    const eng = createEngine();
+    expect(eng.moveFromUci("e2e5")).toBeUndefined();
+  });
+});

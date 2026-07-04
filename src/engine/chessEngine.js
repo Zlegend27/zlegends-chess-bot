@@ -489,6 +489,24 @@ export function createEngine() {
     return san;
   }
 
+  /* Finds the legal move matching a UCI string ("e2e4", "e7e8q") — used to
+     import move sequences from external sources (e.g. Lichess's puzzle
+     database) that speak UCI rather than SAN. Matches against the actual
+     legal-move list rather than constructing a move directly, so castling
+     and en passant flags come from the real generator instead of being
+     guessed. */
+  const UCI_PROMO = { q: WQ, r: WR, b: WB, n: WN };
+  function moveFromUci(uci) {
+    const from = M64TO120[(uci.charCodeAt(1) - 49) * 8 + (uci.charCodeAt(0) - 97)];
+    const to = M64TO120[(uci.charCodeAt(3) - 49) * 8 + (uci.charCodeAt(2) - 97)];
+    const promoChar = uci.length > 4 ? uci[4] : null;
+    return legalMoves().find(m => {
+      if (mFrom(m) !== from || mTo(m) !== to) return false;
+      const promo = mPromo(m);
+      return promo ? UCI_PROMO[promoChar] === promo : !promoChar;
+    });
+  }
+
   function loadFen(fen) {
     const [placement, sideChar, castleStr, epStr, halfStr] = fen.trim().split(/\s+/);
     board.fill(OFF);
@@ -573,7 +591,7 @@ export function createEngine() {
 
   reset();
   return {
-    reset, legalMoves, make, unmake, search, sanOf, pvLine, loadFen, fen, setPersonality,
+    reset, legalMoves, make, unmake, search, sanOf, pvLine, loadFen, fen, setPersonality, moveFromUci,
     inCheckNow: () => inCheck(side),
     getSide: () => side,
     pieceAt: i64 => board[M64TO120[i64]],
