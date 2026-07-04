@@ -22,7 +22,7 @@ body {
 @keyframes kCritterIn { from { opacity: 0; transform: translate(-50%, -50%) scale(0.3); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
 @keyframes kCritterFloat { 0%, 100% { margin-top: 0; } 50% { margin-top: -8px; } }
 @keyframes kCritterPoof { to { opacity: 0; transform: translate(-50%, -50%) scale(1.8) rotate(20deg); } }
-.kRoot > *:not(.kCritters) { position: relative; z-index: 1; }
+.kRoot > *:not(.kCritters):not(.kShopOv) { position: relative; z-index: 1; }
 
 .kCoinBadge {
   display: flex; align-items: center; gap: 4px; font-weight: bold; font-size: 15px;
@@ -35,7 +35,7 @@ body {
 }
 .kShopBtn:active { box-shadow: 0 1px 0 #9CC463; transform: translateY(2px); }
 
-.kShopGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 380px; margin: 10px 0; }
+.kShopGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
 .kShopItem {
   border-radius: 14px; background: #FFFDF7; box-shadow: 0 3px 8px #00000014; padding: 10px;
   display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;
@@ -95,6 +95,19 @@ body {
   font-size: 34px; padding: 6px 10px; border: none; border-radius: 10px;
   background: #FFD166; box-shadow: 0 3px 0 #E8A93B; cursor: pointer;
 }
+
+/* A dedicated overlay for the shop instead of reusing .kPromoOv -- that
+   class centers its content with align-items/justify-content:center,
+   which is fine for the small promotion popup but actively breaks
+   scrolling once the content (6+ shop rows) is taller than the screen:
+   centered flex content in a scroll container clips off the top with no
+   way to scroll back up to it. This one scrolls top-down instead. */
+.kShopOv {
+  position: fixed; inset: 0; z-index: 10; background: #FFF7E6ee;
+  display: flex; flex-direction: column; align-items: center;
+  overflow-y: auto; padding: 16px 12px 24px;
+}
+.kShopGrid { width: min(92vw, 380px); }
 
 .kMoves {
   width: 380px; margin-top: 12px; font-size: 14px; border: 2px solid #F2C48A; border-radius: 12px; padding: 8px;

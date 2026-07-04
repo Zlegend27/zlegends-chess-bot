@@ -659,7 +659,7 @@ export default function KindleApp() {
       </div>
 
       {shopOpen && (
-        <div className="kPromoOv" style={{ position: "fixed", flexDirection: "column", padding: 16, overflowY: "auto" }}>
+        <div className="kShopOv">
           <h2 className="kLessonTitle" style={{ textAlign: "center" }}>Shop - 🪙 {shop.coins}</h2>
           <div className="kShopGrid">
             {HATS.map(h => {
