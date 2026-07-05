@@ -15,13 +15,21 @@ import { saveGame } from "./utils/gameHistory";
 import { ENGINE_VERSION } from "./utils/version";
 import { OPENINGS } from "./utils/openings";
 import { PUZZLES, RATING_BANDS } from "./utils/puzzles";
+import { stockfishBestMove, STOCKFISH_MIN_ELO } from "./engine/stockfishEngine";
 import "./App.css";
 
+/* Casual and Master keep this app's own homemade engine (they're the top
+   two tiers and were never in question). The three tiers below them are
+   backed by a real Stockfish build instead of guessed search-time
+   budgets, so "1000/1500/2000" are meant to actually mean something
+   against chess.com's own rating scale -- see stockfishEngine.js for why.
+   Stockfish's UCI_Elo has a hard floor of 1320, so the "1000" tier adds
+   an extra blunder chance on top of that floor to push it down further. */
 const DIFFICULTIES = [
-  { label: "Idiot", ms: 250, blunderChance: 0.6, book: false },
+  { label: "1000 Elo", stockfishElo: STOCKFISH_MIN_ELO, blunderChance: 0.3, moveTimeMs: 500 },
+  { label: "1500 Elo", stockfishElo: 1500, moveTimeMs: 700 },
+  { label: "2000 Elo", stockfishElo: 2000, moveTimeMs: 1000 },
   { label: "Casual", ms: 600, book: true },
-  { label: "Normal", ms: 2000, book: true },
-  { label: "Hard", ms: 5000, book: true },
   { label: "Master", ms: 12000, book: true },
 ];
 
@@ -332,15 +340,39 @@ export default function ZlegendsBot() {
     setSelected(-1); setTargets([]); setBestArrow(null);
   };
 
+  /* Stockfish tiers report score/depth/nodes/time/pv the same shape the
+     homemade engine's worker does, so the .then() handler below can stay
+     identical either way -- see stockfishEngine.js for why Stockfish was
+     brought in for these three tiers instead of tuning search time. */
+  const stockfishMove = useCallback((diff) => {
+    return stockfishBestMove(eng.fen(), diff.stockfishElo, diff.moveTimeMs || 1000).then(({ uci, info }) => {
+      if (!uci) return null;
+      let move = eng.moveFromUci(uci);
+      if (move && diff.blunderChance && Math.random() < diff.blunderChance) {
+        const legal = eng.legalMoves();
+        if (legal.length) move = legal[(Math.random() * legal.length) | 0];
+      }
+      if (!move) return null;
+      return {
+        move, san: eng.sanOf(move),
+        score: info ? info.score : 0, depth: info ? info.depth : 0,
+        nodes: info ? info.nodes : 0, time: info ? info.time : (diff.moveTimeMs || 1000),
+        pv: info ? info.pv : [], book: false,
+      };
+    });
+  }, [eng]);
+
   const engineMove = useCallback((currentMoveList) => {
     setThinking(true);
+    const diff = difficultyRef.current;
     const botColorNow = -playerColorRef.current;
     const whiteEvalNow = eng.evalWhite();
     const botAdvantagePawns = (botColorNow === 1 ? whiteEvalNow : -whiteEvalNow) / 100;
     const personality = pickPersonality(gameStyleRef.current, eng.plyCount(), botAdvantagePawns);
-    runSearch(currentMoveList, difficultyRef.current.ms, difficultyRef.current.blunderChance || 0, {
-      personality, useBook: difficultyRef.current.book,
-    }).then((res) => {
+    const searchPromise = diff.stockfishElo
+      ? stockfishMove(diff)
+      : runSearch(currentMoveList, diff.ms, diff.blunderChance || 0, { personality, useBook: diff.book });
+    searchPromise.then((res) => {
       if (res && res.move) {
         const cap = isCaptureMove(res.move);
         eng.make(res.move);
@@ -362,7 +394,7 @@ export default function ZlegendsBot() {
       setThinking(false);
       rerender();
     });
-  }, [eng, audio, checkGameOver, runSearch]);
+  }, [eng, audio, checkGameOver, runSearch, stockfishMove]);
   const engineMoveRef = useRef(engineMove);
   engineMoveRef.current = engineMove;
 
