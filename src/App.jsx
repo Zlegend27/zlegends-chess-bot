@@ -1110,6 +1110,11 @@ export default function ZlegendsBot() {
     if (mp3TracksRef.current.length || mp3Loading) return;
     loadMp3Playlist(musicSource);
   }, [musicOpen]);
+  /* The theme is a single track meant to play indefinitely rather than
+     stop dead after ~30s -- native loop restarts it itself and never
+     fires "ended" at all, so the multi-track auto-advance below doesn't
+     need a special case for playlists of length 1. */
+  useEffect(() => { mp3Audio.loop = musicSource === THEME_ID; }, [musicSource]);
   /* Keeps the <audio> element's src in sync with the selected track,
      re-playing automatically if music was already playing -- covers both
      manual next/prev and the "ended" auto-advance below. */
