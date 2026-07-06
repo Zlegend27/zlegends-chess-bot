@@ -4,6 +4,8 @@ import {
   mFrom, mTo, mPromo, mFlags, MATE, fileOf, rankOf,
 } from "./engine/chessEngine";
 import { createAudio } from "./audio/chiptune";
+import { getSupabase } from "./utils/supabase";
+import { MP3_PLAYLISTS, loadPlaylistTracks } from "./utils/musicLibrary";
 import PixelAvatar, { ZPAL, ZPIX, JPAL, JPIX, BPAL, BPIX, PPAL, PPIX } from "./components/PixelAvatar";
 import SocialLinks from "./components/SocialLinks";
 import StarField from "./components/StarField";
@@ -149,6 +151,29 @@ export default function ZlegendsBot() {
   const audioRef = useRef(null);
   if (!audioRef.current) audioRef.current = createAudio(loadSetting("trackIdx", 0), volume / 100);
   const audio = audioRef.current;
+
+  /* MP3 side of the Juice Box -- streamed from Supabase Storage rather than
+     synthesized, so it needs its own HTMLAudioElement instead of the
+     chiptune player's oscillator graph. musicSource picks which engine is
+     "live"; switching sources pauses whichever one was playing so they
+     never overlap. */
+  const mp3AudioRef = useRef(null);
+  if (!mp3AudioRef.current) {
+    mp3AudioRef.current = new Audio();
+    mp3AudioRef.current.volume = volume / 100;
+  }
+  const mp3Audio = mp3AudioRef.current;
+  const [musicSource, setMusicSourceState] = useState(() => loadSetting("musicSource", "chiptune"));
+  const [mp3Tracks, setMp3Tracks] = useState([]);
+  const [mp3Loading, setMp3Loading] = useState(false);
+  const [mp3Idx, setMp3Idx] = useState(() => loadSetting("mp3Idx", 0));
+  const [mp3Playing, setMp3Playing] = useState(false);
+  const mp3IdxRef = useRef(mp3Idx);
+  mp3IdxRef.current = mp3Idx;
+  const mp3TracksRef = useRef(mp3Tracks);
+  mp3TracksRef.current = mp3Tracks;
+  const mp3PlayingRef = useRef(mp3Playing);
+  mp3PlayingRef.current = mp3Playing;
 
   /* engine search runs in a worker so it never blocks the audio scheduler or UI */
   const workerRef = useRef(null);
@@ -1031,10 +1056,84 @@ export default function ZlegendsBot() {
     saveSetting("difficultyIdx", idx);
   };
 
-  const toggleMusic = () => setMusicOn(audio.toggle());
-  const nextTrack = () => { setTrackName(audio.next()); saveSetting("trackIdx", audio.trackIndex()); };
-  const prevTrack = () => { setTrackName(audio.prev()); saveSetting("trackIdx", audio.trackIndex()); };
-  const onVolume = v => { setVolume(v); audio.setVolume(v / 100); saveSetting("volume", v); };
+  const loadMp3Playlist = (id) => {
+    const playlist = MP3_PLAYLISTS.find(p => p.id === id);
+    if (!playlist) return;
+    setMp3Loading(true);
+    setMp3Tracks([]);
+    getSupabase().then(sb => loadPlaylistTracks(sb, playlist)).then(tracks => {
+      setMp3Tracks(tracks);
+      setMp3Loading(false);
+    });
+  };
+  /* Loads whichever mp3 playlist was last selected (if any) once on mount,
+     same idea as the chiptune player restoring its saved trackIdx. */
+  useEffect(() => { if (musicSource !== "chiptune") loadMp3Playlist(musicSource); }, []);
+  /* Keeps the <audio> element's src in sync with the selected track,
+     re-playing automatically if music was already playing -- covers both
+     manual next/prev and the "ended" auto-advance below. */
+  useEffect(() => {
+    if (musicSource === "chiptune" || !mp3Tracks.length) return;
+    const track = mp3Tracks[((mp3Idx % mp3Tracks.length) + mp3Tracks.length) % mp3Tracks.length];
+    if (mp3Audio.src !== track.url) {
+      mp3Audio.src = track.url;
+      if (mp3PlayingRef.current) mp3Audio.play().catch(() => {});
+    }
+  }, [musicSource, mp3Tracks, mp3Idx]);
+  useEffect(() => {
+    const onEnded = () => {
+      setMp3Idx(i => {
+        const tracks = mp3TracksRef.current;
+        if (!tracks.length) return i;
+        const next = (i + 1) % tracks.length;
+        saveSetting("mp3Idx", next);
+        return next;
+      });
+    };
+    mp3Audio.addEventListener("ended", onEnded);
+    return () => mp3Audio.removeEventListener("ended", onEnded);
+  }, []);
+  const setMusicSource = (id) => {
+    if (id === musicSource) return;
+    if (musicOn) { audio.toggle(); setMusicOn(false); }
+    if (mp3PlayingRef.current) { mp3Audio.pause(); setMp3Playing(false); }
+    setMusicSourceState(id);
+    saveSetting("musicSource", id);
+    if (id !== "chiptune") {
+      setMp3Idx(0);
+      saveSetting("mp3Idx", 0);
+      loadMp3Playlist(id);
+    }
+  };
+  const switchMp3Track = (delta) => {
+    const tracks = mp3TracksRef.current;
+    if (!tracks.length) return;
+    setMp3Idx(i => {
+      const next = ((i + delta) % tracks.length + tracks.length) % tracks.length;
+      saveSetting("mp3Idx", next);
+      return next;
+    });
+  };
+  const toggleMusic = () => {
+    if (musicSource === "chiptune") { setMusicOn(audio.toggle()); return; }
+    if (!mp3TracksRef.current.length) return;
+    if (mp3PlayingRef.current) { mp3Audio.pause(); setMp3Playing(false); }
+    else { mp3Audio.play().catch(() => {}); setMp3Playing(true); }
+  };
+  const nextTrack = () => {
+    if (musicSource === "chiptune") { setTrackName(audio.next()); saveSetting("trackIdx", audio.trackIndex()); return; }
+    switchMp3Track(1);
+  };
+  const prevTrack = () => {
+    if (musicSource === "chiptune") { setTrackName(audio.prev()); saveSetting("trackIdx", audio.trackIndex()); return; }
+    switchMp3Track(-1);
+  };
+  const onVolume = v => { setVolume(v); audio.setVolume(v / 100); mp3Audio.volume = v / 100; saveSetting("volume", v); };
+  const isMp3Source = musicSource !== "chiptune";
+  const mp3NowPlaying = isMp3Source && mp3Tracks.length ? mp3Tracks[((mp3Idx % mp3Tracks.length) + mp3Tracks.length) % mp3Tracks.length] : null;
+  const jbTrackLabel = !isMp3Source ? trackName : mp3Loading ? "Loading…" : mp3NowPlaying ? mp3NowPlaying.name : "No tracks yet";
+  const jbPlaying = isMp3Source ? mp3Playing : musicOn;
+  const jbDisabled = isMp3Source && !mp3Tracks.length;
   const choosePieceSet = (id) => { setPieceSetId(id); saveSetting("pieceSet", id); };
   const toggleEvalBar = () => { setHideEvalBar(v => { saveSetting("hideEvalBar", !v); return !v; }); };
 
@@ -1579,16 +1678,20 @@ export default function ZlegendsBot() {
               <PixelAvatar rows={JPIX} pal={JPAL} size={20} />
               <span>Juice Box</span>
             </div>
+            <select value={musicSource} onChange={e => setMusicSource(e.target.value)}>
+              <option value="chiptune">Chiptune</option>
+              {MP3_PLAYLISTS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+            </select>
             <div className="trackRow">
-              <span className="trackName">{"♪ " + trackName}</span>
-              {trackName === "Neon Gambit" && <span className="trackTag">default</span>}
+              <span className="trackName">{"♪ " + jbTrackLabel}</span>
+              {!isMp3Source && trackName === "Neon Gambit" && <span className="trackTag">default</span>}
             </div>
             <div className="audioRow">
-              <button className="playBtn sm" onClick={prevTrack} title="Previous track">{"◀◀"}</button>
-              <button className="playBtn" onClick={toggleMusic} title={musicOn ? "Pause music" : "Play music"}>
-                {musicOn ? "❚❚" : "▶"}
+              <button className="playBtn sm" onClick={prevTrack} disabled={jbDisabled} title="Previous track">{"◀◀"}</button>
+              <button className="playBtn" onClick={toggleMusic} disabled={jbDisabled} title={jbPlaying ? "Pause music" : "Play music"}>
+                {jbPlaying ? "❚❚" : "▶"}
               </button>
-              <button className="playBtn sm" onClick={nextTrack} title="Next track">{"▶▶"}</button>
+              <button className="playBtn sm" onClick={nextTrack} disabled={jbDisabled} title="Next track">{"▶▶"}</button>
               <input type="range" min="0" max="100" value={volume} onChange={e => onVolume(Number(e.target.value))} />
               <span className="volPct">{volume}%</span>
             </div>
