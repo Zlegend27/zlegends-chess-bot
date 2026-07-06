@@ -2,6 +2,7 @@
   --void:#0E0620; --void2:#1A0B33; --panel:#1D1038;
   --violet:#8B2FC9; --magenta:#D94BF0; --cyan:#3EE7F5; --yellow:#F5D93E;
   --liliac:#C9C2E8; --sqdark:#4A2A7A; --white:#F4EFFF; --dim:#9D8FC4;
+  --boardLight:#C9C2E8; --boardDark:#4A2A7A;
   min-height:100vh; min-height:100dvh;
   background: radial-gradient(900px 500px at 50% 0%, #3A1560 0%, var(--void2) 45%, var(--void) 100%);
   color:var(--white);
@@ -97,7 +98,7 @@
 .brow{ flex:1; display:flex; }
 .sq{ flex:1; position:relative; display:flex; align-items:center; justify-content:center; cursor:pointer; touch-action:manipulation; }
 .sq:focus-visible{ outline:3px solid var(--yellow); outline-offset:-3px; z-index:3; }
-.sq.light{ background:var(--liliac); } .sq.dark{ background:var(--sqdark); }
+.sq.light{ background:var(--boardLight); } .sq.dark{ background:var(--boardDark); }
 .sq.last::after{ content:""; position:absolute; inset:0; background:#D94BF03D; }
 .sq.botLast::before{ content:""; position:absolute; inset:0; z-index:1; pointer-events:none;
   background:radial-gradient(circle at 50% 42%, #FFFFFF77 0%, #F5D93E33 42%, transparent 72%);
@@ -108,8 +109,8 @@
   background:radial-gradient(circle at 50% 45%, #3EE7F52E 0%, transparent 68%);
   box-shadow:inset 0 0 9px 1px #3EE7F544; }
 .sq.sel::after{ content:""; position:absolute; inset:0; box-shadow:inset 0 0 0 3px var(--cyan), inset 0 0 14px #3EE7F588; }
-.sq.chk{ background:radial-gradient(circle, #F0534899 15%, transparent 75%), var(--sqdark); }
-.sq.chk.light{ background:radial-gradient(circle, #F0534899 15%, transparent 75%), var(--liliac); }
+.sq.chk{ background:radial-gradient(circle, #F0534899 15%, transparent 75%), var(--boardDark); }
+.sq.chk.light{ background:radial-gradient(circle, #F0534899 15%, transparent 75%), var(--boardLight); }
 .sq.hintFrom::after{ content:""; position:absolute; inset:0; box-shadow:inset 0 0 0 3px var(--yellow), inset 0 0 16px #F5D93E99; }
 .sq.hintTo::after{ content:""; position:absolute; inset:0; box-shadow:inset 0 0 0 3px var(--yellow), inset 0 0 16px #F5D93E99; }
 .sq.dragOver::after{ content:""; position:absolute; inset:0; box-shadow:inset 0 0 0 3px var(--cyan), inset 0 0 18px #3EE7F5AA; z-index:1; }
@@ -161,13 +162,12 @@
 .pv{ margin-top:8px; font-family:ui-monospace,Consolas,monospace; font-size:12px; color:#B9AEE0; line-height:1.5; word-break:break-word; }
 .audioRow{ display:flex; align-items:center; gap:8px; }
 .jbHead{ display:flex; align-items:center; gap:8px; }
-.jbBox{ position:relative; }
 .jbMole{ width:64px; height:auto; display:block; margin:0 auto; filter:drop-shadow(0 0 10px #8B2FC966); }
-.promoBox .jbCloseX{ position:absolute; top:8px; right:8px; width:24px; height:24px; padding:0;
+.promoBox .modalCloseX{ position:absolute; top:8px; right:8px; width:24px; height:24px; padding:0;
   border:1px solid #8B2FC966; border-radius:50%; background:#1D1038; color:var(--liliac);
   font-size:12px; line-height:1; display:flex; align-items:center; justify-content:center;
-  cursor:pointer; touch-action:manipulation; }
-.promoBox .jbCloseX:hover{ background:#3EE7F522; color:var(--cyan); }
+  cursor:pointer; touch-action:manipulation; z-index:1; }
+.promoBox .modalCloseX:hover{ background:#3EE7F522; color:var(--cyan); }
 .trackRow{ display:flex; align-items:center; gap:8px; margin-bottom:8px; }
 .trackName{ font-family:ui-monospace,Consolas,monospace; font-size:12px; color:var(--yellow);
   text-shadow:0 0 8px #F5D93E44; flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -208,7 +208,7 @@ select{ font-family:inherit; font-size:12px; font-weight:700; border-radius:6px;
 .promoOv{ position:absolute; inset:0; background:#0E0620CC; display:flex; align-items:center;
   justify-content:center; z-index:10; border-radius:4px; }
 .promoBox{ background:var(--panel); border:1px solid var(--cyan); border-radius:10px; padding:10px;
-  display:flex; gap:6px; box-shadow:0 0 30px #3EE7F566; }
+  display:flex; gap:6px; box-shadow:0 0 30px #3EE7F566; position:relative; }
 .promoBox button{ font-size:32px; padding:4px 10px; background:transparent; border:none; cursor:pointer; border-radius:6px; }
 .promoBox button:hover{ background:#3EE7F522; }
 .toast{ font-family:ui-monospace,Consolas,monospace; font-size:11px; color:var(--cyan); margin-top:6px; }

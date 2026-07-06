@@ -13,6 +13,7 @@ import { loadSetting, saveSetting } from "./utils/storage";
 import { buildPgn, parsePgnMoves, replayForeignPgn } from "./utils/pgn";
 import { encodeGame, decodeGame, getSharedHash, replayIntoEngine } from "./utils/share";
 import { PIECE_SETS, getPieceSet } from "./utils/pieceSets";
+import { BOARD_COLORS, getBoardColor } from "./utils/boardColors";
 import { saveGame, estimateRating } from "./utils/gameHistory";
 import { ENGINE_VERSION } from "./utils/version";
 import { OPENINGS } from "./utils/openings";
@@ -155,6 +156,7 @@ export default function ZlegendsBot() {
 
   const [volume, setVolume] = useState(() => loadSetting("volume", 60));
   const [pieceSetId, setPieceSetId] = useState(() => loadSetting("pieceSet", "classic"));
+  const [boardColorId, setBoardColorId] = useState(() => loadSetting("boardColor", "default"));
   const [hideEvalBar, setHideEvalBar] = useState(() => loadSetting("hideEvalBar", false));
   const [ecoData, setEcoData] = useState(null);
   useEffect(() => { loadEcoOpenings().then(setEcoData); }, []);
@@ -317,6 +319,7 @@ export default function ZlegendsBot() {
     if (!ratingInfo) estimateRating().then(setRatingInfo);
   };
   const [pieceDesignsOpen, setPieceDesignsOpen] = useState(false);
+  const [boardColorsOpen, setBoardColorsOpen] = useState(false);
   const [openingsOpen, setOpeningsOpen] = useState(false);
   const [activeOpening, setActiveOpening] = useState(null);
   const [quizOpening, setQuizOpening] = useState(null);
@@ -992,6 +995,7 @@ export default function ZlegendsBot() {
     const onKeyDown = (e) => {
       if (e.key !== "Escape") return;
       if (pieceDesignsOpen) { setPieceDesignsOpen(false); setSettingsOpen(true); }
+      else if (boardColorsOpen) { setBoardColorsOpen(false); setSettingsOpen(true); }
       else if (settingsOpen) setSettingsOpen(false);
       else if (rushMode && rushResult) exitRush();
       else if (rushOpen) { setRushOpen(false); setPuzzlesOpen(true); }
@@ -1002,7 +1006,7 @@ export default function ZlegendsBot() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pieceDesignsOpen, settingsOpen, rushMode, rushResult, rushOpen, puzzlesOpen, openingsOpen, musicOpen]);
+  }, [pieceDesignsOpen, boardColorsOpen, settingsOpen, rushMode, rushResult, rushOpen, puzzlesOpen, openingsOpen, musicOpen]);
 
   /* Puzzle Rush countdown -- ticks once a second while a rush is live and
      hasn't already ended from 3 mistakes, pausing entirely once rushResult
@@ -1291,6 +1295,7 @@ export default function ZlegendsBot() {
   const jbPlaying = isMp3Source ? mp3Playing : musicOn;
   const jbDisabled = isMp3Source && !mp3Tracks.length;
   const choosePieceSet = (id) => { setPieceSetId(id); saveSetting("pieceSet", id); };
+  const chooseBoardColor = (id) => { setBoardColorId(id); saveSetting("boardColor", id); };
   const toggleEvalBar = () => { setHideEvalBar(v => { saveSetting("hideEvalBar", !v); return !v; }); };
 
   const onCopyPgn = async () => {
@@ -1487,7 +1492,7 @@ export default function ZlegendsBot() {
   );
 
   return (
-    <div className={"root" + (hideEvalBar ? " noEval" : "")}>
+    <div className={"root" + (hideEvalBar ? " noEval" : "")} style={{ "--boardLight": getBoardColor(boardColorId).light, "--boardDark": getBoardColor(boardColorId).dark }}>
       <StarField />
       <div className="hdr">
         <div className="eyebrow"><span className="live" />{"Zlegend27"}<SocialLinks /></div>
@@ -1830,7 +1835,7 @@ export default function ZlegendsBot() {
       {musicOpen && (
         <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) setMusicOpen(false); }}>
           <div className="promoBox jbBox" style={{ flexDirection: "column", gap: 12, width: 300, padding: "20px 24px" }}>
-            <button className="jbCloseX" onClick={() => setMusicOpen(false)} aria-label="Close Juice Box" title="Close">✕</button>
+            <button className="modalCloseX" onClick={() => setMusicOpen(false)} aria-label="Close Juice Box" title="Close">✕</button>
             <img src="/VIRTUOSO_MOLE.webp" alt="Juice Box" className="jbMole" />
             <select value={musicSource} onChange={e => setMusicSource(e.target.value)}>
               <option value="chiptune">Chiptune</option>
@@ -1889,6 +1894,7 @@ export default function ZlegendsBot() {
       {openingsOpen && (
         <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) setOpeningsOpen(false); }}>
           <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, maxHeight: "80vh", overflowY: "auto", padding: "20px 24px" }}>
+            <button className="modalCloseX" onClick={() => setOpeningsOpen(false)} aria-label="Close Openings Library" title="Close">✕</button>
             <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <PixelAvatar rows={BPIX} pal={BPAL} size={18} />
               Openings Library
@@ -1902,7 +1908,6 @@ export default function ZlegendsBot() {
                 </div>
               ))}
             </div>
-            <button className="btn gold" onClick={() => setOpeningsOpen(false)}>Close</button>
           </div>
         </div>
       )}
@@ -1910,6 +1915,7 @@ export default function ZlegendsBot() {
       {puzzlesOpen && (
         <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) setPuzzlesOpen(false); }}>
           <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
+            <button className="modalCloseX" onClick={() => setPuzzlesOpen(false)} aria-label="Close Puzzles" title="Close">✕</button>
             <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <PixelAvatar rows={PPIX} pal={PPAL} size={18} />
               Puzzles — Pick a Rating
@@ -1947,7 +1953,6 @@ export default function ZlegendsBot() {
                 </div>
               </div>
             )}
-            <button className="btn ghost" onClick={() => setPuzzlesOpen(false)}>Close</button>
           </div>
         </div>
       )}
@@ -1955,6 +1960,7 @@ export default function ZlegendsBot() {
       {rushOpen && (
         <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) { setRushOpen(false); setPuzzlesOpen(true); } }}>
           <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
+            <button className="modalCloseX" onClick={() => { setRushOpen(false); setPuzzlesOpen(true); }} aria-label="Close Puzzle Rush" title="Close">✕</button>
             <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <PixelAvatar rows={PPIX} pal={PPAL} size={18} />
               Puzzle Rush
@@ -1970,7 +1976,6 @@ export default function ZlegendsBot() {
                 </div>
               ))}
             </div>
-            <button className="btn ghost" onClick={() => { setRushOpen(false); setPuzzlesOpen(true); }}>Back</button>
           </div>
         </div>
       )}
@@ -1978,6 +1983,7 @@ export default function ZlegendsBot() {
       {rushMode && rushResult && (
         <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) exitRush(); }}>
           <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
+            <button className="modalCloseX" onClick={exitRush} aria-label="Exit Puzzle Rush" title="Close">✕</button>
             <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <PixelAvatar rows={PPIX} pal={PPAL} size={18} />
               {rushResult.reason === "time" ? "Time's up!" : "3 misses — rush over!"}
@@ -1986,7 +1992,6 @@ export default function ZlegendsBot() {
               You solved <b>{rushResult.solved}</b> puzzle{rushResult.solved === 1 ? "" : "s"}.
             </div>
             <button className="btn gold" onClick={retryRush}>Try Again</button>
-            <button className="btn ghost" onClick={exitRush}>Exit</button>
           </div>
         </div>
       )}
@@ -1994,6 +1999,7 @@ export default function ZlegendsBot() {
       {settingsOpen && (
         <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) setSettingsOpen(false); }}>
           <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
+            <button className="modalCloseX" onClick={() => setSettingsOpen(false)} aria-label="Close Settings" title="Close">✕</button>
             <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span aria-hidden="true">⚙</span>
               Settings
@@ -2003,6 +2009,11 @@ export default function ZlegendsBot() {
                 onClick={() => { setSettingsOpen(false); setPieceDesignsOpen(true); }}>
                 <div style={{ fontWeight: 700 }}>Piece Designs</div>
                 <div style={{ fontSize: 11, opacity: 0.75 }}>Currently: {getPieceSet(pieceSetId).label}</div>
+              </div>
+              <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E" }}
+                onClick={() => { setSettingsOpen(false); setBoardColorsOpen(true); }}>
+                <div style={{ fontWeight: 700 }}>Board Color</div>
+                <div style={{ fontSize: 11, opacity: 0.75 }}>Currently: {getBoardColor(boardColorId).label}</div>
               </div>
               <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E" }} onClick={toggleEvalBar}>
                 <div style={{ fontWeight: 700 }}>{hideEvalBar ? "Show Eval Bar" : "Hide Eval Bar"}</div>
@@ -2020,7 +2031,6 @@ export default function ZlegendsBot() {
                 </div>
               </div>
             </div>
-            <button className="btn ghost" onClick={() => setSettingsOpen(false)}>Close</button>
           </div>
         </div>
       )}
@@ -2028,6 +2038,7 @@ export default function ZlegendsBot() {
       {pieceDesignsOpen && (
         <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) { setPieceDesignsOpen(false); setSettingsOpen(true); } }}>
           <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
+            <button className="modalCloseX" onClick={() => { setPieceDesignsOpen(false); setSettingsOpen(true); }} aria-label="Close Piece Designs" title="Close">✕</button>
             <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               Piece Designs
             </div>
@@ -2048,7 +2059,34 @@ export default function ZlegendsBot() {
                 </div>
               ))}
             </div>
-            <button className="btn ghost" onClick={() => { setPieceDesignsOpen(false); setSettingsOpen(true); }}>Back</button>
+          </div>
+        </div>
+      )}
+
+      {boardColorsOpen && (
+        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) { setBoardColorsOpen(false); setSettingsOpen(true); } }}>
+          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
+            <button className="modalCloseX" onClick={() => { setBoardColorsOpen(false); setSettingsOpen(true); }} aria-label="Close Board Color" title="Close">✕</button>
+            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              Board Color
+            </div>
+            <div className="rows" style={{ maxHeight: "none", display: "flex", flexDirection: "column", gap: 10 }}>
+              {BOARD_COLORS.map(bc => (
+                <div key={bc.id}
+                  style={{
+                    cursor: "pointer", padding: "10px 8px", borderRadius: 8,
+                    border: bc.id === boardColorId ? "1px solid #F5D93E" : "1px solid #8B2FC92E",
+                    display: "flex", alignItems: "center", gap: 12,
+                  }}
+                  onClick={() => chooseBoardColor(bc.id)}>
+                  <div style={{ display: "grid", gridTemplateColumns: "16px 16px", gridTemplateRows: "16px 16px", borderRadius: 6, overflow: "hidden" }}>
+                    <div style={{ background: bc.light }} /><div style={{ background: bc.dark }} />
+                    <div style={{ background: bc.dark }} /><div style={{ background: bc.light }} />
+                  </div>
+                  <div style={{ fontWeight: 700 }}>{bc.label}{bc.id === boardColorId ? " (selected)" : ""}</div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -2056,6 +2094,7 @@ export default function ZlegendsBot() {
       {spectateOpen && (
         <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) setSpectateOpen(false); }}>
           <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
+            <button className="modalCloseX" onClick={() => setSpectateOpen(false)} aria-label="Close Spectate Bots" title="Close">✕</button>
             <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               Spectate Bots
             </div>
@@ -2085,7 +2124,6 @@ export default function ZlegendsBot() {
             </div>
             <button className="btn gold" style={{ fontSize: 12, padding: "8px 12px" }}
               onClick={() => startSpectate(spectateWhiteIdx, spectateBlackIdx, spectateOpeningId)}>Start Spectating</button>
-            <button className="btn ghost" onClick={() => setSpectateOpen(false)}>Close</button>
           </div>
         </div>
       )}
@@ -2093,6 +2131,7 @@ export default function ZlegendsBot() {
       {pasteOpen && (
         <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) setPasteOpen(false); }}>
           <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 420, padding: "20px 24px" }}>
+            <button className="modalCloseX" onClick={() => setPasteOpen(false)} aria-label="Close Paste PGN" title="Close">✕</button>
             <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               Paste PGN
             </div>
@@ -2108,7 +2147,6 @@ export default function ZlegendsBot() {
             />
             {pasteError && <div className="pv" style={{ fontSize: 11, color: "#F05348" }}>{pasteError}</div>}
             <button className="btn gold" onClick={loadPastedPgn} disabled={!pasteText.trim()}>Analyze</button>
-            <button className="btn ghost" onClick={() => setPasteOpen(false)}>Close</button>
           </div>
         </div>
       )}
