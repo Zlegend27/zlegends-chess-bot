@@ -110,6 +110,7 @@ export default function ZlegendsBot() {
 
   const [volume, setVolume] = useState(() => loadSetting("volume", 60));
   const [pieceSetId, setPieceSetId] = useState(() => loadSetting("pieceSet", "classic"));
+  const [hideEvalBar, setHideEvalBar] = useState(() => loadSetting("hideEvalBar", false));
   const pieceImgSrc = (type, isWhite) => getPieceSet(pieceSetId).svgUrl(type, isWhite);
   const audioRef = useRef(null);
   if (!audioRef.current) audioRef.current = createAudio(loadSetting("trackIdx", 0), volume / 100);
@@ -734,6 +735,7 @@ export default function ZlegendsBot() {
   const prevTrack = () => { setTrackName(audio.prev()); saveSetting("trackIdx", audio.trackIndex()); };
   const onVolume = v => { setVolume(v); audio.setVolume(v / 100); saveSetting("volume", v); };
   const choosePieceSet = (id) => { setPieceSetId(id); saveSetting("pieceSet", id); };
+  const toggleEvalBar = () => { setHideEvalBar(v => { saveSetting("hideEvalBar", !v); return !v; }); };
 
   const onCopyPgn = async () => {
     const pgn = buildPgn(moveList, result ? result.text : "*");
@@ -878,7 +880,7 @@ export default function ZlegendsBot() {
   );
 
   return (
-    <div className="root">
+    <div className={"root" + (hideEvalBar ? " noEval" : "")}>
       <StarField />
       <div className="hdr">
         <div className="eyebrow"><span className="live" />{"Zlegend27"}<SocialLinks /></div>
@@ -911,10 +913,12 @@ export default function ZlegendsBot() {
           </div>
 
           <div className="boardWrap">
-            <div className="evalbar" title={"Eval " + evalLabel}>
-              <div className="pfill" style={{ height: playerShare + "%" }} />
-              <div className="tick" />
-            </div>
+            {!hideEvalBar && (
+              <div className="evalbar" title={"Eval " + evalLabel}>
+                <div className="pfill" style={{ height: playerShare + "%" }} />
+                <div className="tick" />
+              </div>
+            )}
             <div style={{ position: "relative", flex: 1 }}>
               <div className="board" role="grid" aria-label="Chess board">
                 {rows}
@@ -1153,11 +1157,13 @@ export default function ZlegendsBot() {
               <PixelAvatar rows={BPIX} pal={BPAL} size={16} />
               Openings
             </button>
-            <button className="btn ghost" style={{ display: "flex", alignItems: "center", gap: 6 }}
+            <button className="btn ghost" style={{ display: "flex", alignItems: "center", padding: "10px 14px" }}
               onClick={() => { setPuzzlesOpen(true); ensurePuzzlesLoaded(); }}
-              onMouseEnter={ensurePuzzlesLoaded}>
-              <PixelAvatar rows={PPIX} pal={PPAL} size={16} />
-              Puzzles
+              onMouseEnter={ensurePuzzlesLoaded}
+              aria-label="Puzzles" title="Puzzles">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5C13 2.12 11.88 1 10.5 1S8 2.12 8 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.49 0 2.7 1.21 2.7 2.7s-1.21 2.7-2.7 2.7H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.49 1.21-2.7 2.7-2.7s2.7 1.21 2.7 2.7V22H17c1.1 0 2-.9 2-2v-4h1.5c1.38 0 2.5-1.12 2.5-2.5S21.88 11 20.5 11z" />
+              </svg>
             </button>
             <button className="btn ghost" style={{ fontSize: 18, lineHeight: 1, padding: "10px 14px" }} onClick={() => setSettingsOpen(true)} aria-label="Settings" title="Settings">
               <span aria-hidden="true">⚙</span>
@@ -1239,9 +1245,13 @@ export default function ZlegendsBot() {
                     </div>
                   );
                 })}
+                <div style={{ cursor: "pointer", padding: "8px 2px" }}
+                  onClick={() => { setPuzzlesOpen(false); setRushOpen(true); }}>
+                  <div style={{ fontWeight: 700, color: "var(--yellow)" }}>⚡ Puzzle Rush</div>
+                  <div style={{ fontSize: 11, opacity: 0.75 }}>Race the clock, difficulty ramps as you solve</div>
+                </div>
               </div>
             )}
-            <button className="btn gold" disabled={!puzzlesData} onClick={() => { setPuzzlesOpen(false); setRushOpen(true); }}>⚡ Puzzle Rush</button>
             <button className="btn ghost" onClick={() => setPuzzlesOpen(false)}>Close</button>
           </div>
         </div>
@@ -1300,6 +1310,9 @@ export default function ZlegendsBot() {
                 <div style={{ fontSize: 11, opacity: 0.75 }}>Currently: {getPieceSet(pieceSetId).label}</div>
               </div>
             </div>
+            <button className={"btn" + (hideEvalBar ? "" : " ghost")} onClick={toggleEvalBar}>
+              {hideEvalBar ? "Show Eval Bar" : "Hide Eval Bar"}
+            </button>
             <button className="btn ghost" onClick={() => setSettingsOpen(false)}>Close</button>
           </div>
         </div>

@@ -74,6 +74,12 @@
 .board{ border:5px solid #120A26; outline:1px solid #8B2FC966; border-radius:8px;
   box-shadow:0 0 30px #8B2FC94D, 0 16px 40px #00000088;
   width:min(88vw,440px); aspect-ratio:1; display:flex; flex-direction:column; user-select:none; position:relative; }
+/* Hide Eval Bar setting: reclaims the evalbar's 14px + 10px gap so the
+   board can grow, and lets it use noticeably more of the viewport width
+   on phones -- the whole point being a visibly bigger board on small
+   screens, not just removing the bar. */
+.root.noEval .board{ width:min(96vw,460px); }
+.root.noEval .card{ width:min(96vw,460px); padding-left:12px; }
 .arrowLayer{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:6;
   filter:drop-shadow(0 0 4px #F5D93E88); }
 .brow{ flex:1; display:flex; }
@@ -97,8 +103,8 @@
 .pc{ width:87%; height:87%; z-index:2; pointer-events:none; }
 .pc.w{ filter:drop-shadow(0 2px 2px #00000066); }
 .pc.b{ filter:drop-shadow(0 2px 2px #00000088); }
-.dot{ position:absolute; width:26%; height:26%; border-radius:50%; background:#3EE7F566; box-shadow:0 0 8px #3EE7F566; z-index:1; }
-.dot.ring{ width:88%; height:88%; background:transparent; border:4px solid #3EE7F566; box-shadow:none; }
+.dot{ position:absolute; width:26%; height:26%; border-radius:50%; background:#1D9EB3; box-shadow:0 0 0 2px #1D10384D, 0 0 8px #3EE7F599; z-index:1; }
+.dot.ring{ width:88%; height:88%; background:transparent; border:4px solid #1D9EB3; box-shadow:0 0 0 2px #1D10384D; }
 .coord{ position:absolute; font-size:10px; font-weight:700; opacity:.6; font-family:ui-monospace,Consolas,monospace; color:#150C24; }
 .sq.dark .coord{ color:#C9C2E8; }
 .coord.rk{ top:3px; left:4px; } .coord.fl{ bottom:2px; right:4px; }
