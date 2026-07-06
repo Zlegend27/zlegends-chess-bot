@@ -61,6 +61,25 @@ function pickPersonality(baseStyle, plyCount, botAdvantagePawns) {
 
 const FILES = "abcdefgh";
 const PIECE_NAME = { 1: "pawn", 2: "knight", 3: "bishop", 4: "rook", 5: "queen", 6: "king" };
+
+/* Recognizes which curated opening (if any) the current game matches,
+   by longest common SAN prefix -- once the game runs past a curated
+   entry's own move list it keeps naming that opening (nothing deeper
+   to compare against), same as how a live board usually keeps showing
+   "last known opening" after leaving book. */
+function detectOpening(moveList) {
+  let best = null;
+  for (const op of OPENINGS) {
+    const len = Math.min(moveList.length, op.moves.length);
+    if (len === 0) continue;
+    let matches = true;
+    for (let i = 0; i < len; i++) {
+      if (moveList[i] !== op.moves[i]) { matches = false; break; }
+    }
+    if (matches && (!best || len > best.len)) best = { opening: op, len };
+  }
+  return best ? best.opening : null;
+}
 const PTS = { 1: 1, 2: 3, 3: 3, 4: 5, 5: 9 };
 const START_COUNT = { 1: 8, 2: 2, 3: 2, 4: 2, 5: 1 };
 const RUSH_DURATIONS = [
@@ -844,6 +863,7 @@ export default function ZlegendsBot() {
   const botTaken = botColor === 1 ? mat.capturedBlack : mat.capturedWhite;
   const youTaken = playerColor === 1 ? mat.capturedBlack : mat.capturedWhite;
   const youDiff = playerColor === 1 ? mat.diff : -mat.diff;
+  const liveOpening = (mode === "play" && !activePuzzle && !quizOpening) ? detectOpening(moveList) : null;
 
   const lastMoverColor = lastMove ? Math.sign(eng.pieceAt(M120TO64[lastMove.to])) : 0;
   const isBotLastMove = !analyzing && lastMove && lastMoverColor === botColor;
@@ -975,6 +995,9 @@ export default function ZlegendsBot() {
               ) : (
                 <>
                   <div className="trayEmpty">{gameStyle.label} today</div>
+                  {liveOpening && (
+                    <div className="trayEmpty openingTag">{liveOpening.name} · {liveOpening.eco}</div>
+                  )}
                   <Tray pieces={botTaken} colorClass={playerColor === 1 ? "wpc" : "bpc"} />
                 </>
               )}
@@ -1225,9 +1248,10 @@ export default function ZlegendsBot() {
           )}
 
           <div className="ctrls iconRow">
-            <button className="btn ghost" style={{ display: "flex", alignItems: "center", gap: 6 }} onClick={() => setMusicOpen(true)} title="Juice Box">
-              <PixelAvatar rows={JPIX} pal={JPAL} size={16} />
-              Juice Box
+            <button className="btn ghost" style={{ display: "flex", alignItems: "center", padding: "10px 14px" }} onClick={() => setMusicOpen(true)} aria-label="Juice Box" title="Juice Box">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z" />
+              </svg>
             </button>
             <button className="btn ghost" style={{ display: "flex", alignItems: "center", gap: 6 }} onClick={() => setOpeningsOpen(true)}>
               <PixelAvatar rows={BPIX} pal={BPAL} size={16} />
@@ -1385,10 +1409,13 @@ export default function ZlegendsBot() {
                 <div style={{ fontWeight: 700 }}>Piece Designs</div>
                 <div style={{ fontSize: 11, opacity: 0.75 }}>Currently: {getPieceSet(pieceSetId).label}</div>
               </div>
+              <div style={{ cursor: "pointer", padding: "8px 2px" }} onClick={toggleEvalBar}>
+                <div style={{ fontWeight: 700 }}>{hideEvalBar ? "Show Eval Bar" : "Hide Eval Bar"}</div>
+                <div style={{ fontSize: 11, opacity: 0.75 }}>
+                  {hideEvalBar ? "Eval bar is currently hidden" : "Hides the eval bar for a bigger board on mobile"}
+                </div>
+              </div>
             </div>
-            <button className={"btn" + (hideEvalBar ? "" : " ghost")} onClick={toggleEvalBar}>
-              {hideEvalBar ? "Show Eval Bar" : "Hide Eval Bar"}
-            </button>
             <button className="btn ghost" onClick={() => setSettingsOpen(false)}>Close</button>
           </div>
         </div>
