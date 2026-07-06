@@ -57,6 +57,7 @@ body {
   background: #FFD166; color: #5B3E27; box-shadow: 0 3px 0 #E8A93B; cursor: pointer;
 }
 .kMusicBtn:active { box-shadow: 0 1px 0 #E8A93B; transform: translateY(2px); }
+.kVolume { width: 60px; accent-color: #FFD166; }
 
 .kCaptureRow { display: flex; align-items: center; gap: 8px; width: min(94vw, 430px); margin: 4px 0; }
 .kCaptureLabel { font-size: 12px; font-weight: bold; color: #8A6A4B; flex: none; }
@@ -80,10 +81,15 @@ body {
 .kSq.kLast { background: #FFE79A; }
 .kSq.kLast.kDark { background: #E0D27A; }
 .kSq.kDragOver { box-shadow: inset 0 0 0 4px #6FCF97; }
+.kSq.kHint { box-shadow: inset 0 0 0 4px #FFD166; }
 .kPc { font-size: 32px; display: inline-block; line-height: 1; }
 .kPc.kPcW { border-radius: 50%; background: #FFF2C2; box-shadow: 0 0 0 3px #F2A65A, 0 2px 3px #00000030; padding: 3px; color: #7A4A17; }
 .kPc.kPcB { border-radius: 50%; background: #CDB6E8; box-shadow: 0 0 0 3px #7C5CBF, 0 2px 3px #00000030; padding: 5px; color: #3B2C5C; }
 .kPc.kDragGhost { position: fixed; transform: translate(-50%, -50%); z-index: 60; pointer-events: none;
+  filter: drop-shadow(0 6px 10px #00000066); }
+.kPcImg { width: 78%; height: 78%; object-fit: contain; display: block; pointer-events: none;
+  filter: drop-shadow(0 1px 1px #00000033); }
+.kPcImg.kDragGhost { position: fixed; transform: translate(-50%, -50%); z-index: 60;
   filter: drop-shadow(0 6px 10px #00000066); }
 .kDot { position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #4EA8DE; opacity: 0.7; }
 .kCoord { position: absolute; font-size: 10px; color: #00000066; }
@@ -94,6 +100,7 @@ body {
   position: absolute; inset: 0; background: #FFF7E6ee; border: 4px solid #E8622C; border-radius: 16px;
   display: flex; align-items: center; justify-content: center; gap: 8px;
 }
+.kPromoOv .kPcImg { width: 40px; height: 40px; }
 .kPromoOv button {
   font-size: 34px; padding: 6px 10px; border: none; border-radius: 10px;
   background: #FFD166; box-shadow: 0 3px 0 #E8A93B; cursor: pointer;

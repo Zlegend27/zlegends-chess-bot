@@ -49,3 +49,12 @@ export function kidPuzzlesInBand(bandId) {
   if (!band) return ALL;
   return ALL.filter(p => p.rating >= band.min && p.rating < band.max);
 }
+
+/* Same one-puzzle-for-everyone-today idea as the main app's Daily Puzzle
+   -- a UTC day count indexes into the full kid-rated pool, so it's stable
+   for anyone opening the app on a given day without needing a server. */
+export function kidDailyPuzzle() {
+  if (!ALL.length) return null;
+  const dayNum = Math.floor(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate()) / 86400000);
+  return ALL[dayNum % ALL.length];
+}

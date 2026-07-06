@@ -6,11 +6,13 @@ import {
 import { replayIntoEngine } from "../src/utils/share";
 import { createKidAudio, TUNES } from "./kidTune";
 import Critters from "./Critters";
-import { KID_PUZZLE_BANDS, kidPuzzlesInBand } from "./kidPuzzles";
+import { KID_PUZZLE_BANDS, kidPuzzlesInBand, kidDailyPuzzle } from "./kidPuzzles";
 import {
   loadShopState, addCoins, buyHat, buyBoard, equipHat, equipBoard, HATS, BOARDS,
-  buyTune, equipTune, buyAnimal,
+  buyTune, equipTune, buyAnimal, buyPiece, equipPiece, PIECES, setMusicVolume, markDailyPuzzleSolved,
 } from "./kidShop";
+import { cburnettPieceSvgUrl } from "../src/utils/cburnettPieceSvg";
+import { woodPieceSvgUrl } from "../src/utils/woodPieceSvg";
 
 /* Search runs in the same shared Worker the main bot uses (see
    src/engine/engineWorker.js) — the hardest tier ("Lion", 8s of search)
@@ -29,6 +31,17 @@ const formatKidClock = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, 
 /* Same ramp idea as the main app's Puzzle Rush: climb a band every few
    solves in a row, drop back one on a miss. */
 const RUSH_STEP_UP_EVERY = 3;
+const todayKey = () => {
+  const d = new Date();
+  return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`;
+};
+/* Coin rewards scale with difficulty instead of a flat amount, so beating
+   a tougher bot or solving a harder puzzle actually feels like it earned
+   more. Puzzle bands cap at 15 (the top, "hard" 1200+ band); bots go up
+   in the same 5-coin steps across all ten difficulties, topping out at
+   50 for Lion. */
+const puzzleCoinReward = (rating) => (rating >= 1200 ? 15 : rating >= 900 ? 10 : 5);
+const botCoinReward = (difficultyIdx) => (difficultyIdx + 1) * 5;
 
 function materialState(eng) {
   const rem = { 1: {}, "-1": {} };
@@ -268,8 +281,11 @@ export default function KindleApp() {
   const [promo, setPromo] = useState(null);
   const [difficultyIdx, setDifficultyIdx] = useState(1);
   const [botLastMove, setBotLastMove] = useState(null);
+  const [hintMove, setHintMove] = useState(null);
+  const [hinting, setHinting] = useState(false);
 
   const [puzzleBand, setPuzzleBand] = useState(null);
+  const [isDailyPuzzle, setIsDailyPuzzle] = useState(false);
   const [activePuzzle, setActivePuzzle] = useState(null);
   const [puzzleFeedback, setPuzzleFeedback] = useState(null);
   const [puzzleSolved, setPuzzleSolved] = useState(false);
@@ -292,6 +308,37 @@ export default function KindleApp() {
   const boardTheme = BOARDS.find(b => b.id === shop.equippedBoard) || BOARDS[0];
   const boardVars = { "--kBoardLight": boardTheme.light, "--kBoardDark": boardTheme.dark };
   useEffect(() => { audio.setTune(shop.equippedTune); }, [audio, shop.equippedTune]);
+  useEffect(() => { audio.setVolume(shop.musicVolume / 100); }, [audio, shop.musicVolume]);
+
+  /* "Classic" keeps Kinnda's own glyph-in-a-circle look (renderPiece
+     returns null and the glyph span renders instead); Standard/Wood reuse
+     the exact same SVG piece sets the main site uses. */
+  const pieceImgSrc = (type, isWhite) => {
+    if (shop.equippedPiece === "standard") return cburnettPieceSvgUrl(type, isWhite);
+    if (shop.equippedPiece === "wood") return woodPieceSvgUrl(type, isWhite);
+    return null;
+  };
+  const renderPiece = (p, extraClass) => {
+    if (p === EMPTY) return null;
+    const isWhite = p > 0;
+    const src = pieceImgSrc(Math.abs(p), isWhite);
+    if (src) return <img className={"kPcImg" + (extraClass ? " " + extraClass : "")} src={src} alt="" draggable="false" />;
+    return <span className={"kPc " + (isWhite ? "kPcW" : "kPcB") + (extraClass ? " " + extraClass : "")}>{glyphFor(p)}</span>;
+  };
+  /* Ghost needs explicit pixel sizing (it's position:fixed, following the
+     pointer, not laid out inside a board cell it could size relative to)
+     -- font-size for the glyph, width/height for an image, never both on
+     the same element so neither mode's box model gets distorted. */
+  const renderDragGhost = () => {
+    if (dragFrom < 0 || !dragPos) return null;
+    const p = eng.pieceAt(dragFrom);
+    const isWhite = p > 0;
+    const src = pieceImgSrc(Math.abs(p), isWhite);
+    if (src) return <img className="kPcImg kDragGhost" src={src} alt="" draggable="false"
+      style={{ left: dragPos.x, top: dragPos.y, width: dragCellSize * 0.8, height: dragCellSize * 0.8 }} />;
+    return <span className={"kPc kDragGhost " + (isWhite ? "kPcW" : "kPcB")}
+      style={{ left: dragPos.x, top: dragPos.y, fontSize: dragCellSize * 0.7 }}>{glyphFor(p)}</span>;
+  };
 
   const isCaptureMove = m => eng.pieceAt(M120TO64[mTo(m)]) !== EMPTY || (mFlags(m) & 1);
 
@@ -312,7 +359,7 @@ export default function KindleApp() {
 
   const announceResult = (over) => {
     if (!over) return;
-    if (over.winner === playerColor) { audio.sfxWin(); setShop(s => addCoins(s, 20)); }
+    if (over.winner === playerColor) { audio.sfxWin(); setShop(s => addCoins(s, botCoinReward(difficultyIdx))); }
     else if (over.winner === 0) { /* draw: no stinger, keep it neutral */ }
     else audio.sfxLose();
   };
@@ -329,6 +376,7 @@ export default function KindleApp() {
         moveListRef.current = [...moveListRef.current, res.san];
         setMoveList(moveListRef.current);
         setBotLastMove({ from: mFrom(res.move), to: mTo(res.move) });
+        setHintMove(null);
         const over = checkGameOver();
         setResult(over);
         announceResult(over);
@@ -347,12 +395,22 @@ export default function KindleApp() {
     moveListRef.current = [...moveListRef.current, san];
     setMoveList(moveListRef.current);
     setBotLastMove(null);
+    setHintMove(null);
     setSelected(-1); setTargets([]);
     const over = checkGameOver();
     setResult(over);
     announceResult(over);
     rerender();
     if (!over) engineMoveRef.current();
+  };
+
+  const onHint = () => {
+    if (thinking || result || promo || hinting || eng.getSide() !== playerColor) return;
+    setHinting(true);
+    runSearch(moveListRef.current, 600, 0, true).then((res) => {
+      if (res && res.move) setHintMove({ from: M120TO64[mFrom(res.move)], to: M120TO64[mTo(res.move)] });
+      setHinting(false);
+    });
   };
 
   /* Returns a status string so drag pointerdown (below) can tell,
@@ -384,7 +442,7 @@ export default function KindleApp() {
     eng.reset();
     setPlayerColor(color);
     moveListRef.current = [];
-    setSelected(-1); setTargets([]); setMoveList([]); setResult(null); setPromo(null); setBotLastMove(null);
+    setSelected(-1); setTargets([]); setMoveList([]); setResult(null); setPromo(null); setBotLastMove(null); setHintMove(null);
     rerender();
     if (color === -1) setTimeout(() => engineMoveRef.current(), 30);
   };
@@ -396,7 +454,7 @@ export default function KindleApp() {
     for (let i = 0; i < n; i++) eng.unmake();
     moveListRef.current = moveListRef.current.slice(0, moveListRef.current.length - n);
     setMoveList(moveListRef.current);
-    setSelected(-1); setTargets([]); setResult(null); setPromo(null); setBotLastMove(null);
+    setSelected(-1); setTargets([]); setResult(null); setPromo(null); setBotLastMove(null); setHintMove(null);
     rerender();
   };
 
@@ -424,7 +482,7 @@ export default function KindleApp() {
     setPuzzleFeedback(null);
     setPuzzleSolved(false);
     setPlayerColor(eng.getSide());
-    setSelected(-1); setTargets([]); setBotLastMove(null);
+    setSelected(-1); setTargets([]); setBotLastMove(null); setHintMove(null);
     rerender();
   };
 
@@ -433,7 +491,18 @@ export default function KindleApp() {
     if (!activePuzzle) prevPlayerColorRef.current = playerColor;
     const pool = kidPuzzlesInBand(band);
     setPuzzleBand(band);
+    setIsDailyPuzzle(false);
     loadPuzzle(pool[(Math.random() * pool.length) | 0]);
+  };
+
+  const startDailyPuzzle = () => {
+    if (thinking) return;
+    const puzzle = kidDailyPuzzle();
+    if (!puzzle) return;
+    if (!activePuzzle) prevPlayerColorRef.current = playerColor;
+    setPuzzleBand(null);
+    setIsDailyPuzzle(true);
+    loadPuzzle(puzzle);
   };
 
   const nextPuzzle = () => startPuzzle(puzzleBand);
@@ -445,6 +514,7 @@ export default function KindleApp() {
 
   const startRush = (seconds) => {
     if (!activePuzzle) prevPlayerColorRef.current = playerColor;
+    setIsDailyPuzzle(false);
     rushSolvedRef.current = 0;
     rushMistakesRef.current = 0;
     rushBandIdxRef.current = 0;
@@ -537,10 +607,14 @@ export default function KindleApp() {
               rushStreakRef.current = 0;
               setRushBandIdx(rushBandIdxRef.current);
             }
-            setShop(s => addCoins(s, 2));
+            setShop(s => addCoins(s, puzzleCoinReward(activePuzzle.rating)));
             setTimeout(() => nextRushPuzzle(), 500);
           } else {
-            setShop(s => addCoins(s, 5));
+            const reward = puzzleCoinReward(activePuzzle.rating);
+            setShop(s => {
+              const next = addCoins(s, reward);
+              return isDailyPuzzle ? markDailyPuzzleSolved(next, todayKey()) : next;
+            });
           }
           rerender();
           return "moved";
@@ -573,7 +647,7 @@ export default function KindleApp() {
   const exitPuzzle = () => {
     eng.reset();
     replayIntoEngine(eng, moveList);
-    setActivePuzzle(null); setPuzzleBand(null); setPuzzleFeedback(null); setPuzzleSolved(false);
+    setActivePuzzle(null); setPuzzleBand(null); setIsDailyPuzzle(false); setPuzzleFeedback(null); setPuzzleSolved(false);
     setSelected(-1); setTargets([]); setBotLastMove(null);
     setPlayerColor(prevPlayerColorRef.current);
     setView("play");
@@ -631,6 +705,8 @@ export default function KindleApp() {
         const isSel = selected === i64;
         const isTarget = targets.includes(i64);
         const isBotLast = botLastMove && (botLastMove.from === sq120 || botLastMove.to === sq120);
+        const isHintFrom = hintMove && hintMove.from === i64;
+        const isHintTo = hintMove && hintMove.to === i64;
         const kingInCheck = p * eng.getSide() === WK && eng.inCheckNow();
         const isDragFrom = dragFrom === i64;
         const isDragOver = dragFrom >= 0 && dragOverSquare === i64 && dragOverSquare !== dragFrom;
@@ -646,8 +722,8 @@ export default function KindleApp() {
             onPointerMove={onPointerMoveSq}
             onPointerUp={onPointerUpSq}
             onPointerCancel={onPointerCancelSq}
-            className={"kSq " + (light ? "kLight" : "kDark") + (isSel ? " kSel" : "") + (isBotLast ? " kLast" : "") + (kingInCheck ? " kChk" : "") + (isDragOver ? " kDragOver" : "")}>
-            {p !== EMPTY && !isDragFrom && <span className={"kPc " + (p > 0 ? "kPcW" : "kPcB")}>{glyphFor(p)}</span>}
+            className={"kSq " + (light ? "kLight" : "kDark") + (isSel ? " kSel" : "") + (isBotLast ? " kLast" : "") + (kingInCheck ? " kChk" : "") + (isDragOver ? " kDragOver" : "") + (isHintFrom || isHintTo ? " kHint" : "")}>
+            {p !== EMPTY && !isDragFrom && renderPiece(p)}
             {isTarget && <span className="kDot" />}
             {vf === 0 && <span className="kCoord kRk">{r + 1}</span>}
             {vr === 7 && <span className="kCoord kFl">{FILES[f]}</span>}
@@ -674,6 +750,11 @@ export default function KindleApp() {
           <>
             <div className="kStatus">Pick a puzzle level!</div>
             <div className="kCtrls">
+              <button onClick={startDailyPuzzle}>
+                📅 Daily Puzzle{shop.dailyPuzzleSolvedDate === todayKey() ? " ✓" : ""}
+              </button>
+            </div>
+            <div className="kCtrls">
               {KID_PUZZLE_BANDS.map(b => (
                 <button key={b.id} onClick={() => startPuzzle(b.id)}>{b.label} ({kidPuzzlesInBand(b.id).length})</button>
               ))}
@@ -688,17 +769,15 @@ export default function KindleApp() {
             <div className="kStatus">
               {rushMode
                 ? `Puzzle Rush · ${KID_PUZZLE_BANDS[rushBandIdx].label} · ${formatKidClock(rushTimeLeft)} left · Solved ${rushSolved} · Misses ${rushMistakes}/3`
-                : puzzleSolved ? "You got it! Great puzzle solving! (+5 coins)"
+                : puzzleSolved ? `You got it! Great puzzle solving! (+${puzzleCoinReward(activePuzzle.rating)} coins)`
                 : puzzleFeedback === "wrong" ? "Not quite - give it another try!"
+                : isDailyPuzzle ? `Daily Puzzle (rated ${activePuzzle.rating}) - find the best move for ${sideLabel}!`
                 : `${band ? band.label : ""} puzzle (rated ${activePuzzle.rating}) - find the best move for ${sideLabel}!`}
             </div>
             {!puzzleFeedback && !puzzleSolved && <div className="kMoves">{activePuzzle.hint}</div>}
             <div className="kBoardWrap">
               <div className="kBoard" style={boardVars} role="grid" aria-label="Chess board" ref={boardRef}>{buildBoardRows(false, onPuzzleSquare)}</div>
-              {dragFrom >= 0 && dragPos && (
-                <span className={"kPc kDragGhost " + (eng.pieceAt(dragFrom) > 0 ? "kPcW" : "kPcB")}
-                  style={{ left: dragPos.x, top: dragPos.y, fontSize: dragCellSize * 0.7 }}>{glyphFor(eng.pieceAt(dragFrom))}</span>
-              )}
+              {renderDragGhost()}
             </div>
             <div className="kCtrls">
               {!rushMode && puzzleSolved && <button onClick={nextPuzzle}>Next Puzzle</button>}
@@ -813,6 +892,9 @@ export default function KindleApp() {
         <button className="kMusicBtn" onClick={() => setMusicOn(audio.toggle())} title={musicOn ? "Pause music" : "Play music"}>
           {musicOn ? "♪⏸" : "♪▶"}
         </button>
+        <input type="range" className="kVolume" min="0" max="100" value={shop.musicVolume}
+          onChange={e => setShop(s => setMusicVolume(s, Number(e.target.value)))}
+          title="Music volume" aria-label="Music volume" />
       </div>
       <div className="kStatus">{status}</div>
 
@@ -823,10 +905,7 @@ export default function KindleApp() {
 
       <div className="kBoardWrap">
         <div className="kBoard" style={boardVars} role="grid" aria-label="Chess board" ref={boardRef}>{rows}</div>
-        {dragFrom >= 0 && dragPos && (
-          <span className={"kPc kDragGhost " + (eng.pieceAt(dragFrom) > 0 ? "kPcW" : "kPcB")}
-            style={{ left: dragPos.x, top: dragPos.y, fontSize: dragCellSize * 0.7 }}>{glyphFor(eng.pieceAt(dragFrom))}</span>
-        )}
+        {renderDragGhost()}
         {promo && (
           <div className="kPromoOv">
             {[WQ, WR, WB, WN].map(pp => (
@@ -834,7 +913,7 @@ export default function KindleApp() {
                 const m = promo.moves.find(x => mPromo(x) === pp);
                 setPromo(null);
                 if (m) playMove(m);
-              }}><span className={"kPc " + (eng.getSide() === 1 ? "kPcW" : "kPcB")}>{GLYPH[pp]}</span></button>
+              }}>{renderPiece(eng.getSide() === 1 ? pp : -pp)}</button>
             ))}
           </div>
         )}
@@ -851,6 +930,9 @@ export default function KindleApp() {
         <button onClick={() => newGame(1)}>Play White</button>
         <button onClick={() => newGame(-1)}>Play Black</button>
         <button onClick={undo} disabled={thinking || !!result || eng.plyCount() === 0}>Undo</button>
+        <button onClick={onHint} disabled={thinking || !!result || !!promo || hinting || eng.getSide() !== playerColor}>
+          {hinting ? "Thinking…" : "💡 Hint"}
+        </button>
         <select value={difficultyIdx} onChange={e => setDifficultyIdx(Number(e.target.value))}>
           {DIFFICULTIES.map((d, i) => (!d.unlockable || shop.ownedAnimals.includes(d.id)) &&
             <option key={i} value={i}>{d.label} ({d.elo})</option>)}
@@ -894,6 +976,27 @@ export default function KindleApp() {
                     <button onClick={() => setShop(s => equipBoard(s, b.id))}>Use</button>
                   ) : (
                     <button disabled={shop.coins < b.price} onClick={() => setShop(s => buyBoard(s, b.id))}>Buy {b.price}🪙</button>
+                  )}
+                </div>
+              );
+            })}
+            {PIECES.map(pc => {
+              const owned = shop.ownedPieces.includes(pc.id);
+              const equipped = shop.equippedPiece === pc.id;
+              const previewSrc = pc.id === "standard" ? cburnettPieceSvgUrl(6, true)
+                : pc.id === "wood" ? woodPieceSvgUrl(6, true) : null;
+              return (
+                <div className="kShopItem" key={pc.id}>
+                  {previewSrc
+                    ? <img src={previewSrc} alt="" style={{ width: 44, height: 44 }} />
+                    : <span className="kPc kPcW" style={{ fontSize: 30 }}>{GLYPH[6]}</span>}
+                  <div>{pc.label}</div>
+                  {equipped ? (
+                    <button className="kEquipped" disabled>Equipped</button>
+                  ) : owned ? (
+                    <button onClick={() => setShop(s => equipPiece(s, pc.id))}>Use</button>
+                  ) : (
+                    <button disabled={shop.coins < pc.price} onClick={() => setShop(s => buyPiece(s, pc.id))}>Buy {pc.price}🪙</button>
                   )}
                 </div>
               );

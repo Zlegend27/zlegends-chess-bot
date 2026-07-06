@@ -11,12 +11,13 @@ export const TUNES = [
 ];
 const DEFAULT_NOTES = TUNES[0].notes;
 
-export function createKidAudio() {
+export function createKidAudio(initialVolume = 0.6) {
   let ctx = null;
   let playing = false;
   let timer = null;
   let step = 0;
   let tuneId = "classic";
+  let masterVolume = initialVolume;
 
   function ensure() {
     if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -31,12 +32,14 @@ export function createKidAudio() {
     const gain = c.createGain();
     osc.type = type;
     osc.frequency.value = freq;
-    gain.gain.setValueAtTime(vol, t0);
+    gain.gain.setValueAtTime(vol * masterVolume, t0);
     gain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
     osc.connect(gain).connect(c.destination);
     osc.start(t0);
     osc.stop(t0 + dur);
   }
+
+  function setVolume(v) { masterVolume = v; }
 
   function currentNotes() {
     const found = TUNES.find(t => t.id === tuneId);
@@ -89,5 +92,5 @@ export function createKidAudio() {
     } catch { /* audio unavailable */ }
   }
 
-  return { toggle, stop, setTune, sfxMove, sfxCapture, sfxWin, sfxLose, isPlaying: () => playing };
+  return { toggle, stop, setTune, setVolume, sfxMove, sfxCapture, sfxWin, sfxLose, isPlaying: () => playing };
 }

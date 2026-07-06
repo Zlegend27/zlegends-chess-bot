@@ -23,11 +23,21 @@ export const BOARDS = [
   { id: "galaxy", label: "Galaxy", price: 110, light: "#EAE3FF", dark: "#7C64C4" },
 ];
 
+/* "Classic" here is Kinnda's own glyph-in-a-circle look (free, always
+   owned) -- Standard and Wood are the same SVG piece sets the main site
+   uses, unlocked with coins like everything else in the shop. */
+export const PIECES = [
+  { id: "classic", label: "Classic", price: 0 },
+  { id: "standard", label: "Standard", price: 50 },
+  { id: "wood", label: "Wood", price: 70 },
+];
+
 function defaultState() {
   return {
     coins: 0,
-    ownedHats: ["none"], ownedBoards: ["classic"], ownedTunes: ["classic"], ownedAnimals: [],
-    equippedHat: "none", equippedBoard: "classic", equippedTune: "classic",
+    ownedHats: ["none"], ownedBoards: ["classic"], ownedTunes: ["classic"], ownedAnimals: [], ownedPieces: ["classic"],
+    equippedHat: "none", equippedBoard: "classic", equippedTune: "classic", equippedPiece: "classic",
+    musicVolume: 60, dailyPuzzleSolvedDate: null,
   };
 }
 
@@ -95,6 +105,33 @@ export function buyTune(state, tuneId) {
 export function equipTune(state, tuneId) {
   if (!state.ownedTunes.includes(tuneId)) return state;
   const next = { ...state, equippedTune: tuneId };
+  save(next);
+  return next;
+}
+
+export function buyPiece(state, pieceId) {
+  const piece = PIECES.find(p => p.id === pieceId);
+  if (!piece || state.ownedPieces.includes(pieceId) || state.coins < piece.price) return state;
+  const next = { ...state, coins: state.coins - piece.price, ownedPieces: [...state.ownedPieces, pieceId] };
+  save(next);
+  return next;
+}
+
+export function equipPiece(state, pieceId) {
+  if (!state.ownedPieces.includes(pieceId)) return state;
+  const next = { ...state, equippedPiece: pieceId };
+  save(next);
+  return next;
+}
+
+export function setMusicVolume(state, volume) {
+  const next = { ...state, musicVolume: volume };
+  save(next);
+  return next;
+}
+
+export function markDailyPuzzleSolved(state, dateKey) {
+  const next = { ...state, dailyPuzzleSolvedDate: dateKey };
   save(next);
   return next;
 }
