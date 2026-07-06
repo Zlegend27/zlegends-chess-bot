@@ -10,7 +10,7 @@ import StarField from "./components/StarField";
 import { loadSetting, saveSetting } from "./utils/storage";
 import { buildPgn } from "./utils/pgn";
 import { encodeGame, decodeGame, getSharedHash, replayIntoEngine } from "./utils/share";
-import { pieceSvgUrl } from "./utils/chessPieceSvg";
+import { PIECE_SETS, getPieceSet } from "./utils/pieceSets";
 import { saveGame } from "./utils/gameHistory";
 import { ENGINE_VERSION } from "./utils/version";
 import { OPENINGS } from "./utils/openings";
@@ -60,11 +60,6 @@ function pickPersonality(baseStyle, plyCount, botAdvantagePawns) {
   return baseStyle;
 }
 
-/* Pieces render as classic bold black/white Staunton silhouettes (see
-   utils/chessPieceSvg.js) rather than a stylized look — the rest of the UI
-   already carries plenty of neon color, so the pieces themselves stay big,
-   plain, and instantly readable. */
-const pieceImgSrc = (type, isWhite) => pieceSvgUrl(type, isWhite);
 const FILES = "abcdefgh";
 const PIECE_NAME = { 1: "pawn", 2: "knight", 3: "bishop", 4: "rook", 5: "queen", 6: "king" };
 const PTS = { 1: 1, 2: 3, 3: 3, 4: 5, 5: 9 };
@@ -115,6 +110,8 @@ export default function ZlegendsBot() {
   const eng = initRef.current.engine;
 
   const [volume, setVolume] = useState(() => loadSetting("volume", 60));
+  const [pieceSetId, setPieceSetId] = useState(() => loadSetting("pieceSet", "classic"));
+  const pieceImgSrc = (type, isWhite) => getPieceSet(pieceSetId).svgUrl(type, isWhite);
   const audioRef = useRef(null);
   if (!audioRef.current) audioRef.current = createAudio(loadSetting("trackIdx", 0), volume / 100);
   const audio = audioRef.current;
@@ -182,6 +179,8 @@ export default function ZlegendsBot() {
   const [shareToast, setShareToast] = useState(null);
   const [pgnToast, setPgnToast] = useState(null);
   const [musicOpen, setMusicOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [pieceDesignsOpen, setPieceDesignsOpen] = useState(false);
   const [openingsOpen, setOpeningsOpen] = useState(false);
   const [activeOpening, setActiveOpening] = useState(null);
   const [quizOpening, setQuizOpening] = useState(null);
@@ -709,6 +708,7 @@ export default function ZlegendsBot() {
   const nextTrack = () => { setTrackName(audio.next()); saveSetting("trackIdx", audio.trackIndex()); };
   const prevTrack = () => { setTrackName(audio.prev()); saveSetting("trackIdx", audio.trackIndex()); };
   const onVolume = v => { setVolume(v); audio.setVolume(v / 100); saveSetting("volume", v); };
+  const choosePieceSet = (id) => { setPieceSetId(id); saveSetting("pieceSet", id); };
 
   const onCopyPgn = async () => {
     const pgn = buildPgn(moveList, result ? result.text : "*");
@@ -1132,6 +1132,10 @@ export default function ZlegendsBot() {
               <PixelAvatar rows={PPIX} pal={PPAL} size={16} />
               Puzzles
             </button>
+            <button className="btn ghost" style={{ display: "flex", alignItems: "center", gap: 6 }} onClick={() => setSettingsOpen(true)} title="Settings">
+              <span aria-hidden="true">⚙</span>
+              Settings
+            </button>
           </div>
         </div>
       </div>
@@ -1248,6 +1252,53 @@ export default function ZlegendsBot() {
             </div>
             <button className="btn gold" onClick={retryRush}>Try Again</button>
             <button className="btn ghost" onClick={exitRush}>Exit</button>
+          </div>
+        </div>
+      )}
+
+      {settingsOpen && (
+        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }}>
+          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
+            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span aria-hidden="true">⚙</span>
+              Settings
+            </div>
+            <div className="rows" style={{ maxHeight: "none" }}>
+              <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E" }}
+                onClick={() => { setSettingsOpen(false); setPieceDesignsOpen(true); }}>
+                <div style={{ fontWeight: 700 }}>Piece Designs</div>
+                <div style={{ fontSize: 11, opacity: 0.75 }}>Currently: {getPieceSet(pieceSetId).label}</div>
+              </div>
+            </div>
+            <button className="btn ghost" onClick={() => setSettingsOpen(false)}>Close</button>
+          </div>
+        </div>
+      )}
+
+      {pieceDesignsOpen && (
+        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }}>
+          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
+            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              Piece Designs
+            </div>
+            <div className="rows" style={{ maxHeight: "none", display: "flex", flexDirection: "column", gap: 10 }}>
+              {PIECE_SETS.map(set => (
+                <div key={set.id}
+                  style={{
+                    cursor: "pointer", padding: "10px 8px", borderRadius: 8,
+                    border: set.id === pieceSetId ? "1px solid #F5D93E" : "1px solid #8B2FC92E",
+                    display: "flex", alignItems: "center", gap: 12,
+                  }}
+                  onClick={() => choosePieceSet(set.id)}>
+                  <div style={{ display: "flex", gap: 4, background: "#DDD6EA", borderRadius: 6, padding: 4 }}>
+                    <img src={set.svgUrl(6, true)} alt="" style={{ width: 36, height: 36 }} />
+                    <img src={set.svgUrl(5, false)} alt="" style={{ width: 36, height: 36 }} />
+                  </div>
+                  <div style={{ fontWeight: 700 }}>{set.label}{set.id === pieceSetId ? " (selected)" : ""}</div>
+                </div>
+              ))}
+            </div>
+            <button className="btn ghost" onClick={() => { setPieceDesignsOpen(false); setSettingsOpen(true); }}>Back</button>
           </div>
         </div>
       )}
