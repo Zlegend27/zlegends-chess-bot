@@ -8,6 +8,12 @@
       "port": 5173
     },
     {
+      "name": "zlegends-bot-preview",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "preview"],
+      "port": 4173
+    },
+    {
       "name": "kinnda-chess-preview",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "preview:kindle"],

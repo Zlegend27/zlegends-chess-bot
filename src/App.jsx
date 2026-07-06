@@ -14,7 +14,6 @@ import { PIECE_SETS, getPieceSet } from "./utils/pieceSets";
 import { saveGame } from "./utils/gameHistory";
 import { ENGINE_VERSION } from "./utils/version";
 import { OPENINGS } from "./utils/openings";
-import { PUZZLES, RATING_BANDS } from "./utils/puzzles";
 import { stockfishBestMove, STOCKFISH_MIN_ELO } from "./engine/stockfishEngine";
 import "./App.css";
 
@@ -187,6 +186,14 @@ export default function ZlegendsBot() {
   const [quizFeedback, setQuizFeedback] = useState(null);
   const [quizDoneToast, setQuizDoneToast] = useState(null);
   const [puzzlesOpen, setPuzzlesOpen] = useState(false);
+  const [puzzlesData, setPuzzlesData] = useState(null);
+  const puzzlesLoadingRef = useRef(false);
+  const pz = puzzlesData || { PUZZLES: [], RATING_BANDS: [] };
+  const ensurePuzzlesLoaded = () => {
+    if (puzzlesData || puzzlesLoadingRef.current) return;
+    puzzlesLoadingRef.current = true;
+    import("./utils/puzzles").then(m => setPuzzlesData({ PUZZLES: m.PUZZLES, RATING_BANDS: m.RATING_BANDS }));
+  };
   const [puzzleBand, setPuzzleBand] = useState(null);
   const [activePuzzle, setActivePuzzle] = useState(null);
   const [puzzleFeedback, setPuzzleFeedback] = useState(null);
@@ -530,7 +537,7 @@ export default function ZlegendsBot() {
     rerender();
   }, [eng, audio, quizOpening, checkGameOver]);
 
-  const puzzlesInBand = (band) => band ? PUZZLES.filter(p => p.rating >= band.min && p.rating < band.max) : PUZZLES;
+  const puzzlesInBand = (band) => band ? pz.PUZZLES.filter(p => p.rating >= band.min && p.rating < band.max) : pz.PUZZLES;
 
   const startPuzzle = (puzzle) => {
     eng.loadFen(puzzle.fen);
@@ -555,7 +562,7 @@ export default function ZlegendsBot() {
 
   const exitPuzzle = () => newGame(1);
 
-  const rushPool = () => puzzlesInBand(RATING_BANDS[rushBandIdxRef.current]);
+  const rushPool = () => puzzlesInBand(pz.RATING_BANDS[rushBandIdxRef.current]);
 
   const startRush = (seconds) => {
     rushSolvedRef.current = 0;
@@ -571,7 +578,7 @@ export default function ZlegendsBot() {
     setRushMode(true);
     setRushOpen(false);
     setPuzzlesOpen(false);
-    const pool = puzzlesInBand(RATING_BANDS[0]);
+    const pool = puzzlesInBand(pz.RATING_BANDS[0]);
     startPuzzle(pool[(Math.random() * pool.length) | 0]);
   };
 
@@ -591,6 +598,24 @@ export default function ZlegendsBot() {
     setRushResult(null);
     exitPuzzle();
   };
+
+  /* Escape closes whichever modal is open, mirroring each one's own
+     backdrop-click behavior (e.g. Piece Designs -> back to Settings). */
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key !== "Escape") return;
+      if (pieceDesignsOpen) { setPieceDesignsOpen(false); setSettingsOpen(true); }
+      else if (settingsOpen) setSettingsOpen(false);
+      else if (rushMode && rushResult) exitRush();
+      else if (rushOpen) { setRushOpen(false); setPuzzlesOpen(true); }
+      else if (puzzlesOpen) setPuzzlesOpen(false);
+      else if (openingsOpen) setOpeningsOpen(false);
+      else if (musicOpen) setMusicOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pieceDesignsOpen, settingsOpen, rushMode, rushResult, rushOpen, puzzlesOpen, openingsOpen, musicOpen]);
 
   /* Puzzle Rush countdown -- ticks once a second while a rush is live and
      hasn't already ended from 3 mistakes, pausing entirely once rushResult
@@ -647,7 +672,7 @@ export default function ZlegendsBot() {
         rushSolvedRef.current += 1;
         setRushSolved(rushSolvedRef.current);
         rushStreakRef.current += 1;
-        if (rushStreakRef.current >= RUSH_STEP_UP_EVERY && rushBandIdxRef.current < RATING_BANDS.length - 1) {
+        if (rushStreakRef.current >= RUSH_STEP_UP_EVERY && rushBandIdxRef.current < pz.RATING_BANDS.length - 1) {
           rushBandIdxRef.current += 1;
           rushStreakRef.current = 0;
           setRushBandIdx(rushBandIdxRef.current);
@@ -873,7 +898,7 @@ export default function ZlegendsBot() {
               <div className="cardName bot">Zlegend2700</div>
               {activePuzzle ? (
                 <div className="trayEmpty puzzleMeta">
-                  {rushMode ? `Puzzle Rush · ${RATING_BANDS[rushBandIdx].label} · ${formatClock(rushTimeLeft)} left` : `Puzzle · rated ${activePuzzle.rating}`}
+                  {rushMode ? `Puzzle Rush · ${pz.RATING_BANDS[rushBandIdx]?.label || ""} · ${formatClock(rushTimeLeft)} left` : `Puzzle · rated ${activePuzzle.rating}`}
                 </div>
               ) : (
                 <>
@@ -1034,7 +1059,7 @@ export default function ZlegendsBot() {
             {activePuzzle ? (
               rushMode ? (
                 <>
-                  <div className="boxHead">Puzzle Rush · {RATING_BANDS[rushBandIdx].label} · {formatClock(rushTimeLeft)} left</div>
+                  <div className="boxHead">Puzzle Rush · {pz.RATING_BANDS[rushBandIdx]?.label || ""} · {formatClock(rushTimeLeft)} left</div>
                   <div className="pv">
                     {puzzleFeedback || `Solved ${rushSolved} · Misses ${rushMistakes}/3 · find the best move for ${eng.getSide() === 1 ? "White" : "Black"}.`}
                   </div>
@@ -1128,7 +1153,9 @@ export default function ZlegendsBot() {
               <PixelAvatar rows={BPIX} pal={BPAL} size={16} />
               Openings
             </button>
-            <button className="btn ghost" style={{ display: "flex", alignItems: "center", gap: 6 }} onClick={() => setPuzzlesOpen(true)}>
+            <button className="btn ghost" style={{ display: "flex", alignItems: "center", gap: 6 }}
+              onClick={() => { setPuzzlesOpen(true); ensurePuzzlesLoaded(); }}
+              onMouseEnter={ensurePuzzlesLoaded}>
               <PixelAvatar rows={PPIX} pal={PPAL} size={16} />
               Puzzles
             </button>
@@ -1193,24 +1220,28 @@ export default function ZlegendsBot() {
               <PixelAvatar rows={PPIX} pal={PPAL} size={18} />
               Puzzles — Pick a Rating
             </div>
-            <div className="rows" style={{ maxHeight: "none" }}>
-              {RATING_BANDS.map(band => {
-                const pool = puzzlesInBand(band);
-                return (
-                  <div key={band.id} style={{ cursor: pool.length ? "pointer" : "default", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E", opacity: pool.length ? 1 : 0.4 }}
-                    onClick={() => {
-                      if (!pool.length) return;
-                      setPuzzleBand(band);
-                      setPuzzlesOpen(false);
-                      startPuzzle(pool[(Math.random() * pool.length) | 0]);
-                    }}>
-                    <div style={{ fontWeight: 700 }}>{band.label} <span style={{ opacity: 0.6, fontWeight: "normal" }}>({band.min}–{band.max === 9999 ? "2000+" : band.max})</span></div>
-                    <div style={{ fontSize: 11, opacity: 0.75 }}>{pool.length} puzzle{pool.length === 1 ? "" : "s"}</div>
-                  </div>
-                );
-              })}
-            </div>
-            <button className="btn gold" onClick={() => { setPuzzlesOpen(false); setRushOpen(true); }}>⚡ Puzzle Rush</button>
+            {!puzzlesData ? (
+              <div className="pv" style={{ padding: "8px 2px" }}>Loading puzzles…</div>
+            ) : (
+              <div className="rows" style={{ maxHeight: "none" }}>
+                {pz.RATING_BANDS.map(band => {
+                  const pool = puzzlesInBand(band);
+                  return (
+                    <div key={band.id} style={{ cursor: pool.length ? "pointer" : "default", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E", opacity: pool.length ? 1 : 0.4 }}
+                      onClick={() => {
+                        if (!pool.length) return;
+                        setPuzzleBand(band);
+                        setPuzzlesOpen(false);
+                        startPuzzle(pool[(Math.random() * pool.length) | 0]);
+                      }}>
+                      <div style={{ fontWeight: 700 }}>{band.label} <span style={{ opacity: 0.6, fontWeight: "normal" }}>({band.min}–{band.max === 9999 ? "2000+" : band.max})</span></div>
+                      <div style={{ fontSize: 11, opacity: 0.75 }}>{pool.length} puzzle{pool.length === 1 ? "" : "s"}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <button className="btn gold" disabled={!puzzlesData} onClick={() => { setPuzzlesOpen(false); setRushOpen(true); }}>⚡ Puzzle Rush</button>
             <button className="btn ghost" onClick={() => setPuzzlesOpen(false)}>Close</button>
           </div>
         </div>
