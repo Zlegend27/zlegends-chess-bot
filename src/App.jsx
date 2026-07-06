@@ -8,7 +8,7 @@ import PixelAvatar, { ZPAL, ZPIX, JPAL, JPIX, BPAL, BPIX, PPAL, PPIX } from "./c
 import SocialLinks from "./components/SocialLinks";
 import StarField from "./components/StarField";
 import { loadSetting, saveSetting } from "./utils/storage";
-import { buildPgn } from "./utils/pgn";
+import { buildPgn, parsePgnMoves, replayForeignPgn } from "./utils/pgn";
 import { encodeGame, decodeGame, getSharedHash, replayIntoEngine } from "./utils/share";
 import { PIECE_SETS, getPieceSet } from "./utils/pieceSets";
 import { saveGame, estimateRating } from "./utils/gameHistory";
@@ -93,6 +93,7 @@ function dailyPuzzle(allPuzzles) {
   return allPuzzles[dayNum % allPuzzles.length];
 }
 const PTS = { 1: 1, 2: 3, 3: 3, 4: 5, 5: 9 };
+const GRADE_TAG = { brilliant: "!!", best: "!", inaccuracy: "?!", mistake: "?", blunder: "??" };
 const START_COUNT = { 1: 8, 2: 2, 3: 2, 4: 2, 5: 1 };
 const RUSH_DURATIONS = [
   { seconds: 60, label: "1 Minute" },
@@ -208,6 +209,10 @@ export default function ZlegendsBot() {
   const [moveGrades, setMoveGrades] = useState(null);
   const [grading, setGrading] = useState(false);
   const [gradeProgress, setGradeProgress] = useState(0);
+  const [pastedGame, setPastedGame] = useState(false);
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+  const [pasteError, setPasteError] = useState(null);
   const [bestArrow, setBestArrow] = useState(null);
   const [analysisBusy, setAnalysisBusy] = useState(false);
   const [analysisExtra, setAnalysisExtra] = useState([]);
@@ -261,9 +266,12 @@ export default function ZlegendsBot() {
   playerColorRef.current = playerColor;
   const [spectateOpen, setSpectateOpen] = useState(false);
   const [spectateMode, setSpectateMode] = useState(false);
+  const [spectatePaused, setSpectatePaused] = useState(false);
   const [spectateWhiteIdx, setSpectateWhiteIdx] = useState(2);
   const [spectateBlackIdx, setSpectateBlackIdx] = useState(2);
+  const [spectateOpeningId, setSpectateOpeningId] = useState("");
   const spectateModeRef = useRef(false);
+  const spectatePausedRef = useRef(false);
   const spectateWhiteRef = useRef(DIFFICULTIES[2]);
   const spectateBlackRef = useRef(DIFFICULTIES[2]);
 
@@ -316,15 +324,19 @@ export default function ZlegendsBot() {
   }, [replayPlaying, replayIndex, replayFull.length]);
 
   /* post-game review: step through the just-finished game without altering its record */
-  const reviewing = mode === "play" && !!result && reviewIndex !== null;
+  const reviewing = mode === "play" && (!!result || pastedGame) && reviewIndex !== null;
   /* Analyze is available both in post-game review and while browsing an
      opening/shared replay -- anywhere the board is showing a fixed,
      already-decided position rather than a live game the player is
      mid-move in. */
-  const canAnalyze = reviewing || mode === "replay";
+  const canAnalyze = reviewing || mode === "replay" || (spectateMode && spectatePaused);
   const reviewFirstRun = useRef(true);
   useEffect(() => {
-    if (!reviewing) { reviewFirstRun.current = true; if (mode !== "replay") { setAnalyzing(false); setBestArrow(null); setAnalysisExtra([]); } return; }
+    if (!reviewing) {
+      reviewFirstRun.current = true;
+      if (mode !== "replay" && !(spectateMode && spectatePaused)) { setAnalyzing(false); setBestArrow(null); setAnalysisExtra([]); }
+      return;
+    }
     eng.reset();
     setAnalysisExtra([]);
     const { applied, lastCaptured } = replayIntoEngine(eng, moveList.slice(0, reviewIndex));
@@ -392,7 +404,11 @@ export default function ZlegendsBot() {
 
   const toggleAnalyze = () => {
     if (!canAnalyze) return;
-    setAnalyzing(a => !a);
+    setAnalyzing(a => {
+      const next = !a;
+      if (next && reviewing && !moveGrades && !grading) gradeMoves();
+      return next;
+    });
     setSelected(-1); setTargets([]); setBestArrow(null);
   };
 
@@ -405,7 +421,14 @@ export default function ZlegendsBot() {
      converted to the mover's own perspective (negamax flip). Homemade
      engine only (fast + free) since this is a retrospective accuracy
      hint, not tournament-grade analysis -- Stockfish's official Elo
-     limiting has no bearing on grading a move that already happened. */
+     limiting has no bearing on grading a move that already happened.
+     "Best" and "brilliant" aren't as rigorous as chess.com/lichess's own
+     classifiers (which use much deeper multi-line analysis) -- "best" is
+     just "matched the engine's own top pick", and "brilliant" is a
+     lightweight sacrifice heuristic (the move leaves the piece truly
+     hanging -- attacked with no legal recapture -- yet the engine still
+     rates it at essentially no lost value). Good enough to be a useful
+     signal, not good enough to claim tournament-grade accuracy. */
   function classifyLoss(loss) {
     if (loss >= 150) return "blunder";
     if (loss >= 60) return "mistake";
@@ -420,14 +443,34 @@ export default function ZlegendsBot() {
     setGrading(true);
     setGradeProgress(0);
     const scores = new Array(list.length + 1);
+    const bestSans = new Array(list.length);
     for (let k = 0; k <= list.length; k++) {
       const res = await runSearch(list.slice(0, k), 250, 0, { personality: BALANCED, useBook: false });
       scores[k] = res ? res.score : 0;
+      if (k < list.length && res) bestSans[k] = res.san;
       setGradeProgress(k + 1);
     }
+    const tempEng = createEngine();
     const grades = [];
     for (let i = 0; i < list.length; i++) {
-      grades.push(classifyLoss(Math.max(0, scores[i] + scores[i + 1])));
+      const loss = Math.max(0, scores[i] + scores[i + 1]);
+      let tag = classifyLoss(loss);
+      const legal = tempEng.legalMoves();
+      const move = legal.find(m => tempEng.sanOf(m) === list[i]);
+      if (!move) { grades.push(null); continue; }
+      tempEng.make(move); // advances for real -- this ply's move stays applied for the rest of the loop
+      if (loss < 20) {
+        const toSq120 = mTo(move);
+        const attacker = tempEng.legalMoves().find(m => mTo(m) === toSq120);
+        if (attacker) {
+          tempEng.make(attacker); // probe only
+          const recapture = tempEng.legalMoves().some(m => mTo(m) === toSq120);
+          tempEng.unmake(); // undo the probe, not the real move
+          if (!recapture) tag = "brilliant";
+        }
+        if (tag !== "brilliant" && bestSans[i] === list[i]) tag = "best";
+      }
+      grades.push(tag);
     }
     /* The search has no move to return at a finished game's final
        position (checkmate), so that last score defaults to a neutral 0
@@ -529,7 +572,7 @@ export default function ZlegendsBot() {
         setResult(over);
         setThinking(false);
         rerender();
-        if (!over) setTimeout(() => spectateMoveRef.current(), 500);
+        if (!over) setTimeout(() => { if (!spectatePausedRef.current) spectateMoveRef.current(); }, 500);
       } else {
         setThinking(false);
         rerender();
@@ -539,19 +582,26 @@ export default function ZlegendsBot() {
   const spectateMoveRef = useRef(spectateMove);
   spectateMoveRef.current = spectateMove;
 
-  const startSpectate = (whiteIdx, blackIdx) => {
+  const startSpectate = (whiteIdx, blackIdx, openingId) => {
     setSpectateWhiteIdx(whiteIdx); setSpectateBlackIdx(blackIdx);
     spectateWhiteRef.current = DIFFICULTIES[whiteIdx];
     spectateBlackRef.current = DIFFICULTIES[blackIdx];
     eng.reset();
-    moveListRef.current = [];
+    const opening = openingId ? OPENINGS.find(op => op.id === openingId) : null;
+    const { applied } = opening ? replayIntoEngine(eng, opening.moves) : { applied: [] };
+    const startMoves = opening ? opening.moves.slice(0, applied.length) : [];
+    moveListRef.current = startMoves;
     setGameStyle(randomStyle());
     setActiveOpening(null); setQuizOpening(null); setActivePuzzle(null);
-    setSelected(-1); setTargets([]); setLastMove(null); setHintMove(null);
-    setMoveList([]); setInfo(null); setResult(null); setPromo(null); setEvalCp(0); setReviewIndex(null);
+    setSelected(-1); setTargets([]); setHintMove(null);
+    setLastMove(applied.length ? { from: mFrom(applied[applied.length - 1]), to: mTo(applied[applied.length - 1]) } : null);
+    setMoveList(startMoves); setInfo(null); setResult(null); setPromo(null); setEvalCp(eng.evalWhite()); setReviewIndex(null);
     setMoveGrades(null); setGrading(false); setGradeProgress(0);
+    setPastedGame(false);
     setMode("play");
     setSpectateOpen(false);
+    spectatePausedRef.current = false;
+    setSpectatePaused(false);
     spectateModeRef.current = true;
     setSpectateMode(true);
     rerender();
@@ -560,8 +610,30 @@ export default function ZlegendsBot() {
 
   const stopSpectate = () => {
     spectateModeRef.current = false;
+    spectatePausedRef.current = false;
     setSpectateMode(false);
+    setSpectatePaused(false);
     newGame(1);
+  };
+
+  const pauseSpectate = () => {
+    spectatePausedRef.current = true;
+    setSpectatePaused(true);
+  };
+
+  /* Resuming discards any exploratory moves made while paused/analyzing
+     (analysisMove only ever appends to analysisExtra, never to the real
+     moveListRef) by resetting the shared engine back to the real game
+     position before letting the bots continue. */
+  const resumeSpectate = () => {
+    spectatePausedRef.current = false;
+    setSpectatePaused(false);
+    setAnalyzing(false); setBestArrow(null); setAnalysisExtra([]);
+    eng.reset();
+    replayIntoEngine(eng, moveListRef.current);
+    setPosVersion(v => v + 1);
+    rerender();
+    setTimeout(() => spectateMoveRef.current(), 60);
   };
 
   const playMove = useCallback((m) => {
@@ -592,7 +664,7 @@ export default function ZlegendsBot() {
      value was added, so the existing onClick/onKeyDown callers that
      ignore it see no behavior change. */
   const onSquare = (i64) => {
-    if (spectateMode || (mode === "replay" && !analyzing) || thinking || promo) return "blocked";
+    if ((spectateMode && !(spectatePaused && analyzing)) || (mode === "replay" && !analyzing) || thinking || promo) return "blocked";
     const inQuiz = !!quizOpening;
     const inPuzzle = !!activePuzzle;
     if (inPuzzle && puzzleSolved) return "blocked";
@@ -702,6 +774,7 @@ export default function ZlegendsBot() {
     setSelected(-1); setTargets([]); setLastMove(null); setHintMove(null);
     setMoveList([]); setInfo(null); setResult(null); setPromo(null); setEvalCp(0); setReviewIndex(null);
     setMoveGrades(null); setGrading(false); setGradeProgress(0);
+    setPastedGame(false);
     rerender();
     if (color === -1) setTimeout(() => engineMoveRef.current([]), 60);
   };
@@ -976,6 +1049,40 @@ export default function ZlegendsBot() {
     setTimeout(() => setPgnToast(null), 2000);
   };
 
+  /* Loads a pasted PGN straight into review mode (reusing the exact same
+     step-through/Analyze/Grade Moves machinery as a just-finished game,
+     via the pastedGame flag folded into reviewing's own definition)
+     rather than building a separate viewer for it. */
+  const loadPastedPgn = () => {
+    const tokens = parsePgnMoves(pasteText);
+    if (!tokens.length) { setPasteError("Couldn't find any moves in that text."); return; }
+    const tempEng = createEngine();
+    const { applied, sans } = replayForeignPgn(tempEng, tokens);
+    if (!applied.length) { setPasteError("Couldn't match those moves to a legal game."); return; }
+    if (applied.length < tokens.length) { setPasteError(`Only matched ${applied.length} of ${tokens.length} moves — loaded as far as it could.`); }
+    else setPasteError(null);
+    eng.reset();
+    replayIntoEngine(eng, sans);
+    moveListRef.current = sans;
+    setMoveList(sans);
+    setActiveOpening(null); setQuizOpening(null); setActivePuzzle(null);
+    setSpectateMode(false); spectateModeRef.current = false;
+    setSelected(-1); setTargets([]); setPromo(null);
+    const last = applied[applied.length - 1];
+    setLastMove({ from: mFrom(last), to: mTo(last) });
+    setEvalCp(eng.evalWhite());
+    setMoveGrades(null); setGrading(false); setGradeProgress(0);
+    setResult(checkGameOver());
+    setPastedGame(true);
+    setMode("play");
+    setReviewIndex(sans.length);
+    setPasteOpen(false);
+    setPasteText("");
+    setAnalyzing(true);
+    gradeMoves();
+    rerender();
+  };
+
 
   const onShare = async () => {
     const hash = encodeGame(playerColor, moveList);
@@ -1027,6 +1134,7 @@ export default function ZlegendsBot() {
      name, quiz feedback text, ...) no longer forces React to re-diff all
      64 squares on every render. */
   const rows = useMemo(() => {
+    const gradeHere = (reviewing && moveGrades && reviewIndex >= 1) ? moveGrades[reviewIndex - 1] : null;
     const built = [];
     for (let vr = 0; vr < 8; vr++) {
       const r = flipped ? vr : 7 - vr;
@@ -1064,6 +1172,7 @@ export default function ZlegendsBot() {
               (kingInCheck ? " chk" : "") + (isHintFrom ? " hintFrom" : "") + (isHintTo ? " hintTo" : "") +
               (isDragOver ? " dragOver" : "")}>
             {p !== EMPTY && !isDragFrom && <img className={"pc " + (p > 0 ? "w" : "b")} src={pieceImgSrc(Math.abs(p), p > 0)} alt="" draggable="false" />}
+            {gradeHere && lastMove && lastMove.to === sq120 && <span className={"boardGrade " + gradeHere}>{GRADE_TAG[gradeHere]}</span>}
             {isTarget && <span className={"dot" + (p !== EMPTY ? " ring" : "")} />}
             {vf === 0 && <span className="coord rk">{r + 1}</span>}
             {vr === 7 && <span className="coord fl">{FILES[f]}</span>}
@@ -1075,7 +1184,8 @@ export default function ZlegendsBot() {
     return built;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eng, flipped, selected, targets, lastMove, hintMove, isBotLastMove, isPlayerLastMove,
-      moveList, reviewIndex, replayIndex, replayFull, analysisExtra, mode, pieceSetId, dragFrom, dragOverSquare]);
+      moveList, reviewIndex, replayIndex, replayFull, analysisExtra, mode, pieceSetId, dragFrom, dragOverSquare,
+      reviewing, moveGrades]);
 
   const pairs = [];
   for (let i = 0; i < moveList.length; i += 2) pairs.push([moveList[i], moveList[i + 1]]);
@@ -1085,7 +1195,9 @@ export default function ZlegendsBot() {
   const inChk = eng.inCheckNow() && !result;
   const replayLabel = activeOpening ? activeOpening.name : "Shared game";
   const status = spectateMode
-    ? (result ? `${result.reason} · ${result.text}` : `${DIFFICULTIES[spectateWhiteIdx].label} vs ${DIFFICULTIES[spectateBlackIdx].label} — ${eng.getSide() === 1 ? "White" : "Black"} to move`)
+    ? (result ? `${result.reason} · ${result.text}`
+        : spectatePaused ? `Paused — ${DIFFICULTIES[spectateWhiteIdx].label} vs ${DIFFICULTIES[spectateBlackIdx].label}`
+        : `${DIFFICULTIES[spectateWhiteIdx].label} vs ${DIFFICULTIES[spectateBlackIdx].label} — ${eng.getSide() === 1 ? "White" : "Black"} to move`)
     : mode === "replay"
     ? (replayIndex === 0 ? `${replayLabel} — starting position` : replayIndex === replayFull.length ? `${replayLabel} — final position` : `${replayLabel} — move ${replayIndex}`)
     : quizOpening
@@ -1270,10 +1382,7 @@ export default function ZlegendsBot() {
               <button className="btn ghost" onClick={() => setReviewIndex(i => Math.min(moveList.length, i + 1))} disabled={reviewIndex === moveList.length}>{"▶"}</button>
               <button className="btn ghost" onClick={() => setReviewIndex(moveList.length)} disabled={reviewIndex === moveList.length}>{"▶|"}</button>
               <button className={"btn" + (analyzing ? "" : " ghost")} onClick={toggleAnalyze}>
-                {analyzing ? (analysisBusy ? "Analyzing…" : "Analyzing") : "Analyze"}
-              </button>
-              <button className="btn ghost" onClick={gradeMoves} disabled={grading || !!moveGrades}>
-                {grading ? `Grading ${gradeProgress}/${moveList.length}…` : moveGrades ? "Graded" : "Grade Moves"}
+                {analyzing ? (grading ? `Grading ${gradeProgress}/${moveList.length}…` : analysisBusy ? "Analyzing…" : "Analyzing") : "Analyze"}
               </button>
             </div>
           )}
@@ -1288,14 +1397,15 @@ export default function ZlegendsBot() {
           <div className="box scoreBox">
             <div className="boxHead" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span>Scoresheet</span>
-              {moveList.length > 0 && (
+              {moveList.length > 0 ? (
                 <button className="btn ghost" style={{ padding: "4px 8px", fontSize: 10 }} onClick={onCopyPgn}>Copy PGN</button>
+              ) : (
+                <button className="btn ghost" style={{ padding: "4px 8px", fontSize: 10 }} onClick={() => { setPasteOpen(true); setPasteError(null); }}>Paste PGN</button>
               )}
             </div>
             <div className="rows">
               {pairs.length === 0 && <div className="empty">{"No moves yet — white to play."}</div>}
               {pairs.map(([w, b], i) => {
-                const GRADE_TAG = { inaccuracy: "?!", mistake: "?", blunder: "??" };
                 const wGrade = moveGrades && moveGrades[i * 2];
                 const bGrade = moveGrades && moveGrades[i * 2 + 1];
                 return (
@@ -1397,8 +1507,24 @@ export default function ZlegendsBot() {
 
           {spectateMode && (
             <div className="ctrls playCtrls">
-              {result && <button className="btn gold" onClick={() => startSpectate(spectateWhiteIdx, spectateBlackIdx)}>Watch Again</button>}
+              {result ? (
+                <button className="btn gold" onClick={() => startSpectate(spectateWhiteIdx, spectateBlackIdx, spectateOpeningId)}>Watch Again</button>
+              ) : spectatePaused ? (
+                <>
+                  <button className="btn gold" onClick={resumeSpectate}>Resume</button>
+                  <button className={"btn" + (analyzing ? "" : " ghost")} onClick={toggleAnalyze}>
+                    {analyzing ? "Analyzing" : "Analyze"}
+                  </button>
+                </>
+              ) : (
+                <button className="btn ghost" onClick={pauseSpectate}>Pause</button>
+              )}
               <button className="btn ghost" onClick={stopSpectate}>Stop Spectating</button>
+            </div>
+          )}
+          {spectateMode && spectatePaused && analyzing && (
+            <div className="status analyzeHint" style={{ fontSize: 11, opacity: 0.8 }}>
+              Move any piece to explore — Resume discards exploratory moves and lets the bots continue
             </div>
           )}
 
@@ -1661,9 +1787,40 @@ export default function ZlegendsBot() {
                   {DIFFICULTIES.map((d, i) => <option key={i} value={i}>{d.label}</option>)}
                 </select>
               </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
+                Starting position
+                <select value={spectateOpeningId} onChange={e => setSpectateOpeningId(e.target.value)}>
+                  <option value="">Standard start</option>
+                  {OPENINGS.map(op => <option key={op.id} value={op.id}>{op.name}</option>)}
+                </select>
+              </label>
             </div>
-            <button className="btn gold" onClick={() => startSpectate(spectateWhiteIdx, spectateBlackIdx)}>Start Spectating</button>
+            <button className="btn gold" style={{ fontSize: 12, padding: "8px 12px" }}
+              onClick={() => startSpectate(spectateWhiteIdx, spectateBlackIdx, spectateOpeningId)}>Start Spectating</button>
             <button className="btn ghost" onClick={() => setSpectateOpen(false)}>Close</button>
+          </div>
+        </div>
+      )}
+
+      {pasteOpen && (
+        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) setPasteOpen(false); }}>
+          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 420, padding: "20px 24px" }}>
+            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              Paste PGN
+            </div>
+            <div className="pv" style={{ fontSize: 12, opacity: 0.85 }}>
+              Paste a game's PGN text below, then press Analyze to step through it and grade the moves.
+            </div>
+            <textarea
+              value={pasteText}
+              onChange={e => setPasteText(e.target.value)}
+              placeholder={"1. e4 e5 2. Nf3 Nc6 3. Bb5 ..."}
+              rows={8}
+              style={{ width: "100%", boxSizing: "border-box", resize: "vertical", fontFamily: "ui-monospace, Consolas, monospace", fontSize: 12, padding: 8, borderRadius: 8, background: "#150C24", color: "var(--white, #F4EFFF)", border: "1px solid #8B2FC966" }}
+            />
+            {pasteError && <div className="pv" style={{ fontSize: 11, color: "#F05348" }}>{pasteError}</div>}
+            <button className="btn gold" onClick={loadPastedPgn} disabled={!pasteText.trim()}>Analyze</button>
+            <button className="btn ghost" onClick={() => setPasteOpen(false)}>Close</button>
           </div>
         </div>
       )}
