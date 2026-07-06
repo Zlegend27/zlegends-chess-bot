@@ -179,8 +179,42 @@ export default function ZlegendsBot() {
        before a song became audible because "auto" preload used to kick
        off a full download the instant a track was selected. */
     mp3AudioRef.current.preload = "metadata";
+    /* Required for createMediaElementSource below to work at all -- must
+       be set before any src is ever assigned. Supabase Storage serves
+       permissive CORS on public objects, verified against the live
+       bucket (non-zero, varying AnalyserNode data), so this doesn't
+       silently break playback. */
+    mp3AudioRef.current.crossOrigin = "anonymous";
   }
   const mp3Audio = mp3AudioRef.current;
+  /* iOS Safari hard-ignores HTMLMediaElement.volume -- the only way to
+     actually change an <audio> element's loudness there is to route it
+     through a Web Audio GainNode instead, which iOS does respect. Created
+     lazily (createMediaElementSource can only ever be called once per
+     element) the first time mp3 playback actually starts, inside a user
+     gesture so the AudioContext isn't blocked by autoplay policy. */
+  const mp3GainRef = useRef(null);
+  const volumeRef = useRef(volume);
+  volumeRef.current = volume;
+  const ensureMp3Gain = () => {
+    if (mp3GainRef.current) return mp3GainRef.current;
+    try {
+      const C = window.AudioContext || window.webkitAudioContext;
+      const ctx = new C();
+      const source = ctx.createMediaElementSource(mp3Audio);
+      const gainNode = ctx.createGain();
+      gainNode.gain.value = volumeRef.current / 100;
+      source.connect(gainNode).connect(ctx.destination);
+      mp3GainRef.current = { ctx, gainNode };
+    } catch {
+      mp3GainRef.current = null;
+    }
+    return mp3GainRef.current;
+  };
+  const resumeMp3Gain = () => {
+    const gain = ensureMp3Gain();
+    if (gain && gain.ctx.state === "suspended") gain.ctx.resume();
+  };
   const [musicSource, setMusicSourceState] = useState(() => loadSetting("musicSource", "chiptune"));
   const [mp3Tracks, setMp3Tracks] = useState([]);
   const [mp3Loading, setMp3Loading] = useState(false);
@@ -1125,7 +1159,7 @@ export default function ZlegendsBot() {
       mp3Audio.src = track.url;
       setMp3Duration(0);
       setMp3CurrentTime(0);
-      if (mp3PlayingRef.current) mp3Audio.play().catch(() => {});
+      if (mp3PlayingRef.current) { resumeMp3Gain(); mp3Audio.play().catch(() => {}); }
     }
   }, [musicSource, mp3Tracks, mp3Idx]);
   useEffect(() => {
@@ -1176,6 +1210,7 @@ export default function ZlegendsBot() {
       themeAutoplayArmedRef.current = false;
       onVolume(35);
       setMp3Playing(true);
+      resumeMp3Gain();
       if (mp3Audio.src) mp3Audio.play().catch(() => {});
     };
     document.addEventListener("pointerdown", start, { once: true });
@@ -1222,7 +1257,7 @@ export default function ZlegendsBot() {
     if (musicSource === "chiptune") { setMusicOn(audio.toggle()); return; }
     if (!mp3TracksRef.current.length) return;
     if (mp3PlayingRef.current) { mp3Audio.pause(); setMp3Playing(false); }
-    else { mp3Audio.play().catch(() => {}); setMp3Playing(true); }
+    else { resumeMp3Gain(); mp3Audio.play().catch(() => {}); setMp3Playing(true); }
   };
   const nextTrack = () => {
     if (musicSource === "chiptune") { setTrackName(audio.next()); saveSetting("trackIdx", audio.trackIndex()); return; }
@@ -1232,7 +1267,19 @@ export default function ZlegendsBot() {
     if (musicSource === "chiptune") { setTrackName(audio.prev()); saveSetting("trackIdx", audio.trackIndex()); return; }
     switchMp3Track(-1);
   };
-  const onVolume = v => { setVolume(v); audio.setVolume(v / 100); mp3Audio.volume = v / 100; saveSetting("volume", v); };
+  /* Once the Web Audio graph exists, control loudness exclusively through
+     its GainNode -- that's what actually works on iOS Safari, which
+     otherwise hard-ignores HTMLMediaElement.volume entirely. Falls back to
+     the plain .volume property only before the graph exists (nothing is
+     playing yet, so it's just keeping state consistent for whenever
+     playback actually starts). */
+  const onVolume = v => {
+    setVolume(v);
+    audio.setVolume(v / 100);
+    if (mp3GainRef.current) mp3GainRef.current.gainNode.gain.value = v / 100;
+    else mp3Audio.volume = v / 100;
+    saveSetting("volume", v);
+  };
   const seekMp3 = (t) => { mp3Audio.currentTime = t; setMp3CurrentTime(t); };
   const fmtTime = (s) => {
     if (!isFinite(s) || s < 0) s = 0;
