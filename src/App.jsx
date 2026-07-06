@@ -14,6 +14,7 @@ import { PIECE_SETS, getPieceSet } from "./utils/pieceSets";
 import { saveGame } from "./utils/gameHistory";
 import { ENGINE_VERSION } from "./utils/version";
 import { OPENINGS } from "./utils/openings";
+import { loadEcoOpenings, detectEcoOpening } from "./utils/ecoOpenings";
 import { stockfishBestMove, STOCKFISH_MIN_ELO } from "./engine/stockfishEngine";
 import "./App.css";
 
@@ -130,6 +131,8 @@ export default function ZlegendsBot() {
   const [volume, setVolume] = useState(() => loadSetting("volume", 60));
   const [pieceSetId, setPieceSetId] = useState(() => loadSetting("pieceSet", "classic"));
   const [hideEvalBar, setHideEvalBar] = useState(() => loadSetting("hideEvalBar", false));
+  const [ecoData, setEcoData] = useState(null);
+  useEffect(() => { loadEcoOpenings().then(setEcoData); }, []);
   const pieceImgSrc = (type, isWhite) => getPieceSet(pieceSetId).svgUrl(type, isWhite);
   const audioRef = useRef(null);
   if (!audioRef.current) audioRef.current = createAudio(loadSetting("trackIdx", 0), volume / 100);
@@ -863,7 +866,9 @@ export default function ZlegendsBot() {
   const botTaken = botColor === 1 ? mat.capturedBlack : mat.capturedWhite;
   const youTaken = playerColor === 1 ? mat.capturedBlack : mat.capturedWhite;
   const youDiff = playerColor === 1 ? mat.diff : -mat.diff;
-  const liveOpening = (mode === "play" && !activePuzzle && !quizOpening) ? detectOpening(moveList) : null;
+  const liveOpening = (mode === "play" && !activePuzzle && !quizOpening)
+    ? (ecoData ? detectEcoOpening(moveList, ecoData) : detectOpening(moveList))
+    : null;
 
   const lastMoverColor = lastMove ? Math.sign(eng.pieceAt(M120TO64[lastMove.to])) : 0;
   const isBotLastMove = !analyzing && lastMove && lastMoverColor === botColor;
