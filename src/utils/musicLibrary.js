@@ -10,7 +10,7 @@ const BUCKET = "music";
 
 export const MP3_PLAYLISTS = [
   { id: "juice", label: "Juice", folder: "juice" },
-  { id: "xxx", label: "XXX", folder: "xxx" },
+  { id: "omori", label: "Omori", folder: "omori" },
 ];
 
 const trackCache = new Map();
