@@ -73,7 +73,8 @@
 .evalbar .tick{ position:absolute; left:0; right:0; top:50%; height:1px; background:#ffffff33; }
 .board{ border:5px solid #120A26; outline:1px solid #8B2FC966; border-radius:8px;
   box-shadow:0 0 30px #8B2FC94D, 0 16px 40px #00000088;
-  width:min(88vw,440px); aspect-ratio:1; display:flex; flex-direction:column; user-select:none; position:relative; }
+  width:min(88vw,440px); aspect-ratio:1; display:flex; flex-direction:column; user-select:none; position:relative;
+  touch-action:none; }
 /* Hide Eval Bar setting: reclaims the evalbar's 14px + 10px gap so the
    board can grow, and lets it use noticeably more of the viewport width
    on phones -- the whole point being a visibly bigger board on small
@@ -100,7 +101,10 @@
 .sq.chk.light{ background:radial-gradient(circle, #F0534899 15%, transparent 75%), var(--liliac); }
 .sq.hintFrom::after{ content:""; position:absolute; inset:0; box-shadow:inset 0 0 0 3px var(--yellow), inset 0 0 16px #F5D93E99; }
 .sq.hintTo::after{ content:""; position:absolute; inset:0; box-shadow:inset 0 0 0 3px var(--yellow), inset 0 0 16px #F5D93E99; }
+.sq.dragOver::after{ content:""; position:absolute; inset:0; box-shadow:inset 0 0 0 3px var(--cyan), inset 0 0 18px #3EE7F5AA; z-index:1; }
 .pc{ width:87%; height:87%; z-index:2; pointer-events:none; }
+.pc.dragGhost{ position:fixed; transform:translate(-50%,-50%); z-index:60;
+  filter:drop-shadow(0 6px 10px #00000088); opacity:.95; }
 .pc.w{ filter:drop-shadow(0 2px 2px #00000066); }
 .pc.b{ filter:drop-shadow(0 2px 2px #00000088); }
 .dot{ position:absolute; width:26%; height:26%; border-radius:50%; background:#1D9EB3; box-shadow:0 0 0 2px #1D10384D, 0 0 8px #3EE7F599; z-index:1; }

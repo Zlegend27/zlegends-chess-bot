@@ -426,30 +426,37 @@ export default function ZlegendsBot() {
     if (!over) engineMoveRef.current(newMoveList);
   }, [eng, audio, checkGameOver]);
 
+  /* Returns a status string ("moved"/"promo"/"selected"/"deselected"/
+     "blocked") purely so drag handling (below) can tell, synchronously,
+     whether a pointerdown just picked up a piece worth dragging --
+     state updates here are otherwise identical to before this return
+     value was added, so the existing onClick/onKeyDown callers that
+     ignore it see no behavior change. */
   const onSquare = (i64) => {
-    if ((mode === "replay" && !analyzing) || thinking || promo) return;
+    if ((mode === "replay" && !analyzing) || thinking || promo) return "blocked";
     const inQuiz = !!quizOpening;
     const inPuzzle = !!activePuzzle;
-    if (inPuzzle && puzzleSolved) return;
+    if (inPuzzle && puzzleSolved) return "blocked";
     const legal = eng.legalMoves();
     const sq120 = M64TO120[i64];
     const sideToMove = (analyzing || inQuiz) ? eng.getSide() : playerColor;
-    if (!analyzing && !inQuiz && (result || eng.getSide() !== playerColor)) return;
-    if (inQuiz && result) return;
+    if (!analyzing && !inQuiz && (result || eng.getSide() !== playerColor)) return "blocked";
+    if (inQuiz && result) return "blocked";
     if (selected >= 0) {
       const from120 = M64TO120[selected];
       const candidates = legal.filter(m => mFrom(m) === from120 && mTo(m) === sq120);
       if (candidates.length > 0) {
-        if (candidates.length > 1) { setPromo({ from: from120, to: sq120, moves: candidates }); return; }
+        if (candidates.length > 1) { setPromo({ from: from120, to: sq120, moves: candidates }); return "promo"; }
         inPuzzle ? puzzleMove(candidates[0]) : inQuiz ? quizMove(candidates[0]) : (analyzing ? analysisMove(candidates[0]) : playMove(candidates[0]));
-        return;
+        return "moved";
       }
     }
     const p = eng.pieceAt(i64);
     if (p !== EMPTY && p * sideToMove > 0) {
       setSelected(i64);
       setTargets(legal.filter(m => mFrom(m) === sq120).map(m => M120TO64[mTo(m)]));
-    } else { setSelected(-1); setTargets([]); }
+      return "selected";
+    } else { setSelected(-1); setTargets([]); return "deselected"; }
   };
   /* The memoized board below only rebuilds when position-relevant state
      changes, so its onClick/onKeyDown closures can't safely capture
@@ -460,6 +467,62 @@ export default function ZlegendsBot() {
      change. */
   const onSquareRef = useRef(onSquare);
   onSquareRef.current = onSquare;
+
+  /* Drag-to-move: a thin pointer-events layer on top of the existing
+     click-to-select/click-to-move state machine above, so it can't
+     regress puzzle/analysis/quiz/promo handling -- pointerdown reuses
+     onSquare's own "select" step (via its new return value, so we know
+     synchronously whether a draggable piece actually got picked up),
+     and dropping calls onSquare again on the square underneath the
+     pointer, exactly as a second click would. Pointer Events (not
+     separate mouse/touch listeners) is what makes one implementation
+     cover both mouse-drag and finger-drag. */
+  const boardRef = useRef(null);
+  const [dragFrom, setDragFrom] = useState(-1);
+  const [dragOverSquare, setDragOverSquare] = useState(-1);
+  const [dragPos, setDragPos] = useState(null);
+  const [dragCellSize, setDragCellSize] = useState(48);
+
+  const squareFromPoint = (clientX, clientY) => {
+    const el = boardRef.current;
+    if (!el) return -1;
+    const rect = el.getBoundingClientRect();
+    const relX = clientX - rect.left, relY = clientY - rect.top;
+    if (relX < 0 || relY < 0 || relX >= rect.width || relY >= rect.height) return -1;
+    const visCol = Math.min(7, Math.floor((relX / rect.width) * 8));
+    const visRow = Math.min(7, Math.floor((relY / rect.height) * 8));
+    const f = flipped ? 7 - visCol : visCol;
+    const r = flipped ? visRow : 7 - visRow;
+    return r * 8 + f;
+  };
+
+  const onSquarePointerDown = (i64, e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    const status = onSquareRef.current(i64);
+    if (status !== "selected") return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDragCellSize(e.currentTarget.getBoundingClientRect().width);
+    setDragFrom(i64);
+    setDragOverSquare(i64);
+    setDragPos({ x: e.clientX, y: e.clientY });
+  };
+  const onDragPointerMoveRef = useRef(null);
+  onDragPointerMoveRef.current = (e) => {
+    if (dragFrom < 0) return;
+    setDragPos({ x: e.clientX, y: e.clientY });
+    setDragOverSquare(squareFromPoint(e.clientX, e.clientY));
+  };
+  const onDragPointerUpRef = useRef(null);
+  onDragPointerUpRef.current = (e) => {
+    if (dragFrom < 0) return;
+    const dropSquare = squareFromPoint(e.clientX, e.clientY);
+    setDragFrom(-1); setDragOverSquare(-1); setDragPos(null);
+    if (dropSquare >= 0) onSquareRef.current(dropSquare);
+  };
+  const onDragPointerCancelRef = useRef(null);
+  onDragPointerCancelRef.current = () => {
+    setDragFrom(-1); setDragOverSquare(-1); setDragPos(null);
+  };
 
   const newGame = (color) => {
     if (mode === "replay") {
@@ -814,6 +877,8 @@ export default function ZlegendsBot() {
         const isHintFrom = hintMove && hintMove.from === sq120;
         const isHintTo = hintMove && hintMove.to === sq120;
         const kingInCheck = p * eng.getSide() === WK && eng.inCheckNow();
+        const isDragFrom = dragFrom === i64;
+        const isDragOver = dragFrom >= 0 && dragOverSquare === i64 && dragOverSquare !== dragFrom;
         const squareName = FILES[f] + (r + 1);
         const pieceLabel = p !== EMPTY ? `${p > 0 ? "White" : "Black"} ${PIECE_NAME[Math.abs(p)]}` : "empty";
         const stateBits = [isSel && "selected", isTarget && "legal move", kingInCheck && "in check"].filter(Boolean);
@@ -822,10 +887,15 @@ export default function ZlegendsBot() {
           <div key={i64} role="gridcell" tabIndex={0} aria-label={ariaLabel}
             onClick={() => onSquareRef.current(i64)}
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSquareRef.current(i64); } }}
+            onPointerDown={(e) => onSquarePointerDown(i64, e)}
+            onPointerMove={(e) => onDragPointerMoveRef.current(e)}
+            onPointerUp={(e) => onDragPointerUpRef.current(e)}
+            onPointerCancel={(e) => onDragPointerCancelRef.current(e)}
             className={"sq " + (light ? "light" : "dark") + (isSel ? " sel" : "") + (isLast ? " last" : "") +
               (isBotLast ? " botLast" : "") + (isPlayerLast ? " playerLast" : "") +
-              (kingInCheck ? " chk" : "") + (isHintFrom ? " hintFrom" : "") + (isHintTo ? " hintTo" : "")}>
-            {p !== EMPTY && <img className={"pc " + (p > 0 ? "w" : "b")} src={pieceImgSrc(Math.abs(p), p > 0)} alt="" draggable="false" />}
+              (kingInCheck ? " chk" : "") + (isHintFrom ? " hintFrom" : "") + (isHintTo ? " hintTo" : "") +
+              (isDragOver ? " dragOver" : "")}>
+            {p !== EMPTY && !isDragFrom && <img className={"pc " + (p > 0 ? "w" : "b")} src={pieceImgSrc(Math.abs(p), p > 0)} alt="" draggable="false" />}
             {isTarget && <span className={"dot" + (p !== EMPTY ? " ring" : "")} />}
             {vf === 0 && <span className="coord rk">{r + 1}</span>}
             {vr === 7 && <span className="coord fl">{FILES[f]}</span>}
@@ -837,7 +907,7 @@ export default function ZlegendsBot() {
     return built;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eng, flipped, selected, targets, lastMove, hintMove, isBotLastMove, isPlayerLastMove,
-      moveList, reviewIndex, replayIndex, replayFull, analysisExtra, mode, pieceSetId]);
+      moveList, reviewIndex, replayIndex, replayFull, analysisExtra, mode, pieceSetId, dragFrom, dragOverSquare]);
 
   const pairs = [];
   for (let i = 0; i < moveList.length; i += 2) pairs.push([moveList[i], moveList[i + 1]]);
@@ -920,7 +990,7 @@ export default function ZlegendsBot() {
               </div>
             )}
             <div style={{ position: "relative", flex: 1 }}>
-              <div className="board" role="grid" aria-label="Chess board">
+              <div className="board" role="grid" aria-label="Chess board" ref={boardRef}>
                 {rows}
                 {arrowLine && (
                   <svg className="arrowLayer" viewBox="0 0 8 8" preserveAspectRatio="none">
@@ -970,6 +1040,12 @@ export default function ZlegendsBot() {
                   </div>
                 )}
               </div>
+              {dragFrom >= 0 && dragPos && (
+                <img className={"pc dragGhost " + (eng.pieceAt(dragFrom) > 0 ? "w" : "b")}
+                  src={pieceImgSrc(Math.abs(eng.pieceAt(dragFrom)), eng.pieceAt(dragFrom) > 0)}
+                  alt="" draggable="false"
+                  style={{ left: dragPos.x, top: dragPos.y, width: dragCellSize, height: dragCellSize }} />
+              )}
             </div>
           </div>
 
