@@ -810,7 +810,7 @@ export default function ZlegendsBot() {
     return built;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eng, flipped, selected, targets, lastMove, hintMove, isBotLastMove, isPlayerLastMove,
-      moveList, reviewIndex, replayIndex, replayFull, analysisExtra, mode]);
+      moveList, reviewIndex, replayIndex, replayFull, analysisExtra, mode, pieceSetId]);
 
   const pairs = [];
   for (let i = 0; i < moveList.length; i += 2) pairs.push([moveList[i], moveList[i + 1]]);
@@ -1132,16 +1132,15 @@ export default function ZlegendsBot() {
               <PixelAvatar rows={PPIX} pal={PPAL} size={16} />
               Puzzles
             </button>
-            <button className="btn ghost" style={{ display: "flex", alignItems: "center", gap: 6 }} onClick={() => setSettingsOpen(true)} title="Settings">
+            <button className="btn ghost" style={{ fontSize: 18, lineHeight: 1, padding: "10px 14px" }} onClick={() => setSettingsOpen(true)} aria-label="Settings" title="Settings">
               <span aria-hidden="true">⚙</span>
-              Settings
             </button>
           </div>
         </div>
       </div>
 
       {musicOpen && (
-        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }}>
+        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) setMusicOpen(false); }}>
           <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 220, padding: "20px 24px" }}>
             <div className="boxHead jbHead">
               <PixelAvatar rows={JPIX} pal={JPAL} size={20} />
@@ -1167,7 +1166,7 @@ export default function ZlegendsBot() {
 
 
       {openingsOpen && (
-        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }}>
+        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) setOpeningsOpen(false); }}>
           <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, maxHeight: "80vh", overflowY: "auto", padding: "20px 24px" }}>
             <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <PixelAvatar rows={BPIX} pal={BPAL} size={18} />
@@ -1188,7 +1187,7 @@ export default function ZlegendsBot() {
       )}
 
       {puzzlesOpen && (
-        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }}>
+        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) setPuzzlesOpen(false); }}>
           <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
             <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <PixelAvatar rows={PPIX} pal={PPAL} size={18} />
@@ -1218,7 +1217,7 @@ export default function ZlegendsBot() {
       )}
 
       {rushOpen && (
-        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }}>
+        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) { setRushOpen(false); setPuzzlesOpen(true); } }}>
           <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
             <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <PixelAvatar rows={PPIX} pal={PPAL} size={18} />
@@ -1241,7 +1240,7 @@ export default function ZlegendsBot() {
       )}
 
       {rushMode && rushResult && (
-        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }}>
+        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) exitRush(); }}>
           <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
             <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <PixelAvatar rows={PPIX} pal={PPAL} size={18} />
@@ -1257,7 +1256,7 @@ export default function ZlegendsBot() {
       )}
 
       {settingsOpen && (
-        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }}>
+        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) setSettingsOpen(false); }}>
           <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
             <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span aria-hidden="true">⚙</span>
@@ -1276,7 +1275,7 @@ export default function ZlegendsBot() {
       )}
 
       {pieceDesignsOpen && (
-        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }}>
+        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) { setPieceDesignsOpen(false); setSettingsOpen(true); } }}>
           <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
             <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               Piece Designs
