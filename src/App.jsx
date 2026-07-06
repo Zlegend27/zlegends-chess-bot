@@ -11,7 +11,7 @@ import { loadSetting, saveSetting } from "./utils/storage";
 import { buildPgn } from "./utils/pgn";
 import { encodeGame, decodeGame, getSharedHash, replayIntoEngine } from "./utils/share";
 import { PIECE_SETS, getPieceSet } from "./utils/pieceSets";
-import { saveGame } from "./utils/gameHistory";
+import { saveGame, estimateRating } from "./utils/gameHistory";
 import { ENGINE_VERSION } from "./utils/version";
 import { OPENINGS } from "./utils/openings";
 import { loadEcoOpenings, detectEcoOpening } from "./utils/ecoOpenings";
@@ -80,6 +80,17 @@ function detectOpening(moveList) {
     if (matches && (!best || len > best.len)) best = { opening: op, len };
   }
   return best ? best.opening : null;
+}
+/* Deterministic "same puzzle for everyone today" -- purely a function of
+   the UTC date and the puzzle pool, no server/schedule needed. */
+function todayKey() {
+  const d = new Date();
+  return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`;
+}
+function dailyPuzzle(allPuzzles) {
+  if (!allPuzzles.length) return null;
+  const dayNum = Math.floor(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate()) / 86400000);
+  return allPuzzles[dayNum % allPuzzles.length];
 }
 const PTS = { 1: 1, 2: 3, 3: 3, 4: 5, 5: 9 };
 const START_COUNT = { 1: 8, 2: 2, 3: 2, 4: 2, 5: 1 };
@@ -194,6 +205,9 @@ export default function ZlegendsBot() {
   const [hinting, setHinting] = useState(false);
   const [reviewIndex, setReviewIndex] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [moveGrades, setMoveGrades] = useState(null);
+  const [grading, setGrading] = useState(false);
+  const [gradeProgress, setGradeProgress] = useState(0);
   const [bestArrow, setBestArrow] = useState(null);
   const [analysisBusy, setAnalysisBusy] = useState(false);
   const [analysisExtra, setAnalysisExtra] = useState([]);
@@ -202,6 +216,11 @@ export default function ZlegendsBot() {
   const [pgnToast, setPgnToast] = useState(null);
   const [musicOpen, setMusicOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [ratingInfo, setRatingInfo] = useState(null);
+  const openSettings = () => {
+    setSettingsOpen(true);
+    if (!ratingInfo) estimateRating().then(setRatingInfo);
+  };
   const [pieceDesignsOpen, setPieceDesignsOpen] = useState(false);
   const [openingsOpen, setOpeningsOpen] = useState(false);
   const [activeOpening, setActiveOpening] = useState(null);
@@ -221,6 +240,7 @@ export default function ZlegendsBot() {
   const [activePuzzle, setActivePuzzle] = useState(null);
   const [puzzleFeedback, setPuzzleFeedback] = useState(null);
   const [puzzleSolved, setPuzzleSolved] = useState(false);
+  const [dailySolvedDate, setDailySolvedDate] = useState(() => loadSetting("dailyPuzzleSolvedDate", null));
   const [rushOpen, setRushOpen] = useState(false);
   const [rushMode, setRushMode] = useState(false);
   const [rushDuration, setRushDuration] = useState(60);
@@ -239,6 +259,13 @@ export default function ZlegendsBot() {
   gameStyleRef.current = gameStyle;
   const playerColorRef = useRef(playerColor);
   playerColorRef.current = playerColor;
+  const [spectateOpen, setSpectateOpen] = useState(false);
+  const [spectateMode, setSpectateMode] = useState(false);
+  const [spectateWhiteIdx, setSpectateWhiteIdx] = useState(2);
+  const [spectateBlackIdx, setSpectateBlackIdx] = useState(2);
+  const spectateModeRef = useRef(false);
+  const spectateWhiteRef = useRef(DIFFICULTIES[2]);
+  const spectateBlackRef = useRef(DIFFICULTIES[2]);
 
   const checkGameOver = useCallback(() => {
     const legal = eng.legalMoves();
@@ -369,6 +396,50 @@ export default function ZlegendsBot() {
     setSelected(-1); setTargets([]); setBestArrow(null);
   };
 
+  /* Move-quality grading: only needs N+1 searches for an N-ply game, not
+     2N -- the position after move i is the same position as before move
+     i+1, so each prefix's best-play score is computed once and reused
+     for both the "before" side of one ply and the "after" side of the
+     previous one. loss = bestScoreBefore - (-bestScoreAfter), i.e. how
+     much worse the actual move was than the best move available, both
+     converted to the mover's own perspective (negamax flip). Homemade
+     engine only (fast + free) since this is a retrospective accuracy
+     hint, not tournament-grade analysis -- Stockfish's official Elo
+     limiting has no bearing on grading a move that already happened. */
+  function classifyLoss(loss) {
+    if (loss >= 150) return "blunder";
+    if (loss >= 60) return "mistake";
+    if (loss >= 20) return "inaccuracy";
+    return null;
+  }
+
+  const gradeMoves = async () => {
+    if (grading) return;
+    const list = moveListRef.current;
+    if (!list.length) return;
+    setGrading(true);
+    setGradeProgress(0);
+    const scores = new Array(list.length + 1);
+    for (let k = 0; k <= list.length; k++) {
+      const res = await runSearch(list.slice(0, k), 250, 0, { personality: BALANCED, useBook: false });
+      scores[k] = res ? res.score : 0;
+      setGradeProgress(k + 1);
+    }
+    const grades = [];
+    for (let i = 0; i < list.length; i++) {
+      grades.push(classifyLoss(Math.max(0, scores[i] + scores[i + 1])));
+    }
+    /* The search has no move to return at a finished game's final
+       position (checkmate), so that last score defaults to a neutral 0
+       rather than "this side is completely lost" -- without this fix,
+       the very move that delivers checkmate could get wrongly flagged
+       as a blunder purely from that missing data, when it's obviously
+       the best possible move available. */
+    if (result && result.reason === "Checkmate") grades[grades.length - 1] = null;
+    setMoveGrades(grades);
+    setGrading(false);
+  };
+
   /* Stockfish tiers report score/depth/nodes/time/pv the same shape the
      homemade engine's worker does, so the .then() handler below can stay
      identical either way -- see stockfishEngine.js for why Stockfish was
@@ -427,6 +498,72 @@ export default function ZlegendsBot() {
   const engineMoveRef = useRef(engineMove);
   engineMoveRef.current = engineMove;
 
+  /* Bot-vs-bot spectator mode: a dedicated mover (same shape as
+     engineMove/playMove elsewhere in this file follow the one-function-
+     per-mode convention) since BOTH sides are automated here rather than
+     one bot answering a human click -- picks whichever tier is assigned
+     to the side currently on move and keeps calling itself until the
+     game ends or spectating is stopped. Games here aren't saved (no
+     saveGame call) since neither side is the visitor playing. */
+  const spectateMove = useCallback(() => {
+    if (!spectateModeRef.current) return;
+    setThinking(true);
+    const diff = eng.getSide() === 1 ? spectateWhiteRef.current : spectateBlackRef.current;
+    const personality = pickPersonality(gameStyleRef.current, eng.plyCount(), 0);
+    const searchPromise = diff.stockfishElo
+      ? stockfishMove(diff)
+      : runSearch(moveListRef.current, diff.ms, diff.blunderChance || 0, { personality, useBook: diff.book });
+    searchPromise.then((res) => {
+      if (res && res.move && spectateModeRef.current) {
+        const cap = isCaptureMove(res.move);
+        eng.make(res.move);
+        try { cap ? audio.sfxCapture() : audio.sfxMove(); } catch { /* audio unavailable */ }
+        setLastMove({ from: mFrom(res.move), to: mTo(res.move) });
+        const newMoveList = [...moveListRef.current, res.san];
+        moveListRef.current = newMoveList;
+        setMoveList(newMoveList);
+        const whiteScore = eng.getSide() === 1 ? -res.score : res.score;
+        setEvalCp(whiteScore);
+        setInfo({ depth: res.depth, score: whiteScore, nodes: res.nodes, time: res.time, pv: res.pv, book: res.book });
+        const over = checkGameOver();
+        setResult(over);
+        setThinking(false);
+        rerender();
+        if (!over) setTimeout(() => spectateMoveRef.current(), 500);
+      } else {
+        setThinking(false);
+        rerender();
+      }
+    });
+  }, [eng, audio, checkGameOver, runSearch, stockfishMove]);
+  const spectateMoveRef = useRef(spectateMove);
+  spectateMoveRef.current = spectateMove;
+
+  const startSpectate = (whiteIdx, blackIdx) => {
+    setSpectateWhiteIdx(whiteIdx); setSpectateBlackIdx(blackIdx);
+    spectateWhiteRef.current = DIFFICULTIES[whiteIdx];
+    spectateBlackRef.current = DIFFICULTIES[blackIdx];
+    eng.reset();
+    moveListRef.current = [];
+    setGameStyle(randomStyle());
+    setActiveOpening(null); setQuizOpening(null); setActivePuzzle(null);
+    setSelected(-1); setTargets([]); setLastMove(null); setHintMove(null);
+    setMoveList([]); setInfo(null); setResult(null); setPromo(null); setEvalCp(0); setReviewIndex(null);
+    setMoveGrades(null); setGrading(false); setGradeProgress(0);
+    setMode("play");
+    setSpectateOpen(false);
+    spectateModeRef.current = true;
+    setSpectateMode(true);
+    rerender();
+    setTimeout(() => spectateMoveRef.current(), 60);
+  };
+
+  const stopSpectate = () => {
+    spectateModeRef.current = false;
+    setSpectateMode(false);
+    newGame(1);
+  };
+
   const playMove = useCallback((m) => {
     const cap = isCaptureMove(m);
     const san = eng.sanOf(m);
@@ -455,7 +592,7 @@ export default function ZlegendsBot() {
      value was added, so the existing onClick/onKeyDown callers that
      ignore it see no behavior change. */
   const onSquare = (i64) => {
-    if ((mode === "replay" && !analyzing) || thinking || promo) return "blocked";
+    if (spectateMode || (mode === "replay" && !analyzing) || thinking || promo) return "blocked";
     const inQuiz = !!quizOpening;
     const inPuzzle = !!activePuzzle;
     if (inPuzzle && puzzleSolved) return "blocked";
@@ -564,6 +701,7 @@ export default function ZlegendsBot() {
     setPuzzleSolved(false);
     setSelected(-1); setTargets([]); setLastMove(null); setHintMove(null);
     setMoveList([]); setInfo(null); setResult(null); setPromo(null); setEvalCp(0); setReviewIndex(null);
+    setMoveGrades(null); setGrading(false); setGradeProgress(0);
     rerender();
     if (color === -1) setTimeout(() => engineMoveRef.current([]), 60);
   };
@@ -754,6 +892,11 @@ export default function ZlegendsBot() {
     if (newMoveList.length === activePuzzle.moves.length) {
       setPuzzleSolved(true);
       try { audio.sfxCapture(); } catch { /* audio unavailable */ }
+      const daily = dailyPuzzle(pz.PUZZLES);
+      if (daily && activePuzzle.id === daily.id) {
+        setDailySolvedDate(todayKey());
+        saveSetting("dailyPuzzleSolvedDate", todayKey());
+      }
       if (rushMode) {
         rushSolvedRef.current += 1;
         setRushSolved(rushSolvedRef.current);
@@ -784,7 +927,7 @@ export default function ZlegendsBot() {
       }
     }, 500);
     rerender();
-  }, [eng, audio, activePuzzle, rushMode]);
+  }, [eng, audio, activePuzzle, rushMode, pz]);
 
   const undo = () => {
     if (mode === "replay" || thinking || result || eng.plyCount() === 0) return;
@@ -941,7 +1084,9 @@ export default function ZlegendsBot() {
 
   const inChk = eng.inCheckNow() && !result;
   const replayLabel = activeOpening ? activeOpening.name : "Shared game";
-  const status = mode === "replay"
+  const status = spectateMode
+    ? (result ? `${result.reason} · ${result.text}` : `${DIFFICULTIES[spectateWhiteIdx].label} vs ${DIFFICULTIES[spectateBlackIdx].label} — ${eng.getSide() === 1 ? "White" : "Black"} to move`)
+    : mode === "replay"
     ? (replayIndex === 0 ? `${replayLabel} — starting position` : replayIndex === replayFull.length ? `${replayLabel} — final position` : `${replayLabel} — move ${replayIndex}`)
     : quizOpening
     ? `Quiz: ${quizOpening.name} — move ${moveList.length + 1} of ${quizOpening.moves.length}`
@@ -992,7 +1137,7 @@ export default function ZlegendsBot() {
               {botMood === "neutral" && <PixelAvatar rows={ZPIX} pal={ZPAL} size={44} />}
             </div>
             <div className="cardMeta">
-              <div className="cardName bot">Zlegend2700</div>
+              <div className="cardName bot">{spectateMode ? `${DIFFICULTIES[botColor === 1 ? spectateWhiteIdx : spectateBlackIdx].label} (${botColor === 1 ? "White" : "Black"})` : "Zlegend2700"}</div>
               {activePuzzle ? (
                 <div className="trayEmpty puzzleMeta">
                   {rushMode ? `Puzzle Rush · ${pz.RATING_BANDS[rushBandIdx]?.label || ""} · ${formatClock(rushTimeLeft)} left` : `Puzzle · rated ${activePuzzle.rating}`}
@@ -1080,7 +1225,7 @@ export default function ZlegendsBot() {
           <div className={"card youCard" + (mode === "play" && !result && !thinking && eng.getSide() === playerColor ? " turnGlow" : "")}>
             <div className="avatarBox"><img src="/you-avatar.webp" alt="You (Challenger)" className="youAvatarImg" /></div>
             <div className="cardMeta">
-              <div className="cardName you">You (Challenger)</div>
+              <div className="cardName you">{spectateMode ? `${DIFFICULTIES[playerColor === 1 ? spectateWhiteIdx : spectateBlackIdx].label} (${playerColor === 1 ? "White" : "Black"})` : "You (Challenger)"}</div>
               {activePuzzle ? (
                 <div className="trayEmpty puzzleMeta">
                   {rushMode
@@ -1127,6 +1272,9 @@ export default function ZlegendsBot() {
               <button className={"btn" + (analyzing ? "" : " ghost")} onClick={toggleAnalyze}>
                 {analyzing ? (analysisBusy ? "Analyzing…" : "Analyzing") : "Analyze"}
               </button>
+              <button className="btn ghost" onClick={gradeMoves} disabled={grading || !!moveGrades}>
+                {grading ? `Grading ${gradeProgress}/${moveList.length}…` : moveGrades ? "Graded" : "Grade Moves"}
+              </button>
             </div>
           )}
           {analyzing && (
@@ -1146,19 +1294,28 @@ export default function ZlegendsBot() {
             </div>
             <div className="rows">
               {pairs.length === 0 && <div className="empty">{"No moves yet — white to play."}</div>}
-              {pairs.map(([w, b], i) => (
-                <div className="mrow" key={i}>
-                  <span className="num">{i + 1}.</span>
-                  <span
-                    className={curMoveIdx === i * 2 ? "cur" : ""}
-                    style={reviewing ? { cursor: "pointer" } : undefined}
-                    onClick={reviewing ? () => setReviewIndex(i * 2 + 1) : undefined}>{w}</span>
-                  <span
-                    className={curMoveIdx === i * 2 + 1 ? "cur" : ""}
-                    style={reviewing && b ? { cursor: "pointer" } : undefined}
-                    onClick={reviewing && b ? () => setReviewIndex(i * 2 + 2) : undefined}>{b || ""}</span>
-                </div>
-              ))}
+              {pairs.map(([w, b], i) => {
+                const GRADE_TAG = { inaccuracy: "?!", mistake: "?", blunder: "??" };
+                const wGrade = moveGrades && moveGrades[i * 2];
+                const bGrade = moveGrades && moveGrades[i * 2 + 1];
+                return (
+                  <div className="mrow" key={i}>
+                    <span className="num">{i + 1}.</span>
+                    <span
+                      className={curMoveIdx === i * 2 ? "cur" : ""}
+                      style={reviewing ? { cursor: "pointer" } : undefined}
+                      onClick={reviewing ? () => setReviewIndex(i * 2 + 1) : undefined}>
+                      {w}{wGrade && <span className={"moveGrade " + wGrade}>{GRADE_TAG[wGrade]}</span>}
+                    </span>
+                    <span
+                      className={curMoveIdx === i * 2 + 1 ? "cur" : ""}
+                      style={reviewing && b ? { cursor: "pointer" } : undefined}
+                      onClick={reviewing && b ? () => setReviewIndex(i * 2 + 2) : undefined}>
+                      {b || ""}{bGrade && <span className={"moveGrade " + bGrade}>{GRADE_TAG[bGrade]}</span>}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
             {pgnToast && <div className="toast">{pgnToast}</div>}
           </div>
@@ -1220,7 +1377,7 @@ export default function ZlegendsBot() {
             )}
           </div>
 
-          {mode === "play" && !activePuzzle && (
+          {mode === "play" && !activePuzzle && !spectateMode && (
             <div className="ctrls playCtrls">
               <button className="btn" onClick={() => { setPromo(null); setColorPick(true); }}>New</button>
               <button className="btn" onClick={undo} disabled={thinking || !!result || eng.plyCount() === 0}>Undo</button>
@@ -1235,6 +1392,13 @@ export default function ZlegendsBot() {
               {result && <button className="btn gold" onClick={() => newGame(playerColor)}>Rematch!</button>}
               {shareToast && <div className="toast">{shareToast}</div>}
               {quizDoneToast && <div className="toast">{quizDoneToast}</div>}
+            </div>
+          )}
+
+          {spectateMode && (
+            <div className="ctrls playCtrls">
+              {result && <button className="btn gold" onClick={() => startSpectate(spectateWhiteIdx, spectateBlackIdx)}>Watch Again</button>}
+              <button className="btn ghost" onClick={stopSpectate}>Stop Spectating</button>
             </div>
           )}
 
@@ -1270,7 +1434,12 @@ export default function ZlegendsBot() {
                 <path d="M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5C13 2.12 11.88 1 10.5 1S8 2.12 8 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.49 0 2.7 1.21 2.7 2.7s-1.21 2.7-2.7 2.7H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.49 1.21-2.7 2.7-2.7s2.7 1.21 2.7 2.7V22H17c1.1 0 2-.9 2-2v-4h1.5c1.38 0 2.5-1.12 2.5-2.5S21.88 11 20.5 11z" />
               </svg>
             </button>
-            <button className="btn ghost" style={{ fontSize: 18, lineHeight: 1, padding: "10px 14px" }} onClick={() => setSettingsOpen(true)} aria-label="Settings" title="Settings">
+            <button className="btn ghost" style={{ display: "flex", alignItems: "center", padding: "10px 14px" }} onClick={() => setSpectateOpen(true)} aria-label="Spectate bots" title="Spectate bots">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 5c-5 0-9.27 3.11-11 7 1.73 3.89 6 7 11 7s9.27-3.11 11-7c-1.73-3.89-6-7-11-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
+              </svg>
+            </button>
+            <button className="btn ghost" style={{ fontSize: 18, lineHeight: 1, padding: "10px 14px" }} onClick={openSettings} aria-label="Settings" title="Settings">
               <span aria-hidden="true">⚙</span>
             </button>
           </div>
@@ -1335,6 +1504,13 @@ export default function ZlegendsBot() {
               <div className="pv" style={{ padding: "8px 2px" }}>Loading puzzles…</div>
             ) : (
               <div className="rows" style={{ maxHeight: "none" }}>
+                <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E" }}
+                  onClick={() => { setPuzzlesOpen(false); startPuzzle(dailyPuzzle(pz.PUZZLES)); }}>
+                  <div style={{ fontWeight: 700, color: "var(--cyan)" }}>📅 Daily Puzzle</div>
+                  <div style={{ fontSize: 11, opacity: 0.75 }}>
+                    {dailySolvedDate === todayKey() ? "Solved today ✓" : "One puzzle, same for everyone today"}
+                  </div>
+                </div>
                 {pz.RATING_BANDS.map(band => {
                   const pool = puzzlesInBand(band);
                   return (
@@ -1414,10 +1590,19 @@ export default function ZlegendsBot() {
                 <div style={{ fontWeight: 700 }}>Piece Designs</div>
                 <div style={{ fontSize: 11, opacity: 0.75 }}>Currently: {getPieceSet(pieceSetId).label}</div>
               </div>
-              <div style={{ cursor: "pointer", padding: "8px 2px" }} onClick={toggleEvalBar}>
+              <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E" }} onClick={toggleEvalBar}>
                 <div style={{ fontWeight: 700 }}>{hideEvalBar ? "Show Eval Bar" : "Hide Eval Bar"}</div>
                 <div style={{ fontSize: 11, opacity: 0.75 }}>
                   {hideEvalBar ? "Eval bar is currently hidden" : "Hides the eval bar for a bigger board on mobile"}
+                </div>
+              </div>
+              <div style={{ padding: "8px 2px" }}>
+                <div style={{ fontWeight: 700 }}>Your Rating</div>
+                <div style={{ fontSize: 11, opacity: 0.75 }}>
+                  {!ratingInfo ? "Loading…"
+                    : ratingInfo.error ? ratingInfo.message
+                    : ratingInfo.games === 0 ? "Play the 1000/1500/2000 Elo bots to get an estimate"
+                    : `~${ratingInfo.rating} (from ${ratingInfo.games} game${ratingInfo.games === 1 ? "" : "s"} vs the calibrated bots)`}
                 </div>
               </div>
             </div>
@@ -1450,6 +1635,35 @@ export default function ZlegendsBot() {
               ))}
             </div>
             <button className="btn ghost" onClick={() => { setPieceDesignsOpen(false); setSettingsOpen(true); }}>Back</button>
+          </div>
+        </div>
+      )}
+
+      {spectateOpen && (
+        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) setSpectateOpen(false); }}>
+          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
+            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              Spectate Bots
+            </div>
+            <div className="pv" style={{ fontSize: 12, opacity: 0.85 }}>
+              Pick a bot for each side and watch them play each other. No clicking required.
+            </div>
+            <div className="rows" style={{ maxHeight: "none", display: "flex", flexDirection: "column", gap: 10, padding: "4px 2px" }}>
+              <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
+                White
+                <select value={spectateWhiteIdx} onChange={e => setSpectateWhiteIdx(Number(e.target.value))}>
+                  {DIFFICULTIES.map((d, i) => <option key={i} value={i}>{d.label}</option>)}
+                </select>
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
+                Black
+                <select value={spectateBlackIdx} onChange={e => setSpectateBlackIdx(Number(e.target.value))}>
+                  {DIFFICULTIES.map((d, i) => <option key={i} value={i}>{d.label}</option>)}
+                </select>
+              </label>
+            </div>
+            <button className="btn gold" onClick={() => startSpectate(spectateWhiteIdx, spectateBlackIdx)}>Start Spectating</button>
+            <button className="btn ghost" onClick={() => setSpectateOpen(false)}>Close</button>
           </div>
         </div>
       )}

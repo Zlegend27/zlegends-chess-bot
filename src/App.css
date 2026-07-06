@@ -141,6 +141,10 @@
 .mrow{ display:grid; grid-template-columns:34px 1fr 1fr; padding:4px 2px; border-bottom:1px solid #8B2FC92E; }
 .mrow .num{ color:var(--dim); }
 .mrow:last-child .cur{ color:var(--yellow); font-weight:700; text-shadow:0 0 6px #F5D93E55; }
+.moveGrade{ margin-left:3px; font-weight:700; }
+.moveGrade.inaccuracy{ color:var(--yellow); }
+.moveGrade.mistake{ color:#F0A548; }
+.moveGrade.blunder{ color:#F05348; }
 .empty{ padding:10px 2px; color:var(--dim); font-size:12px; font-style:italic; }
 .astats{ display:flex; gap:14px; font-family:ui-monospace,Consolas,monospace; font-size:13px; }
 .astats b{ font-size:18px; color:var(--magenta); display:block; text-shadow:0 0 8px #D94BF055; }
