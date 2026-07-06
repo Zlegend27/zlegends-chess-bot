@@ -14,7 +14,14 @@ const BUCKET = "music";
    ever gets flattened later. */
 const ROOT_PREFIX = "music";
 
+/* "theme" is a single file (the site's default track) sitting directly in
+   the root music folder rather than its own subfolder -- folder:"" means
+   "don't join a subfolder onto ROOT_PREFIX", so it's listed/resolved
+   through the exact same code path as a real playlist and gets all the
+   same next/prev/shuffle/progress-bar machinery for free. */
+export const THEME_ID = "theme";
 export const MP3_PLAYLISTS = [
+  { id: THEME_ID, label: "Theme", folder: "" },
   { id: "juice", label: "Juice", folder: "juice" },
   { id: "omori", label: "Omori", folder: "omori" },
 ];
@@ -29,7 +36,7 @@ export async function loadPlaylistTracks(supabase, playlist) {
   if (!supabase) return [];
   if (trackCache.has(playlist.id)) return trackCache.get(playlist.id);
   try {
-    const folderPath = `${ROOT_PREFIX}/${playlist.folder}`;
+    const folderPath = playlist.folder ? `${ROOT_PREFIX}/${playlist.folder}` : ROOT_PREFIX;
     const { data, error } = await supabase.storage
       .from(BUCKET)
       .list(folderPath, { sortBy: { column: "name", order: "asc" } });

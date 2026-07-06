@@ -5,7 +5,7 @@ import {
 } from "./engine/chessEngine";
 import { createAudio } from "./audio/chiptune";
 import { getSupabase } from "./utils/supabase";
-import { MP3_PLAYLISTS, loadPlaylistTracks } from "./utils/musicLibrary";
+import { MP3_PLAYLISTS, THEME_ID, loadPlaylistTracks } from "./utils/musicLibrary";
 import PixelAvatar, { ZPAL, ZPIX, BPAL, BPIX, PPAL, PPIX } from "./components/PixelAvatar";
 import SocialLinks from "./components/SocialLinks";
 import StarField from "./components/StarField";
@@ -94,6 +94,17 @@ function dailyPuzzle(allPuzzles) {
   const dayNum = Math.floor(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate()) / 86400000);
   return allPuzzles[dayNum % allPuzzles.length];
 }
+/* Shared by manual next/prev and the "ended" auto-advance -- shuffle picks
+   any other track at random, otherwise steps sequentially with wraparound. */
+function pickTrackIndex(current, len, delta, shuffle) {
+  if (len <= 1) return 0;
+  if (shuffle) {
+    let next;
+    do { next = Math.floor(Math.random() * len); } while (next === current);
+    return next;
+  }
+  return ((current + delta) % len + len) % len;
+}
 const PTS = { 1: 1, 2: 3, 3: 3, 4: 5, 5: 9 };
 const GRADE_TAG = { brilliant: "!!", best: "!", inaccuracy: "?!", mistake: "?", blunder: "??" };
 const START_COUNT = { 1: 8, 2: 2, 3: 2, 4: 2, 5: 1 };
@@ -178,12 +189,22 @@ export default function ZlegendsBot() {
   const [mp3Duration, setMp3Duration] = useState(0);
   const [mp3CurrentTime, setMp3CurrentTime] = useState(0);
   const [mp3Buffering, setMp3Buffering] = useState(false);
+  const [mp3Shuffle, setMp3Shuffle] = useState(() => loadSetting("mp3Shuffle", false));
   const mp3IdxRef = useRef(mp3Idx);
   mp3IdxRef.current = mp3Idx;
   const mp3TracksRef = useRef(mp3Tracks);
   mp3TracksRef.current = mp3Tracks;
   const mp3PlayingRef = useRef(mp3Playing);
   mp3PlayingRef.current = mp3Playing;
+  const mp3ShuffleRef = useRef(mp3Shuffle);
+  mp3ShuffleRef.current = mp3Shuffle;
+  /* First-time visitors get the theme track playing softly the moment
+     they first interact with the page (browsers block audio-with-sound
+     autoplay before any user gesture, so we can't start it on load --
+     the very first click/tap/keydown anywhere satisfies that gesture
+     requirement while still feeling immediate). Only fires once, ever,
+     and only if they haven't already picked a source themselves. */
+  const themeAutoplayArmedRef = useRef(!loadSetting("visitedBefore", false) && loadSetting("musicSource", "chiptune") === "chiptune");
 
   /* engine search runs in a worker so it never blocks the audio scheduler or UI */
   const workerRef = useRef(null);
@@ -1107,7 +1128,7 @@ export default function ZlegendsBot() {
       setMp3Idx(i => {
         const tracks = mp3TracksRef.current;
         if (!tracks.length) return i;
-        const next = (i + 1) % tracks.length;
+        const next = pickTrackIndex(i, tracks.length, 1, mp3ShuffleRef.current);
         saveSetting("mp3Idx", next);
         return next;
       });
@@ -1131,7 +1152,36 @@ export default function ZlegendsBot() {
       mp3Audio.removeEventListener("canplay", onReady);
     };
   }, []);
+  /* Cues the theme track (metadata + src only, not full playback) as soon
+     as a genuine first-time visitor loads the page, so it's ready to go
+     the instant they satisfy the browser's user-gesture requirement for
+     audio-with-sound autoplay below -- without this, the first click would
+     have to wait on a fresh Storage round trip before anything could play. */
+  useEffect(() => {
+    if (!themeAutoplayArmedRef.current) return;
+    saveSetting("visitedBefore", true);
+    setMusicSourceState(THEME_ID);
+    saveSetting("musicSource", THEME_ID);
+    loadMp3Playlist(THEME_ID);
+  }, []);
+  useEffect(() => {
+    if (!themeAutoplayArmedRef.current) return;
+    const start = () => {
+      if (!themeAutoplayArmedRef.current) return;
+      themeAutoplayArmedRef.current = false;
+      onVolume(35);
+      setMp3Playing(true);
+      if (mp3Audio.src) mp3Audio.play().catch(() => {});
+    };
+    document.addEventListener("pointerdown", start, { once: true });
+    document.addEventListener("keydown", start, { once: true });
+    return () => {
+      document.removeEventListener("pointerdown", start);
+      document.removeEventListener("keydown", start);
+    };
+  }, []);
   const setMusicSource = (id) => {
+    themeAutoplayArmedRef.current = false;
     if (id === musicSource) return;
     if (musicOn) { audio.toggle(); setMusicOn(false); }
     if (mp3PlayingRef.current) { mp3Audio.pause(); setMp3Playing(false); }
@@ -1147,10 +1197,21 @@ export default function ZlegendsBot() {
     const tracks = mp3TracksRef.current;
     if (!tracks.length) return;
     setMp3Idx(i => {
-      const next = ((i + delta) % tracks.length + tracks.length) % tracks.length;
+      const next = pickTrackIndex(i, tracks.length, delta, mp3ShuffleRef.current);
       saveSetting("mp3Idx", next);
       return next;
     });
+  };
+  const toggleShuffle = () => {
+    setMp3Shuffle(v => {
+      const next = !v;
+      saveSetting("mp3Shuffle", next);
+      return next;
+    });
+  };
+  const pickMp3Track = (idx) => {
+    setMp3Idx(idx);
+    saveSetting("mp3Idx", idx);
   };
   const toggleMusic = () => {
     if (musicSource === "chiptune") { setMusicOn(audio.toggle()); return; }
@@ -1741,6 +1802,11 @@ export default function ZlegendsBot() {
               </div>
             )}
             <div className="audioRow">
+              {isMp3Source && (
+                <button className={"playBtn sm" + (mp3Shuffle ? " active" : "")} onClick={toggleShuffle} disabled={jbDisabled} title={mp3Shuffle ? "Shuffle on" : "Shuffle off"}>
+                  {"\u{1F500}"}
+                </button>
+              )}
               <button className="playBtn sm" onClick={prevTrack} disabled={jbDisabled} title="Previous track">{"◀◀"}</button>
               <button className="playBtn" onClick={toggleMusic} disabled={jbDisabled} title={jbPlaying ? "Pause music" : "Play music"}>
                 {jbPlaying ? "❚❚" : "▶"}
@@ -1749,6 +1815,20 @@ export default function ZlegendsBot() {
               <input type="range" min="0" max="100" value={volume} onChange={e => onVolume(Number(e.target.value))} />
               <span className="volPct">{volume}%</span>
             </div>
+            {isMp3Source && mp3Tracks.length > 1 && (
+              <div className="jbTrackList">
+                {mp3Tracks.map((t, i) => (
+                  <button
+                    key={t.url}
+                    className={"jbTrackRow" + (i === mp3Idx ? " cur" : "")}
+                    onClick={() => pickMp3Track(i)}
+                    title={t.name}
+                  >
+                    {t.name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -183,6 +183,14 @@
   background:#241338; box-shadow:0 0 10px #8B2FC933; }
 .playBtn.sm:hover{ box-shadow:0 0 16px #D94BF066; }
 .playBtn:disabled{ opacity:.4; cursor:default; box-shadow:none; }
+.playBtn.sm.active{ border-color:var(--cyan); color:var(--cyan); background:#0E2E38; box-shadow:0 0 12px #3EE7F544; }
+.jbTrackList{ max-height:110px; overflow-y:auto; display:flex; flex-direction:column; gap:2px;
+  border:1px solid #8B2FC966; border-radius:8px; padding:4px; }
+.promoBox .jbTrackRow{ background:transparent; border:none; text-align:left; color:var(--liliac);
+  font-family:ui-monospace,Consolas,monospace; font-size:11px; padding:4px 6px; border-radius:4px;
+  cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:none; }
+.promoBox .jbTrackRow:hover{ background:#3EE7F522; }
+.promoBox .jbTrackRow.cur{ background:#8B2FC933; color:var(--cyan); font-weight:700; }
 input[type=range]{ flex:1; min-width:0; accent-color:var(--magenta); }
 .volPct{ font-family:ui-monospace,Consolas,monospace; font-size:11px; color:var(--dim); width:34px; text-align:right; }
 .ctrls{ display:flex; gap:8px; flex-wrap:wrap; }
