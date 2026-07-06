@@ -161,7 +161,13 @@
 .pv{ margin-top:8px; font-family:ui-monospace,Consolas,monospace; font-size:12px; color:#B9AEE0; line-height:1.5; word-break:break-word; }
 .audioRow{ display:flex; align-items:center; gap:8px; }
 .jbHead{ display:flex; align-items:center; gap:8px; }
+.jbBox{ position:relative; }
 .jbMole{ width:64px; height:auto; display:block; margin:0 auto; filter:drop-shadow(0 0 10px #8B2FC966); }
+.promoBox .jbCloseX{ position:absolute; top:8px; right:8px; width:24px; height:24px; padding:0;
+  border:1px solid #8B2FC966; border-radius:50%; background:#1D1038; color:var(--liliac);
+  font-size:12px; line-height:1; display:flex; align-items:center; justify-content:center;
+  cursor:pointer; touch-action:manipulation; }
+.promoBox .jbCloseX:hover{ background:#3EE7F522; color:var(--cyan); }
 .trackRow{ display:flex; align-items:center; gap:8px; margin-bottom:8px; }
 .trackName{ font-family:ui-monospace,Consolas,monospace; font-size:12px; color:var(--yellow);
   text-shadow:0 0 8px #F5D93E44; flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }

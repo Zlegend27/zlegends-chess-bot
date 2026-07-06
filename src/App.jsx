@@ -1717,6 +1717,7 @@ export default function ZlegendsBot() {
       {musicOpen && (
         <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) setMusicOpen(false); }}>
           <div className="promoBox jbBox" style={{ flexDirection: "column", gap: 12, width: 300, padding: "20px 24px" }}>
+            <button className="jbCloseX" onClick={() => setMusicOpen(false)} aria-label="Close Juice Box" title="Close">✕</button>
             <img src="/VIRTUOSO_MOLE.webp" alt="Juice Box" className="jbMole" />
             <select value={musicSource} onChange={e => setMusicSource(e.target.value)}>
               <option value="chiptune">Chiptune</option>
@@ -1748,7 +1749,6 @@ export default function ZlegendsBot() {
               <input type="range" min="0" max="100" value={volume} onChange={e => onVolume(Number(e.target.value))} />
               <span className="volPct">{volume}%</span>
             </div>
-            <button className="btn gold" onClick={() => setMusicOpen(false)}>Close</button>
           </div>
         </div>
       )}
