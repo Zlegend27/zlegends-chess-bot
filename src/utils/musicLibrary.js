@@ -7,6 +7,12 @@
    HTMLAudioElement in App.jsx so the two sources can share the same
    play/pause/next/prev/volume UI. */
 const BUCKET = "music";
+/* The dashboard upload landed the playlist folders one level deeper than
+   expected -- bucket root has a "music" folder, and "juice"/"omori" sit
+   inside that, not at the bucket root. Prefixing every path here (instead
+   of asking for a re-upload) keeps this a one-line fix if the structure
+   ever gets flattened later. */
+const ROOT_PREFIX = "music";
 
 export const MP3_PLAYLISTS = [
   { id: "juice", label: "Juice", folder: "juice" },
@@ -23,14 +29,15 @@ export async function loadPlaylistTracks(supabase, playlist) {
   if (!supabase) return [];
   if (trackCache.has(playlist.id)) return trackCache.get(playlist.id);
   try {
+    const folderPath = `${ROOT_PREFIX}/${playlist.folder}`;
     const { data, error } = await supabase.storage
       .from(BUCKET)
-      .list(playlist.folder, { sortBy: { column: "name", order: "asc" } });
+      .list(folderPath, { sortBy: { column: "name", order: "asc" } });
     if (error || !data) return [];
     const tracks = data
       .filter(f => /\.mp3$/i.test(f.name))
       .map(f => {
-        const path = `${playlist.folder}/${f.name}`;
+        const path = `${folderPath}/${f.name}`;
         const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
         return { name: f.name.replace(/\.mp3$/i, ""), url: pub.publicUrl };
       });
