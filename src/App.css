@@ -177,7 +177,7 @@
   background:#241338; box-shadow:0 0 10px #8B2FC933; }
 .playBtn.sm:hover{ box-shadow:0 0 16px #D94BF066; }
 .playBtn:disabled{ opacity:.4; cursor:default; box-shadow:none; }
-input[type=range]{ flex:1; accent-color:var(--magenta); }
+input[type=range]{ flex:1; min-width:0; accent-color:var(--magenta); }
 .volPct{ font-family:ui-monospace,Consolas,monospace; font-size:11px; color:var(--dim); width:34px; text-align:right; }
 .ctrls{ display:flex; gap:8px; flex-wrap:wrap; }
 .btn{ font-family:'Arial Black',Impact,sans-serif; font-style:italic; font-size:12px;

@@ -5,6 +5,12 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.json" />
+    <!-- Opens the TLS connection to the Supabase Storage host before the
+         Juice Box ever needs it, so the first mp3 request skips DNS/TLS
+         handshake latency -- most of that cost is otherwise paid right
+         when someone hits Play. -->
+    <link rel="preconnect" href="%VITE_SUPABASE_URL%" crossorigin />
+    <link rel="dns-prefetch" href="%VITE_SUPABASE_URL%" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0E0620" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
