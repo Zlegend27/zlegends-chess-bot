@@ -58,7 +58,7 @@ body {
 }
 .kMusicBtn:active { box-shadow: 0 1px 0 #E8A93B; transform: translateY(2px); }
 
-.kCaptureRow { display: flex; align-items: center; gap: 8px; width: 380px; margin: 4px 0; }
+.kCaptureRow { display: flex; align-items: center; gap: 8px; width: min(94vw, 430px); margin: 4px 0; }
 .kCaptureLabel { font-size: 12px; font-weight: bold; color: #8A6A4B; flex: none; }
 .kTray { display: flex; flex-wrap: wrap; gap: 2px; min-height: 22px; align-items: center; }
 .kTrayPc { font-size: 18px; line-height: 1; }
@@ -66,7 +66,7 @@ body {
 
 .kBoardWrap { position: relative; }
 .kBoard {
-  width: 380px; height: 380px; border: 6px solid #E8622C; border-radius: 16px;
+  width: min(94vw, 430px); height: min(94vw, 430px); border: 6px solid #E8622C; border-radius: 16px;
   display: flex; flex-direction: column; overflow: hidden;
   box-shadow: 0 6px 14px #00000022; touch-action: none;
 }
@@ -110,14 +110,14 @@ body {
   display: flex; flex-direction: column; align-items: center;
   overflow-y: auto; padding: 16px 12px 24px;
 }
-.kShopGrid { width: min(92vw, 380px); }
+.kShopGrid { width: min(92vw, 430px); }
 
 .kMoves {
-  width: 380px; margin-top: 12px; font-size: 14px; border: 2px solid #F2C48A; border-radius: 12px; padding: 8px;
+  width: min(94vw, 430px); margin-top: 12px; font-size: 14px; border: 2px solid #F2C48A; border-radius: 12px; padding: 8px;
   min-height: 40px; max-height: 100px; overflow-y: auto; background: #FFFDF7;
 }
 
-.kCtrls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; width: 380px; justify-content: center; }
+.kCtrls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; width: min(94vw, 430px); justify-content: center; }
 .kCtrls button, .kCtrls select {
   font-family: inherit; font-size: 15px; padding: 10px 14px; border: none; border-radius: 14px;
   background: #6FCF97; color: #1E4620; box-shadow: 0 3px 0 #4F9E6E; cursor: pointer;

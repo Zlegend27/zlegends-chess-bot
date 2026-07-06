@@ -215,3 +215,17 @@ select{ font-family:inherit; font-size:12px; font-weight:700; border-radius:6px;
   .analysisBox{ order:8; }
   .iconRow{ order:9; }
 }
+/* Desktop: the 440px cap above was sized for phones and left large windows
+   mostly empty around a small board. Past the mobile breakpoint, let the
+   board grow with the window instead of stalling at a fixed pixel size --
+   capped by vh (not just vw) so a wide-but-short window can't blow the
+   board past the space actually available above/below it, and .card
+   mirrors it (+24px) so the avatar strip keeps lining up with the board's
+   left edge. */
+@media (min-width:701px){
+  .board{ width:min(48vw,60vh,760px); }
+  .root.noEval .board{ width:min(52vw,64vh,800px); }
+  .card{ width:calc(min(48vw,60vh,760px) + 24px); }
+  .root.noEval .card{ width:min(52vw,64vh,800px); padding-left:12px; }
+  .panel{ width:min(22vw,340px); }
+}
