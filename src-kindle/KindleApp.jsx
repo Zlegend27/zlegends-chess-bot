@@ -355,25 +355,29 @@ export default function KindleApp() {
     if (!over) engineMoveRef.current();
   };
 
+  /* Returns a status string so drag pointerdown (below) can tell,
+     synchronously, whether it just picked up a draggable piece --
+     existing callers that ignore the return value see no change. */
   const onSquare = (i64) => {
-    if (thinking || result || promo) return;
-    if (eng.getSide() !== playerColor) return;
+    if (thinking || result || promo) return "blocked";
+    if (eng.getSide() !== playerColor) return "blocked";
     const legal = eng.legalMoves();
     const sq120 = M64TO120[i64];
     if (selected >= 0) {
       const from120 = M64TO120[selected];
       const candidates = legal.filter(m => mFrom(m) === from120 && mTo(m) === sq120);
       if (candidates.length > 0) {
-        if (candidates.length > 1) { setPromo({ from: from120, to: sq120, moves: candidates }); return; }
+        if (candidates.length > 1) { setPromo({ from: from120, to: sq120, moves: candidates }); return "promo"; }
         playMove(candidates[0]);
-        return;
+        return "moved";
       }
     }
     const p = eng.pieceAt(i64);
     if (p !== EMPTY && p * playerColor > 0) {
       setSelected(i64);
       setTargets(legal.filter(m => mFrom(m) === sq120).map(m => M120TO64[mTo(m)]));
-    } else { setSelected(-1); setTargets([]); }
+      return "selected";
+    } else { setSelected(-1); setTargets([]); return "deselected"; }
   };
 
   const newGame = (color) => {
@@ -398,6 +402,20 @@ export default function KindleApp() {
 
   const puzzleProgressRef = useRef([]);
   const prevPlayerColorRef = useRef(1);
+
+  /* Drag-to-move (mouse and touch, via Pointer Events), same approach as
+     the main site's board: pointerdown reuses whichever click handler is
+     active (onSquare or onPuzzleSquare) for its "select" step -- its new
+     return value tells us synchronously whether a draggable piece got
+     picked up -- and dropping calls that handler again on the square
+     under the pointer, exactly like a second click/tap would. Kinnda's
+     board isn't memoized (buildBoardRows already reruns every render), so
+     there's no stale-closure ref dance needed here like the main app's. */
+  const boardRef = useRef(null);
+  const [dragFrom, setDragFrom] = useState(-1);
+  const [dragOverSquare, setDragOverSquare] = useState(-1);
+  const [dragPos, setDragPos] = useState(null);
+  const [dragCellSize, setDragCellSize] = useState(40);
 
   const loadPuzzle = (puzzle) => {
     eng.loadFen(puzzle.fen);
@@ -466,7 +484,7 @@ export default function KindleApp() {
   }, [rushMode, rushResult, rushTimeLeft]);
 
   const onPuzzleSquare = (i64) => {
-    if (puzzleFeedback || puzzleSolved) return;
+    if (puzzleFeedback || puzzleSolved) return "blocked";
     const sideToMove = eng.getSide();
     const legal = eng.legalMoves();
     const sq120 = M64TO120[i64];
@@ -494,11 +512,11 @@ export default function KindleApp() {
               setPuzzleFeedback("wrong");
               setTimeout(() => nextRushPuzzle(), 700);
             }
-            return;
+            return "deselected";
           }
           setPuzzleFeedback("wrong");
           setTimeout(() => setPuzzleFeedback(null), 1400);
-          return;
+          return "deselected";
         }
         const cap = isCaptureMove(move);
         eng.make(move);
@@ -525,7 +543,7 @@ export default function KindleApp() {
             setShop(s => addCoins(s, 5));
           }
           rerender();
-          return;
+          return "moved";
         }
         const replySan = activePuzzle.moves[puzzleProgressRef.current.length];
         setTimeout(() => {
@@ -541,14 +559,15 @@ export default function KindleApp() {
           }
         }, 500);
         rerender();
-        return;
+        return "moved";
       }
     }
     const p = eng.pieceAt(i64);
     if (p !== EMPTY && p * sideToMove > 0) {
       setSelected(i64);
       setTargets(legal.filter(m => mFrom(m) === sq120).map(m => M120TO64[mTo(m)]));
-    } else { setSelected(-1); setTargets([]); }
+      return "selected";
+    } else { setSelected(-1); setTargets([]); return "deselected"; }
   };
 
   const exitPuzzle = () => {
@@ -562,6 +581,43 @@ export default function KindleApp() {
   };
 
   const buildBoardRows = (flippedFlag, clickHandler) => {
+    const squareFromPoint = (clientX, clientY) => {
+      const el = boardRef.current;
+      if (!el) return -1;
+      const rect = el.getBoundingClientRect();
+      const relX = clientX - rect.left, relY = clientY - rect.top;
+      if (relX < 0 || relY < 0 || relX >= rect.width || relY >= rect.height) return -1;
+      const visCol = Math.min(7, Math.floor((relX / rect.width) * 8));
+      const visRow = Math.min(7, Math.floor((relY / rect.height) * 8));
+      const f = flippedFlag ? 7 - visCol : visCol;
+      const r = flippedFlag ? visRow : 7 - visRow;
+      return r * 8 + f;
+    };
+    const onPointerDownSq = (i64, e) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      const status = clickHandler(i64);
+      if (status !== "selected") return;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      setDragCellSize(e.currentTarget.getBoundingClientRect().width);
+      setDragFrom(i64);
+      setDragOverSquare(i64);
+      setDragPos({ x: e.clientX, y: e.clientY });
+    };
+    const onPointerMoveSq = (e) => {
+      if (dragFrom < 0) return;
+      setDragPos({ x: e.clientX, y: e.clientY });
+      setDragOverSquare(squareFromPoint(e.clientX, e.clientY));
+    };
+    const onPointerUpSq = (e) => {
+      if (dragFrom < 0) return;
+      const dropSquare = squareFromPoint(e.clientX, e.clientY);
+      setDragFrom(-1); setDragOverSquare(-1); setDragPos(null);
+      if (dropSquare >= 0) clickHandler(dropSquare);
+    };
+    const onPointerCancelSq = () => {
+      setDragFrom(-1); setDragOverSquare(-1); setDragPos(null);
+    };
+
     const rows = [];
     for (let vr = 0; vr < 8; vr++) {
       const r = flippedFlag ? vr : 7 - vr;
@@ -576,6 +632,8 @@ export default function KindleApp() {
         const isTarget = targets.includes(i64);
         const isBotLast = botLastMove && (botLastMove.from === sq120 || botLastMove.to === sq120);
         const kingInCheck = p * eng.getSide() === WK && eng.inCheckNow();
+        const isDragFrom = dragFrom === i64;
+        const isDragOver = dragFrom >= 0 && dragOverSquare === i64 && dragOverSquare !== dragFrom;
         const squareName = FILES[f] + (r + 1);
         const pieceLabel = p !== EMPTY ? `${p > 0 ? "White" : "Black"} ${PIECE_NAME[Math.abs(p)]}` : "empty";
         const stateBits = [isSel && "selected", isTarget && "legal move", kingInCheck && "in check"].filter(Boolean);
@@ -584,8 +642,12 @@ export default function KindleApp() {
           <div key={i64} role="gridcell" tabIndex={0} aria-label={ariaLabel}
             onClick={() => clickHandler(i64)}
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); clickHandler(i64); } }}
-            className={"kSq " + (light ? "kLight" : "kDark") + (isSel ? " kSel" : "") + (isBotLast ? " kLast" : "") + (kingInCheck ? " kChk" : "")}>
-            {p !== EMPTY && <span className={"kPc " + (p > 0 ? "kPcW" : "kPcB")}>{glyphFor(p)}</span>}
+            onPointerDown={(e) => onPointerDownSq(i64, e)}
+            onPointerMove={onPointerMoveSq}
+            onPointerUp={onPointerUpSq}
+            onPointerCancel={onPointerCancelSq}
+            className={"kSq " + (light ? "kLight" : "kDark") + (isSel ? " kSel" : "") + (isBotLast ? " kLast" : "") + (kingInCheck ? " kChk" : "") + (isDragOver ? " kDragOver" : "")}>
+            {p !== EMPTY && !isDragFrom && <span className={"kPc " + (p > 0 ? "kPcW" : "kPcB")}>{glyphFor(p)}</span>}
             {isTarget && <span className="kDot" />}
             {vf === 0 && <span className="kCoord kRk">{r + 1}</span>}
             {vr === 7 && <span className="kCoord kFl">{FILES[f]}</span>}
@@ -632,7 +694,11 @@ export default function KindleApp() {
             </div>
             {!puzzleFeedback && !puzzleSolved && <div className="kMoves">{activePuzzle.hint}</div>}
             <div className="kBoardWrap">
-              <div className="kBoard" style={boardVars} role="grid" aria-label="Chess board">{buildBoardRows(false, onPuzzleSquare)}</div>
+              <div className="kBoard" style={boardVars} role="grid" aria-label="Chess board" ref={boardRef}>{buildBoardRows(false, onPuzzleSquare)}</div>
+              {dragFrom >= 0 && dragPos && (
+                <span className={"kPc kDragGhost " + (eng.pieceAt(dragFrom) > 0 ? "kPcW" : "kPcB")}
+                  style={{ left: dragPos.x, top: dragPos.y, fontSize: dragCellSize * 0.7 }}>{glyphFor(eng.pieceAt(dragFrom))}</span>
+              )}
             </div>
             <div className="kCtrls">
               {!rushMode && puzzleSolved && <button onClick={nextPuzzle}>Next Puzzle</button>}
@@ -756,7 +822,11 @@ export default function KindleApp() {
       </div>
 
       <div className="kBoardWrap">
-        <div className="kBoard" style={boardVars} role="grid" aria-label="Chess board">{rows}</div>
+        <div className="kBoard" style={boardVars} role="grid" aria-label="Chess board" ref={boardRef}>{rows}</div>
+        {dragFrom >= 0 && dragPos && (
+          <span className={"kPc kDragGhost " + (eng.pieceAt(dragFrom) > 0 ? "kPcW" : "kPcB")}
+            style={{ left: dragPos.x, top: dragPos.y, fontSize: dragCellSize * 0.7 }}>{glyphFor(eng.pieceAt(dragFrom))}</span>
+        )}
         {promo && (
           <div className="kPromoOv">
             {[WQ, WR, WB, WN].map(pp => (
