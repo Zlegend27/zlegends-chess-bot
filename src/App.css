@@ -161,11 +161,14 @@
 .pv{ margin-top:8px; font-family:ui-monospace,Consolas,monospace; font-size:12px; color:#B9AEE0; line-height:1.5; word-break:break-word; }
 .audioRow{ display:flex; align-items:center; gap:8px; }
 .jbHead{ display:flex; align-items:center; gap:8px; }
+.jbMole{ width:64px; height:auto; display:block; margin:0 auto; filter:drop-shadow(0 0 10px #8B2FC966); }
 .trackRow{ display:flex; align-items:center; gap:8px; margin-bottom:8px; }
 .trackName{ font-family:ui-monospace,Consolas,monospace; font-size:12px; color:var(--yellow);
-  text-shadow:0 0 8px #F5D93E44; }
+  text-shadow:0 0 8px #F5D93E44; flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .trackTag{ font-size:9px; font-weight:700; letter-spacing:.14em; text-transform:uppercase;
-  color:var(--dim); border:1px solid #8B2FC966; border-radius:4px; padding:1px 5px; }
+  color:var(--dim); border:1px solid #8B2FC966; border-radius:4px; padding:1px 5px; flex:none; }
+.mp3Progress{ display:flex; align-items:center; gap:8px; }
+.mp3Time{ font-family:ui-monospace,Consolas,monospace; font-size:10px; color:var(--dim); width:30px; flex:none; text-align:center; }
 .playBtn{ width:38px; height:38px; border-radius:50%; border:2px solid var(--cyan);
   background:#0E2E38; color:var(--cyan); font-size:15px; cursor:pointer; flex:none;
   box-shadow:0 0 12px #3EE7F544; display:flex; align-items:center; justify-content:center; touch-action:manipulation; }

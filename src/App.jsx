@@ -6,7 +6,7 @@ import {
 import { createAudio } from "./audio/chiptune";
 import { getSupabase } from "./utils/supabase";
 import { MP3_PLAYLISTS, loadPlaylistTracks } from "./utils/musicLibrary";
-import PixelAvatar, { ZPAL, ZPIX, JPAL, JPIX, BPAL, BPIX, PPAL, PPIX } from "./components/PixelAvatar";
+import PixelAvatar, { ZPAL, ZPIX, BPAL, BPIX, PPAL, PPIX } from "./components/PixelAvatar";
 import SocialLinks from "./components/SocialLinks";
 import StarField from "./components/StarField";
 import { loadSetting, saveSetting } from "./utils/storage";
@@ -161,6 +161,13 @@ export default function ZlegendsBot() {
   if (!mp3AudioRef.current) {
     mp3AudioRef.current = new Audio();
     mp3AudioRef.current.volume = volume / 100;
+    /* "metadata" (not the "auto" default) so picking a playlist only costs
+       a small header fetch for duration/seek-bar purposes -- the full
+       multi-MB file doesn't start streaming until the player actually
+       presses Play. Mobile connections were stalling for a long time
+       before a song became audible because "auto" preload used to kick
+       off a full download the instant a track was selected. */
+    mp3AudioRef.current.preload = "metadata";
   }
   const mp3Audio = mp3AudioRef.current;
   const [musicSource, setMusicSourceState] = useState(() => loadSetting("musicSource", "chiptune"));
@@ -168,6 +175,9 @@ export default function ZlegendsBot() {
   const [mp3Loading, setMp3Loading] = useState(false);
   const [mp3Idx, setMp3Idx] = useState(() => loadSetting("mp3Idx", 0));
   const [mp3Playing, setMp3Playing] = useState(false);
+  const [mp3Duration, setMp3Duration] = useState(0);
+  const [mp3CurrentTime, setMp3CurrentTime] = useState(0);
+  const [mp3Buffering, setMp3Buffering] = useState(false);
   const mp3IdxRef = useRef(mp3Idx);
   mp3IdxRef.current = mp3Idx;
   const mp3TracksRef = useRef(mp3Tracks);
@@ -1066,9 +1076,19 @@ export default function ZlegendsBot() {
       setMp3Loading(false);
     });
   };
-  /* Loads whichever mp3 playlist was last selected (if any) once on mount,
-     same idea as the chiptune player restoring its saved trackIdx. */
-  useEffect(() => { if (musicSource !== "chiptune") loadMp3Playlist(musicSource); }, []);
+  /* Only fetches the saved playlist's track list once the Juice Box is
+     actually opened, not on every app mount -- otherwise, whenever
+     someone's last-used source was an mp3 playlist, the app would import
+     supabase-js and hit Storage before they'd even looked at the music
+     player, slowing down the rest of the site (worst on mobile). Picking
+     a playlist from the dropdown already loads it directly in
+     setMusicSource below, so this only covers "reopened with a playlist
+     already selected from last time". */
+  useEffect(() => {
+    if (!musicOpen || musicSource === "chiptune") return;
+    if (mp3TracksRef.current.length || mp3Loading) return;
+    loadMp3Playlist(musicSource);
+  }, [musicOpen]);
   /* Keeps the <audio> element's src in sync with the selected track,
      re-playing automatically if music was already playing -- covers both
      manual next/prev and the "ended" auto-advance below. */
@@ -1077,6 +1097,8 @@ export default function ZlegendsBot() {
     const track = mp3Tracks[((mp3Idx % mp3Tracks.length) + mp3Tracks.length) % mp3Tracks.length];
     if (mp3Audio.src !== track.url) {
       mp3Audio.src = track.url;
+      setMp3Duration(0);
+      setMp3CurrentTime(0);
       if (mp3PlayingRef.current) mp3Audio.play().catch(() => {});
     }
   }, [musicSource, mp3Tracks, mp3Idx]);
@@ -1090,8 +1112,24 @@ export default function ZlegendsBot() {
         return next;
       });
     };
+    const onMeta = () => setMp3Duration(mp3Audio.duration || 0);
+    const onTime = () => setMp3CurrentTime(mp3Audio.currentTime);
+    const onWaiting = () => setMp3Buffering(true);
+    const onReady = () => setMp3Buffering(false);
     mp3Audio.addEventListener("ended", onEnded);
-    return () => mp3Audio.removeEventListener("ended", onEnded);
+    mp3Audio.addEventListener("loadedmetadata", onMeta);
+    mp3Audio.addEventListener("timeupdate", onTime);
+    mp3Audio.addEventListener("waiting", onWaiting);
+    mp3Audio.addEventListener("playing", onReady);
+    mp3Audio.addEventListener("canplay", onReady);
+    return () => {
+      mp3Audio.removeEventListener("ended", onEnded);
+      mp3Audio.removeEventListener("loadedmetadata", onMeta);
+      mp3Audio.removeEventListener("timeupdate", onTime);
+      mp3Audio.removeEventListener("waiting", onWaiting);
+      mp3Audio.removeEventListener("playing", onReady);
+      mp3Audio.removeEventListener("canplay", onReady);
+    };
   }, []);
   const setMusicSource = (id) => {
     if (id === musicSource) return;
@@ -1129,6 +1167,11 @@ export default function ZlegendsBot() {
     switchMp3Track(-1);
   };
   const onVolume = v => { setVolume(v); audio.setVolume(v / 100); mp3Audio.volume = v / 100; saveSetting("volume", v); };
+  const seekMp3 = (t) => { mp3Audio.currentTime = t; setMp3CurrentTime(t); };
+  const fmtTime = (s) => {
+    if (!isFinite(s) || s < 0) s = 0;
+    return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+  };
   const isMp3Source = musicSource !== "chiptune";
   const mp3NowPlaying = isMp3Source && mp3Tracks.length ? mp3Tracks[((mp3Idx % mp3Tracks.length) + mp3Tracks.length) % mp3Tracks.length] : null;
   const jbTrackLabel = !isMp3Source ? trackName : mp3Loading ? "Loading…" : mp3NowPlaying ? mp3NowPlaying.name : "No tracks yet";
@@ -1673,19 +1716,29 @@ export default function ZlegendsBot() {
 
       {musicOpen && (
         <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) setMusicOpen(false); }}>
-          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 220, padding: "20px 24px" }}>
-            <div className="boxHead jbHead">
-              <PixelAvatar rows={JPIX} pal={JPAL} size={20} />
-              <span>Juice Box</span>
-            </div>
+          <div className="promoBox jbBox" style={{ flexDirection: "column", gap: 12, width: 300, padding: "20px 24px" }}>
+            <img src="/VIRTUOSO_MOLE.webp" alt="Juice Box" className="jbMole" />
             <select value={musicSource} onChange={e => setMusicSource(e.target.value)}>
               <option value="chiptune">Chiptune</option>
               {MP3_PLAYLISTS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
             </select>
             <div className="trackRow">
-              <span className="trackName">{"♪ " + jbTrackLabel}</span>
+              <span className="trackName" title={jbTrackLabel}>{"♪ " + jbTrackLabel}</span>
               {!isMp3Source && trackName === "Neon Gambit" && <span className="trackTag">default</span>}
+              {isMp3Source && mp3Buffering && !jbDisabled && <span className="trackTag">buffering</span>}
             </div>
+            {isMp3Source && (
+              <div className="mp3Progress">
+                <span className="mp3Time">{fmtTime(mp3CurrentTime)}</span>
+                <input
+                  type="range" min="0" max={mp3Duration || 0}
+                  value={Math.min(mp3CurrentTime, mp3Duration || 0)}
+                  onChange={e => seekMp3(Number(e.target.value))}
+                  disabled={jbDisabled || !mp3Duration}
+                />
+                <span className="mp3Time">{fmtTime(mp3Duration)}</span>
+              </div>
+            )}
             <div className="audioRow">
               <button className="playBtn sm" onClick={prevTrack} disabled={jbDisabled} title="Previous track">{"◀◀"}</button>
               <button className="playBtn" onClick={toggleMusic} disabled={jbDisabled} title={jbPlaying ? "Pause music" : "Play music"}>
