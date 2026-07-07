@@ -17,6 +17,7 @@ import { BOARD_COLORS, getBoardColor } from "./utils/boardColors";
 import { saveGame, estimateRating } from "./utils/gameHistory";
 import { getDisplayName, setDisplayName } from "./utils/playerIdentity";
 import { submitRushScore, fetchLeaderboard } from "./utils/leaderboard";
+import { syncRankBotToSupabase, fetchRankBotFromSupabase } from "./utils/rankBot";
 import { ENGINE_VERSION } from "./utils/version";
 import { OPENINGS } from "./utils/openings";
 import { loadEcoOpenings, detectEcoOpening } from "./utils/ecoOpenings";
@@ -36,7 +37,30 @@ const DIFFICULTIES = [
   { label: "2000 Elo", stockfishElo: 2000, moveTimeMs: 1000 },
   { label: "Casual", ms: 600, book: true },
   { label: "Master", ms: 12000, book: true },
+  { label: "Rank Bot", id: "rank", adaptive: true, moveTimeMs: 900 },
 ];
+
+/* Rank Bot: rather than one fixed Elo, the target Stockfish strength is a
+   dial that moves after every move the player makes -- a blunder steps
+   it down immediately, a clean run of moves steps it up, everything else
+   holds steady, always by one bounded increment so it can't swing wildly
+   in a single game (see adjustRankBotDial below). The first few games use
+   a bigger step to converge faster (closer to chess.com/Lichess-style
+   placement matches), then settle into finer adjustments for ongoing
+   play. Below Stockfish's own 1320 floor, blunderChance stands in for
+   "weaker than Stockfish can go" the same way the "1000 Elo" tier does. */
+const RANK_BOT_MIN_ELO = 600;
+const RANK_BOT_MAX_ELO = 2200;
+const RANK_BOT_DEFAULT_ELO = 1000;
+const RANK_BOT_CALIBRATION_GAMES = 3;
+const RANK_BOT_STEP_CALIBRATION = 75;
+const RANK_BOT_STEP_STEADY = 25;
+const RANK_BOT_PROBE_MS = 250;
+function rankBotBlunderChance(elo) {
+  if (elo >= STOCKFISH_MIN_ELO) return 0;
+  const deficit = STOCKFISH_MIN_ELO - elo;
+  return Math.min(0.75, 0.3 + deficit / 1000);
+}
 
 /* Named weight presets on evaluate()'s existing material/position/king-safety
    terms — same eval function, different personality, no engine duplication.
@@ -324,6 +348,8 @@ export default function ZlegendsBot() {
     if (!ratingInfo) estimateRating().then(setRatingInfo);
   };
   const [displayName, setDisplayNameState] = useState(() => getDisplayName());
+  const displayNameRef = useRef(displayName);
+  displayNameRef.current = displayName;
   const [nameEditOpen, setNameEditOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const saveDisplayName = () => {
@@ -339,6 +365,30 @@ export default function ZlegendsBot() {
     setLeaderboardRows(null);
     fetchLeaderboard(duration).then(setLeaderboardRows);
   };
+  const [rankBotElo, setRankBotElo] = useState(() => loadSetting("rankBotElo", RANK_BOT_DEFAULT_ELO));
+  const [rankBotGames, setRankBotGames] = useState(() => loadSetting("rankBotGames", 0));
+  const rankBotEloRef = useRef(rankBotElo);
+  rankBotEloRef.current = rankBotElo;
+  const rankBotGamesRef = useRef(rankBotGames);
+  rankBotGamesRef.current = rankBotGames;
+  /* Last few of the player's own move-quality scores this game -- reset
+     each new game, not persisted, purely to smooth out the live dial
+     adjustment so one weird move doesn't overreact. */
+  const rankBotWindowRef = useRef([]);
+  /* Recovers a returning player's rating on a fresh browser/device --
+     only if localStorage has never seen a Rank Bot game here, so it
+     can't clobber an in-progress session's own local state. */
+  useEffect(() => {
+    if (loadSetting("rankBotElo", null) != null) return;
+    fetchRankBotFromSupabase().then(saved => {
+      const elo = saved ? saved.rankElo : RANK_BOT_DEFAULT_ELO;
+      const games = saved ? saved.rankGames : 0;
+      setRankBotElo(elo);
+      setRankBotGames(games);
+      saveSetting("rankBotElo", elo);
+      saveSetting("rankBotGames", games);
+    });
+  }, []);
   const [pieceDesignsOpen, setPieceDesignsOpen] = useState(false);
   const [boardColorsOpen, setBoardColorsOpen] = useState(false);
   const [openingsOpen, setOpeningsOpen] = useState(false);
@@ -619,9 +669,55 @@ export default function ZlegendsBot() {
     });
   }, [eng]);
 
+  /* Rank Bot has no fixed stockfishElo in DIFFICULTIES -- it's synthesized
+     here from the live dial every time a move is needed, so engineMove
+     doesn't need its own special case beyond this one substitution. */
+  const effectiveDifficulty = (diff) => {
+    if (!diff.adaptive) return diff;
+    const elo = rankBotEloRef.current;
+    return { ...diff, stockfishElo: Math.max(elo, STOCKFISH_MIN_ELO), blunderChance: rankBotBlunderChance(elo) };
+  };
+
+  /* Runs after each of the player's own moves (playMove only -- not
+     puzzles/analysis/quiz), purely when Rank Bot is the opponent. Two
+     quick background searches (before/after the move, same shape as the
+     N+1-search trick gradeMoves uses for move-grading) estimate how much
+     eval the player's actual move gave up; a rolling window of the last
+     few smooths that into one dial step per move so a single lucky or
+     unlucky move can't swing it. */
+  const adjustRankBotDial = (prefixBefore, prefixAfter, gameOver) => {
+    if (difficultyRef.current.id !== "rank" || gameOver) return;
+    Promise.all([
+      runSearch(prefixBefore, RANK_BOT_PROBE_MS, 0, { useBook: false }),
+      runSearch(prefixAfter, RANK_BOT_PROBE_MS, 0, { useBook: false }),
+    ]).then(([before, after]) => {
+      if (!before || !after) return;
+      const loss = Math.max(0, before.score + after.score);
+      const window = rankBotWindowRef.current;
+      window.push(loss);
+      if (window.length > 5) window.shift();
+      const calibrating = rankBotGamesRef.current < RANK_BOT_CALIBRATION_GAMES;
+      const step = calibrating ? RANK_BOT_STEP_CALIBRATION : RANK_BOT_STEP_STEADY;
+      let next = rankBotEloRef.current;
+      if (loss >= 150) {
+        next -= step;
+      } else if (window.length >= 3) {
+        const avg = window.reduce((a, b) => a + b, 0) / window.length;
+        if (avg < 15) next += step;
+        else if (avg >= 60) next -= step;
+      }
+      next = Math.max(RANK_BOT_MIN_ELO, Math.min(RANK_BOT_MAX_ELO, next));
+      if (next !== rankBotEloRef.current) {
+        rankBotEloRef.current = next;
+        setRankBotElo(next);
+        saveSetting("rankBotElo", next);
+      }
+    });
+  };
+
   const engineMove = useCallback((currentMoveList) => {
     setThinking(true);
-    const diff = difficultyRef.current;
+    const diff = effectiveDifficulty(difficultyRef.current);
     const botColorNow = -playerColorRef.current;
     const whiteEvalNow = eng.evalWhite();
     const botAdvantagePawns = (botColorNow === 1 ? whiteEvalNow : -whiteEvalNow) / 100;
@@ -646,6 +742,7 @@ export default function ZlegendsBot() {
         if (over) {
           setReviewIndex(eng.plyCount());
           saveGame({ difficultyLabel: difficultyRef.current.label, playerColor: playerColorRef.current, moveList: newMoveList, result: over, finalEval: whiteScore, style: gameStyleRef.current.label, engineVersion: ENGINE_VERSION });
+          finishRankBotGame();
         }
       }
       setThinking(false);
@@ -750,9 +847,20 @@ export default function ZlegendsBot() {
     setTimeout(() => spectateMoveRef.current(), 60);
   };
 
+  const finishRankBotGame = () => {
+    if (difficultyRef.current.id !== "rank") return;
+    const games = rankBotGamesRef.current + 1;
+    rankBotGamesRef.current = games;
+    setRankBotGames(games);
+    saveSetting("rankBotGames", games);
+    rankBotWindowRef.current = [];
+    syncRankBotToSupabase({ rankElo: rankBotEloRef.current, rankGames: games, displayName: displayNameRef.current });
+  };
+
   const playMove = useCallback((m) => {
     const cap = isCaptureMove(m);
     const san = eng.sanOf(m);
+    const prefixBefore = moveListRef.current;
     eng.make(m);
     try { cap ? audio.sfxCapture() : audio.sfxMove(); } catch { /* audio unavailable */ }
     setLastMove({ from: mFrom(m), to: mTo(m) });
@@ -763,9 +871,11 @@ export default function ZlegendsBot() {
     setEvalCp(eng.evalWhite());
     const over = checkGameOver();
     setResult(over);
+    adjustRankBotDial(prefixBefore, newMoveList, !!over);
     if (over) {
       setReviewIndex(eng.plyCount());
       saveGame({ difficultyLabel: difficultyRef.current.label, playerColor: playerColorRef.current, moveList: newMoveList, result: over, finalEval: eng.evalWhite(), style: gameStyleRef.current.label, engineVersion: ENGINE_VERSION });
+      finishRankBotGame();
     }
     rerender();
     if (!over) engineMoveRef.current(newMoveList);
@@ -1539,6 +1649,11 @@ export default function ZlegendsBot() {
               ) : (
                 <>
                   <div className="trayEmpty">{gameStyle.label} today</div>
+                  {!spectateMode && difficultyRef.current.id === "rank" && (
+                    <div className="trayEmpty openingTag">
+                      ~{rankBotElo} Elo{rankBotGames < RANK_BOT_CALIBRATION_GAMES ? ` · Calibration ${rankBotGames + 1}/${RANK_BOT_CALIBRATION_GAMES}` : ""}
+                    </div>
+                  )}
                   {liveOpening && (
                     <div className="trayEmpty openingTag">{liveOpening.name} · {liveOpening.eco}</div>
                   )}
@@ -2189,13 +2304,13 @@ export default function ZlegendsBot() {
               <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
                 White
                 <select value={spectateWhiteIdx} onChange={e => setSpectateWhiteIdx(Number(e.target.value))}>
-                  {DIFFICULTIES.map((d, i) => <option key={i} value={i}>{d.label}</option>)}
+                  {DIFFICULTIES.map((d, i) => !d.adaptive && <option key={i} value={i}>{d.label}</option>)}
                 </select>
               </label>
               <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
                 Black
                 <select value={spectateBlackIdx} onChange={e => setSpectateBlackIdx(Number(e.target.value))}>
-                  {DIFFICULTIES.map((d, i) => <option key={i} value={i}>{d.label}</option>)}
+                  {DIFFICULTIES.map((d, i) => !d.adaptive && <option key={i} value={i}>{d.label}</option>)}
                 </select>
               </label>
               <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
