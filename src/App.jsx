@@ -1798,7 +1798,7 @@ export default function ZlegendsBot() {
               {!spectateMode && difficultyRef.current.id === "rank" ? (
                 <div className="trayEmpty" style={{ color: "var(--cyan)" }}>
                   {rankBotAssessedElo == null
-                    ? `Calibrating — game ${(rankBotGames % RANK_BOT_ASSESSMENT_EVERY) + 1}/${RANK_BOT_ASSESSMENT_EVERY}`
+                    ? `Calibrating Elo — game ${(rankBotGames % RANK_BOT_ASSESSMENT_EVERY) + 1}/${RANK_BOT_ASSESSMENT_EVERY}`
                     : `~${rankBotAssessedElo} Elo`}
                 </div>
               ) : (
