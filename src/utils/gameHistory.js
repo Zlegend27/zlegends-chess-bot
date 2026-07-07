@@ -5,7 +5,7 @@ import { buildPgn } from "./pgn";
 /** Best-effort game save — never throws, never blocks/disrupts gameplay.
  *  No-ops entirely if Supabase isn't configured (e.g. local dev without
  *  a .env file). */
-export async function saveGame({ difficultyLabel, playerColor, moveList, result, finalEval, style, engineVersion }) {
+export async function saveGame({ difficultyLabel, playerColor, moveList, result, finalEval, style, engineVersion, gameUid, rankEloAtGame }) {
   const supabase = await getSupabase();
   if (!supabase) return;
   try {
@@ -21,6 +21,8 @@ export async function saveGame({ difficultyLabel, playerColor, moveList, result,
       final_eval: finalEval,
       style: style ?? null,
       engine_version: engineVersion ?? null,
+      game_uid: gameUid ?? null,
+      rank_elo_at_game: rankEloAtGame ?? null,
     });
   } catch {
     /* stats are a nice-to-have, not worth surfacing an error over */

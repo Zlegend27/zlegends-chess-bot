@@ -17,7 +17,7 @@ import { BOARD_COLORS, getBoardColor } from "./utils/boardColors";
 import { saveGame, estimateRating } from "./utils/gameHistory";
 import { getDisplayName, setDisplayName } from "./utils/playerIdentity";
 import { submitRushScore, fetchLeaderboard } from "./utils/leaderboard";
-import { syncRankBotToSupabase, fetchRankBotFromSupabase } from "./utils/rankBot";
+import { syncRankBotToSupabase, fetchRankBotFromSupabase, logRankBotMove } from "./utils/rankBot";
 import { ENGINE_VERSION } from "./utils/version";
 import { OPENINGS } from "./utils/openings";
 import { loadEcoOpenings, detectEcoOpening } from "./utils/ecoOpenings";
@@ -375,6 +375,20 @@ export default function ZlegendsBot() {
      each new game, not persisted, purely to smooth out the live dial
      adjustment so one weird move doesn't overreact. */
   const rankBotWindowRef = useRef([]);
+  /* Client-generated id linking one Rank Bot game's rank_bot_moves rows
+     back to its single games-table row (that insert is fire-and-forget
+     and doesn't return its own id) -- lazily created on this game's first
+     tracked move, cleared once the game ends so the next game gets a
+     fresh one. */
+  const rankBotGameUidRef = useRef(null);
+  const ensureRankBotGameUid = () => {
+    if (!rankBotGameUidRef.current) {
+      rankBotGameUidRef.current = (typeof crypto !== "undefined" && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    }
+    return rankBotGameUidRef.current;
+  };
   /* Recovers a returning player's rating on a fresh browser/device --
      only if localStorage has never seen a Rank Bot game here, so it
      can't clobber an in-progress session's own local state. */
@@ -687,6 +701,8 @@ export default function ZlegendsBot() {
      unlucky move can't swing it. */
   const adjustRankBotDial = (prefixBefore, prefixAfter, gameOver) => {
     if (difficultyRef.current.id !== "rank" || gameOver) return;
+    const gameUid = ensureRankBotGameUid();
+    const ply = prefixAfter.length;
     Promise.all([
       runSearch(prefixBefore, RANK_BOT_PROBE_MS, 0, { useBook: false }),
       runSearch(prefixAfter, RANK_BOT_PROBE_MS, 0, { useBook: false }),
@@ -698,7 +714,8 @@ export default function ZlegendsBot() {
       if (window.length > 5) window.shift();
       const calibrating = rankBotGamesRef.current < RANK_BOT_CALIBRATION_GAMES;
       const step = calibrating ? RANK_BOT_STEP_CALIBRATION : RANK_BOT_STEP_STEADY;
-      let next = rankBotEloRef.current;
+      const eloBefore = rankBotEloRef.current;
+      let next = eloBefore;
       if (loss >= 150) {
         next -= step;
       } else if (window.length >= 3) {
@@ -707,11 +724,12 @@ export default function ZlegendsBot() {
         else if (avg >= 60) next -= step;
       }
       next = Math.max(RANK_BOT_MIN_ELO, Math.min(RANK_BOT_MAX_ELO, next));
-      if (next !== rankBotEloRef.current) {
+      if (next !== eloBefore) {
         rankBotEloRef.current = next;
         setRankBotElo(next);
         saveSetting("rankBotElo", next);
       }
+      logRankBotMove({ gameUid, ply, loss, eloBefore, eloAfter: next });
     });
   };
 
@@ -741,7 +759,12 @@ export default function ZlegendsBot() {
         setResult(over);
         if (over) {
           setReviewIndex(eng.plyCount());
-          saveGame({ difficultyLabel: difficultyRef.current.label, playerColor: playerColorRef.current, moveList: newMoveList, result: over, finalEval: whiteScore, style: gameStyleRef.current.label, engineVersion: ENGINE_VERSION });
+          const isRankBot = difficultyRef.current.id === "rank";
+          saveGame({
+            difficultyLabel: difficultyRef.current.label, playerColor: playerColorRef.current, moveList: newMoveList,
+            result: over, finalEval: whiteScore, style: gameStyleRef.current.label, engineVersion: ENGINE_VERSION,
+            gameUid: isRankBot ? rankBotGameUidRef.current : null, rankEloAtGame: isRankBot ? rankBotEloRef.current : null,
+          });
           finishRankBotGame();
         }
       }
@@ -854,6 +877,7 @@ export default function ZlegendsBot() {
     setRankBotGames(games);
     saveSetting("rankBotGames", games);
     rankBotWindowRef.current = [];
+    rankBotGameUidRef.current = null;
     syncRankBotToSupabase({ rankElo: rankBotEloRef.current, rankGames: games, displayName: displayNameRef.current });
   };
 
@@ -874,7 +898,12 @@ export default function ZlegendsBot() {
     adjustRankBotDial(prefixBefore, newMoveList, !!over);
     if (over) {
       setReviewIndex(eng.plyCount());
-      saveGame({ difficultyLabel: difficultyRef.current.label, playerColor: playerColorRef.current, moveList: newMoveList, result: over, finalEval: eng.evalWhite(), style: gameStyleRef.current.label, engineVersion: ENGINE_VERSION });
+      const isRankBot = difficultyRef.current.id === "rank";
+      saveGame({
+        difficultyLabel: difficultyRef.current.label, playerColor: playerColorRef.current, moveList: newMoveList,
+        result: over, finalEval: eng.evalWhite(), style: gameStyleRef.current.label, engineVersion: ENGINE_VERSION,
+        gameUid: isRankBot ? rankBotGameUidRef.current : null, rankEloAtGame: isRankBot ? rankBotEloRef.current : null,
+      });
       finishRankBotGame();
     }
     rerender();

@@ -91,3 +91,40 @@ create policy "Allow anonymous select rush_scores" on rush_scores
   for select
   to anon
   using (true);
+
+-- Rank Bot analysis support: a per-game snapshot of the dial (so you can
+-- see rating progression across a player's games) plus a client-generated
+-- game_uid that links a game row to its own per-move adjustment log
+-- below, since the client doesn't get the games row's own `id` back from
+-- the existing best-effort insert.
+alter table games add column game_uid uuid;
+alter table games add column rank_elo_at_game int;
+
+-- One row per player move played against Rank Bot: the estimated eval
+-- loss for that move and the dial's value immediately before/after,
+-- so a single game's difficulty curve (and why it moved) can be
+-- reconstructed move by move.
+create table rank_bot_moves (
+  id uuid primary key default gen_random_uuid(),
+  client_id text not null,
+  game_uid uuid not null,
+  ply int not null,
+  loss int not null,
+  elo_before int not null,
+  elo_after int not null,
+  created_at timestamptz not null default now()
+);
+
+create index rank_bot_moves_game_idx on rank_bot_moves (game_uid, ply);
+
+alter table rank_bot_moves enable row level security;
+
+create policy "Allow anonymous insert rank_bot_moves" on rank_bot_moves
+  for insert
+  to anon
+  with check (true);
+
+create policy "Allow anonymous select rank_bot_moves" on rank_bot_moves
+  for select
+  to anon
+  using (true);

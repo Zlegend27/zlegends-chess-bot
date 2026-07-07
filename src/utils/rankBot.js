@@ -40,3 +40,25 @@ export async function fetchRankBotFromSupabase() {
     return null;
   }
 }
+
+/** One row per player move against Rank Bot -- best-effort, fire-and-
+ *  forget, same as everything else here. gameUid links these rows back
+ *  to the single games-table row for that game (see saveGame's gameUid
+ *  param), so a game's whole difficulty curve can be reconstructed by
+ *  querying rank_bot_moves for that game_uid ordered by ply. */
+export async function logRankBotMove({ gameUid, ply, loss, eloBefore, eloAfter }) {
+  const supabase = await getSupabase();
+  if (!supabase) return;
+  try {
+    await supabase.from("rank_bot_moves").insert({
+      client_id: getClientId(),
+      game_uid: gameUid,
+      ply,
+      loss: Math.round(loss),
+      elo_before: eloBefore,
+      elo_after: eloAfter,
+    });
+  } catch {
+    /* analysis log is a nice-to-have, not worth surfacing an error over */
+  }
+}
