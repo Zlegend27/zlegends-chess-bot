@@ -1706,9 +1706,7 @@ export default function ZlegendsBot() {
                   <div className="trayEmpty">{gameStyle.label} today</div>
                   {!spectateMode && difficultyRef.current.id === "rank" && (
                     <div className="trayEmpty openingTag">
-                      {rankBotAssessedElo == null
-                        ? `Calibrating — game ${(rankBotGames % RANK_BOT_ASSESSMENT_EVERY) + 1}/${RANK_BOT_ASSESSMENT_EVERY}`
-                        : `~${rankBotAssessedElo} Elo · game ${rankBotGames % RANK_BOT_ASSESSMENT_EVERY}/${RANK_BOT_ASSESSMENT_EVERY} since last update`}
+                      ~{rankBotElo} Elo{rankBotAssessedElo == null ? " · Calibrating" : ""}
                     </div>
                   )}
                   {liveOpening && (
@@ -1801,7 +1799,7 @@ export default function ZlegendsBot() {
                 <div className="trayEmpty" style={{ color: "var(--cyan)" }}>
                   {rankBotAssessedElo == null
                     ? `Your Elo updates every ${RANK_BOT_ASSESSMENT_EVERY} games — playing game ${(rankBotGames % RANK_BOT_ASSESSMENT_EVERY) + 1}/${RANK_BOT_ASSESSMENT_EVERY}`
-                    : `Elo updates every ${RANK_BOT_ASSESSMENT_EVERY} games — ${RANK_BOT_ASSESSMENT_EVERY - (rankBotGames % RANK_BOT_ASSESSMENT_EVERY)} to go`}
+                    : `~${rankBotAssessedElo} Elo`}
                 </div>
               ) : (
                 !spectateMode && ratingInfo && !ratingInfo.error && ratingInfo.games > 0 && (
