@@ -35,9 +35,9 @@ const DIFFICULTIES = [
   { label: "1000 Elo", stockfishElo: STOCKFISH_MIN_ELO, blunderChance: 0.3, moveTimeMs: 500 },
   { label: "1500 Elo", stockfishElo: 1500, moveTimeMs: 700 },
   { label: "2000 Elo", stockfishElo: 2000, moveTimeMs: 1000 },
+  { label: "Rank Bot", id: "rank", adaptive: true, moveTimeMs: 900 },
   { label: "Casual", ms: 600, book: true },
   { label: "Master", ms: 12000, book: true },
-  { label: "Rank Bot", id: "rank", adaptive: true, moveTimeMs: 900 },
 ];
 
 /* Rank Bot: rather than one fixed Elo, the target Stockfish strength is a
@@ -1769,8 +1769,12 @@ export default function ZlegendsBot() {
                   <button className="nameEditBtn" onClick={() => { setNameDraft(displayName); setNameEditOpen(true); }} title="Edit your name" aria-label="Edit your name">✎</button>
                 )}
               </div>
-              {!spectateMode && ratingInfo && !ratingInfo.error && ratingInfo.games > 0 && (
-                <div className="trayEmpty" style={{ color: "var(--cyan)" }}>~{ratingInfo.rating} Elo</div>
+              {!spectateMode && difficultyRef.current.id === "rank" ? (
+                <div className="trayEmpty" style={{ color: "var(--cyan)" }}>Your Elo is calculated from these games</div>
+              ) : (
+                !spectateMode && ratingInfo && !ratingInfo.error && ratingInfo.games > 0 && (
+                  <div className="trayEmpty" style={{ color: "var(--cyan)" }}>~{ratingInfo.rating} Elo</div>
+                )
               )}
               {activePuzzle ? (
                 <div className="trayEmpty puzzleMeta">
@@ -1930,7 +1934,7 @@ export default function ZlegendsBot() {
                 {hinting ? "Thinking…" : "Best Move"}
               </button>
               <select value={difficultyIdx} onChange={e => onDifficultyChange(Number(e.target.value))}>
-                {DIFFICULTIES.map((d, i) => <option key={i} value={i}>{"Level: " + d.label}</option>)}
+                {DIFFICULTIES.map((d, i) => <option key={i} value={i}>{d.adaptive ? d.label : "Level: " + d.label}</option>)}
               </select>
               {moveList.length > 0 && <button className="btn ghost" onClick={onShare}>Share</button>}
               {result && <button className="btn gold" onClick={() => newGame(playerColor)}>Rematch!</button>}
