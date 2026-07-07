@@ -15,6 +15,8 @@ import { encodeGame, decodeGame, getSharedHash, replayIntoEngine } from "./utils
 import { PIECE_SETS, getPieceSet } from "./utils/pieceSets";
 import { BOARD_COLORS, getBoardColor } from "./utils/boardColors";
 import { saveGame, estimateRating } from "./utils/gameHistory";
+import { getDisplayName, setDisplayName } from "./utils/playerIdentity";
+import { submitRushScore, fetchLeaderboard } from "./utils/leaderboard";
 import { ENGINE_VERSION } from "./utils/version";
 import { OPENINGS } from "./utils/openings";
 import { loadEcoOpenings, detectEcoOpening } from "./utils/ecoOpenings";
@@ -314,9 +316,28 @@ export default function ZlegendsBot() {
   const [musicOpen, setMusicOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [ratingInfo, setRatingInfo] = useState(null);
+  /* Fetched eagerly (not just when Settings opens) now that the estimate
+     also shows next to the "You" card on the main play screen. */
+  useEffect(() => { estimateRating().then(setRatingInfo); }, []);
   const openSettings = () => {
     setSettingsOpen(true);
     if (!ratingInfo) estimateRating().then(setRatingInfo);
+  };
+  const [displayName, setDisplayNameState] = useState(() => getDisplayName());
+  const [nameEditOpen, setNameEditOpen] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const saveDisplayName = () => {
+    const saved = setDisplayName(nameDraft);
+    setDisplayNameState(saved);
+    setNameEditOpen(false);
+  };
+  const [leaderboardOpen, setLeaderboardOpen] = useState(false);
+  const [leaderboardDuration, setLeaderboardDuration] = useState(60);
+  const [leaderboardRows, setLeaderboardRows] = useState(null);
+  const loadLeaderboard = (duration) => {
+    setLeaderboardDuration(duration);
+    setLeaderboardRows(null);
+    fetchLeaderboard(duration).then(setLeaderboardRows);
   };
   const [pieceDesignsOpen, setPieceDesignsOpen] = useState(false);
   const [boardColorsOpen, setBoardColorsOpen] = useState(false);
@@ -979,6 +1000,7 @@ export default function ZlegendsBot() {
 
   const finishRush = (reason) => {
     setRushResult({ reason, solved: rushSolvedRef.current });
+    submitRushScore({ duration: rushDuration, solved: rushSolvedRef.current, displayName });
   };
 
   const retryRush = () => startRush(rushDuration);
@@ -1597,7 +1619,15 @@ export default function ZlegendsBot() {
           <div className={"card youCard" + (mode === "play" && !result && !thinking && eng.getSide() === playerColor ? " turnGlow" : "")}>
             <div className="avatarBox"><img src="/you-avatar.webp" alt="You (Challenger)" className="youAvatarImg" /></div>
             <div className="cardMeta">
-              <div className="cardName you">{spectateMode ? `${DIFFICULTIES[playerColor === 1 ? spectateWhiteIdx : spectateBlackIdx].label} (${playerColor === 1 ? "White" : "Black"})` : "You (Challenger)"}</div>
+              <div className="cardName you" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span>{spectateMode ? `${DIFFICULTIES[playerColor === 1 ? spectateWhiteIdx : spectateBlackIdx].label} (${playerColor === 1 ? "White" : "Black"})` : (displayName || "Challenger")}</span>
+                {!spectateMode && (
+                  <button className="nameEditBtn" onClick={() => { setNameDraft(displayName); setNameEditOpen(true); }} title="Edit your name" aria-label="Edit your name">✎</button>
+                )}
+              </div>
+              {!spectateMode && ratingInfo && !ratingInfo.error && ratingInfo.games > 0 && (
+                <div className="trayEmpty" style={{ color: "var(--cyan)" }}>~{ratingInfo.rating} Elo</div>
+              )}
               {activePuzzle ? (
                 <div className="trayEmpty puzzleMeta">
                   {rushMode
@@ -1976,6 +2006,7 @@ export default function ZlegendsBot() {
                 </div>
               ))}
             </div>
+            <button className="btn ghost" onClick={() => { setRushOpen(false); setLeaderboardOpen(true); loadLeaderboard(rushDuration); }}>🏆 Leaderboard</button>
           </div>
         </div>
       )}
@@ -1992,6 +2023,59 @@ export default function ZlegendsBot() {
               You solved <b>{rushResult.solved}</b> puzzle{rushResult.solved === 1 ? "" : "s"}.
             </div>
             <button className="btn gold" onClick={retryRush}>Try Again</button>
+            <button className="btn ghost" onClick={() => { setLeaderboardOpen(true); loadLeaderboard(rushDuration); }}>🏆 Leaderboard</button>
+          </div>
+        </div>
+      )}
+
+      {leaderboardOpen && (
+        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 51 }} onClick={e => { if (e.target === e.currentTarget) setLeaderboardOpen(false); }}>
+          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
+            <button className="modalCloseX" onClick={() => setLeaderboardOpen(false)} aria-label="Close Leaderboard" title="Close">✕</button>
+            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              🏆 Puzzle Rush Leaderboard
+            </div>
+            <div className="ctrls">
+              {RUSH_DURATIONS.map(d => (
+                <button key={d.seconds} className={"btn" + (leaderboardDuration === d.seconds ? "" : " ghost")}
+                  onClick={() => loadLeaderboard(d.seconds)}>{d.label}</button>
+              ))}
+            </div>
+            <div className="rows" style={{ maxHeight: 280 }}>
+              {leaderboardRows === null ? (
+                <div className="pv" style={{ padding: "8px 2px" }}>Loading…</div>
+              ) : leaderboardRows.length === 0 ? (
+                <div className="pv" style={{ padding: "8px 2px" }}>No scores yet for this duration — be the first!</div>
+              ) : (
+                leaderboardRows.map((row, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "6px 2px", borderBottom: "1px solid #8B2FC92E" }}>
+                    <span>#{i + 1} {row.display_name || "Anonymous"}</span>
+                    <b>{row.solved}</b>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {nameEditOpen && (
+        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 51 }} onClick={e => { if (e.target === e.currentTarget) setNameEditOpen(false); }}>
+          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
+            <button className="modalCloseX" onClick={() => setNameEditOpen(false)} aria-label="Close" title="Close">✕</button>
+            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              Your Name
+            </div>
+            <div className="pv" style={{ fontSize: 12, opacity: 0.85 }}>
+              Shown on your "You" card and on the Puzzle Rush leaderboard.
+            </div>
+            <input
+              type="text" value={nameDraft} maxLength={24} placeholder="Challenger"
+              onChange={e => setNameDraft(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") saveDisplayName(); }}
+              style={{ width: "100%", boxSizing: "border-box", fontSize: 14, padding: "8px 10px", borderRadius: 8, background: "#150C24", color: "var(--white, #F4EFFF)", border: "1px solid #8B2FC966" }}
+            />
+            <button className="btn gold" onClick={saveDisplayName}>Save</button>
           </div>
         </div>
       )}

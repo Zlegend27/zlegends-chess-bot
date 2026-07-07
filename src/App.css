@@ -203,6 +203,9 @@ input[type=range]{ flex:1; min-width:0; accent-color:var(--magenta); }
   box-shadow:0 3px 0 #150C24, 0 0 14px #F5D93E66; }
 .btn.ghost{ background:transparent; border:1px solid #8B2FC966; box-shadow:none; color:var(--liliac); }
 .btn:disabled{ opacity:.4; cursor:default; }
+.nameEditBtn{ font-size:11px; line-height:1; padding:2px 4px; border:1px solid #3EE7F555; border-radius:4px;
+  background:transparent; color:var(--cyan); cursor:pointer; text-transform:none; opacity:.75; flex:none; }
+.nameEditBtn:hover{ opacity:1; background:#3EE7F522; }
 select{ font-family:inherit; font-size:12px; font-weight:700; border-radius:6px; padding:8px;
   border:1px solid #8B2FC966; background:#1D1038; color:var(--white); }
 .promoOv{ position:absolute; inset:0; background:#0E0620CC; display:flex; align-items:center;
