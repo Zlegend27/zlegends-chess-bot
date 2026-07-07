@@ -740,8 +740,10 @@ export default function KindleApp() {
   if (view === "puzzle") {
     const band = KID_PUZZLE_BANDS.find(b => b.id === puzzleBand);
     const sideLabel = activePuzzle ? (eng.getSide() === 1 ? "White" : "Black") : "";
+    const closePuzzleView = () => { if (rushMode) exitRush(); else exitPuzzle(); };
     return (
-      <div className="kRoot">
+      <div className="kRoot" onClick={e => { if (e.target === e.currentTarget) closePuzzleView(); }}>
+        <button className="kCloseX" onClick={closePuzzleView} aria-label="Close Puzzles">✕</button>
         <Critters />
         <div className="kHdr">
           <AnimalIcon kind={DIFFICULTIES[difficultyIdx].label} hat={equippedHat} />
@@ -763,7 +765,6 @@ export default function KindleApp() {
             </div>
             <div className="kCtrls">
               <button onClick={() => setRushOpen(true)}>⚡ Puzzle Rush</button>
-              <button onClick={exitPuzzle}>Back to the Game</button>
             </div>
           </>
         ) : (
@@ -783,7 +784,6 @@ export default function KindleApp() {
             </div>
             <div className="kCtrls">
               {!rushMode && puzzleSolved && <button onClick={nextPuzzle}>Next Puzzle</button>}
-              {rushMode ? <button onClick={exitRush}>End Rush</button> : <button onClick={exitPuzzle}>Back to the Game</button>}
             </div>
           </>
         )}
@@ -823,7 +823,8 @@ export default function KindleApp() {
 
   if (view === "lessons") {
     return (
-      <div className="kRoot">
+      <div className="kRoot" onClick={e => { if (e.target === e.currentTarget) setView("play"); }}>
+        <button className="kCloseX" onClick={() => setView("play")} aria-label="Close How to Play">✕</button>
         <Critters />
         <div className="kHdr">
           <AnimalIcon kind={DIFFICULTIES[difficultyIdx].label} hat={equippedHat} />
@@ -845,9 +846,6 @@ export default function KindleApp() {
         <ul className="kTips">
           {TIPS.map((t, i) => <li key={i}>{t}</li>)}
         </ul>
-        <div className="kCtrls">
-          <button onClick={() => setView("play")}>Back to the Game</button>
-        </div>
       </div>
     );
   }
