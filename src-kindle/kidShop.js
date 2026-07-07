@@ -64,6 +64,16 @@ export function addCoins(state, amount) {
   return next;
 }
 
+/** No-ops (same pattern as the buy* functions) if the kid can't afford
+ *  it -- e.g. a hint -- rather than going negative; the caller should
+ *  also disable that action in the UI, this is just the backstop. */
+export function spendCoins(state, amount) {
+  if (state.coins < amount) return state;
+  const next = { ...state, coins: state.coins - amount };
+  save(next);
+  return next;
+}
+
 export function buyHat(state, hatId) {
   const hat = HATS.find(h => h.id === hatId);
   if (!hat || state.ownedHats.includes(hatId) || state.coins < hat.price) return state;

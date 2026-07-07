@@ -8,7 +8,7 @@ import { createKidAudio, TUNES } from "./kidTune";
 import Critters from "./Critters";
 import { KID_PUZZLE_BANDS, kidPuzzlesInBand, kidDailyPuzzle } from "./kidPuzzles";
 import {
-  loadShopState, addCoins, buyHat, buyBoard, equipHat, equipBoard, HATS, BOARDS,
+  loadShopState, addCoins, spendCoins, buyHat, buyBoard, equipHat, equipBoard, HATS, BOARDS,
   buyTune, equipTune, buyAnimal, buyPiece, equipPiece, PIECES, setMusicVolume, markDailyPuzzleSolved,
 } from "./kidShop";
 import { cburnettPieceSvgUrl } from "../src/utils/cburnettPieceSvg";
@@ -42,6 +42,7 @@ const todayKey = () => {
    50 for Lion. */
 const puzzleCoinReward = (rating) => (rating >= 1200 ? 15 : rating >= 900 ? 10 : 5);
 const botCoinReward = (difficultyIdx) => (difficultyIdx + 1) * 5;
+const HINT_COST = 1;
 
 function materialState(eng) {
   const rem = { 1: {}, "-1": {} };
@@ -405,8 +406,9 @@ export default function KindleApp() {
   };
 
   const onHint = () => {
-    if (thinking || result || promo || hinting || eng.getSide() !== playerColor) return;
+    if (thinking || result || promo || hinting || eng.getSide() !== playerColor || shop.coins < HINT_COST) return;
     setHinting(true);
+    setShop(s => spendCoins(s, HINT_COST));
     runSearch(moveListRef.current, 600, 0, true).then((res) => {
       if (res && res.move) setHintMove({ from: M120TO64[mFrom(res.move)], to: M120TO64[mTo(res.move)] });
       setHinting(false);
@@ -928,8 +930,9 @@ export default function KindleApp() {
         <button onClick={() => newGame(1)}>Play White</button>
         <button onClick={() => newGame(-1)}>Play Black</button>
         <button onClick={undo} disabled={thinking || !!result || eng.plyCount() === 0}>Undo</button>
-        <button onClick={onHint} disabled={thinking || !!result || !!promo || hinting || eng.getSide() !== playerColor}>
-          {hinting ? "Thinking…" : "💡 Hint"}
+        <button onClick={onHint} disabled={thinking || !!result || !!promo || hinting || eng.getSide() !== playerColor || shop.coins < HINT_COST}
+          title={`Costs ${HINT_COST} coin`}>
+          {hinting ? "Thinking…" : `💡 Hint (${HINT_COST}🪙)`}
         </button>
         <select value={difficultyIdx} onChange={e => setDifficultyIdx(Number(e.target.value))}>
           {DIFFICULTIES.map((d, i) => (!d.unlockable || shop.ownedAnimals.includes(d.id)) &&
