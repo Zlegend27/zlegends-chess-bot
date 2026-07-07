@@ -787,7 +787,8 @@ export default function KindleApp() {
         )}
 
         {rushOpen && (
-          <div className="kShopOv">
+          <div className="kShopOv" onClick={e => { if (e.target === e.currentTarget) setRushOpen(false); }}>
+            <button className="kCloseX" onClick={() => setRushOpen(false)} aria-label="Close Puzzle Rush">✕</button>
             <h2 className="kLessonTitle" style={{ textAlign: "center" }}>Puzzle Rush</h2>
             <div className="kMoves" style={{ width: "min(92vw, 380px)" }}>
               Solve as many puzzles as you can! Three wrong answers or running out of time ends the rush.
@@ -797,14 +798,12 @@ export default function KindleApp() {
                 <button key={d.seconds} onClick={() => startRush(d.seconds)}>{d.label}</button>
               ))}
             </div>
-            <div className="kCtrls">
-              <button onClick={() => setRushOpen(false)}>Back</button>
-            </div>
           </div>
         )}
 
         {rushMode && rushResult && (
-          <div className="kShopOv">
+          <div className="kShopOv" onClick={e => { if (e.target === e.currentTarget) exitRush(); }}>
+            <button className="kCloseX" onClick={exitRush} aria-label="Exit Puzzle Rush">✕</button>
             <h2 className="kLessonTitle" style={{ textAlign: "center" }}>
               {rushResult.reason === "time" ? "Time's up!" : "3 misses — rush over!"}
             </h2>
@@ -813,7 +812,6 @@ export default function KindleApp() {
             </div>
             <div className="kCtrls">
               <button onClick={retryRush}>Try Again</button>
-              <button onClick={exitRush}>Exit</button>
             </div>
           </div>
         )}
@@ -943,7 +941,8 @@ export default function KindleApp() {
       </div>
 
       {shopOpen && (
-        <div className="kShopOv">
+        <div className="kShopOv" onClick={e => { if (e.target === e.currentTarget) setShopOpen(false); }}>
+          <button className="kCloseX" onClick={() => setShopOpen(false)} aria-label="Close Shop">✕</button>
           <h2 className="kLessonTitle" style={{ textAlign: "center" }}>Shop - 🪙 {shop.coins}</h2>
           <div className="kShopGrid">
             {HATS.map(h => {
@@ -1032,9 +1031,6 @@ export default function KindleApp() {
                 </div>
               );
             })}
-          </div>
-          <div className="kCtrls">
-            <button onClick={() => setShopOpen(false)}>Close</button>
           </div>
         </div>
       )}
