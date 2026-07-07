@@ -56,6 +56,13 @@ const RANK_BOT_CALIBRATION_GAMES = 3;
 const RANK_BOT_STEP_CALIBRATION = 75;
 const RANK_BOT_STEP_STEADY = 25;
 const RANK_BOT_PROBE_MS = 250;
+/* The live dial above drives actual in-game difficulty and never stops
+   moving -- but that's a bad number to show the player directly (it can
+   swing mid-game). Every RANK_BOT_ASSESSMENT_EVERY completed games, this
+   averages that batch's ending dial values into one displayed Elo,
+   smoothing out one unusually easy/hard game rather than trusting
+   whichever number the dial happened to land on last. */
+const RANK_BOT_ASSESSMENT_EVERY = 3;
 function rankBotBlunderChance(elo) {
   if (elo >= STOCKFISH_MIN_ELO) return 0;
   const deficit = STOCKFISH_MIN_ELO - elo;
@@ -371,6 +378,12 @@ export default function ZlegendsBot() {
   rankBotEloRef.current = rankBotElo;
   const rankBotGamesRef = useRef(rankBotGames);
   rankBotGamesRef.current = rankBotGames;
+  /* The displayed, checkpointed Elo (see RANK_BOT_ASSESSMENT_EVERY above)
+     -- null until the player's first batch of games completes. Recent
+     game-ending dial values accumulate in rankBotRecentGameElosRef until
+     there are enough for a new checkpoint, then reset. */
+  const [rankBotAssessedElo, setRankBotAssessedElo] = useState(() => loadSetting("rankBotAssessedElo", null));
+  const rankBotRecentGameElosRef = useRef(loadSetting("rankBotRecentGameElos", []));
   /* Last few of the player's own move-quality scores this game -- reset
      each new game, not persisted, purely to smooth out the live dial
      adjustment so one weird move doesn't overreact. */
@@ -878,6 +891,19 @@ export default function ZlegendsBot() {
     saveSetting("rankBotGames", games);
     rankBotWindowRef.current = [];
     rankBotGameUidRef.current = null;
+
+    const recent = [...rankBotRecentGameElosRef.current, rankBotEloRef.current];
+    if (recent.length >= RANK_BOT_ASSESSMENT_EVERY) {
+      const assessed = Math.round(recent.reduce((a, b) => a + b, 0) / recent.length);
+      rankBotRecentGameElosRef.current = [];
+      saveSetting("rankBotRecentGameElos", []);
+      setRankBotAssessedElo(assessed);
+      saveSetting("rankBotAssessedElo", assessed);
+    } else {
+      rankBotRecentGameElosRef.current = recent;
+      saveSetting("rankBotRecentGameElos", recent);
+    }
+
     syncRankBotToSupabase({ rankElo: rankBotEloRef.current, rankGames: games, displayName: displayNameRef.current });
   };
 
@@ -1680,7 +1706,9 @@ export default function ZlegendsBot() {
                   <div className="trayEmpty">{gameStyle.label} today</div>
                   {!spectateMode && difficultyRef.current.id === "rank" && (
                     <div className="trayEmpty openingTag">
-                      ~{rankBotElo} Elo{rankBotGames < RANK_BOT_CALIBRATION_GAMES ? ` · Calibration ${rankBotGames + 1}/${RANK_BOT_CALIBRATION_GAMES}` : ""}
+                      {rankBotAssessedElo == null
+                        ? `Calibrating — game ${(rankBotGames % RANK_BOT_ASSESSMENT_EVERY) + 1}/${RANK_BOT_ASSESSMENT_EVERY}`
+                        : `~${rankBotAssessedElo} Elo · game ${rankBotGames % RANK_BOT_ASSESSMENT_EVERY}/${RANK_BOT_ASSESSMENT_EVERY} since last update`}
                     </div>
                   )}
                   {liveOpening && (
@@ -1770,7 +1798,11 @@ export default function ZlegendsBot() {
                 )}
               </div>
               {!spectateMode && difficultyRef.current.id === "rank" ? (
-                <div className="trayEmpty" style={{ color: "var(--cyan)" }}>Your Elo is calculated from these games</div>
+                <div className="trayEmpty" style={{ color: "var(--cyan)" }}>
+                  {rankBotAssessedElo == null
+                    ? `Your Elo updates every ${RANK_BOT_ASSESSMENT_EVERY} games — playing game ${(rankBotGames % RANK_BOT_ASSESSMENT_EVERY) + 1}/${RANK_BOT_ASSESSMENT_EVERY}`
+                    : `Elo updates every ${RANK_BOT_ASSESSMENT_EVERY} games — ${RANK_BOT_ASSESSMENT_EVERY - (rankBotGames % RANK_BOT_ASSESSMENT_EVERY)} to go`}
+                </div>
               ) : (
                 !spectateMode && ratingInfo && !ratingInfo.error && ratingInfo.games > 0 && (
                   <div className="trayEmpty" style={{ color: "var(--cyan)" }}>~{ratingInfo.rating} Elo</div>
