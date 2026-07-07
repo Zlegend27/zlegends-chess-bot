@@ -740,10 +740,8 @@ export default function KindleApp() {
   if (view === "puzzle") {
     const band = KID_PUZZLE_BANDS.find(b => b.id === puzzleBand);
     const sideLabel = activePuzzle ? (eng.getSide() === 1 ? "White" : "Black") : "";
-    const closePuzzleView = () => { if (rushMode) exitRush(); else exitPuzzle(); };
     return (
-      <div className="kRoot" onClick={e => { if (e.target === e.currentTarget) closePuzzleView(); }}>
-        <button className="kCloseX" onClick={closePuzzleView} aria-label="Close Puzzles">✕</button>
+      <div className="kRoot">
         <Critters />
         <div className="kHdr">
           <AnimalIcon kind={DIFFICULTIES[difficultyIdx].label} hat={equippedHat} />
@@ -765,6 +763,7 @@ export default function KindleApp() {
             </div>
             <div className="kCtrls">
               <button onClick={() => setRushOpen(true)}>⚡ Puzzle Rush</button>
+              <button onClick={exitPuzzle}>Back to the Game</button>
             </div>
           </>
         ) : (
@@ -784,6 +783,7 @@ export default function KindleApp() {
             </div>
             <div className="kCtrls">
               {!rushMode && puzzleSolved && <button onClick={nextPuzzle}>Next Puzzle</button>}
+              {rushMode ? <button onClick={exitRush}>End Rush</button> : <button onClick={exitPuzzle}>Back to the Game</button>}
             </div>
           </>
         )}
