@@ -45,21 +45,41 @@ const DIFFICULTIES = [
 ];
 
 /* Rank Bot: rather than one fixed Elo, the target Stockfish strength is a
-   dial that moves after every move the player makes -- a blunder steps
-   it down immediately, a clean run of moves steps it up, everything else
-   holds steady, always by one bounded increment so it can't swing wildly
-   in a single game (see adjustRankBotDial below). The first few games use
-   a bigger step to converge faster (closer to chess.com/Lichess-style
-   placement matches), then settle into finer adjustments for ongoing
-   play. Below Stockfish's own 1320 floor, blunderChance stands in for
-   "weaker than Stockfish can go" the same way the "1000 Elo" tier does. */
+   dial that moves after every move the player makes, by a step scaled to
+   how bad (or clean) the move actually was -- see adjustRankBotDial. The
+   thresholds/steps here were retuned after analyzing real logged games
+   (rank_bot_moves): the original flat 25/75 steps with a <15cp "clean"
+   bar never stepped up once across every game played, because the 250ms
+   probe searches carry ~20-50cp of noise. So the clean bar is looser,
+   steps scale with severity, and the opening is excluded entirely (both
+   from measurement and from the bot's own strength limit -- it plays
+   theory at full strength, then drops to the dial). Below Stockfish's
+   1320 floor, blunderChance stands in for "weaker than Stockfish can
+   go", same as the "1000 Elo" tier. */
 const RANK_BOT_MIN_ELO = 600;
 const RANK_BOT_MAX_ELO = 2200;
-const RANK_BOT_DEFAULT_ELO = 1000;
+const RANK_BOT_DEFAULT_ELO = 1400;
 const RANK_BOT_CALIBRATION_GAMES = 3;
-const RANK_BOT_STEP_CALIBRATION = 75;
-const RANK_BOT_STEP_STEADY = 25;
+const RANK_BOT_CALIBRATION_MULT = 1.5;
 const RANK_BOT_PROBE_MS = 250;
+/* Plies (both sides) treated as opening theory: the bot plays them at
+   full strength and the dial ignores them. */
+const RANK_BOT_OPENING_PLIES = 8;
+/* Minimum tracked (post-opening) player moves for an abandoned game to
+   still count toward the assessment -- players who bail mid-game and hit
+   New would otherwise never complete 3 "games". */
+const RANK_BOT_MIN_TRACKED_MOVES = 8;
+/* Severity-scaled dial steps, in cp-loss terms (probe noise is roughly
+   20-50cp, so nothing below 30 is treated as signal). */
+function rankBotStep(loss, windowAvg, windowLen) {
+  if (loss >= 300) return -150;
+  if (loss >= 150) return -75;
+  if (windowLen >= 3) {
+    if (windowAvg < 30) return 50;
+    if (windowAvg >= 80) return -50;
+  }
+  return 0;
+}
 /* The live dial above drives actual in-game difficulty and never stops
    moving -- but that's a bad number to show the player directly (it can
    swing mid-game). Every RANK_BOT_ASSESSMENT_EVERY completed games, this
@@ -376,7 +396,22 @@ export default function ZlegendsBot() {
     setLeaderboardRows(null);
     fetchLeaderboard(duration).then(setLeaderboardRows);
   };
-  const [rankBotElo, setRankBotElo] = useState(() => loadSetting("rankBotElo", RANK_BOT_DEFAULT_ELO));
+  /* One-time recalibration (v2): the original dial logic could only ever
+     drift down -- its step-up bar sat under the probe searches' noise
+     floor, confirmed from the logged rank_bot_moves data -- so anyone who
+     never completed a full assessment restarts from the new, higher
+     default rather than keeping a rating the old math dragged down. */
+  const [rankBotElo, setRankBotElo] = useState(() => {
+    if (loadSetting("rankBotVersion", 1) < 2) {
+      if (loadSetting("rankBotElo", null) != null && loadSetting("rankBotAssessedElo", null) == null) {
+        saveSetting("rankBotElo", RANK_BOT_DEFAULT_ELO);
+        saveSetting("rankBotGames", 0);
+        saveSetting("rankBotRecentGameElos", []);
+      }
+      saveSetting("rankBotVersion", 2);
+    }
+    return loadSetting("rankBotElo", RANK_BOT_DEFAULT_ELO);
+  });
   const [rankBotGames, setRankBotGames] = useState(() => loadSetting("rankBotGames", 0));
   const rankBotEloRef = useRef(rankBotElo);
   rankBotEloRef.current = rankBotElo;
@@ -392,6 +427,10 @@ export default function ZlegendsBot() {
      each new game, not persisted, purely to smooth out the live dial
      adjustment so one weird move doesn't overreact. */
   const rankBotWindowRef = useRef([]);
+  /* How many post-opening player moves the dial tracked this game --
+     an abandoned game with enough of these still counts toward the
+     assessment (see maybeCountAbandonedRankGame). */
+  const rankBotTrackedRef = useRef(0);
   /* Client-generated id linking one Rank Bot game's rank_bot_moves rows
      back to its single games-table row (that insert is fire-and-forget
      and doesn't return its own id) -- lazily created on this game's first
@@ -703,9 +742,16 @@ export default function ZlegendsBot() {
 
   /* Rank Bot has no fixed stockfishElo in DIFFICULTIES -- it's synthesized
      here from the live dial every time a move is needed, so engineMove
-     doesn't need its own special case beyond this one substitution. */
+     doesn't need its own special case beyond this one substitution.
+     During the opening plies it plays unthrottled (3190 is Stockfish's
+     own UCI_Elo ceiling): everyone's theory moves are "perfect", so a
+     weakened bot stumbling out of a normal opening reads as random
+     rather than adaptive, and the dial isn't measuring yet anyway. */
   const effectiveDifficulty = (diff) => {
     if (!diff.adaptive) return diff;
+    if (eng.plyCount() < RANK_BOT_OPENING_PLIES) {
+      return { ...diff, stockfishElo: 3190, blunderChance: 0 };
+    }
     const elo = rankBotEloRef.current;
     return { ...diff, stockfishElo: Math.max(elo, STOCKFISH_MIN_ELO), blunderChance: rankBotBlunderChance(elo) };
   };
@@ -715,10 +761,13 @@ export default function ZlegendsBot() {
      quick background searches (before/after the move, same shape as the
      N+1-search trick gradeMoves uses for move-grading) estimate how much
      eval the player's actual move gave up; a rolling window of the last
-     few smooths that into one dial step per move so a single lucky or
-     unlucky move can't swing it. */
+     few smooths that into one severity-scaled dial step per move (see
+     rankBotStep). Opening plies are skipped entirely: they're theory,
+     their measured "loss" is mostly probe noise, and letting them into
+     the window was masking the player's real level. */
   const adjustRankBotDial = (prefixBefore, prefixAfter, gameOver) => {
     if (difficultyRef.current.id !== "rank" || gameOver) return;
+    if (prefixAfter.length <= RANK_BOT_OPENING_PLIES) return;
     const gameUid = ensureRankBotGameUid();
     const ply = prefixAfter.length;
     Promise.all([
@@ -730,17 +779,11 @@ export default function ZlegendsBot() {
       const window = rankBotWindowRef.current;
       window.push(loss);
       if (window.length > 5) window.shift();
-      const calibrating = rankBotGamesRef.current < RANK_BOT_CALIBRATION_GAMES;
-      const step = calibrating ? RANK_BOT_STEP_CALIBRATION : RANK_BOT_STEP_STEADY;
+      rankBotTrackedRef.current += 1;
+      const avg = window.reduce((a, b) => a + b, 0) / window.length;
+      const mult = rankBotGamesRef.current < RANK_BOT_CALIBRATION_GAMES ? RANK_BOT_CALIBRATION_MULT : 1;
       const eloBefore = rankBotEloRef.current;
-      let next = eloBefore;
-      if (loss >= 150) {
-        next -= step;
-      } else if (window.length >= 3) {
-        const avg = window.reduce((a, b) => a + b, 0) / window.length;
-        if (avg < 15) next += step;
-        else if (avg >= 60) next -= step;
-      }
+      let next = eloBefore + Math.round(rankBotStep(loss, avg, window.length) * mult);
       next = Math.max(RANK_BOT_MIN_ELO, Math.min(RANK_BOT_MAX_ELO, next));
       if (next !== eloBefore) {
         rankBotEloRef.current = next;
@@ -896,6 +939,7 @@ export default function ZlegendsBot() {
     saveSetting("rankBotGames", games);
     rankBotWindowRef.current = [];
     rankBotGameUidRef.current = null;
+    rankBotTrackedRef.current = 0;
 
     const recent = [...rankBotRecentGameElosRef.current, rankBotEloRef.current];
     if (recent.length >= RANK_BOT_ASSESSMENT_EVERY) {
@@ -910,6 +954,18 @@ export default function ZlegendsBot() {
     }
 
     syncRankBotToSupabase({ rankElo: rankBotEloRef.current, rankGames: games, displayName: displayNameRef.current });
+  };
+
+  /* An abandoned Rank Bot game (player hits New mid-game) still counts
+     toward the assessment if the dial tracked enough real moves --
+     otherwise players who rarely play to checkmate would never complete
+     3 "games" and never see their Elo. Finished games reset the tracked
+     counter inside finishRankBotGame, so this can't double-count. */
+  const maybeCountAbandonedRankGame = () => {
+    if (rankBotTrackedRef.current >= RANK_BOT_MIN_TRACKED_MOVES) finishRankBotGame();
+    rankBotWindowRef.current = [];
+    rankBotGameUidRef.current = null;
+    rankBotTrackedRef.current = 0;
   };
 
   const playMove = useCallback((m) => {
@@ -1040,6 +1096,7 @@ export default function ZlegendsBot() {
   };
 
   const newGame = (color) => {
+    maybeCountAbandonedRankGame();
     if (mode === "replay") {
       history.replaceState(null, "", window.location.pathname + window.location.search);
       setMode("play");
@@ -1313,6 +1370,10 @@ export default function ZlegendsBot() {
   };
 
   const onDifficultyChange = (idx) => {
+    /* difficultyRef still points at the outgoing tier here (it's
+       reassigned on render), so an in-progress Rank Bot game being
+       switched away from can still be counted. */
+    if (difficultyRef.current.id === "rank" && DIFFICULTIES[idx].id !== "rank") maybeCountAbandonedRankGame();
     setDifficultyIdx(idx);
     saveSetting("difficultyIdx", idx);
   };
