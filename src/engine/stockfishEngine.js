@@ -48,6 +48,14 @@ function getWorker() {
   return workerPromise;
 }
 
+/** Kicks off worker creation + WASM load ahead of the first search, so
+ *  the first bot move doesn't absorb the whole engine boot (noticeable
+ *  in blind mode, where the player is waiting on a spoken reply with no
+ *  board activity to watch). Safe to call repeatedly. */
+export function warmUpStockfish() {
+  getWorker().catch(() => { /* surfaces on first real search instead */ });
+}
+
 function parseInfoLine(line) {
   const parts = line.split(" ");
   const get = (key) => {

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo, lazy, Suspense } from "react";
 import {
   createEngine, EMPTY, WN, WB, WR, WQ, WK, M64TO120, M120TO64,
   mFrom, mTo, mPromo, mFlags, MATE, fileOf, rankOf,
@@ -23,6 +23,10 @@ import { OPENINGS } from "./utils/openings";
 import { loadEcoOpenings, detectEcoOpening } from "./utils/ecoOpenings";
 import { stockfishBestMove, STOCKFISH_MIN_ELO } from "./engine/stockfishEngine";
 import "./App.css";
+
+/* Loaded on demand: blind mode brings its own parser/describer/speech
+   stack, none of which the main board ever needs. */
+const BlindMode = lazy(() => import("./components/BlindMode"));
 
 /* Casual and Master keep this app's own homemade engine (they're the top
    two tiers and were never in question). The three tiers below them are
@@ -424,6 +428,7 @@ export default function ZlegendsBot() {
   const [quizFeedback, setQuizFeedback] = useState(null);
   const [quizDoneToast, setQuizDoneToast] = useState(null);
   const [puzzlesOpen, setPuzzlesOpen] = useState(false);
+  const [blindOpen, setBlindOpen] = useState(false);
   const [puzzlesData, setPuzzlesData] = useState(null);
   const puzzlesLoadingRef = useRef(false);
   const pz = puzzlesData || { PUZZLES: [], RATING_BANDS: [] };
@@ -2033,12 +2038,23 @@ export default function ZlegendsBot() {
                 <path d="M12 5c-5 0-9.27 3.11-11 7 1.73 3.89 6 7 11 7s9.27-3.11 11-7c-1.73-3.89-6-7-11-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
               </svg>
             </button>
+            <button className="btn ghost" style={{ display: "flex", alignItems: "center", padding: "10px 14px" }} onClick={() => setBlindOpen(true)} aria-label="Blind Chess" title="Blind Chess — play by voice">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z" />
+              </svg>
+            </button>
             <button className="btn ghost" style={{ fontSize: 18, lineHeight: 1, padding: "10px 14px" }} onClick={openSettings} aria-label="Settings" title="Settings">
               <span aria-hidden="true">⚙</span>
             </button>
           </div>
         </div>
       </div>
+
+      {blindOpen && (
+        <Suspense fallback={null}>
+          <BlindMode onClose={() => setBlindOpen(false)} />
+        </Suspense>
+      )}
 
       {musicOpen && (
         <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) setMusicOpen(false); }}>

@@ -128,3 +128,21 @@ create policy "Allow anonymous select rank_bot_moves" on rank_bot_moves
   for select
   to anon
   using (true);
+
+-- Blind Chess: transcripts the voice parser FAILED to understand (and
+-- only those -- successfully parsed speech is never logged). Reviewed
+-- manually to teach the parser real players' phrasings. Same anonymous
+-- anon-key model as the tables above.
+create table blind_utterances (
+  id uuid primary key default gen_random_uuid(),
+  client_id text not null,
+  created_at timestamptz not null default now(),
+  text text not null
+);
+
+alter table blind_utterances enable row level security;
+
+create policy "Allow anonymous insert" on blind_utterances
+  for insert
+  to anon
+  with check (true);
