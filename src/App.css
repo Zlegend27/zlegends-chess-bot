@@ -166,8 +166,10 @@
 .promoBox .modalCloseX{ position:absolute; top:8px; right:8px; width:24px; height:24px; padding:0;
   border:1px solid #8B2FC966; border-radius:50%; background:#1D1038; color:var(--liliac);
   font-size:12px; line-height:1; display:flex; align-items:center; justify-content:center;
-  cursor:pointer; touch-action:manipulation; z-index:1; }
+  cursor:pointer; touch-action:manipulation; z-index:1;
+  transition:background .15s ease, color .15s ease, transform .1s ease; }
 .promoBox .modalCloseX:hover{ background:#3EE7F522; color:var(--cyan); }
+.promoBox .modalCloseX:active{ transform:scale(.88); }
 .trackRow{ display:flex; align-items:center; gap:8px; margin-bottom:8px; }
 .trackName{ font-family:ui-monospace,Consolas,monospace; font-size:12px; color:var(--yellow);
   text-shadow:0 0 8px #F5D93E44; flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -177,8 +179,10 @@
 .mp3Time{ font-family:ui-monospace,Consolas,monospace; font-size:10px; color:var(--dim); width:30px; flex:none; text-align:center; }
 .playBtn{ width:38px; height:38px; border-radius:50%; border:2px solid var(--cyan);
   background:#0E2E38; color:var(--cyan); font-size:15px; cursor:pointer; flex:none;
-  box-shadow:0 0 12px #3EE7F544; display:flex; align-items:center; justify-content:center; touch-action:manipulation; }
-.playBtn:hover{ box-shadow:0 0 18px #3EE7F588; }
+  box-shadow:0 0 12px #3EE7F544; display:flex; align-items:center; justify-content:center; touch-action:manipulation;
+  transition:box-shadow .15s ease, transform .1s ease; }
+.playBtn:hover:not(:disabled){ box-shadow:0 0 18px #3EE7F588; }
+.playBtn:active:not(:disabled){ transform:scale(.92); }
 .playBtn.sm{ width:30px; height:30px; font-size:9px; border-color:#8B2FC9; color:var(--magenta);
   background:#241338; box-shadow:0 0 10px #8B2FC933; }
 .playBtn.sm:hover{ box-shadow:0 0 16px #D94BF066; }
@@ -188,7 +192,8 @@
   border:1px solid #8B2FC966; border-radius:8px; padding:4px; }
 .promoBox .jbTrackRow{ background:transparent; border:none; text-align:left; color:var(--liliac);
   font-family:ui-monospace,Consolas,monospace; font-size:11px; padding:4px 6px; border-radius:4px;
-  cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:none; }
+  cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:none;
+  transition:background .12s ease, color .12s ease; }
 .promoBox .jbTrackRow:hover{ background:#3EE7F522; }
 .promoBox .jbTrackRow.cur{ background:#8B2FC933; color:var(--cyan); font-weight:700; }
 input[type=range]{ flex:1; min-width:0; accent-color:var(--magenta); }
@@ -197,22 +202,52 @@ input[type=range]{ flex:1; min-width:0; accent-color:var(--magenta); }
 .btn{ font-family:'Arial Black',Impact,sans-serif; font-style:italic; font-size:12px;
   text-transform:uppercase; letter-spacing:.04em; cursor:pointer; touch-action:manipulation;
   background:linear-gradient(180deg,#A957E0,var(--violet)); color:#fff; border:none; border-radius:6px;
-  padding:9px 12px; box-shadow:0 3px 0 #150C24, 0 0 14px #8B2FC955; }
-.btn:hover{ filter:brightness(1.15); }
+  padding:9px 12px; box-shadow:0 3px 0 #150C24, 0 0 14px #8B2FC955;
+  transition:filter .15s ease, transform .1s ease, box-shadow .1s ease; }
+.btn:hover:not(:disabled){ filter:brightness(1.15); }
+/* Pressing sinks the button into its own 3px drop shadow -- tactile
+   without any layout shift, since transform doesn't reflow. */
+.btn:active:not(:disabled){ transform:translateY(2px); box-shadow:0 1px 0 #150C24, 0 0 10px #8B2FC955; }
 .btn.gold{ background:linear-gradient(180deg,#FFE873,#E0B93E); color:#3A2A00;
   box-shadow:0 3px 0 #150C24, 0 0 14px #F5D93E66; }
+.btn.gold:active:not(:disabled){ box-shadow:0 1px 0 #150C24, 0 0 10px #F5D93E66; }
 .btn.ghost{ background:transparent; border:1px solid #8B2FC966; box-shadow:none; color:var(--liliac); }
+.btn.ghost:hover:not(:disabled){ filter:none; border-color:var(--cyan); color:var(--cyan); background:#3EE7F511; }
+.btn.ghost:active:not(:disabled){ transform:translateY(1px); box-shadow:none; }
 .btn:disabled{ opacity:.4; cursor:default; }
+/* One consistent keyboard-focus ring across every interactive control --
+   only board squares had one before, so tabbing through buttons/selects
+   gave no visible indication of where you were. :focus-visible keeps it
+   off mouse/touch clicks. */
+.btn:focus-visible, .playBtn:focus-visible, select:focus-visible, .modalCloseX:focus-visible,
+.nameEditBtn:focus-visible, .jbTrackRow:focus-visible, input[type=range]:focus-visible,
+input[type=text]:focus-visible, .promoBox button:focus-visible{
+  outline:2px solid var(--cyan); outline-offset:2px; }
 .nameEditBtn{ font-size:11px; line-height:1; padding:2px 4px; border:1px solid #3EE7F555; border-radius:4px;
-  background:transparent; color:var(--cyan); cursor:pointer; text-transform:none; opacity:.75; flex:none; }
+  background:transparent; color:var(--cyan); cursor:pointer; text-transform:none; opacity:.75; flex:none;
+  transition:opacity .15s ease, background .15s ease; }
 .nameEditBtn:hover{ opacity:1; background:#3EE7F522; }
 select{ font-family:inherit; font-size:12px; font-weight:700; border-radius:6px; padding:8px;
-  border:1px solid #8B2FC966; background:#1D1038; color:var(--white); }
+  border:1px solid #8B2FC966; background:#1D1038; color:var(--white); cursor:pointer;
+  transition:border-color .15s ease; }
+select:hover{ border-color:var(--cyan); }
+/* Thin dark scrollbars for the in-panel lists -- the OS default light
+   gray bar reads as a hole punched in the dark theme. */
+.rows, .jbTrackList, .blindLog{ scrollbar-width:thin; scrollbar-color:#8B2FC966 transparent; }
+.rows::-webkit-scrollbar, .jbTrackList::-webkit-scrollbar, .blindLog::-webkit-scrollbar{ width:8px; }
+.rows::-webkit-scrollbar-thumb, .jbTrackList::-webkit-scrollbar-thumb, .blindLog::-webkit-scrollbar-thumb{
+  background:#8B2FC966; border-radius:4px; }
+.rows::-webkit-scrollbar-track, .jbTrackList::-webkit-scrollbar-track, .blindLog::-webkit-scrollbar-track{
+  background:transparent; }
 .promoOv{ position:absolute; inset:0; background:#0E0620CC; display:flex; align-items:center;
-  justify-content:center; z-index:10; border-radius:4px; }
+  justify-content:center; z-index:10; border-radius:4px; animation:ovFade .15s ease-out; }
+@keyframes ovFade{ from{ opacity:0; } to{ opacity:1; } }
 .promoBox{ background:var(--panel); border:1px solid var(--cyan); border-radius:10px; padding:10px;
-  display:flex; gap:6px; box-shadow:0 0 30px #3EE7F566; position:relative; }
-.promoBox button{ font-size:32px; padding:4px 10px; background:transparent; border:none; cursor:pointer; border-radius:6px; }
+  display:flex; gap:6px; box-shadow:0 0 30px #3EE7F566; position:relative;
+  animation:boxPop .18s cubic-bezier(.34,1.4,.64,1); }
+@keyframes boxPop{ from{ opacity:0; transform:scale(.94) translateY(6px); } to{ opacity:1; transform:none; } }
+.promoBox button{ font-size:32px; padding:4px 10px; background:transparent; border:none; cursor:pointer;
+  border-radius:6px; transition:background .15s ease; }
 .promoBox button:hover{ background:#3EE7F522; }
 .toast{ font-family:ui-monospace,Consolas,monospace; font-size:11px; color:var(--cyan); margin-top:6px; }
 .errBox{ min-height:100vh; min-height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -272,3 +307,13 @@ select{ font-family:inherit; font-size:12px; font-weight:700; border-radius:6px;
   border:1px solid #8B2FC966; }
 .blindInputRow input[type=text]:focus{ outline:none; border-color:var(--cyan); }
 .blindCtrls .btn{ font-size:10px; padding:8px 10px; }
+
+/* Respect the OS "reduce motion" preference: kill the ambient/looping
+   animations (twinkling stars, pulsing highlights, blinking badges) and
+   modal entrances. One-shot functional transitions (button presses)
+   are quick enough to keep. */
+@media (prefers-reduced-motion: reduce){
+  .star, .hdr .eyebrow .live, .bang, .sq.botLast::before{ animation:none; }
+  .promoOv, .promoBox{ animation:none; }
+  .evalbar .pfill{ transition:none; }
+}

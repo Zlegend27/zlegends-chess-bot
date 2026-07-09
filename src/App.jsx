@@ -369,11 +369,18 @@ export default function ZlegendsBot() {
   const [shareToast, setShareToast] = useState(null);
   const [pgnToast, setPgnToast] = useState(null);
   const [musicOpen, setMusicOpen] = useState(false);
+  const musicOpenRef = useRef(false);
+  musicOpenRef.current = musicOpen;
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [ratingInfo, setRatingInfo] = useState(null);
-  /* Fetched eagerly (not just when Settings opens) now that the estimate
-     also shows next to the "You" card on the main play screen. */
-  useEffect(() => { estimateRating().then(setRatingInfo); }, []);
+  /* Fetched up-front (not just when Settings opens) now that the estimate
+     also shows next to the "You" card -- but deferred a few seconds past
+     load, since it dynamic-imports the ~100KB supabase-js chunk and
+     shouldn't compete with the board/engine for startup bandwidth. */
+  useEffect(() => {
+    const t = setTimeout(() => estimateRating().then(setRatingInfo), 3000);
+    return () => clearTimeout(t);
+  }, []);
   const openSettings = () => {
     setSettingsOpen(true);
     if (!ratingInfo) estimateRating().then(setRatingInfo);
@@ -1256,16 +1263,20 @@ export default function ZlegendsBot() {
       if (pieceDesignsOpen) { setPieceDesignsOpen(false); setSettingsOpen(true); }
       else if (boardColorsOpen) { setBoardColorsOpen(false); setSettingsOpen(true); }
       else if (settingsOpen) setSettingsOpen(false);
+      else if (nameEditOpen) setNameEditOpen(false);
+      else if (leaderboardOpen) setLeaderboardOpen(false);
       else if (rushMode && rushResult) exitRush();
       else if (rushOpen) { setRushOpen(false); setPuzzlesOpen(true); }
       else if (puzzlesOpen) setPuzzlesOpen(false);
       else if (openingsOpen) setOpeningsOpen(false);
       else if (musicOpen) setMusicOpen(false);
+      else if (spectateOpen) setSpectateOpen(false);
+      else if (pasteOpen) setPasteOpen(false);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pieceDesignsOpen, boardColorsOpen, settingsOpen, rushMode, rushResult, rushOpen, puzzlesOpen, openingsOpen, musicOpen]);
+  }, [pieceDesignsOpen, boardColorsOpen, settingsOpen, nameEditOpen, leaderboardOpen, rushMode, rushResult, rushOpen, puzzlesOpen, openingsOpen, musicOpen, spectateOpen, pasteOpen]);
 
   /* Puzzle Rush countdown -- ticks once a second while a rush is live and
      hasn't already ended from 3 mistakes, pausing entirely once rushResult
@@ -1440,7 +1451,11 @@ export default function ZlegendsBot() {
       });
     };
     const onMeta = () => setMp3Duration(mp3Audio.duration || 0);
-    const onTime = () => setMp3CurrentTime(mp3Audio.currentTime);
+    /* timeupdate fires ~4x/second the whole time music plays (and the
+       theme autoplays), re-rendering the entire app each tick -- but the
+       progress bar it drives is only visible inside the Juice Box modal,
+       so skip the state write entirely while that's closed. */
+    const onTime = () => { if (musicOpenRef.current) setMp3CurrentTime(mp3Audio.currentTime); };
     const onWaiting = () => setMp3Buffering(true);
     const onReady = () => setMp3Buffering(false);
     mp3Audio.addEventListener("ended", onEnded);

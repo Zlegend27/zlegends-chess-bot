@@ -20,22 +20,33 @@ export async function submitRushScore({ duration, solved, displayName }) {
   }
 }
 
-/** Top N runs for one Rush duration, best solved count first (earliest
- *  achiever breaks ties). Returns [] on any failure/misconfiguration so
- *  the leaderboard UI can just show "no scores yet" either way. */
+/** Top N players for one Rush duration, best solved count first (earliest
+ *  achiever breaks ties). Every run is stored as its own row, so this
+ *  fetches a deeper slice and keeps only each player's best run --
+ *  otherwise one person's ten attempts could fill the whole board.
+ *  Returns [] on any failure/misconfiguration so the leaderboard UI can
+ *  just show "no scores yet" either way. */
 export async function fetchLeaderboard(duration, limit = 10) {
   const supabase = await getSupabase();
   if (!supabase) return [];
   try {
     const { data, error } = await supabase
       .from("rush_scores")
-      .select("display_name, solved, created_at")
+      .select("client_id, display_name, solved, created_at")
       .eq("duration_seconds", duration)
       .order("solved", { ascending: false })
       .order("created_at", { ascending: true })
-      .limit(limit);
+      .limit(limit * 10);
     if (error || !data) return [];
-    return data;
+    const seen = new Set();
+    const best = [];
+    for (const row of data) {
+      if (seen.has(row.client_id)) continue;
+      seen.add(row.client_id);
+      best.push(row);
+      if (best.length >= limit) break;
+    }
+    return best;
   } catch {
     return [];
   }
