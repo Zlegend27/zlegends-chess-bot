@@ -307,6 +307,7 @@ select:hover{ border-color:var(--cyan); }
   border:1px solid #8B2FC966; }
 .blindInputRow input[type=text]:focus{ outline:none; border-color:var(--cyan); }
 .blindCtrls .btn{ font-size:10px; padding:8px 10px; }
+.blindCtrls .btn.ghost.active{ box-shadow:0 3px 0 #150C24, 0 0 10px #3EE7F588; color:var(--cyan); }
 
 /* Respect the OS "reduce motion" preference: kill the ambient/looping
    animations (twinkling stars, pulsing highlights, blinking badges) and

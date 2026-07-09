@@ -80,6 +80,12 @@ export function createSpeaker() {
   let queue = Promise.resolve();
   let enabled = true;
   let voice = null;   // null = browser default until pickBestVoice resolves
+  /* Bumped by cancel() so an in-flight chunk loop (see speakOne) notices
+     and stops advancing to the next chunk instead of talking through a
+     cancellation — this is what let "cancel" only mute the CURRENT
+     sentence of a multi-sentence announcement while the rest played on
+     regardless (e.g. after closing the panel mid board-read). */
+  let cancelToken = 0;
 
   if (synth) loadVoices().then(vs => { if (!voice) voice = rankEnglishVoices(vs)[0] || null; });
 
@@ -94,28 +100,45 @@ export function createSpeaker() {
        otherwise deafen the app permanently — this generous length-based
        timeout guarantees the queue always drains. */
     setTimeout(resolve, 2000 + text.length * 120);
-    synth.speak(u);
+    /* speak() can throw synchronously on mobile when the audio session
+       is in a bad state (e.g. right after backgrounding). Uncaught, that
+       throw would reject this promise -- and since speak() below chains
+       onto `queue` with a bare .then(), a single rejection would
+       permanently poison every future announcement for the rest of the
+       session (a rejected promise's .then(fn) skips fn forever after).
+       That silent, permanent "the coach just stopped talking" bug is
+       exactly what a bad synth.speak() call would have caused. */
+    try { synth.speak(u); } catch { resolve(); }
   });
 
   const speakOne = async (text) => {
     if (!synth || !enabled) return;
-    for (const chunk of chunkForSpeech(text)) await speakChunk(chunk);
+    const myToken = cancelToken;
+    for (const chunk of chunkForSpeech(text)) {
+      if (myToken !== cancelToken) return;
+      await speakChunk(chunk);
+      if (myToken !== cancelToken) return;
+    }
   };
 
   return {
     supported: !!synth,
     /** Queues text; returned promise resolves when THIS utterance ends. */
     speak(text) {
-      queue = queue.then(() => speakOne(text));
+      /* .catch keeps one failed utterance from wedging every later one:
+         without it, a rejected link in the chain makes every subsequent
+         .then(() => speakOne(...)) silently skip forever. */
+      queue = queue.then(() => speakOne(text)).catch(() => {});
       return queue;
     },
     cancel() {
+      cancelToken++;
       queue = Promise.resolve();
       if (synth) synth.cancel();
     },
     setEnabled(on) {
       enabled = on;
-      if (!on && synth) synth.cancel();
+      if (!on && synth) { cancelToken++; synth.cancel(); }
     },
     setVoice(v) { voice = v || null; },
     get voiceName() { return voice ? voice.name : null; },
@@ -154,8 +177,12 @@ export function createRecognizer({ onResult, onStart, onEnd, onError } = {}) {
   rec.onerror = (e) => {
     active = false;
     if (e.error === "not-allowed" || e.error === "service-not-allowed") blocked = true;
-    /* "no-speech"/"aborted" are routine between turns, not failures */
-    if (onError && e.error !== "no-speech" && e.error !== "aborted") onError(e.error);
+    /* "aborted" fires on every intentional stop()/abort() call -- pure
+       noise. "no-speech" (mic timed out hearing nothing) is passed
+       through instead of swallowed: silently doing nothing there is
+       exactly what makes a flaky mobile mic feel "wonky" -- the caller
+       can now tell the player to just try again. */
+    if (onError && e.error !== "aborted") onError(e.error);
   };
 
   return {

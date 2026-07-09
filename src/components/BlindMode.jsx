@@ -53,8 +53,17 @@ export default function BlindMode({ onClose }) {
   const [playerColor, setPlayerColor] = useState(1);
   const [log, setLog] = useState([]);
   const [botThinking, setBotThinking] = useState(false);
-  const [micOn, setMicOn] = useState(false);
   const [listening, setListening] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  /* Push-to-talk (tap the mic each turn) is the default: mobile browsers
+     -- iOS Safari especially, more so as a home-screen shortcut -- are
+     strict about starting speech recognition outside a direct user
+     gesture, and the old "auto-restart from a timer after each turn"
+     design triggered start() from a setTimeout, not a tap, which is
+     exactly the kind of call mobile browsers can silently ignore. Hands
+     Free restores that auto-restart loop for anyone (mainly desktop)
+     who wants a fully spoken back-and-forth with no tapping. */
+  const [handsFree, setHandsFree] = useState(() => loadSetting("blindHandsFree", false));
   const [voiceOn, setVoiceOn] = useState(true);
   const [input, setInput] = useState("");
   const [resultText, setResultText] = useState(null);
@@ -70,8 +79,9 @@ export default function BlindMode({ onClose }) {
   /* Mirrors for values read inside speech callbacks (which outlive any
      single render) — same ref-mirror pattern App.jsx uses throughout. */
   const phaseRef = useRef(phase); phaseRef.current = phase;
-  const micOnRef = useRef(micOn); micOnRef.current = micOn;
+  const handsFreeRef = useRef(handsFree); handsFreeRef.current = handsFree;
   const botThinkingRef = useRef(botThinking); botThinkingRef.current = botThinking;
+  const micGrantedRef = useRef(false);
   const moveListRef = useRef([]);
   const pendingRef = useRef(null);          // {type:"disambiguate"|"promotion"|"confirm", matches, question}
   const lastMoveSpeechRef = useRef(null);   // for "repeat"
@@ -89,12 +99,15 @@ export default function BlindMode({ onClose }) {
 
   const pushLog = (who, text) => setLog(l => [...l, { who, text }]);
 
-  /* The mic stays off while the bot talks (so it can't hear itself) and
-     while the bot is thinking; it comes back the moment the speech queue
-     drains, giving the hands-free back-and-forth loop. */
+  const vibrate = (pattern) => { try { navigator.vibrate?.(pattern); } catch { /* unsupported */ } };
+
+  /* Only used in Hands Free mode: the mic stays off while the bot talks
+     (so it can't hear itself) and while it's thinking, and comes back
+     the moment the speech queue drains. Push-to-talk (the default)
+     never calls this — every listen there starts from a real tap. */
   const maybeListen = () => {
-    if (!recRef.current?.supported) return;
-    if (micOnRef.current && phaseRef.current === "playing" && !botThinkingRef.current && pendingSpeechRef.current === 0) {
+    if (!recRef.current?.supported || !handsFreeRef.current) return;
+    if (phaseRef.current === "playing" && !botThinkingRef.current && pendingSpeechRef.current === 0) {
       recRef.current.start();
     }
   };
@@ -103,8 +116,10 @@ export default function BlindMode({ onClose }) {
     pushLog("bot", text);
     recRef.current?.stop();
     pendingSpeechRef.current++;
+    setSpeaking(true);
     speakerRef.current.speak(text).then(() => {
       pendingSpeechRef.current--;
+      if (pendingSpeechRef.current === 0) setSpeaking(false);
       maybeListen();
     });
   };
@@ -112,15 +127,22 @@ export default function BlindMode({ onClose }) {
   useEffect(() => {
     recRef.current = createRecognizer({
       onResult: (transcript, confidence) => handleUtteranceRef.current(transcript, confidence ?? 1),
-      onStart: () => setListening(true),
+      onStart: () => { setListening(true); vibrate(15); },
       /* Slight delay before restarting: an immediate start() inside
-         onend races Chrome's session teardown and throws. */
-      onEnd: () => { setListening(false); setTimeout(maybeListen, 250); },
+         onend races Chrome's session teardown and throws. Only matters
+         in Hands Free mode -- push-to-talk never auto-restarts. */
+      onEnd: () => { setListening(false); if (handsFreeRef.current) setTimeout(maybeListen, 250); },
       onError: (err) => {
         setListening(false);
         if (err === "not-allowed" || err === "service-not-allowed") {
-          setMicOn(false); micOnRef.current = false;
-          announce("I can't access the microphone — it's blocked for this site. Allow microphone access in your browser settings, then turn the mic back on.");
+          micGrantedRef.current = false;
+          vibrate([15, 60, 15]);
+          announce("I can't access the microphone — it's blocked for this site. Allow microphone access in your browser settings, then tap the mic again.");
+        } else if (err === "no-speech") {
+          /* Common and not really an error -- just tell them plainly
+             instead of the mic silently seeming to "not pick up." */
+          vibrate([15, 60, 15]);
+          pushLog("bot", "(Didn't catch that — tap the mic and try again.)");
         } else {
           pushLog("bot", `(Mic error: ${err})`);
         }
@@ -142,6 +164,28 @@ export default function BlindMode({ onClose }) {
       speakerRef.current.cancel();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* Backgrounding the tab/app (switching apps, screen lock, the phone's
+     shortcut going to the background) is the other way the coach can be
+     left "talking after you left" — not just closing the panel. Cut the
+     mic and any in-flight speech the moment the page is hidden; nothing
+     auto-restarts on return, since a stale recognition session resuming
+     on its own is exactly the kind of surprise that makes voice features
+     feel unreliable. */
+  useEffect(() => {
+    const onHidden = () => {
+      if (document.hidden) {
+        recRef.current?.stop();
+        speakerRef.current.cancel();
+      }
+    };
+    document.addEventListener("visibilitychange", onHidden);
+    window.addEventListener("pagehide", onHidden);
+    return () => {
+      document.removeEventListener("visibilitychange", onHidden);
+      window.removeEventListener("pagehide", onHidden);
+    };
   }, []);
 
   const pickVoice = (name) => {
@@ -234,6 +278,7 @@ export default function BlindMode({ onClose }) {
     eng.make(match.move);
     moveListRef.current = [...moveListRef.current, match.san];
     persistGame();
+    vibrate(15);
     const speech = `You played ${sanToSpeech(match.san)}.`;
     lastMoveSpeechRef.current = speech;
     const over = checkGameOver();
@@ -433,25 +478,35 @@ export default function BlindMode({ onClose }) {
     if (!yourMove) botTurn();
   };
 
-  const toggleMic = async () => {
-    if (micOn) {
-      setMicOn(false); micOnRef.current = false;
-      recRef.current?.stop();
-      return;
+  /* Push-to-talk: every start() call here happens directly inside the
+     tap's own event handler (the one async gap is the FIRST-ever
+     permission request, which is exactly the pattern browsers expect
+     for a permission prompt) rather than from a timer -- the reliable
+     pattern for mobile speech recognition. Tapping again while
+     listening cancels that listen instead of doing nothing. */
+  const onMicTap = async () => {
+    if (listening) { recRef.current?.stop(); return; }
+    if (phaseRef.current !== "playing" || botThinkingRef.current) return;
+    if (!micGrantedRef.current) {
+      const perm = await requestMicPermission();
+      if (!perm.ok) {
+        announce(perm.reason === "denied"
+          ? "Microphone access was denied. Allow it in your browser's site settings, then tap the mic again."
+          : "I couldn't access a microphone on this device — you can still play with the text box.");
+        return;
+      }
+      micGrantedRef.current = true;
+      recRef.current?.resetBlock();
     }
-    /* Ask for the mic via getUserMedia first: this reliably raises the
-       browser's permission prompt from the click, where a bare
-       SpeechRecognition.start() can fail silently with "not-allowed". */
-    const perm = await requestMicPermission();
-    if (!perm.ok) {
-      announce(perm.reason === "denied"
-        ? "Microphone access was denied. Allow it in your browser's site settings, then try again."
-        : "I couldn't access a microphone on this device — you can still play with the text box.");
-      return;
-    }
-    recRef.current?.resetBlock();
-    setMicOn(true); micOnRef.current = true;
-    maybeListen();
+    recRef.current?.start();
+  };
+
+  const toggleHandsFree = () => {
+    const next = !handsFree;
+    setHandsFree(next); handsFreeRef.current = next;
+    saveSetting("blindHandsFree", next);
+    if (next) maybeListen();
+    else recRef.current?.stop();
   };
 
   const toggleVoice = () => {
@@ -470,13 +525,22 @@ export default function BlindMode({ onClose }) {
   const micSupported = typeof window !== "undefined" &&
     !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 
+  /* Stops mic + speech immediately rather than waiting on the unmount
+     cleanup effect's timing — the goal is that the coach can never be
+     heard still talking after the panel is gone. */
+  const handleClose = () => {
+    recRef.current?.stop();
+    speakerRef.current.cancel();
+    onClose();
+  };
+
   return (
     /* Backdrop click is ignored mid-game: a blind player can't see what a
        stray tap hit. The ✕ still closes — the game autosaves, so nothing
        is lost, and reopening offers Resume. */
-    <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget && phase !== "playing") onClose(); }}>
+    <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget && phase !== "playing") handleClose(); }}>
       <div className="promoBox blindBox">
-        <button className="modalCloseX" onClick={onClose} aria-label="Close Blind Chess"
+        <button className="modalCloseX" onClick={handleClose} aria-label="Close Blind Chess"
           title={phase === "playing" ? "Close — your game is saved for resume" : "Close"}>✕</button>
         <div className="boxHead">🕶️ Blind Chess</div>
 
@@ -521,8 +585,9 @@ export default function BlindMode({ onClose }) {
             <div className="blindStatus">
               {phase === "over" ? resultText
                 : botThinking ? "Bot is thinking…"
+                : speaking ? "Speaking…"
                 : listening ? "Listening…"
-                : micOn ? "Mic ready" : "Your move"}
+                : "Your move — tap the mic or type"}
             </div>
             <div className="blindLog" aria-live="polite">
               {log.map((entry, i) => (
@@ -546,9 +611,19 @@ export default function BlindMode({ onClose }) {
                 </form>
                 <div className="ctrls blindCtrls">
                   {micSupported && (
-                    <button className={"btn " + (micOn ? "gold" : "ghost")} onClick={toggleMic}>
-                      {micOn ? "🎙 Mic on" : "🎙 Mic off"}
-                    </button>
+                    <>
+                      <button className={"btn " + (listening ? "gold" : "ghost")} onClick={onMicTap}
+                        disabled={botThinking} title={handsFree ? "Hands Free is on — tap to interrupt/stop" : "Tap, then speak your move"}>
+                        {listening ? "🎙 Listening… (tap to stop)" : "🎙 Tap to speak"}
+                      </button>
+                      <button className={"btn ghost" + (handsFree ? " active" : "")} onClick={toggleHandsFree}
+                        title="Hands Free re-listens automatically after every turn instead of needing a tap each time — best on desktop, less reliable on phones">
+                        {handsFree ? "🔁 Hands Free: On" : "🔁 Hands Free: Off"}
+                      </button>
+                    </>
+                  )}
+                  {speaking && (
+                    <button className="btn ghost" onClick={() => speakerRef.current.cancel()}>⏹ Stop talking</button>
                   )}
                   <button className="btn ghost" onClick={toggleVoice}>{voiceOn ? "🔊 Voice" : "🔇 Muted"}</button>
                   <button className="btn ghost" onClick={() => runCommand("repeat")}>Repeat</button>
@@ -566,7 +641,7 @@ export default function BlindMode({ onClose }) {
               <div className="ctrls">
                 <button className="btn gold" onClick={() => startGame(playerColor)}>New Game</button>
                 <button className="btn ghost" onClick={() => setPhase("setup")}>Change Settings</button>
-                <button className="btn ghost" onClick={onClose}>Exit</button>
+                <button className="btn ghost" onClick={handleClose}>Exit</button>
               </div>
             )}
           </>
