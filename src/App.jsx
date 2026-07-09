@@ -775,6 +775,16 @@ export default function ZlegendsBot() {
       runSearch(prefixAfter, RANK_BOT_PROBE_MS, 0, { useBook: false }),
     ]).then(([before, after]) => {
       if (!before || !after) return;
+      /* Mate-range scores don't behave like normal centipawn evals -- two
+         shallow (250ms) probe searches finding forced mate at slightly
+         different distances can disagree by tens of thousands of "cp",
+         which reads as a catastrophic blunder even when the player's
+         move was fine or literally the best move in a mating sequence.
+         Confirmed from logged games: this is what was smashing the dial
+         back to the floor mid-mate even while the player kept playing
+         cleanly. Skip the whole adjustment rather than trust either
+         number once either side sees mate. */
+      if (Math.abs(before.score) > MATE - 2000 || Math.abs(after.score) > MATE - 2000) return;
       const loss = Math.max(0, before.score + after.score);
       const window = rankBotWindowRef.current;
       window.push(loss);
