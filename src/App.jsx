@@ -9,6 +9,7 @@ import { MP3_PLAYLISTS, THEME_ID, loadPlaylistTracks } from "./utils/musicLibrar
 import PixelAvatar, { ZPAL, ZPIX, BPAL, BPIX, PPAL, PPIX } from "./components/PixelAvatar";
 import SocialLinks from "./components/SocialLinks";
 import StarField from "./components/StarField";
+import HomePage from "./components/HomePage";
 import { loadSetting, saveSetting } from "./utils/storage";
 import { buildPgn, parsePgnMoves, replayForeignPgn } from "./utils/pgn";
 import { encodeGame, decodeGame, getSharedHash, replayIntoEngine } from "./utils/share";
@@ -221,6 +222,11 @@ function materialState(eng) {
 export default function ZlegendsBot() {
   const initialHash = useRef(getSharedHash()).current;
   const initialShared = useRef(initialHash ? decodeGame(initialHash) : null).current;
+  /* A shared game link (?/#g=...) always drops straight into Play with
+     that game loaded -- a viewer clicking a friend's shared link should
+     never have to click through the home page first to see the position
+     they were sent. */
+  const [siteView, setSiteView] = useState(initialShared ? "play" : "home");
 
   const initRef = useRef(null);
   if (!initRef.current) {
@@ -1868,6 +1874,29 @@ export default function ZlegendsBot() {
         : pieces.map((t, i) => <img key={i} className={"trayPc " + colorClass} src={pieceImgSrc(t, colorClass === "wpc")} alt="" draggable="false" />)}
     </div>
   );
+
+  /* Home page mode cards drop straight into the matching part of the
+     Play screen rather than making the player navigate there themselves
+     -- each of these already exists as its own control elsewhere in the
+     app (the Puzzles/Openings/Spectate/Blind Chess icon-row buttons, the
+     Rush row inside the Puzzles modal, the Rank Bot difficulty option),
+     this just triggers the same state changes those already do. */
+  const enterMode = (modeId) => {
+    setSiteView("play");
+    if (modeId === "puzzles") setPuzzlesOpen(true);
+    else if (modeId === "openings") setOpeningsOpen(true);
+    else if (modeId === "rush") setRushOpen(true);
+    else if (modeId === "spectate") setSpectateOpen(true);
+    else if (modeId === "blind") setBlindOpen(true);
+    else if (modeId === "rank") {
+      const idx = DIFFICULTIES.findIndex(d => d.id === "rank");
+      if (idx >= 0) onDifficultyChange(idx);
+    }
+  };
+
+  if (siteView === "home") {
+    return <HomePage onEnter={enterMode} />;
+  }
 
   return (
     <div className={"root" + (hideEvalBar ? " noEval" : "")} style={{ "--boardLight": getBoardColor(boardColorId).light, "--boardDark": getBoardColor(boardColorId).dark }}>
