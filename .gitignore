@@ -3,3 +3,4 @@ dist
 dist-kindle
 .DS_Store
 .env
+ui-screenshots/

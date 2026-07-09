@@ -1,3 +1,14 @@
+/* Tailwind, additive only: theme + utility classes for new code (nav
+   rework, future auth screens, etc.), deliberately WITHOUT importing
+   "tailwindcss/preflight.css" -- that's Tailwind's base-style reset
+   (default margins/fonts/button styles stripped off every element on the
+   page), and it would silently fight the existing hand-written CSS below
+   since it isn't scoped to only Tailwind-authored markup. Skipping it
+   means adding Tailwind can't visually change anything that doesn't
+   explicitly opt in with a Tailwind class. */
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body {
   margin: 0;
