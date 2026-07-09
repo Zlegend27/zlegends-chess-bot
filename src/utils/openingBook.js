@@ -27,6 +27,34 @@ const STATIC_BOOK = {
   "d4 d5 c4": [["e6", 3], ["c6", 3], ["dxc4", 1]],
 };
 
+/* Style bias for the Casual bot's daily personality (only Casual opts in --
+   the Stockfish tiers don't use a book and Master stays neutral). Explorer
+   weights are raw play-counts, so an untouched pick is pure popularity and
+   every Casual game funnels into the same mainlines. Two knobs reshape
+   that: `exp` is an exponent on the counts (below 1 flattens the
+   distribution so sharp sidelines actually get picked; above 1 makes
+   mainlines even stickier for solid styles), and `boost` multiplies moves
+   that match the style's signature theory when they're among the
+   candidates (Gambit reaching for f4/b4/c3 lines, Positional for
+   d4/c4/fianchettos). All candidates still come from real played theory,
+   so a boosted move can never be an unsound invention. */
+const STYLE_BOOK_BIAS = {
+  Aggressive: { exp: 0.55, mult: 3, boost: new Set(["e4", "f4", "Bc4", "h4", "g4", "Ng5", "d5", "f5"]) },
+  Tactical: { exp: 0.65, mult: 2.5, boost: new Set(["e4", "Bc4", "Nc3", "d4", "c5", "Nf6"]) },
+  Gambit: { exp: 0.5, mult: 3, boost: new Set(["e4", "f4", "b4", "c3", "Bc4", "e5", "b5"]) },
+  Positional: { exp: 1.4, mult: 2.5, boost: new Set(["d4", "c4", "Nf3", "g3", "b3", "e6", "g6", "c6"]) },
+  Defensive: { exp: 1.4, mult: 2.5, boost: new Set(["d4", "Nf3", "e3", "g3", "c6", "e6", "d5"]) },
+};
+
+function applyStyleBias(entries, style) {
+  const bias = style && STYLE_BOOK_BIAS[style];
+  if (!bias) return entries;
+  return entries.map(e => ({
+    san: e.san,
+    weight: Math.pow(e.weight, bias.exp) * (bias.boost.has(e.san) ? bias.mult : 1),
+  }));
+}
+
 function pickWeighted(entries) {
   const total = entries.reduce((s, e) => s + e.weight, 0);
   if (total <= 0) return null;
@@ -38,13 +66,13 @@ function pickWeighted(entries) {
   return entries[entries.length - 1].san;
 }
 
-export function getStaticBookMove(moveList) {
+export function getStaticBookMove(moveList, style) {
   const entry = STATIC_BOOK[moveList.join(" ")];
   if (!entry) return null;
-  return pickWeighted(entry.map(([san, weight]) => ({ san, weight })));
+  return pickWeighted(applyStyleBias(entry.map(([san, weight]) => ({ san, weight })), style));
 }
 
-export async function fetchExplorerMove(fenStr, { timeoutMs = 2500 } = {}) {
+export async function fetchExplorerMove(fenStr, { timeoutMs = 2500, style = null } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -59,7 +87,7 @@ export async function fetchExplorerMove(fenStr, { timeoutMs = 2500 } = {}) {
       .filter(e => e.weight > 0);
     const total = entries.reduce((s, e) => s + e.weight, 0);
     if (total < 20) return null; // too little data in the database to trust
-    return pickWeighted(entries);
+    return pickWeighted(applyStyleBias(entries, style));
   } catch {
     return null; // offline, timed out, CORS hiccup — caller falls back
   } finally {
@@ -67,8 +95,8 @@ export async function fetchExplorerMove(fenStr, { timeoutMs = 2500 } = {}) {
   }
 }
 
-export async function getBookMove(fenStr, moveList, opts) {
+export async function getBookMove(fenStr, moveList, opts = {}) {
   const explorerMove = await fetchExplorerMove(fenStr, opts);
   if (explorerMove) return explorerMove;
-  return getStaticBookMove(moveList);
+  return getStaticBookMove(moveList, opts.style);
 }

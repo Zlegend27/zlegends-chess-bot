@@ -40,7 +40,11 @@ const DIFFICULTIES = [
   { label: "1500 Elo", stockfishElo: 1500, moveTimeMs: 700 },
   { label: "2000 Elo", stockfishElo: 2000, moveTimeMs: 1000 },
   { label: "Rank Bot", id: "rank", adaptive: true, moveTimeMs: 900 },
-  { label: "Casual", ms: 600, book: true },
+  /* styleBook: Casual's opening picks lean into the bot's daily
+     personality (see STYLE_BOOK_BIAS in openingBook.js). Master stays on
+     the neutral popularity-weighted book, and the Stockfish tiers don't
+     use a book at all. */
+  { label: "Casual", ms: 600, book: true, styleBook: true },
   { label: "Master", ms: 12000, book: true },
 ];
 
@@ -317,7 +321,7 @@ export default function ZlegendsBot() {
       pendingSearchesRef.current.set(id, resolve);
       workerRef.current.postMessage({
         id, moveList: searchMoveList, timeMs, blunderChance,
-        personality: opts.personality, useBook: !!opts.useBook,
+        personality: opts.personality, useBook: !!opts.useBook, bookStyle: opts.bookStyle || null,
       });
     });
   }, []);
@@ -820,7 +824,7 @@ export default function ZlegendsBot() {
     const personality = pickPersonality(gameStyleRef.current, eng.plyCount(), botAdvantagePawns);
     const searchPromise = diff.stockfishElo
       ? stockfishMove(diff)
-      : runSearch(currentMoveList, diff.ms, diff.blunderChance || 0, { personality, useBook: diff.book });
+      : runSearch(currentMoveList, diff.ms, diff.blunderChance || 0, { personality, useBook: diff.book, bookStyle: diff.styleBook ? gameStyleRef.current.label : null });
     searchPromise.then((res) => {
       if (res && res.move) {
         const cap = isCaptureMove(res.move);
@@ -867,7 +871,7 @@ export default function ZlegendsBot() {
     const personality = pickPersonality(gameStyleRef.current, eng.plyCount(), 0);
     const searchPromise = diff.stockfishElo
       ? stockfishMove(diff)
-      : runSearch(moveListRef.current, diff.ms, diff.blunderChance || 0, { personality, useBook: diff.book });
+      : runSearch(moveListRef.current, diff.ms, diff.blunderChance || 0, { personality, useBook: diff.book, bookStyle: diff.styleBook ? gameStyleRef.current.label : null });
     searchPromise.then((res) => {
       if (res && res.move && spectateModeRef.current) {
         const cap = isCaptureMove(res.move);
