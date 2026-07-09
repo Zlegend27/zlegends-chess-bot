@@ -84,6 +84,21 @@ function rankBotStep(loss, windowAvg, windowLen) {
   }
   return 0;
 }
+/* The per-move dial above only updates *after* the player moves, and only
+   by a small step -- fine for a slow-moving skill estimate, but it means
+   a bot sitting on a weak dial would blunder-roll right past a just-hung
+   queen because "skill this low" says so. Material/tactical reality has
+   to trump the calibration in the moment: a big swing overrides the dial
+   for that one move only (never persisted), snapping to full strength to
+   grab (or dodge) it, and easing off when the bot is already dominating
+   so the game doesn't turn into a blowout. */
+const RANK_BOT_SWING_CP = 400;
+/* Budget for the full-strength sanity search in stockfishMove -- short
+   since it's only checking "is there something decisive right now", not
+   doing real analysis; confirmed reliable at this length even at only
+   300ms in testing. Adds this much to Rank Bot's per-move latency. */
+const RANK_BOT_SANITY_MS = 400;
+const RANK_BOT_DOMINANT_CAP = 900;
 /* The live dial above drives actual in-game difficulty and never stops
    moving -- but that's a bad number to show the player directly (it can
    swing mid-game). Every RANK_BOT_ASSESSMENT_EVERY completed games, this
@@ -371,6 +386,7 @@ export default function ZlegendsBot() {
   const [analysisExtra, setAnalysisExtra] = useState([]);
   const [posVersion, setPosVersion] = useState(0);
   const [shareToast, setShareToast] = useState(null);
+  const [shareLinkFallback, setShareLinkFallback] = useState(null);
   const [pgnToast, setPgnToast] = useState(null);
   const [musicOpen, setMusicOpen] = useState(false);
   const musicOpenRef = useRef(false);
@@ -442,6 +458,13 @@ export default function ZlegendsBot() {
      an abandoned game with enough of these still counts toward the
      assessment (see maybeCountAbandonedRankGame). */
   const rankBotTrackedRef = useRef(0);
+  /* Bumped on every undo/new-game/abandon -- an in-flight adjustRankBotDial
+     probe (two 250ms searches) captures the epoch when it starts and
+     checks it again before applying its result, so undoing a move can't
+     let a stale probe for a move that no longer happened still nudge the
+     dial and log a row (confirmed in production data: a duplicate ply
+     entry from exactly this race). */
+  const rankBotEpochRef = useRef(0);
   /* Client-generated id linking one Rank Bot game's rank_bot_moves rows
      back to its single games-table row (that insert is fire-and-forget
      and doesn't return its own id) -- lazily created on this game's first
@@ -734,17 +757,37 @@ export default function ZlegendsBot() {
      identical either way -- see stockfishEngine.js for why Stockfish was
      brought in for these three tiers instead of tuning search time. */
   const stockfishMove = useCallback((diff) => {
-    return stockfishBestMove(eng.fen(), diff.stockfishElo, diff.moveTimeMs || 1000).then(({ uci, info }) => {
+    const fen = eng.fen();
+    const mainSearch = stockfishBestMove(fen, diff.stockfishElo, diff.moveTimeMs || 1000);
+    /* Rank Bot only: a short full-strength sanity check run alongside the
+       calibrated search. Testing this directly against the engine showed
+       why this needs its own search rather than just reading diff's own
+       result -- UCI_LimitStrength doesn't just search shallower, it
+       deliberately weakens Stockfish's play, so a low-Elo search can
+       simply fail to notice a one-move queen capture even given ample
+       time (confirmed: 600 Elo missed it at 900ms/1200ms in testing,
+       while full strength found it consistently even at 300ms). Piece
+       value/board reality has to come from a search that isn't itself
+       handicapped -- the calibrated search stays in charge of "how" the
+       bot plays, this only overrides "whether it takes the free queen". */
+    const sanitySearch = diff.adaptive ? stockfishBestMove(fen, 3190, RANK_BOT_SANITY_MS) : Promise.resolve(null);
+    return Promise.all([mainSearch, sanitySearch]).then(([{ uci, info }, sanity]) => {
       if (!uci) return null;
       let move = eng.moveFromUci(uci);
-      if (move && diff.blunderChance && Math.random() < diff.blunderChance) {
+      let score = info ? info.score : 0;
+      const sanityMove = sanity && sanity.info && sanity.info.score >= RANK_BOT_SWING_CP && sanity.uci
+        ? eng.moveFromUci(sanity.uci) : null;
+      if (sanityMove) {
+        move = sanityMove;
+        score = sanity.info.score;
+      } else if (move && diff.blunderChance && Math.random() < diff.blunderChance) {
         const legal = eng.legalMoves();
         if (legal.length) move = legal[(Math.random() * legal.length) | 0];
       }
       if (!move) return null;
       return {
         move, san: eng.sanOf(move),
-        score: info ? info.score : 0, depth: info ? info.depth : 0,
+        score, depth: info ? info.depth : 0,
         nodes: info ? info.nodes : 0, time: info ? info.time : (diff.moveTimeMs || 1000),
         pv: info ? info.pv : [], book: false,
       };
@@ -763,7 +806,19 @@ export default function ZlegendsBot() {
     if (eng.plyCount() < RANK_BOT_OPENING_PLIES) {
       return { ...diff, stockfishElo: 3190, blunderChance: 0 };
     }
-    const elo = rankBotEloRef.current;
+    let elo = rankBotEloRef.current;
+    /* Real-time material/eval reality check, evaluated fresh every move
+       (cheap -- reuses the existing static eval, no extra search) rather
+       than waiting on the slow per-move dial to catch up:
+       - bot is getting crushed (a hung queen, a blundered piece) -> play
+         its actual best move this instant regardless of calibration;
+       - bot is already crushing the player -> cap its own strength down
+         so the position doesn't snowball into a blowout. */
+    const botColorNow = -playerColorRef.current;
+    const whiteEval = eng.evalWhite();
+    const botAdvantageCp = botColorNow === 1 ? whiteEval : -whiteEval;
+    if (botAdvantageCp <= -RANK_BOT_SWING_CP) elo = RANK_BOT_MAX_ELO;
+    else if (botAdvantageCp >= RANK_BOT_SWING_CP) elo = Math.min(elo, RANK_BOT_DOMINANT_CAP);
     return { ...diff, stockfishElo: Math.max(elo, STOCKFISH_MIN_ELO), blunderChance: rankBotBlunderChance(elo) };
   };
 
@@ -781,10 +836,12 @@ export default function ZlegendsBot() {
     if (prefixAfter.length <= RANK_BOT_OPENING_PLIES) return;
     const gameUid = ensureRankBotGameUid();
     const ply = prefixAfter.length;
+    const epoch = rankBotEpochRef.current;
     Promise.all([
       runSearch(prefixBefore, RANK_BOT_PROBE_MS, 0, { useBook: false }),
       runSearch(prefixAfter, RANK_BOT_PROBE_MS, 0, { useBook: false }),
     ]).then(([before, after]) => {
+      if (rankBotEpochRef.current !== epoch) return; // undone/reset since this probe started
       if (!before || !after) return;
       /* Mate-range scores don't behave like normal centipawn evals -- two
          shallow (250ms) probe searches finding forced mate at slightly
@@ -983,6 +1040,7 @@ export default function ZlegendsBot() {
      3 "games" and never see their Elo. Finished games reset the tracked
      counter inside finishRankBotGame, so this can't double-count. */
   const maybeCountAbandonedRankGame = () => {
+    rankBotEpochRef.current += 1;
     if (rankBotTrackedRef.current >= RANK_BOT_MIN_TRACKED_MOVES) finishRankBotGame();
     rankBotWindowRef.current = [];
     rankBotGameUidRef.current = null;
@@ -1268,6 +1326,7 @@ export default function ZlegendsBot() {
       else if (boardColorsOpen) { setBoardColorsOpen(false); setSettingsOpen(true); }
       else if (settingsOpen) setSettingsOpen(false);
       else if (nameEditOpen) setNameEditOpen(false);
+      else if (shareLinkFallback) setShareLinkFallback(null);
       else if (leaderboardOpen) setLeaderboardOpen(false);
       else if (rushMode && rushResult) exitRush();
       else if (rushOpen) { setRushOpen(false); setPuzzlesOpen(true); }
@@ -1280,7 +1339,7 @@ export default function ZlegendsBot() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pieceDesignsOpen, boardColorsOpen, settingsOpen, nameEditOpen, leaderboardOpen, rushMode, rushResult, rushOpen, puzzlesOpen, openingsOpen, musicOpen, spectateOpen, pasteOpen]);
+  }, [pieceDesignsOpen, boardColorsOpen, settingsOpen, nameEditOpen, shareLinkFallback, leaderboardOpen, rushMode, rushResult, rushOpen, puzzlesOpen, openingsOpen, musicOpen, spectateOpen, pasteOpen]);
 
   /* Puzzle Rush countdown -- ticks once a second while a rush is live and
      hasn't already ended from 3 mistakes, pausing entirely once rushResult
@@ -1375,6 +1434,20 @@ export default function ZlegendsBot() {
     let n;
     if (quizOpening) n = 1; // quiz: the player supplies every ply, so always step back exactly one
     else if (eng.getSide() === playerColor && eng.plyCount() >= 2) n = 2; else n = 1;
+    /* Bump first (see rankBotEpochRef): any adjustRankBotDial probe still
+       in flight for the move(s) being undone will find its epoch stale
+       and discard its result instead of logging/adjusting for a move
+       that's about to stop existing. n===2 means a full player+bot pair
+       is being undone -- if that player move was past the opening and
+       already got tracked, unwind that bookkeeping too rather than
+       leaving the count/window one move ahead of reality. */
+    if (n === 2 && difficultyRef.current.id === "rank" && moveListRef.current.length - n >= RANK_BOT_OPENING_PLIES) {
+      rankBotEpochRef.current += 1;
+      rankBotWindowRef.current.pop();
+      rankBotTrackedRef.current = Math.max(0, rankBotTrackedRef.current - 1);
+    } else if (difficultyRef.current.id === "rank") {
+      rankBotEpochRef.current += 1;
+    }
     for (let i = 0; i < n; i++) eng.unmake();
     const newMoveList = moveListRef.current.slice(0, moveListRef.current.length - n);
     moveListRef.current = newMoveList;
@@ -1626,15 +1699,38 @@ export default function ZlegendsBot() {
   };
 
 
+  /* Three-tier fallback, in order of "works well on the phone this is
+     most likely being tapped from":
+     1. navigator.share -- the native share sheet. Only real option that
+        works reliably from an installed home-screen PWA on iOS; also
+        just the better UX on any mobile browser.
+     2. Clipboard write -- fine on desktop, but mobile Safari can throw
+        "Document is not focused" here depending on what triggered the
+        tap, and it silently fails in some in-app browsers (Instagram/
+        TikTok webviews) that don't grant clipboard permissions at all.
+     3. A real modal showing the link as selectable text. NOT
+        window.prompt() -- that's a no-op in iOS standalone/home-screen
+        PWA mode (this app is installable), so on exactly the devices
+        most likely to reach this fallback, prompt() would show nothing
+        and the player would think Share was just broken. */
   const onShare = async () => {
     const hash = encodeGame(playerColor, moveList);
     const url = `${window.location.origin}${window.location.pathname}#g=${hash}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: "Zlegend's Chess Bot", text: "Check out this game!", url });
+        return;
+      } catch (e) {
+        if (e && e.name === "AbortError") return; // player closed the native share sheet
+        // any other failure (unsupported target, permission, etc.) -- fall through
+      }
+    }
     try {
       await navigator.clipboard.writeText(url);
       setShareToast("Link copied — send it to a viewer!");
       setTimeout(() => setShareToast(null), 2500);
     } catch {
-      window.prompt("Copy this link to share the game:", url);
+      setShareLinkFallback(url);
     }
   };
 
@@ -2360,6 +2456,33 @@ export default function ZlegendsBot() {
               style={{ width: "100%", boxSizing: "border-box", fontSize: 14, padding: "8px 10px", borderRadius: 8, background: "#150C24", color: "var(--white, #F4EFFF)", border: "1px solid #8B2FC966" }}
             />
             <button className="btn gold" onClick={saveDisplayName}>Save</button>
+          </div>
+        </div>
+      )}
+
+      {shareLinkFallback && (
+        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 51 }} onClick={e => { if (e.target === e.currentTarget) setShareLinkFallback(null); }}>
+          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 400, padding: "20px 24px" }}>
+            <button className="modalCloseX" onClick={() => setShareLinkFallback(null)} aria-label="Close" title="Close">✕</button>
+            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              Share This Game
+            </div>
+            <div className="pv" style={{ fontSize: 12, opacity: 0.85 }}>
+              Couldn't copy automatically — tap the link below to select it, or hit Copy.
+            </div>
+            <input
+              type="text" readOnly value={shareLinkFallback}
+              onFocus={e => e.target.select()}
+              style={{ width: "100%", boxSizing: "border-box", fontSize: 12, padding: "8px 10px", borderRadius: 8, background: "#150C24", color: "var(--white, #F4EFFF)", border: "1px solid #8B2FC966" }}
+            />
+            <button className="btn gold" onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(shareLinkFallback);
+                setShareLinkFallback(null);
+                setShareToast("Link copied — send it to a viewer!");
+                setTimeout(() => setShareToast(null), 2500);
+              } catch { /* still selectable in the input above */ }
+            }}>Copy</button>
           </div>
         </div>
       )}
