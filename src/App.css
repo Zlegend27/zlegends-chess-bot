@@ -18,10 +18,13 @@
   animation-name:twinkle; animation-timing-function:ease-in-out; animation-iteration-count:infinite; }
 @keyframes twinkle{ 0%,100%{ opacity:.15; transform:scale(.75); } 50%{ opacity:1; transform:scale(1.2); } }
 .hdr{ text-align:center; margin-bottom:16px; z-index:1; }
-.hdr .eyebrow{ display:inline-flex; align-items:center; gap:7px; font-size:11px; font-weight:700;
+/* Not scoped under .hdr -- SocialBanner.jsx renders this same markup at
+   the bottom of every page now, outside any .hdr wrapper, so the rule
+   needs to stand on its own. */
+.eyebrow{ display:inline-flex; align-items:center; gap:7px; font-size:11px; font-weight:700;
   letter-spacing:.3em; text-transform:uppercase; color:var(--cyan);
   text-shadow:0 0 10px #3EE7F5AA; }
-.hdr .eyebrow .live{ width:8px; height:8px; border-radius:50%; background:#FF4B4B;
+.eyebrow .live{ width:8px; height:8px; border-radius:50%; background:#FF4B4B;
   box-shadow:0 0 8px #FF4B4B; animation:blink 1.2s infinite; }
 .socialLinks{ display:inline-flex; align-items:center; gap:9px; margin-left:2px; }
 .socialIcon{ display:flex; color:var(--cyan); opacity:.8; text-shadow:none; transition:opacity .15s ease, filter .15s ease; }
@@ -106,6 +109,14 @@
   background:#1D1038; transition:background .2s ease, box-shadow .2s ease; }
 .rushMistakeBox.filled{ background:#FF4C5B; box-shadow:0 0 8px #FF4C5B99; }
 .rushHudLifetime{ font-size:10px; color:var(--dim); font-style:italic; }
+
+/* Daily/Ranked Puzzle HUD -- same slot as rushHud/botCard above, but for
+   an untimed single puzzle: no clock/mistakes (not a Rush), no
+   avatar/mood/name (not "facing" anyone). Just what puzzle it is and
+   its rating; the actual prompt/feedback text stays on the you-card
+   below, same as it already does for every other mode. */
+.puzzleHudLabel{ font-family:'Arial Black',Impact,sans-serif; font-style:italic; font-size:13px;
+  text-transform:uppercase; letter-spacing:.03em; color:var(--cyan); text-shadow:0 0 8px #3EE7F555; }
 .rushCounterRow{ display:flex; align-items:center; justify-content:space-between; gap:10px;
   font-size:11px; color:var(--dim); }
 .rushMissedList{ display:flex; flex-direction:column; gap:6px; border-top:1px solid #8B2FC93D;
@@ -322,7 +333,7 @@ select:hover{ border-color:var(--cyan); }
 @media (max-width:700px){
   .layout{ flex-direction:column; align-items:center; }
   .boardCol, .panel{ display:contents; }
-  .botCard, .rushHud{ order:1; }
+  .botCard, .rushHud, .puzzleHud{ order:1; }
   .boardWrap{ order:2; }
   .youCard{ order:3; }
   .statusRow{ order:4; }
@@ -379,7 +390,7 @@ select:hover{ border-color:var(--cyan); }
    modal entrances. One-shot functional transitions (button presses)
    are quick enough to keep. */
 @media (prefers-reduced-motion: reduce){
-  .star, .hdr .eyebrow .live, .bang, .sq.botLast::before{ animation:none; }
+  .star, .eyebrow .live, .bang, .sq.botLast::before{ animation:none; }
   .promoOv, .promoBox{ animation:none; }
   .evalbar .pfill{ transition:none; }
 }

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import StarField from "./StarField";
+import { TopNav } from "./ExploreNav";
+import SocialBanner from "./SocialBanner";
 import { fetchLeaderboard } from "../utils/leaderboard";
 import { RUSH_DURATIONS } from "../utils/rushDurations";
 
@@ -7,8 +9,13 @@ import { RUSH_DURATIONS } from "../utils/rushDurations";
  *  "View Leaderboard" trigger in the app should navigate here (see
  *  App.jsx's openLeaderboard) instead of opening an overlay, so this is
  *  the one place that pattern lives. Self-contained: owns its own
- *  duration/rows state rather than lifting it into App.jsx. */
-export default function LeaderboardPage({ initialDuration = 60, onBack }) {
+ *  duration/rows state rather than lifting it into App.jsx.
+ *
+ *  onToolSelect/activeToolId are the same handlers the Play screen's
+ *  TopNav uses -- every non-home page gets the same nav bar at the top,
+ *  not just Play (see App.jsx's onToolSelect for why it flips siteView
+ *  back to "play" for Music/Settings, which only mount there). */
+export default function LeaderboardPage({ initialDuration = 60, onBack, onToolSelect, activeToolId }) {
   const [duration, setDuration] = useState(initialDuration);
   const [rows, setRows] = useState(null);
 
@@ -26,6 +33,7 @@ export default function LeaderboardPage({ initialDuration = 60, onBack }) {
   return (
     <div className="root">
       <StarField />
+      <TopNav onSelect={onToolSelect} active={activeToolId} />
       <div className="hdr">
         <h1 style={{ fontSize: 34 }}>🏆 Leaderboard</h1>
         <div className="sub">Puzzle Rush · top solvers</div>
@@ -54,6 +62,8 @@ export default function LeaderboardPage({ initialDuration = 60, onBack }) {
       </div>
 
       <button className="btn ghost" style={{ marginTop: 20 }} onClick={onBack}>← Back</button>
+
+      <SocialBanner />
     </div>
   );
 }

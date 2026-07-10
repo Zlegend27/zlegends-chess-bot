@@ -11,7 +11,8 @@ import StarField from "./components/StarField";
 import Confetti from "./components/Confetti";
 import HomePage from "./components/HomePage";
 import SiteHeader from "./components/SiteHeader";
-import { ExploreDock, BottomNav } from "./components/ExploreNav";
+import { TopNav } from "./components/ExploreNav";
+import SocialBanner from "./components/SocialBanner";
 import GamePanel from "./components/GamePanel";
 import { loadSetting, saveSetting } from "./utils/storage";
 import { buildPgn, parsePgnMoves, replayForeignPgn } from "./utils/pgn";
@@ -416,9 +417,14 @@ export default function ZlegendsBot() {
      the nav only exposes Home/Login/Music/Settings now -- those modes are
      reachable from the home page's mode grid instead. Login has no auth
      wired up yet, so it's a no-op placeholder for now. */
+  /* The Music/Settings modals only render inside the "play" branch below
+     -- TopNav is now shown on every page (Play, Leaderboard, ...), so
+     opening one from a page that isn't "play" needs to flip siteView
+     first or the modal has nowhere to mount. Harmless no-op when
+     already on "play". */
   const onToolSelect = (id) => {
-    if (id === "music") setMusicOpen(true);
-    else if (id === "settings") openSettings();
+    if (id === "music") { setSiteView("play"); setMusicOpen(true); }
+    else if (id === "settings") { setSiteView("play"); openSettings(); }
     else if (id === "home") setSiteView("home");
     else if (id === "login") {} // placeholder -- no auth implemented yet
   };
@@ -2045,7 +2051,14 @@ export default function ZlegendsBot() {
   }
 
   if (siteView === "leaderboard") {
-    return <LeaderboardPage initialDuration={leaderboardDuration} onBack={() => setSiteView("play")} />;
+    return (
+      <LeaderboardPage
+        initialDuration={leaderboardDuration}
+        onBack={() => setSiteView("play")}
+        onToolSelect={onToolSelect}
+        activeToolId={activeToolId}
+      />
+    );
   }
 
   return (
@@ -2053,6 +2066,7 @@ export default function ZlegendsBot() {
       <StarField />
       {rushMilestone > 0 && <Confetti key={rushMilestone} />}
       <SiteHeader onHome={() => setSiteView("home")} />
+      <TopNav onSelect={onToolSelect} active={activeToolId} />
 
       <div className="layout">
         <div className="boardCol">
@@ -2072,6 +2086,22 @@ export default function ZlegendsBot() {
                 <div className="rushHudLifetime">Lifetime solved: {rushLifetime}</div>
               </div>
             </div>
+          ) : activePuzzle ? (
+            /* Neither the Rush HUD (clock/mistakes, a solo race) nor the
+               bot-facing card (avatar/mood/name, an opponent framing) fit
+               an untimed Daily/Ranked puzzle -- there's no clock and no
+               one to "face", just a position and a rating. */
+            <div className="card puzzleHud">
+              <div className="avatarBox">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="var(--cyan)" aria-hidden="true">
+                  <path d="M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5C13 2.12 11.88 1 10.5 1S8 2.12 8 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.49 0 2.7 1.21 2.7 2.7s-1.21 2.7-2.7 2.7H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.49 1.21-2.7 2.7-2.7s2.7 1.21 2.7 2.7V22H17c1.1 0 2-.9 2-2v-4h1.5c1.38 0 2.5-1.12 2.5-2.5S21.88 11 20.5 11z" />
+                </svg>
+              </div>
+              <div className="cardMeta">
+                <div className="puzzleHudLabel">{puzzleBand ? `${puzzleBand.label} Puzzle` : "Daily Puzzle"}</div>
+                <div className="trayEmpty puzzleMeta">Rated {activePuzzle.rating}</div>
+              </div>
+            </div>
           ) : (
             <div className={"card botCard" + (mode === "play" && !result && !thinking && eng.getSide() === botColor ? " turnGlow" : "")}>
               <div className={"avatarBox" + (botMood !== "neutral" ? " reactionBox " + botMood : "")}>
@@ -2081,22 +2111,16 @@ export default function ZlegendsBot() {
               </div>
               <div className="cardMeta">
                 <div className="cardName bot">{spectateMode ? `${DIFFICULTIES[botColor === 1 ? spectateWhiteIdx : spectateBlackIdx].label} (${botColor === 1 ? "White" : "Black"})` : "Zlegend2700"}</div>
-                {activePuzzle ? (
-                  <div className="trayEmpty puzzleMeta">Puzzle · rated {activePuzzle.rating}</div>
-                ) : (
-                  <>
-                    <div className="trayEmpty">{gameStyle.label} today</div>
-                    {!spectateMode && difficultyRef.current.id === "rank" && (
-                      <div className="trayEmpty openingTag">
-                        ~{rankBotElo} Elo{rankBotAssessedElo == null ? " · Calibrating" : ""}
-                      </div>
-                    )}
-                    {liveOpening && (
-                      <div className="trayEmpty openingTag">{liveOpening.name} · {liveOpening.eco}</div>
-                    )}
-                    <Tray pieces={botTaken} colorClass={playerColor === 1 ? "wpc" : "bpc"} />
-                  </>
+                <div className="trayEmpty">{gameStyle.label} today</div>
+                {!spectateMode && difficultyRef.current.id === "rank" && (
+                  <div className="trayEmpty openingTag">
+                    ~{rankBotElo} Elo{rankBotAssessedElo == null ? " · Calibrating" : ""}
+                  </div>
                 )}
+                {liveOpening && (
+                  <div className="trayEmpty openingTag">{liveOpening.name} · {liveOpening.eco}</div>
+                )}
+                <Tray pieces={botTaken} colorClass={playerColor === 1 ? "wpc" : "bpc"} />
               </div>
               {youDiff < 0 && <div className="lead">+{-youDiff}</div>}
             </div>
@@ -2322,18 +2346,10 @@ export default function ZlegendsBot() {
             </div>
           )}
 
-          <ExploreDock onSelect={onToolSelect} active={activeToolId} />
         </div>
       </div>
 
-      {/* Fixed mobile nav, all 6 tools -- ExploreDock (above) covers the
-         same 6 for desktop (lg:hidden on this one, hidden lg:block on
-         that one, so exactly one shows at a time). Lives outside
-         .layout/.panel since position:fixed doesn't need their width
-         constraints; a spacer right below reserves its height so it
-         can't cover the last bit of page content on mobile. */}
-      <BottomNav onSelect={onToolSelect} active={activeToolId} />
-      <div className="h-16 lg:hidden" aria-hidden="true" />
+      <SocialBanner />
 
       {blindOpen && (
         <Suspense fallback={null}>
@@ -2434,7 +2450,7 @@ export default function ZlegendsBot() {
             ) : (
               <div className="rows" style={{ maxHeight: "none" }}>
                 <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E" }}
-                  onClick={() => { setPuzzlesOpen(false); startPuzzle(dailyPuzzle(pz.PUZZLES)); }}>
+                  onClick={() => { setPuzzlesOpen(false); setPuzzleBand(null); startPuzzle(dailyPuzzle(pz.PUZZLES)); }}>
                   <div style={{ fontWeight: 700, color: "var(--cyan)" }}>📅 Daily Puzzle</div>
                   <div style={{ fontSize: 11, opacity: 0.75 }}>
                     {dailySolvedDate === todayKey() ? "Solved today ✓" : "One puzzle, same for everyone today"}

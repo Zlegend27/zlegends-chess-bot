@@ -1,9 +1,12 @@
 import PixelAvatar, { SPAL, SPIX } from "./PixelAvatar";
 
-/* Four tools shared between the desktop "Explore" dock and the mobile
- *  bottom nav -- ONE list so they can't drift apart the way the v0
- *  reference design's two components did (its ToolDock had 6 tools but
- *  its BottomNav only had 5 and silently dropped one).
+/* One nav bar for every screen size, rendered in-flow at the top of the
+ *  page (below SiteHeader) rather than split into a desktop sidebar dock
+ *  and a fixed-bottom mobile bar -- with the page's social banner also
+ *  moving to the bottom of every page (see SocialBanner.jsx), a fixed
+ *  bottom-of-viewport nav would fight it for the same territory, and
+ *  there's no longer a real reason to treat mobile/desktop differently
+ *  here.
  *
  *  Openings/Puzzles/Spectate/Blind Chess used to live here too, but are
  *  reachable from the home page's mode grid now instead -- this nav is
@@ -31,18 +34,14 @@ function Icon({ d, size = 18, className }) {
 
 function toolIcon(t, { size, className } = {}) {
   return t.id === "home"
-    ? <PixelAvatar rows={SPIX} pal={SPAL} size={size ?? 34} className={className} />
+    ? <PixelAvatar rows={SPIX} pal={SPAL} size={size ?? 26} className={className} />
     : <Icon d={t.icon} size={size ?? 18} className={className} />;
 }
 
-/** Desktop-only grid, sits in the right-hand panel column below the
- *  scoresheet/analysis card. Hidden below the lg breakpoint -- BottomNav
- *  covers mobile instead so the two never show at once. */
-export function ExploreDock({ onSelect, active }) {
+export function TopNav({ onSelect, active }) {
   return (
-    <section aria-label="More features" className="hidden lg:block">
-      <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-[#9D8FC4]">Explore</p>
-      <div className="grid grid-cols-3 gap-2">
+    <nav aria-label="Main features" className="mb-4 w-full max-w-4xl rounded-2xl border border-[#8B2FC966] bg-[#1D1038CC] backdrop-blur-sm">
+      <div className="flex items-center justify-around px-1 py-1.5">
         {TOOLS.map((t) => {
           const isActive = active === t.id;
           return (
@@ -50,46 +49,12 @@ export function ExploreDock({ onSelect, active }) {
               key={t.id}
               onClick={() => onSelect(t.id)}
               aria-label={t.label}
-              className={`group flex flex-col items-center gap-2 rounded-xl border px-2 py-3 text-center backdrop-blur-sm transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3EE7F5] ${
-                isActive ? "border-[#3EE7F580] bg-[#1D1038E6]" : "border-[#8B2FC933] bg-[#1D1038CC] hover:border-[#3EE7F566]"
-              }`}
-            >
-              <span className={`flex h-9 items-center justify-center ${isActive ? "text-[#3EE7F5]" : "text-[#3EE7F5] group-hover:text-[#5FF0FA]"}`}>
-                {toolIcon(t)}
-              </span>
-              <span className="text-[11px] font-bold leading-tight text-[#F4EFFF]">{t.label}</span>
-            </button>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-/** Fixed bottom bar, mobile-only (hidden at the lg breakpoint where
- *  ExploreDock takes over). All 6 tools, unlike the reference design's
- *  version of this component. */
-export function BottomNav({ onSelect, active }) {
-  return (
-    <nav
-      aria-label="Main features"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-[#8B2FC940] bg-[#0E0620E6] backdrop-blur-md lg:hidden"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-    >
-      <div className="flex h-16 items-center justify-around px-1">
-        {TOOLS.map((t) => {
-          const isActive = active === t.id;
-          return (
-            <button
-              key={t.id}
-              onClick={() => onSelect(t.id)}
-              aria-label={t.label}
-              className={`flex flex-1 flex-col items-center justify-center gap-0.5 rounded-lg border-0 bg-transparent py-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3EE7F5] ${
+              className={`flex flex-1 flex-col items-center justify-center gap-0.5 rounded-lg border-0 bg-transparent py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3EE7F5] ${
                 isActive ? "text-[#3EE7F5]" : "text-[#9D8FC4] hover:text-[#F4EFFF]"
               }`}
             >
               {toolIcon(t, {
-                size: t.id === "home" ? 28 : 18,
+                size: t.id === "home" ? 26 : 18,
                 className: isActive ? "scale-110 transition-transform" : "transition-transform",
               })}
               <span className="text-[10px] font-semibold tracking-wide">{t.label}</span>

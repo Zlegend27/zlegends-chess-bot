@@ -1,6 +1,6 @@
 import { useState } from "react";
 import StarField from "./StarField";
-import SocialLinks from "./SocialLinks";
+import SocialBanner from "./SocialBanner";
 import PixelAvatar, { ZPAL, ZPIX } from "./PixelAvatar";
 
 /* Same inline-SVG-path convention already used for the Juice Box/Puzzles/
@@ -11,7 +11,6 @@ import PixelAvatar, { ZPAL, ZPIX } from "./PixelAvatar";
    currentColor path, per direction: the bot sprite for Play, a colored
    book for Openings, a blindfolded face for Blind. */
 const ICONS = {
-  play: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-2 14.5v-9l7 4.5-7 4.5z",
   puzzle: "M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5C13 2.12 11.88 1 10.5 1S8 2.12 8 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.49 0 2.7 1.21 2.7 2.7s-1.21 2.7-2.7 2.7H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.49 1.21-2.7 2.7-2.7s2.7 1.21 2.7 2.7V22H17c1.1 0 2-.9 2-2v-4h1.5c1.38 0 2.5-1.12 2.5-2.5S21.88 11 20.5 11z",
   bolt: "M7 2v11h3v9l7-12h-4l4-8z",
   eye: "M12 5c-5 0-9.27 3.11-11 7 1.73 3.89 6 7 11 7s9.27-3.11 11-7c-1.73-3.89-6-7-11-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
@@ -91,7 +90,6 @@ export default function HomePage({ onEnter }) {
     <div className="root">
       <StarField />
       <div className="hdr">
-        <div className="eyebrow"><span className="live" />Zlegend27<SocialLinks /></div>
         <h1>Zlegend's Chess Bot</h1>
         <div className="sub">can you beat it??</div>
       </div>
@@ -99,14 +97,6 @@ export default function HomePage({ onEnter }) {
       <p className="mt-4 max-w-sm text-center text-sm leading-relaxed text-[#CBBDF0]">
         A custom chess engine that adapts, attacks, and surprises. Challenge it at any level — or train until you can.
       </p>
-
-      <button
-        onClick={() => onEnter("play")}
-        className="mt-7 inline-flex items-center gap-2.5 rounded-2xl bg-gradient-to-b from-[#FFE873] to-[#E0B93E] px-8 py-4 text-base font-bold text-[#3A2A00] shadow-[0_3px_0_#150C24,0_0_14px_#F5D93E66] transition hover:brightness-110 active:translate-y-0.5 active:shadow-[0_1px_0_#150C24,0_0_10px_#F5D93E66]"
-      >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={ICONS.play} /></svg>
-        Play Now
-      </button>
 
       {/* App-icon style grid -- big square tiles (icon + label only, no
           description) rather than the horizontal list-style cards this
@@ -182,6 +172,8 @@ export default function HomePage({ onEnter }) {
       {comingSoon && (
         <p className="mb-4 max-w-xs text-center text-xs text-[#9D8FC4]">{comingSoon}</p>
       )}
+
+      <SocialBanner />
 
       <footer className="mt-2 pb-6 text-center text-xs text-[#9D8FC4]">
         Built by <a href="https://www.youtube.com/@Zlegend27" target="_blank" rel="noopener noreferrer" className="text-[#3EE7F5] hover:underline">Zlegend27</a> — all rights reserved.
