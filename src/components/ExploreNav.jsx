@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import PixelAvatar, { SPAL, SPIX } from "./PixelAvatar";
 
 /* The ONE top bar every non-home page gets now -- it replaced both the
@@ -43,10 +44,26 @@ function toolIcon(t, { size, className } = {}) {
 }
 
 export function TopNav({ onSelect, active }) {
+  /* Login has no auth behind it yet -- handled here (not in App's
+     dispatcher) so every page that renders this nav gets the same
+     "coming soon" feedback instead of a button that silently does
+     nothing, which reads as broken. */
+  const [loginSoon, setLoginSoon] = useState(false);
+  const loginTimerRef = useRef(null);
+  useEffect(() => () => clearTimeout(loginTimerRef.current), []);
+  const handleSelect = (id) => {
+    if (id === "login") {
+      setLoginSoon(true);
+      clearTimeout(loginTimerRef.current);
+      loginTimerRef.current = setTimeout(() => setLoginSoon(false), 2400);
+      return;
+    }
+    onSelect(id);
+  };
   return (
     <nav
       aria-label="Main features"
-      className="mb-4 border-b border-[#8B2FC966] bg-[#1D1038CC] backdrop-blur-sm"
+      className="relative mb-4 border-b border-[#8B2FC966] bg-[#1D1038CC] backdrop-blur-sm"
       style={{
         width: "calc(100% + 28px + env(safe-area-inset-left) + env(safe-area-inset-right))",
         marginLeft: "calc(-14px - env(safe-area-inset-left))",
@@ -61,7 +78,7 @@ export function TopNav({ onSelect, active }) {
           return (
             <button
               key={t.id}
-              onClick={() => onSelect(t.id)}
+              onClick={() => handleSelect(t.id)}
               aria-label={t.label}
               className={`flex flex-1 flex-col items-center justify-center gap-0.5 rounded-lg border-0 bg-transparent py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3EE7F5] ${
                 isActive ? "text-[#3EE7F5]" : "text-[#9D8FC4] hover:text-[#F4EFFF]"
@@ -76,6 +93,13 @@ export function TopNav({ onSelect, active }) {
           );
         })}
       </div>
+      {loginSoon && (
+        <div className="pointer-events-none absolute inset-x-0 top-full z-50 flex justify-center pt-2" aria-live="polite">
+          <span className="rounded-lg border border-[#8B2FC966] bg-[#1D1038F0] px-4 py-1.5 text-xs font-semibold text-[#CBBDF0] shadow-lg backdrop-blur-sm">
+            Accounts are coming soon — everything works without one for now.
+          </span>
+        </div>
+      )}
     </nav>
   );
 }

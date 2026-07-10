@@ -226,9 +226,6 @@
 .boardGrade.mistake{ color:#F0A548; }
 .boardGrade.blunder{ color:#F05348; }
 .empty{ padding:10px 2px; color:var(--dim); font-size:12px; font-style:italic; }
-.astats{ display:flex; gap:14px; font-family:ui-monospace,Consolas,monospace; font-size:13px; }
-.astats b{ font-size:18px; color:var(--magenta); display:block; text-shadow:0 0 8px #D94BF055; }
-.astats span{ font-size:9px; color:var(--dim); text-transform:uppercase; letter-spacing:.12em; }
 .pv{ margin-top:8px; font-family:ui-monospace,Consolas,monospace; font-size:12px; color:#B9AEE0; line-height:1.5; word-break:break-word; }
 .audioRow{ display:flex; align-items:center; gap:8px; }
 .jbHead{ display:flex; align-items:center; gap:8px; }

@@ -276,7 +276,15 @@ export default function ZlegendsBot() {
   const [boardColorId, setBoardColorId] = useState(() => loadSetting("boardColor", "default"));
   const [hideEvalBar, setHideEvalBar] = useState(() => loadSetting("hideEvalBar", false));
   const [ecoData, setEcoData] = useState(null);
-  useEffect(() => { loadEcoOpenings().then(setEcoData); }, []);
+  /* The full ECO book is a ~480KB chunk that only matters once there's a
+     game to name openings for -- don't make home-page visitors download
+     it. detectOpening (the small built-in book) covers the gap while it
+     streams in after the player first enters the play view. */
+  useEffect(() => {
+    if (siteView !== "play" || ecoData) return;
+    loadEcoOpenings().then(setEcoData);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [siteView]);
   const pieceImgSrc = (type, isWhite) => getPieceSet(pieceSetId).svgUrl(type, isWhite);
   const audioRef = useRef(null);
   if (!audioRef.current) audioRef.current = createAudio(loadSetting("trackIdx", 0), volume / 100);
@@ -474,10 +482,14 @@ export default function ZlegendsBot() {
   };
   /* Leaderboard lives on its own page (LeaderboardPage.jsx), not a modal
      -- every "View Leaderboard" trigger should call this rather than
-     opening an overlay, now and for any future leaderboard entry point. */
+     opening an overlay, now and for any future leaderboard entry point.
+     Back returns to whichever view the player actually came from (home
+     tile vs the Rush modals on the play screen), not a hardcoded one. */
   const [leaderboardDuration, setLeaderboardDuration] = useState(60);
+  const leaderboardReturnRef = useRef("play");
   const openLeaderboard = (duration) => {
     setLeaderboardDuration(duration);
+    leaderboardReturnRef.current = siteView === "leaderboard" ? leaderboardReturnRef.current : siteView;
     setSiteView("leaderboard");
   };
   /* One-time recalibration (v2): the original dial logic could only ever
@@ -2059,59 +2071,83 @@ export default function ZlegendsBot() {
      itself is never "active" here since clicking it navigates away from
      this screen (ExploreDock/BottomNav only render in the play view). */
   const activeToolId = musicOpen ? "music" : settingsOpen ? "settings" : null;
+  /* The tab itself is already named (Rush/Puzzle/Quiz/Opening/Analysis via
+     analysisLabel), so no state repeats a heading inside its own content
+     anymore -- each shows one small context chip where it earns its place,
+     then the actual text. Rush deliberately shows no clock/score here:
+     the rushHud card above the board already owns those numbers, and
+     mirroring them in a second spot was pure clutter. */
+  const analysisChip = (text, tone = "dim") => (
+    <span className={`inline-flex w-fit items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-bold tracking-wide ${
+      tone === "gold" ? "bg-[#F5D93E1F] text-[#F5D93E]" : tone === "cyan" ? "bg-[#3EE7F51F] text-[#3EE7F5]" : "bg-[#8B2FC926] text-[#9D8FC4]"
+    }`}>{text}</span>
+  );
+  const analysisHint = (text) => <p className="m-0 text-[13px] leading-relaxed text-[#CBBDF0]">{text}</p>;
+  const playerAdvantageCp = playerColor === 1 ? evalCp : -evalCp;
   const analysisContent = activePuzzle ? (
     rushMode ? (
-      <>
-        <div className="boxHead">Puzzle Rush · {pz.RATING_BANDS[rushBandIdx]?.label || ""} · {formatClock(rushTimeLeft)} left</div>
-        <div className="pv">
-          {puzzleFeedback || `Solved ${rushSolved} · Misses ${rushMistakes}/3 · find the best move for ${eng.getSide() === 1 ? "White" : "Black"}.`}
-        </div>
-      </>
+      <div className="flex flex-col gap-2.5">
+        {analysisChip(`⚡ ${pz.RATING_BANDS[rushBandIdx]?.label || ""}`, "gold")}
+        {analysisHint(puzzleFeedback || `Find the best move for ${eng.getSide() === 1 ? "White" : "Black"}.`)}
+      </div>
     ) : (
-      <>
-        <div className="boxHead">Puzzle · rated {activePuzzle.rating}</div>
-        <div className="pv">
-          {puzzleSolved
-            ? "Solved! Nice work."
-            : puzzleFeedback || `Find the best move for ${eng.getSide() === 1 ? "White" : "Black"}.`}
-        </div>
-      </>
+      <div className="flex flex-col gap-2.5">
+        {analysisChip(`Rated ${activePuzzle.rating}`, "gold")}
+        {analysisHint(puzzleSolved ? "Solved! Nice work." : puzzleFeedback || `Find the best move for ${eng.getSide() === 1 ? "White" : "Black"}.`)}
+      </div>
     )
   ) : quizOpening ? (
-    <>
-      <div className="boxHead">Quiz: {quizOpening.name}</div>
-      <div className="pv">
-        {quizFeedback || `Play ${eng.getSide() === 1 ? "White" : "Black"}'s move ${moveList.length + 1} of ${quizOpening.moves.length} from memory.`}
+    <div className="flex flex-col gap-2.5">
+      <div className="flex flex-wrap items-center gap-1.5">
+        {analysisChip(quizOpening.name, "cyan")}
+        {analysisChip(`Move ${Math.min(moveList.length + 1, quizOpening.moves.length)} of ${quizOpening.moves.length}`)}
       </div>
-    </>
+      {analysisHint(quizFeedback || `Play ${eng.getSide() === 1 ? "White" : "Black"}'s next move from memory.`)}
+    </div>
   ) : activeOpening ? (
-    <>
-      <div className="boxHead">{activeOpening.name} · {activeOpening.eco}</div>
-      <div className="pv">
-        {replayIndex === 0 ? activeOpening.summary : activeOpening.steps[replayIndex - 1]}
+    <div className="flex flex-col gap-2.5">
+      <div className="flex flex-wrap items-center gap-1.5">
+        {analysisChip(activeOpening.name, "cyan")}
+        {analysisChip(activeOpening.eco)}
       </div>
-    </>
+      {analysisHint(replayIndex === 0 ? activeOpening.summary : activeOpening.steps[replayIndex - 1])}
+    </div>
   ) : (
-    <>
-      <div className="boxHead">Bot Analysis</div>
-      {info ? (
-        info.book ? (
-          <div className="pv">Playing from the opening book.</div>
-        ) : (
-          <>
-            <div className="astats">
-              <div><b>{evalLabel}</b><span>eval</span></div>
-              <div><b>{info.depth}</b><span>depth</span></div>
-              <div><b>{(info.nodes / 1000).toFixed(0)}k</b><span>nodes</span></div>
-              <div><b>{(info.time / 1000).toFixed(1)}s</b><span>time</span></div>
-            </div>
-            {info.pv.length > 0 && <div className="pv">line: {info.pv.join(" ")}</div>}
-          </>
-        )
+    info ? (
+      info.book ? (
+        <div className="flex flex-col gap-2.5">
+          {analysisChip("Opening book", "cyan")}
+          {analysisHint("The bot is playing known theory — analysis starts once it's out of book.")}
+        </div>
       ) : (
-        <div className="pv">After each of its moves, the bot posts its eval, search depth, node count, and the line it expects.</div>
-      )}
-    </>
+        <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-xl bg-[#150C2480] px-3 py-2.5">
+              <div className={`text-lg font-bold leading-none ${playerAdvantageCp >= 50 ? "text-[#3EE7F5]" : playerAdvantageCp <= -50 ? "text-[#FF7B9C]" : "text-[#F4EFFF]"}`}>{evalLabel}</div>
+              <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[#9D8FC4]">Eval</div>
+            </div>
+            <div className="rounded-xl bg-[#150C2480] px-3 py-2.5">
+              <div className="text-lg font-bold leading-none text-[#F4EFFF]">{info.depth}</div>
+              <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[#9D8FC4]">Depth</div>
+            </div>
+          </div>
+          {info.pv.length > 0 && (
+            <div>
+              <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[#9D8FC4]">Expected line</div>
+              <div className="flex flex-wrap gap-1">
+                {info.pv.slice(0, 8).map((sanMove, i) => (
+                  <span key={i} className="rounded-md bg-[#8B2FC926] px-1.5 py-0.5 font-mono text-xs text-[#F4EFFF]">{sanMove}</span>
+                ))}
+                {info.pv.length > 8 && <span className="px-1 py-0.5 text-xs text-[#9D8FC4]">+{info.pv.length - 8} more</span>}
+              </div>
+            </div>
+          )}
+          <div className="text-[11px] text-[#9D8FC4]">{(info.nodes / 1000).toFixed(0)}k nodes · {(info.time / 1000).toFixed(1)}s</div>
+        </div>
+      )
+    ) : (
+      analysisHint("After each bot move, its eval, search depth, and the line it expects will show up here.")
+    )
   );
 
   const inChk = eng.inCheckNow() && !result;
@@ -2160,7 +2196,7 @@ export default function ZlegendsBot() {
      Rush row inside the Puzzles modal, the Rank Bot difficulty option),
      this just triggers the same state changes those already do. */
   const enterMode = (modeId) => {
-    if (modeId === "leaderboard") { setSiteView("leaderboard"); return; }
+    if (modeId === "leaderboard") { leaderboardReturnRef.current = "home"; setSiteView("leaderboard"); return; }
     if (modeId === "settings") { setSiteView("play"); openSettings(); return; }
     setSiteView("play");
     if (modeId === "puzzles") { setPuzzlesOpen(true); ensurePuzzlesLoaded(); }
@@ -2182,7 +2218,7 @@ export default function ZlegendsBot() {
     return (
       <LeaderboardPage
         initialDuration={leaderboardDuration}
-        onBack={() => setSiteView("play")}
+        onBack={() => setSiteView(leaderboardReturnRef.current)}
         onToolSelect={onToolSelect}
         activeToolId={activeToolId}
       />
