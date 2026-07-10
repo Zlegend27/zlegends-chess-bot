@@ -2091,6 +2091,7 @@ export default function ZlegendsBot() {
      this just triggers the same state changes those already do. */
   const enterMode = (modeId) => {
     if (modeId === "leaderboard") { setSiteView("leaderboard"); return; }
+    if (modeId === "settings") { setSiteView("play"); openSettings(); return; }
     setSiteView("play");
     if (modeId === "puzzles") { setPuzzlesOpen(true); ensurePuzzlesLoaded(); }
     else if (modeId === "openings") setOpeningsOpen(true);
@@ -2673,21 +2674,44 @@ export default function ZlegendsBot() {
               Settings
             </div>
             <div className="rows" style={{ maxHeight: "none" }}>
-              <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E" }}
+              <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E", display: "flex", alignItems: "center", gap: 10 }}
                 onClick={() => { setSettingsOpen(false); setPieceDesignsOpen(true); }}>
-                <div style={{ fontWeight: 700 }}>Piece Designs</div>
-                <div style={{ fontSize: 11, opacity: 0.75 }}>Currently: {getPieceSet(pieceSetId).label}</div>
-              </div>
-              <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E" }}
-                onClick={() => { setSettingsOpen(false); setBoardColorsOpen(true); }}>
-                <div style={{ fontWeight: 700 }}>Board Color</div>
-                <div style={{ fontSize: 11, opacity: 0.75 }}>Currently: {getBoardColor(boardColorId).label}</div>
-              </div>
-              <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E" }} onClick={toggleEvalBar}>
-                <div style={{ fontWeight: 700 }}>{hideEvalBar ? "Show Eval Bar" : "Hide Eval Bar"}</div>
-                <div style={{ fontSize: 11, opacity: 0.75 }}>
-                  {hideEvalBar ? "Eval bar is currently hidden" : "Hides the eval bar for a bigger board on mobile"}
+                <img src={pieceImgSrc(1, true)} alt="" style={{ width: 30, height: 30, flex: "none", background: "#DDD6EA", borderRadius: 6, padding: 3, boxSizing: "border-box" }} />
+                <div>
+                  <div style={{ fontWeight: 700 }}>Piece Designs</div>
+                  <div style={{ fontSize: 11, opacity: 0.75 }}>Currently: {getPieceSet(pieceSetId).label}</div>
                 </div>
+              </div>
+              <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E", display: "flex", alignItems: "center", gap: 10 }}
+                onClick={() => { setSettingsOpen(false); setBoardColorsOpen(true); }}>
+                <span style={{
+                  display: "grid", gridTemplateColumns: "1fr 1fr", width: 30, height: 30, flex: "none",
+                  borderRadius: 6, overflow: "hidden", border: "1px solid #ffffff22",
+                }} aria-hidden="true">
+                  <span style={{ background: getBoardColor(boardColorId).light }} />
+                  <span style={{ background: getBoardColor(boardColorId).dark }} />
+                  <span style={{ background: getBoardColor(boardColorId).dark }} />
+                  <span style={{ background: getBoardColor(boardColorId).light }} />
+                </span>
+                <div>
+                  <div style={{ fontWeight: 700 }}>Board Color</div>
+                  <div style={{ fontSize: 11, opacity: 0.75 }}>Currently: {getBoardColor(boardColorId).label}</div>
+                </div>
+              </div>
+              <div style={{ padding: "8px 2px", borderBottom: "1px solid #8B2FC92E", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                <div>
+                  <div style={{ fontWeight: 700 }}>Eval Bar</div>
+                  <div style={{ fontSize: 11, opacity: 0.75 }}>
+                    {hideEvalBar ? "Hidden — bigger board on mobile" : "Shown next to the board"}
+                  </div>
+                </div>
+                <button
+                  type="button" role="switch" aria-checked={!hideEvalBar} aria-label="Toggle eval bar"
+                  className={"toggleSwitch" + (!hideEvalBar ? " on" : "")}
+                  onClick={toggleEvalBar}
+                >
+                  <span className="toggleThumb" />
+                </button>
               </div>
               <div style={{ padding: "8px 2px" }}>
                 <div style={{ fontWeight: 700 }}>Your Rating</div>

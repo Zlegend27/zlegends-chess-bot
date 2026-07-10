@@ -17,6 +17,7 @@ const ICONS = {
   star: "M12 2l2.9 6.9L22 9.6l-5.5 4.8L18 22l-6-3.6L6 22l1.5-7.6L2 9.6l7.1-.7L12 2z",
   trophy: "M7 4V2h10v2h4v3c0 2.21-1.79 4-4 4h-.08A6.007 6.007 0 0 1 13 15.92V18h3v2H8v-2h3v-2.08A6.007 6.007 0 0 1 7.08 9H7c-2.21 0-4-1.79-4-4V4h4zm-2 2v1c0 1.1.9 2 2 2V6H5zm12 0v3c1.1 0 2-.9 2-2V6h-2z",
   cap: "M12 3 1 9l11 6 9-4.91V17h2V9L12 3zm0 13.5L4.24 12.3 3 13l9 5 9-5-1.24-.7L12 16.5zM5 14.18v3.82c0 1.1 3.13 3 7 3s7-1.9 7-3v-3.82l-7 3.82-7-3.82z",
+  cog: "M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.5.5 0 0 0-.59.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32c.14.24.42.32.66.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.24.1.51 0 .59-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z",
 };
 
 /** Play/Openings/Blind get bespoke icons instead of a single-fill path:
@@ -143,17 +144,28 @@ export default function HomePage({ onEnter }) {
         </button>
       </div>
 
-      {/* Leaderboard is a link to its own page (App.jsx routes "leaderboard"
-          straight to LeaderboardPage), not a mode-grid tile -- it's not a
-          mode you "enter" the way Play/Puzzles/etc. are, just a place to
-          check scores, so it gets its own small row instead. */}
-      <button
-        onClick={() => onEnter("leaderboard")}
-        className="mt-8 inline-flex items-center gap-2 rounded-xl border border-[#8B2FC94D] bg-[#1D1038CC] px-5 py-2 text-sm font-bold text-[#CBBDF0] backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-[#8B2FC999] hover:text-[#F4EFFF]"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={ICONS.trophy} /></svg>
-        Leaderboard
-      </button>
+      {/* Leaderboard and Settings are both links out to their own page/modal
+          (App.jsx routes "leaderboard" straight to LeaderboardPage; enterMode
+          opens Settings the same way) rather than mode-grid tiles -- neither
+          is a mode you "enter" the way Play/Puzzles/etc. are, so they get
+          their own small row instead. */}
+      <div className="mt-8 flex items-center gap-3">
+        <button
+          onClick={() => onEnter("leaderboard")}
+          className="inline-flex items-center gap-2 rounded-xl border border-[#8B2FC94D] bg-[#1D1038CC] px-5 py-2 text-sm font-bold text-[#CBBDF0] backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-[#8B2FC999] hover:text-[#F4EFFF]"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={ICONS.trophy} /></svg>
+          Leaderboard
+        </button>
+        <button
+          onClick={() => onEnter("settings")}
+          aria-label="Settings"
+          title="Settings"
+          className="flex size-9 items-center justify-center rounded-xl border border-[#8B2FC94D] bg-[#1D1038CC] text-[#CBBDF0] backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-[#8B2FC999] hover:text-[#F4EFFF]"
+        >
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={ICONS.cog} /></svg>
+        </button>
+      </div>
 
       <div className="mt-6 mb-2 flex flex-wrap justify-center gap-3">
         <button
