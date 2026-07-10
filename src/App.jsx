@@ -10,7 +10,6 @@ import PixelAvatar, { ZPAL, ZPIX, BPAL, BPIX, PPAL, PPIX } from "./components/Pi
 import StarField from "./components/StarField";
 import Confetti from "./components/Confetti";
 import HomePage from "./components/HomePage";
-import SiteHeader from "./components/SiteHeader";
 import { TopNav } from "./components/ExploreNav";
 import SocialBanner from "./components/SocialBanner";
 import GamePanel from "./components/GamePanel";
@@ -1667,6 +1666,29 @@ export default function ZlegendsBot() {
       document.removeEventListener("keydown", start);
     };
   }, []);
+  /* Backgrounding the tab (swiped away, phone locked, switched apps) is
+     supposed to keep music playing -- that's the whole point of it being
+     music -- but browsers auto-suspend AudioContexts and throttle
+     setInterval timers while hidden, which is what "music breaking after
+     leaving the app" actually was: the chiptune engine's scheduler falls
+     behind and either stays silent or bursts through its missed steps at
+     once (see chiptune.js's resumeIfNeeded), and the mp3 engine's own
+     GainNode context can end up suspended too. Nothing here pauses
+     anything ON hide -- that's the point, it should keep going in the
+     background -- this only repairs state once the tab is visible again. */
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.hidden) return;
+      if (musicOn) audio.resumeIfNeeded();
+      if (mp3PlayingRef.current) {
+        resumeMp3Gain();
+        if (mp3Audio.paused) mp3Audio.play().catch(() => {});
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [musicOn]);
   const setMusicSource = (id) => {
     themeAutoplayArmedRef.current = false;
     if (id === musicSource) return;
@@ -1680,6 +1702,41 @@ export default function ZlegendsBot() {
       loadMp3Playlist(id);
     }
   };
+  /* Blind Mode reads moves aloud over speechSynthesis -- background music
+     talking over it at the same time would make both unintelligible, so
+     the two are mutually exclusive the same way switching musicSource
+     already pauses whichever engine was playing. Unlike that case,
+     leaving Blind Mode should hand playback back rather than just
+     staying off, so this remembers which engine (if either) it paused
+     and resumes only that one. Background music itself is untouched by
+     any of this -- see the visibilitychange effect above -- this is
+     purely about not overlapping with Blind Mode's own audio. */
+  const blindPausedMusicRef = useRef(null);
+  useEffect(() => {
+    if (blindOpen) {
+      if (musicSource === "chiptune" && musicOn) {
+        audio.toggle();
+        setMusicOn(false);
+        blindPausedMusicRef.current = "chiptune";
+      } else if (musicSource !== "chiptune" && mp3PlayingRef.current) {
+        mp3Audio.pause();
+        setMp3Playing(false);
+        blindPausedMusicRef.current = "mp3";
+      } else {
+        blindPausedMusicRef.current = null;
+      }
+    } else if (blindPausedMusicRef.current) {
+      if (blindPausedMusicRef.current === "chiptune") {
+        setMusicOn(audio.toggle());
+      } else {
+        resumeMp3Gain();
+        mp3Audio.play().catch(() => {});
+        setMp3Playing(true);
+      }
+      blindPausedMusicRef.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blindOpen]);
   const switchMp3Track = (delta) => {
     const tracks = mp3TracksRef.current;
     if (!tracks.length) return;
@@ -2065,7 +2122,6 @@ export default function ZlegendsBot() {
     <div className={"root" + (hideEvalBar ? " noEval" : "") + (boardColorId === "standard" ? " theme-standard" : "")} style={{ "--boardLight": getBoardColor(boardColorId).light, "--boardDark": getBoardColor(boardColorId).dark }}>
       <StarField />
       {rushMilestone > 0 && <Confetti key={rushMilestone} />}
-      <SiteHeader onHome={() => setSiteView("home")} />
       <TopNav onSelect={onToolSelect} active={activeToolId} />
 
       <div className="layout">

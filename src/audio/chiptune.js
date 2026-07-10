@@ -85,6 +85,19 @@ export function createAudio(initialTrackIdx = 0, initialVolume = 0.6) {
   };
   st.next = () => switchTo(st.trackIdx + 1);
   st.prev = () => switchTo(st.trackIdx - 1);
+  /* Backgrounding a tab suspends the AudioContext and throttles/pauses
+     the setInterval driving tick() -- when both come back, nextTime is
+     however far behind ctx.currentTime the app was hidden for, so the
+     very next tick()'s `while (nextTime < currentTime + 0.28)` loop
+     would try to fire every missed step back-to-back as a burst of
+     garbled notes. Call this on visibilitychange-to-visible: resumes
+     the context and snaps nextTime back to "now", same as starting
+     fresh, instead of "catching up". */
+  st.resumeIfNeeded = () => {
+    if (!st.ctx) return;
+    if (st.ctx.state === "suspended") st.ctx.resume();
+    if (st.playing) st.nextTime = st.ctx.currentTime + 0.06;
+  };
   st.setVolume = v => { st.volume = v; if (st.master) st.master.gain.value = v; };
   st.sfxMove = () => {
     ensure();

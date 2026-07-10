@@ -1,12 +1,16 @@
 import PixelAvatar, { SPAL, SPIX } from "./PixelAvatar";
 
-/* One nav bar for every screen size, rendered in-flow at the top of the
- *  page (below SiteHeader) rather than split into a desktop sidebar dock
- *  and a fixed-bottom mobile bar -- with the page's social banner also
- *  moving to the bottom of every page (see SocialBanner.jsx), a fixed
- *  bottom-of-viewport nav would fight it for the same territory, and
- *  there's no longer a real reason to treat mobile/desktop differently
- *  here.
+/* The ONE top bar every non-home page gets now -- it replaced both the
+ *  old SiteHeader wordmark bar (deleted) and the split desktop sidebar
+ *  dock / fixed-bottom mobile bar this used to be. With the page's
+ *  social banner living at the bottom of every page (see
+ *  SocialBanner.jsx), a fixed bottom-of-viewport nav would've fought it
+ *  for the same territory, and there's no longer a reason to treat
+ *  mobile/desktop differently here.
+ *
+ *  Bleeds edge-to-edge past .root's own padding (negative margins below)
+ *  since it's standing in for a true top bar now, not just another
+ *  max-w-4xl content card like everything below it.
  *
  *  Openings/Puzzles/Spectate/Blind Chess used to live here too, but are
  *  reachable from the home page's mode grid now instead -- this nav is
@@ -40,8 +44,18 @@ function toolIcon(t, { size, className } = {}) {
 
 export function TopNav({ onSelect, active }) {
   return (
-    <nav aria-label="Main features" className="mb-4 w-full max-w-4xl rounded-2xl border border-[#8B2FC966] bg-[#1D1038CC] backdrop-blur-sm">
-      <div className="flex items-center justify-around px-1 py-1.5">
+    <nav
+      aria-label="Main features"
+      className="mb-4 border-b border-[#8B2FC966] bg-[#1D1038CC] backdrop-blur-sm"
+      style={{
+        width: "calc(100% + 28px + env(safe-area-inset-left) + env(safe-area-inset-right))",
+        marginLeft: "calc(-14px - env(safe-area-inset-left))",
+        marginRight: "calc(-14px - env(safe-area-inset-right))",
+        marginTop: "calc(-22px - env(safe-area-inset-top))",
+        paddingTop: "env(safe-area-inset-top)",
+      }}
+    >
+      <div className="mx-auto flex max-w-4xl items-center justify-around px-1 py-2">
         {TOOLS.map((t) => {
           const isActive = active === t.id;
           return (
