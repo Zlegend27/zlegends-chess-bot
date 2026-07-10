@@ -78,6 +78,53 @@
 .puzzleMeta{ font-style:normal; line-height:1.3; margin-top:2px; }
 .lead{ font-family:'Arial Black',Impact,sans-serif; font-size:15px; color:var(--yellow);
   text-shadow:0 0 8px #F5D93E77, 1px 1px 0 #150C24; flex:none; }
+
+/* Standard board theme -- chess.com look: flat (no neon glow) green
+   best-move arrow (color/width handled in App.jsx per-theme) and a
+   plain gray material-lead pill instead of this app's glowing yellow
+   badge, matching chess.com's own material-advantage indicator. */
+.theme-standard .arrowLayer{ filter:none; }
+.theme-standard .lead{ font-family:inherit; font-weight:700; font-size:12px; color:#E5E5E5;
+  text-shadow:none; background:#4B4847; border-radius:10px; padding:1px 7px; }
+
+/* Puzzle Rush HUD -- replaces the bot avatar card while a rush is live
+   (no "facing an opponent" framing for a solo race against the clock).
+   Shares .card's box/sizing so it drops into the same layout slot. */
+.rushHud{ align-items:center; }
+.rushClock{ font-family:'Arial Black',Impact,sans-serif; font-size:22px; font-weight:900;
+  font-variant-numeric:tabular-nums; color:var(--cyan); text-shadow:0 0 10px #3EE7F566;
+  background:#120A26; border:1px solid #ffffff18; border-radius:8px; padding:8px 10px;
+  flex:none; min-width:64px; text-align:center; }
+.rushClock.low{ color:#FF4C5B; text-shadow:0 0 12px #FF4C5B88; animation:rushClockPulse 1s ease-in-out infinite; }
+@keyframes rushClockPulse{ 0%,100%{ opacity:1; } 50%{ opacity:.5; } }
+.rushHudBody{ flex:1; min-width:0; display:flex; flex-direction:column; gap:5px; }
+.rushHudTop{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+.rushHudBand{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--yellow); }
+.rushHudSolved{ font-size:12px; font-weight:700; color:var(--white); }
+.rushMistakeBoxes{ display:flex; gap:6px; }
+.rushMistakeBox{ width:18px; height:18px; border-radius:4px; border:1.5px solid #FF4C5B77;
+  background:#1D1038; transition:background .2s ease, box-shadow .2s ease; }
+.rushMistakeBox.filled{ background:#FF4C5B; box-shadow:0 0 8px #FF4C5B99; }
+.rushHudLifetime{ font-size:10px; color:var(--dim); font-style:italic; }
+.rushCounterRow{ display:flex; align-items:center; justify-content:space-between; gap:10px;
+  font-size:11px; color:var(--dim); }
+.rushMissedList{ display:flex; flex-direction:column; gap:6px; border-top:1px solid #8B2FC93D;
+  padding-top:10px; }
+.rushMissedHead{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.16em; color:var(--cyan); }
+.rushMissedRow{ display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12px; }
+.rushMissedActions{ display:flex; gap:6px; }
+.rushMissedActions .btn{ padding:5px 9px; font-size:10px; }
+
+/* Confetti -- see Confetti.jsx. Fixed overlay so it plays above modals
+   too (rush results, milestone can land mid-modal). */
+.confettiLayer{ position:fixed; inset:0; pointer-events:none; z-index:80; overflow:hidden; }
+.confettiPiece{ position:absolute; top:-12px; border-radius:1px;
+  animation-name:confettiFall; animation-timing-function:ease-in; animation-fill-mode:forwards; }
+@keyframes confettiFall{
+  0%{ transform:translate(0,0) rotate(0deg); opacity:1; }
+  100%{ transform:translate(var(--drift), 108vh) rotate(540deg); opacity:0; }
+}
+
 .boardWrap{ display:flex; gap:10px; }
 .evalbar{ width:14px; border-radius:7px; overflow:hidden; background:#170E2C;
   border:1px solid #8B2FC955; display:flex; flex-direction:column-reverse; position:relative; flex:none; }
@@ -261,7 +308,7 @@ select:hover{ border-color:var(--cyan); }
 @media (max-width:700px){
   .layout{ flex-direction:column; align-items:center; }
   .boardCol, .panel{ display:contents; }
-  .botCard{ order:1; }
+  .botCard, .rushHud{ order:1; }
   .boardWrap{ order:2; }
   .youCard{ order:3; }
   .statusRow{ order:4; }

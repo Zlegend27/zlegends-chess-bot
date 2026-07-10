@@ -3,7 +3,8 @@
    --boardLight/--boardDark custom properties on .root, rather than
    swapping in the whole boarad SVGs these were sourced from. */
 export const BOARD_COLORS = [
-  { id: "default", label: "Default", light: "#C9C2E8", dark: "#4A2A7A" },
+  { id: "default", label: "Classic", light: "#C9C2E8", dark: "#4A2A7A" },
+  { id: "standard", label: "Standard", light: "#EEEED2", dark: "#769656" },
   { id: "blue", label: "Blue", light: "#ffffff", dark: "#96dbff" },
   { id: "brown", label: "Brown", light: "#fff2d4", dark: "#de925a" },
   { id: "green", label: "Green", light: "#fff2d4", dark: "#8cc936" },

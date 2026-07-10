@@ -8,6 +8,7 @@ import { getSupabase } from "./utils/supabase";
 import { MP3_PLAYLISTS, THEME_ID, loadPlaylistTracks } from "./utils/musicLibrary";
 import PixelAvatar, { ZPAL, ZPIX, BPAL, BPIX, PPAL, PPIX } from "./components/PixelAvatar";
 import StarField from "./components/StarField";
+import Confetti from "./components/Confetti";
 import HomePage from "./components/HomePage";
 import SiteHeader from "./components/SiteHeader";
 import { ExploreDock, BottomNav } from "./components/ExploreNav";
@@ -542,6 +543,17 @@ export default function ZlegendsBot() {
   const [rushSolved, setRushSolved] = useState(0);
   const [rushResult, setRushResult] = useState(null);
   const [rushBandIdx, setRushBandIdx] = useState(0);
+  /* Puzzles missed during the current run (max 3, since 3 misses ends the
+     run) -- kept as full puzzle objects so the results screen can offer
+     Retry/Analyze straight from the summary. */
+  const [rushMissed, setRushMissed] = useState([]);
+  const rushMissedRef = useRef([]);
+  /* Lifetime rush-solve counter, independent of any single run -- for
+     players doing many rushes in one sitting. Persisted so it survives a
+     reload; user-resettable from the Rush start menu. */
+  const [rushLifetime, setRushLifetime] = useState(() => loadSetting("rushLifetimeSolved", 0));
+  const rushLifetimePrevRef = useRef(rushLifetime);
+  const [rushMilestone, setRushMilestone] = useState(0);
   const rushSolvedRef = useRef(0);
   const rushMistakesRef = useRef(0);
   const rushBandIdxRef = useRef(0);
@@ -1305,9 +1317,11 @@ export default function ZlegendsBot() {
     rushMistakesRef.current = 0;
     rushBandIdxRef.current = 0;
     rushStreakRef.current = 0;
+    rushMissedRef.current = [];
     setRushSolved(0);
     setRushMistakes(0);
     setRushBandIdx(0);
+    setRushMissed([]);
     setRushResult(null);
     setRushDuration(seconds);
     setRushTimeLeft(seconds);
@@ -1326,6 +1340,7 @@ export default function ZlegendsBot() {
   const finishRush = (reason) => {
     setRushResult({ reason, solved: rushSolvedRef.current });
     submitRushScore({ duration: rushDuration, solved: rushSolvedRef.current, displayName });
+    if (reason === "time") { try { audio.sfxTimeUp(); } catch { /* audio unavailable */ } }
   };
 
   const retryRush = () => startRush(rushDuration);
@@ -1335,6 +1350,44 @@ export default function ZlegendsBot() {
     setRushResult(null);
     exitPuzzle();
   };
+
+  const resetRushCounter = () => {
+    setRushLifetime(0);
+    rushLifetimePrevRef.current = 0;
+    saveSetting("rushLifetimeSolved", 0);
+  };
+
+  /* Opens a puzzle missed during the last rush outside of rush mode --
+     Retry just replays it with unlimited tries via the normal Puzzle
+     controls; Analyze additionally draws the solution's first move as a
+     hint arrow (no engine call needed, the puzzle data already has it). */
+  const reviewMissedPuzzle = (puzzle, reveal) => {
+    setRushMode(false);
+    setRushResult(null);
+    startPuzzle(puzzle);
+    if (reveal) {
+      /* bestArrow gets wiped by the canAnalyze cleanup effect since a
+         plain puzzle isn't an "analyzable" mode -- hintMove isn't touched
+         by that effect and already renders a from/to square highlight
+         (see isHintFrom/isHintTo), so it survives here. */
+      const legal = eng.legalMoves();
+      const mv = legal.find(x => eng.sanOf(x) === puzzle.moves[0]);
+      if (mv) setHintMove({ from: mFrom(mv), to: mTo(mv) });
+    }
+  };
+
+  /* Confetti + fanfare every 50 lifetime rush solves. Driven off the
+     lifetime counter itself (not the per-run solved count) via a
+     prev-value ref, so it fires exactly once per crossing regardless of
+     how state batching groups the surrounding updates. */
+  useEffect(() => {
+    if (rushLifetime > rushLifetimePrevRef.current && rushLifetime % 50 === 0) {
+      setRushMilestone(m => m + 1);
+      try { audio.sfxWin(); } catch { /* audio unavailable */ }
+    }
+    rushLifetimePrevRef.current = rushLifetime;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rushLifetime]);
 
   /* Escape closes whichever modal is open, mirroring each one's own
      backdrop-click behavior (e.g. Piece Designs -> back to Settings). */
@@ -1381,6 +1434,8 @@ export default function ZlegendsBot() {
       if (rushMode) {
         rushMistakesRef.current += 1;
         setRushMistakes(rushMistakesRef.current);
+        rushMissedRef.current = [...rushMissedRef.current, activePuzzle];
+        setRushMissed(rushMissedRef.current);
         rushStreakRef.current = 0;
         rushBandIdxRef.current = Math.max(0, rushBandIdxRef.current - 1);
         setRushBandIdx(rushBandIdxRef.current);
@@ -1425,6 +1480,11 @@ export default function ZlegendsBot() {
           rushStreakRef.current = 0;
           setRushBandIdx(rushBandIdxRef.current);
         }
+        setRushLifetime(n => {
+          const next = n + 1;
+          saveSetting("rushLifetimeSolved", next);
+          return next;
+        });
         setTimeout(() => nextRushPuzzle(), 500);
       }
       rerender();
@@ -1965,9 +2025,9 @@ export default function ZlegendsBot() {
      this just triggers the same state changes those already do. */
   const enterMode = (modeId) => {
     setSiteView("play");
-    if (modeId === "puzzles") setPuzzlesOpen(true);
+    if (modeId === "puzzles") { setPuzzlesOpen(true); ensurePuzzlesLoaded(); }
     else if (modeId === "openings") setOpeningsOpen(true);
-    else if (modeId === "rush") setRushOpen(true);
+    else if (modeId === "rush") { setRushOpen(true); ensurePuzzlesLoaded(); }
     else if (modeId === "spectate") setSpectateOpen(true);
     else if (modeId === "blind") setBlindOpen(true);
     else if (modeId === "rank") {
@@ -1981,41 +2041,58 @@ export default function ZlegendsBot() {
   }
 
   return (
-    <div className={"root" + (hideEvalBar ? " noEval" : "")} style={{ "--boardLight": getBoardColor(boardColorId).light, "--boardDark": getBoardColor(boardColorId).dark }}>
+    <div className={"root" + (hideEvalBar ? " noEval" : "") + (boardColorId === "standard" ? " theme-standard" : "")} style={{ "--boardLight": getBoardColor(boardColorId).light, "--boardDark": getBoardColor(boardColorId).dark }}>
       <StarField />
+      {rushMilestone > 0 && <Confetti key={rushMilestone} />}
       <SiteHeader onHome={() => setSiteView("home")} />
 
       <div className="layout">
         <div className="boardCol">
-          <div className={"card botCard" + (mode === "play" && !result && !thinking && eng.getSide() === botColor ? " turnGlow" : "")}>
-            <div className={"avatarBox" + (botMood !== "neutral" ? " reactionBox " + botMood : "")}>
-              {botMood === "angry" && <img src="/bot-angry.webp" alt="Zlegend2700 is furious" className="reactionImg" />}
-              {botMood === "happy" && <img src="/bot-happy.webp" alt="Zlegend2700 is thrilled" className="reactionImg" />}
-              {botMood === "neutral" && <PixelAvatar rows={ZPIX} pal={ZPAL} size={44} />}
-            </div>
-            <div className="cardMeta">
-              <div className="cardName bot">{spectateMode ? `${DIFFICULTIES[botColor === 1 ? spectateWhiteIdx : spectateBlackIdx].label} (${botColor === 1 ? "White" : "Black"})` : "Zlegend2700"}</div>
-              {activePuzzle ? (
-                <div className="trayEmpty puzzleMeta">
-                  {rushMode ? `Puzzle Rush · ${pz.RATING_BANDS[rushBandIdx]?.label || ""} · ${formatClock(rushTimeLeft)} left` : `Puzzle · rated ${activePuzzle.rating}`}
+          {rushMode ? (
+            <div className="card rushHud">
+              <div className={"rushClock" + (rushTimeLeft <= 10 ? " low" : "")}>{formatClock(rushTimeLeft)}</div>
+              <div className="rushHudBody">
+                <div className="rushHudTop">
+                  <span className="rushHudBand">{pz.RATING_BANDS[rushBandIdx]?.label || ""}</span>
+                  <span className="rushHudSolved">Solved {rushSolved}</span>
                 </div>
-              ) : (
-                <>
-                  <div className="trayEmpty">{gameStyle.label} today</div>
-                  {!spectateMode && difficultyRef.current.id === "rank" && (
-                    <div className="trayEmpty openingTag">
-                      ~{rankBotElo} Elo{rankBotAssessedElo == null ? " · Calibrating" : ""}
-                    </div>
-                  )}
-                  {liveOpening && (
-                    <div className="trayEmpty openingTag">{liveOpening.name} · {liveOpening.eco}</div>
-                  )}
-                  <Tray pieces={botTaken} colorClass={playerColor === 1 ? "wpc" : "bpc"} />
-                </>
-              )}
+                <div className="rushMistakeBoxes" aria-label={`${rushMistakes} of 3 mistakes`}>
+                  {[0, 1, 2].map(i => (
+                    <span key={i} className={"rushMistakeBox" + (i < rushMistakes ? " filled" : "")} />
+                  ))}
+                </div>
+                <div className="rushHudLifetime">Lifetime solved: {rushLifetime}</div>
+              </div>
             </div>
-            {youDiff < 0 && <div className="lead">+{-youDiff}</div>}
-          </div>
+          ) : (
+            <div className={"card botCard" + (mode === "play" && !result && !thinking && eng.getSide() === botColor ? " turnGlow" : "")}>
+              <div className={"avatarBox" + (botMood !== "neutral" ? " reactionBox " + botMood : "")}>
+                {botMood === "angry" && <img src="/bot-angry.webp" alt="Zlegend2700 is furious" className="reactionImg" />}
+                {botMood === "happy" && <img src="/bot-happy.webp" alt="Zlegend2700 is thrilled" className="reactionImg" />}
+                {botMood === "neutral" && <PixelAvatar rows={ZPIX} pal={ZPAL} size={44} />}
+              </div>
+              <div className="cardMeta">
+                <div className="cardName bot">{spectateMode ? `${DIFFICULTIES[botColor === 1 ? spectateWhiteIdx : spectateBlackIdx].label} (${botColor === 1 ? "White" : "Black"})` : "Zlegend2700"}</div>
+                {activePuzzle ? (
+                  <div className="trayEmpty puzzleMeta">Puzzle · rated {activePuzzle.rating}</div>
+                ) : (
+                  <>
+                    <div className="trayEmpty">{gameStyle.label} today</div>
+                    {!spectateMode && difficultyRef.current.id === "rank" && (
+                      <div className="trayEmpty openingTag">
+                        ~{rankBotElo} Elo{rankBotAssessedElo == null ? " · Calibrating" : ""}
+                      </div>
+                    )}
+                    {liveOpening && (
+                      <div className="trayEmpty openingTag">{liveOpening.name} · {liveOpening.eco}</div>
+                    )}
+                    <Tray pieces={botTaken} colorClass={playerColor === 1 ? "wpc" : "bpc"} />
+                  </>
+                )}
+              </div>
+              {youDiff < 0 && <div className="lead">+{-youDiff}</div>}
+            </div>
+          )}
 
           <div className="boardWrap">
             {!hideEvalBar && (
@@ -2027,26 +2104,37 @@ export default function ZlegendsBot() {
             <div style={{ position: "relative", flex: 1 }}>
               <div className="board" role="grid" aria-label="Chess board" ref={boardRef}>
                 {rows}
-                {arrowLine && (
-                  <svg className="arrowLayer" viewBox="0 0 8 8" preserveAspectRatio="none">
-                    <defs>
-                      <marker id="bestArrowHead" markerWidth="3.2" markerHeight="3.2" refX="1.5" refY="1.6" orient="auto">
-                        <path d="M0,0 L3.2,1.6 L0,3.2 Z" fill="#F5D93E" />
-                      </marker>
-                    </defs>
-                    {arrowLine.bend ? (
-                      <>
-                        <line x1={arrowLine.a.x} y1={arrowLine.a.y} x2={arrowLine.bend.x} y2={arrowLine.bend.y}
-                          stroke="#F5D93E" strokeOpacity="0.85" strokeWidth="0.14" strokeLinecap="round" />
-                        <line x1={arrowLine.bend.x} y1={arrowLine.bend.y} x2={arrowLine.b.x} y2={arrowLine.b.y}
-                          stroke="#F5D93E" strokeOpacity="0.85" strokeWidth="0.14" strokeLinecap="round" markerEnd="url(#bestArrowHead)" />
-                      </>
-                    ) : (
-                      <line x1={arrowLine.a.x} y1={arrowLine.a.y} x2={arrowLine.b.x} y2={arrowLine.b.y}
-                        stroke="#F5D93E" strokeOpacity="0.85" strokeWidth="0.14" strokeLinecap="round" markerEnd="url(#bestArrowHead)" />
-                    )}
-                  </svg>
-                )}
+                {arrowLine && (() => {
+                  /* Standard theme mimics chess.com's thicker, flat,
+                     semi-transparent green best-move arrow; every other
+                     theme keeps this app's original thin glowing-yellow
+                     one. */
+                  const std = boardColorId === "standard";
+                  const color = std ? "#15A310" : "#F5D93E";
+                  const opacity = std ? "0.8" : "0.85";
+                  const width = std ? "0.22" : "0.14";
+                  const headSize = std ? 4.4 : 3.2;
+                  return (
+                    <svg className="arrowLayer" viewBox="0 0 8 8" preserveAspectRatio="none">
+                      <defs>
+                        <marker id="bestArrowHead" markerWidth={headSize} markerHeight={headSize} refX={headSize * 0.47} refY={headSize / 2} orient="auto">
+                          <path d={`M0,0 L${headSize},${headSize / 2} L0,${headSize} Z`} fill={color} fillOpacity={opacity} />
+                        </marker>
+                      </defs>
+                      {arrowLine.bend ? (
+                        <>
+                          <line x1={arrowLine.a.x} y1={arrowLine.a.y} x2={arrowLine.bend.x} y2={arrowLine.bend.y}
+                            stroke={color} strokeOpacity={opacity} strokeWidth={width} strokeLinecap="round" />
+                          <line x1={arrowLine.bend.x} y1={arrowLine.bend.y} x2={arrowLine.b.x} y2={arrowLine.b.y}
+                            stroke={color} strokeOpacity={opacity} strokeWidth={width} strokeLinecap="round" markerEnd="url(#bestArrowHead)" />
+                        </>
+                      ) : (
+                        <line x1={arrowLine.a.x} y1={arrowLine.a.y} x2={arrowLine.b.x} y2={arrowLine.b.y}
+                          stroke={color} strokeOpacity={opacity} strokeWidth={width} strokeLinecap="round" markerEnd="url(#bestArrowHead)" />
+                      )}
+                    </svg>
+                  );
+                })()}
                 {promo && (
                   <div className="promoOv">
                     <div className="promoBox">
@@ -2107,7 +2195,7 @@ export default function ZlegendsBot() {
               {activePuzzle ? (
                 <div className="trayEmpty puzzleMeta">
                   {rushMode
-                    ? (puzzleFeedback || `Solved ${rushSolved} · Misses ${rushMistakes}/3`)
+                    ? (puzzleFeedback || `Find the best move for ${eng.getSide() === 1 ? "White" : "Black"}.`)
                     : (puzzleSolved ? "Solved! Nice work." : puzzleFeedback || `Find the best move for ${eng.getSide() === 1 ? "White" : "Black"}.`)}
                 </div>
               ) : (
@@ -2389,6 +2477,10 @@ export default function ZlegendsBot() {
                 </div>
               ))}
             </div>
+            <div className="rushCounterRow">
+              <span>Lifetime solved: <b>{rushLifetime}</b></span>
+              <button className="btn ghost" style={{ padding: "4px 10px", fontSize: 10 }} onClick={resetRushCounter}>Reset</button>
+            </div>
             <button className="btn ghost" onClick={() => { setRushOpen(false); setLeaderboardOpen(true); loadLeaderboard(rushDuration); }}>🏆 Leaderboard</button>
           </div>
         </div>
@@ -2405,6 +2497,20 @@ export default function ZlegendsBot() {
             <div className="pv" style={{ fontSize: 15 }}>
               You solved <b>{rushResult.solved}</b> puzzle{rushResult.solved === 1 ? "" : "s"}.
             </div>
+            {rushMissed.length > 0 && (
+              <div className="rushMissedList">
+                <div className="rushMissedHead">Missed puzzles</div>
+                {rushMissed.map((p, i) => (
+                  <div className="rushMissedRow" key={p.id + "-" + i}>
+                    <span className="rushMissedRating">Rated {p.rating}</span>
+                    <span className="rushMissedActions">
+                      <button className="btn ghost" onClick={() => reviewMissedPuzzle(p, false)}>Retry</button>
+                      <button className="btn ghost" onClick={() => reviewMissedPuzzle(p, true)}>Analyze</button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
             <button className="btn gold" onClick={retryRush}>Try Again</button>
             <button className="btn ghost" onClick={() => { setLeaderboardOpen(true); loadLeaderboard(rushDuration); }}>🏆 Leaderboard</button>
           </div>

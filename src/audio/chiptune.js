@@ -115,5 +115,28 @@ export function createAudio(initialTrackIdx = 0, initialVolume = 0.6) {
     o.connect(g); g.connect(st.master);
     o.start(t); o.stop(t + 0.26);
   };
+  /* Puzzle Rush clock hitting zero -- two-note alarm buzz. */
+  st.sfxTimeUp = () => {
+    ensure();
+    const t = st.ctx.currentTime;
+    [0, 0.16].forEach(off => {
+      const o = st.ctx.createOscillator(), g = st.ctx.createGain();
+      o.type = "square";
+      o.frequency.setValueAtTime(220, t + off);
+      g.gain.setValueAtTime(0.0001, t + off);
+      g.gain.linearRampToValueAtTime(0.16, t + off + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + off + 0.14);
+      o.connect(g); g.connect(st.master);
+      o.start(t + off); o.stop(t + off + 0.16);
+    });
+  };
+  /* Rush milestone (every 50 solved) -- rising major arpeggio. */
+  st.sfxWin = () => {
+    ensure();
+    const t = st.ctx.currentTime;
+    [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
+      voice(freq, t + i * 0.09, 0.3, "triangle", 0.16);
+    });
+  };
   return st;
 }
