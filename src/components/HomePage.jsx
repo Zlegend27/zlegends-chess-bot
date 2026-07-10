@@ -24,15 +24,15 @@ const ICONS = {
  *  piñata-style face for Blind Chess. Everything else keeps the plain
  *  currentColor path + accent-tint treatment. */
 function renderIcon(id) {
-  if (id === "play") return <PixelAvatar rows={ZPIX} pal={ZPAL} size={30} />;
+  if (id === "play") return <PixelAvatar rows={ZPIX} pal={ZPAL} size={46} />;
   if (id === "openings") return (
-    <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true">
+    <svg width="38" height="38" viewBox="0 0 24 24" aria-hidden="true">
       <path d="M12 5.5C10.5 4 8 3 4 3v14c4 0 6.5 1 8 2.5V5.5z" fill="#3EE7F5" />
       <path d="M12 5.5C13.5 4 16 3 20 3v14c-4 0-6.5 1-8 2.5V5.5z" fill="#F5D93E" />
     </svg>
   );
   if (id === "blind") return (
-    <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true">
+    <svg width="38" height="38" viewBox="0 0 24 24" aria-hidden="true">
       <circle cx="12" cy="12" r="9" fill="#F5D93E26" stroke="#F5D93E" strokeWidth="1.4" />
       <path d="M2.3 8.3c-.6-.15-1-.75-.85-1.35" stroke="#D94BF0" strokeWidth="1.5" fill="none" strokeLinecap="round" />
       <path d="M21.7 8.3c.6-.15 1-.75.85-1.35" stroke="#D94BF0" strokeWidth="1.5" fill="none" strokeLinecap="round" />
@@ -118,9 +118,9 @@ export default function HomePage({ onEnter }) {
                 onClick={() => onEnter(m.id)}
                 className={`group flex aspect-square flex-col items-center justify-center gap-3 rounded-3xl border ${a.border} bg-[#1D1038CC] p-4 text-center backdrop-blur-sm transition hover:-translate-y-0.5 hover:bg-[#1D1038E6]`}
               >
-                <span className={`flex size-14 shrink-0 items-center justify-center rounded-2xl transition-colors ${a.bg}`}>
+                <span className="flex h-14 shrink-0 items-center justify-center">
                   {m.custom ? renderIcon(m.id) : (
-                    <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" className={a.text} aria-hidden="true"><path d={m.icon} /></svg>
+                    <svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor" className={a.text} aria-hidden="true"><path d={m.icon} /></svg>
                   )}
                 </span>
                 <span className="text-sm font-bold leading-tight text-[#F4EFFF]">{m.label}</span>
@@ -138,8 +138,8 @@ export default function HomePage({ onEnter }) {
           onClick={() => onEnter(RANK_FEATURE.id)}
           className="group flex w-full flex-col items-center gap-4 rounded-3xl border border-[#F5D93E4D] bg-gradient-to-br from-[#1D1038CC] to-[#2A1F0EE6] p-6 text-center backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-[#F5D93E99] sm:flex-row sm:text-left"
         >
-          <span className="flex size-16 shrink-0 items-center justify-center rounded-2xl bg-[#F5D93E1F] transition-colors group-hover:bg-[#F5D93E33]">
-            <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor" className="text-[#F5D93E]" aria-hidden="true"><path d={RANK_FEATURE.icon} /></svg>
+          <span className="flex h-16 shrink-0 items-center justify-center">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor" className="text-[#F5D93E]" aria-hidden="true"><path d={RANK_FEATURE.icon} /></svg>
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-[10px] font-bold uppercase tracking-[0.2em] text-[#F5D93E]">New Feature</span>
