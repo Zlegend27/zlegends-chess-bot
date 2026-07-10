@@ -1,15 +1,20 @@
-/* Six tools shared between the desktop "Explore" dock and the mobile
+/* Four tools shared between the desktop "Explore" dock and the mobile
  *  bottom nav -- ONE list so they can't drift apart the way the v0
- *  reference design's two components did (its ToolDock had all 6 tools
- *  including Blind Chess, but its BottomNav only had 5 and silently
- *  dropped Blind Chess; mobile is the primary surface here, so that's
- *  the worse place to lose a whole game mode). */
+ *  reference design's two components did (its ToolDock had 6 tools but
+ *  its BottomNav only had 5 and silently dropped one).
+ *
+ *  Openings/Puzzles/Spectate/Blind Chess used to live here too, but are
+ *  reachable from the home page's mode grid now instead -- this nav is
+ *  just Home (back to that grid), Login (placeholder, no auth wired up
+ *  yet), Music, and Settings.
+ *
+ *  "home"'s icon is a placeholder -- swap for the actual ship artwork
+ *  once that's available as a real asset file (a pasted image isn't one
+ *  yet, can't inline it as an SVG path). */
 const TOOLS = [
+  { id: "home", label: "Home", icon: "M12 3l9 8h-3v9h-4v-6h-4v6H6v-9H3l9-8z" },
+  { id: "login", label: "Login", icon: "M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5z" },
   { id: "music", label: "Music", icon: "M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z" },
-  { id: "openings", label: "Openings", icon: "M6 2a2 2 0 0 0-2 2v16l8-4 8 4V4a2 2 0 0 0-2-2H6z" },
-  { id: "puzzles", label: "Puzzles", icon: "M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5C13 2.12 11.88 1 10.5 1S8 2.12 8 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.49 0 2.7 1.21 2.7 2.7s-1.21 2.7-2.7 2.7H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.49 1.21-2.7 2.7-2.7s2.7 1.21 2.7 2.7V22H17c1.1 0 2-.9 2-2v-4h1.5c1.38 0 2.5-1.12 2.5-2.5S21.88 11 20.5 11z" },
-  { id: "spectate", label: "Spectate", icon: "M12 5c-5 0-9.27 3.11-11 7 1.73 3.89 6 7 11 7s9.27-3.11 11-7c-1.73-3.89-6-7-11-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" },
-  { id: "blind", label: "Blind Chess", icon: "M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z" },
   { id: "settings", label: "Settings", icon: "M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.5.5 0 0 0-.59.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32c.14.24.42.32.66.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.24.1.51 0 .59-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" },
 ];
 

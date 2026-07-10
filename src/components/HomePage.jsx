@@ -1,31 +1,57 @@
 import { useState } from "react";
 import StarField from "./StarField";
 import SocialLinks from "./SocialLinks";
+import PixelAvatar, { ZPAL, ZPIX } from "./PixelAvatar";
 
 /* Same inline-SVG-path convention already used for the Juice Box/Puzzles/
-   Spectate/Blind Chess icons elsewhere in the app (see App.jsx's icon
-   row) -- kept consistent rather than pulling in an icon library just
-   for this page. Puzzles/Spectate/Blind reuse those exact paths. */
+   Spectate icons elsewhere in the app (see App.jsx's icon row) -- kept
+   consistent rather than pulling in an icon library just for this page.
+   Puzzles/Spectate reuse those exact paths; Play/Openings/Blind get
+   their own custom icons below (renderIcon) instead of a plain
+   currentColor path, per direction: the bot sprite for Play, a colored
+   book for Openings, a blindfolded face for Blind. */
 const ICONS = {
   play: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-2 14.5v-9l7 4.5-7 4.5z",
   puzzle: "M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5C13 2.12 11.88 1 10.5 1S8 2.12 8 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.49 0 2.7 1.21 2.7 2.7s-1.21 2.7-2.7 2.7H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.49 1.21-2.7 2.7-2.7s2.7 1.21 2.7 2.7V22H17c1.1 0 2-.9 2-2v-4h1.5c1.38 0 2.5-1.12 2.5-2.5S21.88 11 20.5 11z",
-  book: "M6 2a2 2 0 0 0-2 2v16l8-4 8 4V4a2 2 0 0 0-2-2H6z",
   bolt: "M7 2v11h3v9l7-12h-4l4-8z",
   eye: "M12 5c-5 0-9.27 3.11-11 7 1.73 3.89 6 7 11 7s9.27-3.11 11-7c-1.73-3.89-6-7-11-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
-  ear: "M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z",
   star: "M12 2l2.9 6.9L22 9.6l-5.5 4.8L18 22l-6-3.6L6 22l1.5-7.6L2 9.6l7.1-.7L12 2z",
 };
+
+/** Play/Openings/Blind get bespoke icons instead of a single-fill path:
+ *  Zlegend2700's own sprite for Play (it's literally who you're
+ *  playing), a two-tone open book for Openings, and a blindfolded
+ *  piñata-style face for Blind Chess. Everything else keeps the plain
+ *  currentColor path + accent-tint treatment. */
+function renderIcon(id) {
+  if (id === "play") return <PixelAvatar rows={ZPIX} pal={ZPAL} size={30} />;
+  if (id === "openings") return (
+    <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 5.5C10.5 4 8 3 4 3v14c4 0 6.5 1 8 2.5V5.5z" fill="#3EE7F5" />
+      <path d="M12 5.5C13.5 4 16 3 20 3v14c-4 0-6.5 1-8 2.5V5.5z" fill="#F5D93E" />
+    </svg>
+  );
+  if (id === "blind") return (
+    <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" fill="#F5D93E26" stroke="#F5D93E" strokeWidth="1.4" />
+      <path d="M2.3 8.3c-.6-.15-1-.75-.85-1.35" stroke="#D94BF0" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+      <path d="M21.7 8.3c.6-.15 1-.75.85-1.35" stroke="#D94BF0" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+      <rect x="3" y="9.5" width="18" height="5" rx="2.5" fill="#D94BF0" />
+    </svg>
+  );
+  return null;
+}
 
 /* Puzzle Rush and Rank Bot deliberately aren't tiles here anymore --
    Rush lives one level down inside Puzzles (same as in the app itself),
    and Rank Bot graduated to its own spotlight in the Features section
    below instead of competing for space as a 6th icon. */
 const MODES = [
-  { id: "play", label: "Play vs Bot", desc: "Challenge ZLEGEND2700 at any Elo. Can you beat it?", icon: ICONS.play, featured: true },
+  { id: "play", label: "Play vs Bot", desc: "Challenge ZLEGEND2700 at any Elo. Can you beat it?", custom: true, featured: true },
   { id: "puzzles", label: "Puzzles", desc: "Solve rated tactics from Beginner to Expert.", icon: ICONS.puzzle },
-  { id: "openings", label: "Openings Library", desc: "Study Italian, Sicilian, Ruy Lopez and more.", icon: ICONS.book },
+  { id: "openings", label: "Openings Library", desc: "Study Italian, Sicilian, Ruy Lopez and more.", custom: true },
   { id: "spectate", label: "Spectate Bots", desc: "Watch two bots battle. No clicking required.", icon: ICONS.eye },
-  { id: "blind", label: "Blind Chess", desc: "Play a full game by voice only. No board.", icon: ICONS.ear },
+  { id: "blind", label: "Blind Chess", desc: "Play a full game by voice only. No board.", custom: true },
 ];
 
 /* The one mode this page spotlights instead of tiling -- same label/desc
@@ -93,7 +119,9 @@ export default function HomePage({ onEnter }) {
                 className={`group flex aspect-square flex-col items-center justify-center gap-3 rounded-3xl border ${a.border} bg-[#1D1038CC] p-4 text-center backdrop-blur-sm transition hover:-translate-y-0.5 hover:bg-[#1D1038E6]`}
               >
                 <span className={`flex size-14 shrink-0 items-center justify-center rounded-2xl transition-colors ${a.bg}`}>
-                  <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" className={a.text} aria-hidden="true"><path d={m.icon} /></svg>
+                  {m.custom ? renderIcon(m.id) : (
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" className={a.text} aria-hidden="true"><path d={m.icon} /></svg>
+                  )}
                 </span>
                 <span className="text-sm font-bold leading-tight text-[#F4EFFF]">{m.label}</span>
               </button>

@@ -413,17 +413,16 @@ export default function ZlegendsBot() {
     setSettingsOpen(true);
     if (!ratingInfo) estimateRating().then(setRatingInfo);
   };
-  /* Single dispatcher for ExploreDock (desktop)/BottomNav (mobile) --
-     both fire the exact same real openers the old iconRow buttons did
-     (ensurePuzzlesLoaded included), just funneled through one id-keyed
-     function instead of one-off onClick per icon. */
+  /* Single dispatcher for ExploreDock (desktop)/BottomNav (mobile).
+     Openings/Puzzles/Spectate/Blind Chess used to open from here too, but
+     the nav only exposes Home/Login/Music/Settings now -- those modes are
+     reachable from the home page's mode grid instead. Login has no auth
+     wired up yet, so it's a no-op placeholder for now. */
   const onToolSelect = (id) => {
     if (id === "music") setMusicOpen(true);
-    else if (id === "openings") setOpeningsOpen(true);
-    else if (id === "puzzles") { setPuzzlesOpen(true); ensurePuzzlesLoaded(); }
-    else if (id === "spectate") setSpectateOpen(true);
-    else if (id === "blind") setBlindOpen(true);
     else if (id === "settings") openSettings();
+    else if (id === "home") setSiteView("home");
+    else if (id === "login") {} // placeholder -- no auth implemented yet
   };
   const [displayName, setDisplayNameState] = useState(() => getDisplayName());
   const displayNameRef = useRef(displayName);
@@ -1857,9 +1856,13 @@ export default function ZlegendsBot() {
      quiz, opening replay, normal bot analysis), nothing stubbed. */
   const analysisLabel = activePuzzle ? (rushMode ? "Rush" : "Puzzle") : quizOpening ? "Quiz" : activeOpening ? "Opening" : "Analysis";
   /* Shared by ExploreDock and BottomNav so the currently-open tool
-     highlights consistently on both. */
-  const activeToolId = musicOpen ? "music" : openingsOpen ? "openings" : puzzlesOpen ? "puzzles"
-    : spectateOpen ? "spectate" : blindOpen ? "blind" : settingsOpen ? "settings" : null;
+     highlights consistently on both. Only tracks tools the nav can
+     actually open now (Home/Login/Music/Settings) -- Openings/Puzzles/
+     Spectate/Blind Chess still have their own open state elsewhere for
+     the home-page mode grid, they just don't light up this nav. Home
+     itself is never "active" here since clicking it navigates away from
+     this screen (ExploreDock/BottomNav only render in the play view). */
+  const activeToolId = musicOpen ? "music" : settingsOpen ? "settings" : null;
   const analysisContent = activePuzzle ? (
     rushMode ? (
       <>
