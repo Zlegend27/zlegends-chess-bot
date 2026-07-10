@@ -1343,10 +1343,15 @@ export default function ZlegendsBot() {
 
   const retryRush = () => startRush(rushDuration);
 
+  /* Deliberately does NOT call exitPuzzle()/newGame(1) -- that would
+     reset the board into a fresh Play vs Bot game, "portaling" the
+     player out of Puzzles entirely right after a rush ends. Clearing the
+     rush flags and reopening the Puzzles menu keeps them on a puzzle
+     board and lets them immediately pick Daily/Ranked/Rush again. */
   const exitRush = () => {
     setRushMode(false);
     setRushResult(null);
-    exitPuzzle();
+    setPuzzlesOpen(true);
   };
 
   const resetRushCounter = () => {
@@ -2022,6 +2027,7 @@ export default function ZlegendsBot() {
      Rush row inside the Puzzles modal, the Rank Bot difficulty option),
      this just triggers the same state changes those already do. */
   const enterMode = (modeId) => {
+    if (modeId === "leaderboard") { setSiteView("leaderboard"); return; }
     setSiteView("play");
     if (modeId === "puzzles") { setPuzzlesOpen(true); ensurePuzzlesLoaded(); }
     else if (modeId === "openings") setOpeningsOpen(true);

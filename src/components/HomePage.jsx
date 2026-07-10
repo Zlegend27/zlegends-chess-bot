@@ -16,6 +16,7 @@ const ICONS = {
   bolt: "M7 2v11h3v9l7-12h-4l4-8z",
   eye: "M12 5c-5 0-9.27 3.11-11 7 1.73 3.89 6 7 11 7s9.27-3.11 11-7c-1.73-3.89-6-7-11-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
   star: "M12 2l2.9 6.9L22 9.6l-5.5 4.8L18 22l-6-3.6L6 22l1.5-7.6L2 9.6l7.1-.7L12 2z",
+  trophy: "M7 4V2h10v2h4v3c0 2.21-1.79 4-4 4h-.08A6.007 6.007 0 0 1 13 15.92V18h3v2H8v-2h3v-2.08A6.007 6.007 0 0 1 7.08 9H7c-2.21 0-4-1.79-4-4V4h4zm-2 2v1c0 1.1.9 2 2 2V6H5zm12 0v3c1.1 0 2-.9 2-2V6h-2z",
 };
 
 /** Play/Openings/Blind get bespoke icons instead of a single-fill path:
@@ -52,6 +53,7 @@ const MODES = [
   { id: "openings", label: "Openings Library", desc: "Study Italian, Sicilian, Ruy Lopez and more.", custom: true },
   { id: "spectate", label: "Spectate Bots", desc: "Watch two bots battle. No clicking required.", icon: ICONS.eye },
   { id: "blind", label: "Blind Chess", desc: "Play a full game by voice only. No board.", custom: true },
+  { id: "leaderboard", label: "Leaderboard", desc: "See the top Puzzle Rush solvers.", icon: ICONS.trophy },
 ];
 
 /* The one mode this page spotlights instead of tiling -- same label/desc
