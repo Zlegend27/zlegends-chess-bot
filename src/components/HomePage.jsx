@@ -1,3 +1,4 @@
+import { useState } from "react";
 import StarField from "./StarField";
 import SocialLinks from "./SocialLinks";
 
@@ -15,22 +16,29 @@ const ICONS = {
   star: "M12 2l2.9 6.9L22 9.6l-5.5 4.8L18 22l-6-3.6L6 22l1.5-7.6L2 9.6l7.1-.7L12 2z",
 };
 
+/* Puzzle Rush and Rank Bot deliberately aren't tiles here anymore --
+   Rush lives one level down inside Puzzles (same as in the app itself),
+   and Rank Bot graduated to its own spotlight in the Features section
+   below instead of competing for space as a 6th icon. */
 const MODES = [
   { id: "play", label: "Play vs Bot", desc: "Challenge ZLEGEND2700 at any Elo. Can you beat it?", icon: ICONS.play, featured: true },
   { id: "puzzles", label: "Puzzles", desc: "Solve rated tactics from Beginner to Expert.", icon: ICONS.puzzle },
   { id: "openings", label: "Openings Library", desc: "Study Italian, Sicilian, Ruy Lopez and more.", icon: ICONS.book },
-  { id: "rush", label: "Puzzle Rush", desc: "Race the clock. How many can you solve?", icon: ICONS.bolt },
   { id: "spectate", label: "Spectate Bots", desc: "Watch two bots battle. No clicking required.", icon: ICONS.eye },
   { id: "blind", label: "Blind Chess", desc: "Play a full game by voice only. No board.", icon: ICONS.ear },
-  { id: "rank", label: "Rank Bot", desc: "An adaptive bot that estimates your rating as you play.", icon: ICONS.star },
 ];
+
+/* The one mode this page spotlights instead of tiling -- same label/desc
+   Rank Bot has always used elsewhere in the app (see App.jsx's
+   DIFFICULTIES), reused verbatim here rather than writing new copy. */
+const RANK_FEATURE = { id: "rank", label: "Rank Bot", desc: "An adaptive bot that estimates your rating as you play.", icon: ICONS.star };
 
 const ACCENT = {
   play: { text: "text-[#F5D93E]", bg: "bg-[#F5D93E1F] group-hover:bg-[#F5D93E33]", border: "border-[#F5D93E4D] group-hover:border-[#F5D93E99]" },
   gold: { text: "text-[#F5D93E]", bg: "bg-[#F5D93E1A] group-hover:bg-[#F5D93E2E]", border: "border-[#F5D93E33] group-hover:border-[#F5D93E80]" },
   cyan: { text: "text-[#3EE7F5]", bg: "bg-[#3EE7F51A] group-hover:bg-[#3EE7F52E]", border: "border-[#3EE7F533] group-hover:border-[#3EE7F580]" },
 };
-const accentFor = (m) => (m.featured ? ACCENT.play : m.id === "rush" || m.id === "rank" ? ACCENT.gold : ACCENT.cyan);
+const accentFor = (m) => (m.featured ? ACCENT.play : ACCENT.cyan);
 
 /** The site's front door -- our real branding/hero (same .hdr markup the
  *  Play screen used to open with), then a mode picker grid, then the
@@ -42,6 +50,13 @@ const accentFor = (m) => (m.featured ? ACCENT.play : m.id === "rush" || m.id ===
  *  CSS never targets descendants by type/class the way e.g. .promoBox
  *  does, so nesting new markup inside it can't be fought by anything. */
 export default function HomePage({ onEnter }) {
+  /* Donate/Contact have no real destination yet ("later will flesh out a
+     contact page and set up donations") -- onEnter only knows the modes
+     App.jsx's enterMode handles, and silently falls through to the Play
+     screen for anything else, which would be a confusing bait-and-switch
+     for a button that says Donate. A local toast instead of routing
+     through onEnter keeps them honest about not being wired up yet. */
+  const [comingSoon, setComingSoon] = useState(null);
   return (
     <div className="root">
       <StarField />
@@ -63,64 +78,68 @@ export default function HomePage({ onEnter }) {
         Play Now
       </button>
 
-      <div className="mt-6 flex flex-wrap justify-center gap-2.5">
-        {[["Bot Rating", "~2700 Elo"], ["Game Modes", String(MODES.length)]].map(([label, value]) => (
-          <div key={label} className="rounded-full border border-[#8B2FC966] bg-[#1D1038CC] px-4 py-1.5 text-xs">
-            <span className="text-[#9D8FC4]">{label}: </span>
-            <span className="font-bold text-[#F4EFFF]">{value}</span>
-          </div>
-        ))}
-      </div>
-
+      {/* App-icon style grid -- big square tiles (icon + label only, no
+          description) rather than the horizontal list-style cards this
+          used to be, per the "should look like a home screen" direction. */}
       <div className="mt-11 w-full max-w-4xl">
         <h2 className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-[#9D8FC4]">Choose a mode</h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {MODES.map((m) => {
             const a = accentFor(m);
             return (
               <button
                 key={m.id}
                 onClick={() => onEnter(m.id)}
-                className={`group flex items-start gap-4 rounded-2xl border ${a.border} bg-[#1D1038CC] p-5 text-left backdrop-blur-sm transition hover:-translate-y-0.5 hover:bg-[#1D1038E6] ${m.featured ? "sm:col-span-2 lg:col-span-1" : ""}`}
+                className={`group flex aspect-square flex-col items-center justify-center gap-3 rounded-3xl border ${a.border} bg-[#1D1038CC] p-4 text-center backdrop-blur-sm transition hover:-translate-y-0.5 hover:bg-[#1D1038E6]`}
               >
-                <span className={`flex size-11 shrink-0 items-center justify-center rounded-xl transition-colors ${a.bg}`}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className={a.text} aria-hidden="true"><path d={m.icon} /></svg>
+                <span className={`flex size-14 shrink-0 items-center justify-center rounded-2xl transition-colors ${a.bg}`}>
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" className={a.text} aria-hidden="true"><path d={m.icon} /></svg>
                 </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block font-bold text-[#F4EFFF]">{m.label}</span>
-                  <span className="mt-0.5 block text-sm leading-relaxed text-[#9D8FC4]">{m.desc}</span>
-                </span>
+                <span className="text-sm font-bold leading-tight text-[#F4EFFF]">{m.label}</span>
               </button>
             );
           })}
         </div>
       </div>
 
-      <div className="mt-10 mb-4 w-full max-w-4xl">
-        <h2 className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-[#9D8FC4]">Follow Zlegend27</h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {[
-            { label: "YouTube", handle: "@Zlegend27", href: "https://www.youtube.com/@Zlegend27", color: "#FF0000" },
-            { label: "TikTok", handle: "@zlegend27", href: "https://www.tiktok.com/@zlegend27", color: "#69C9D0" },
-            { label: "Discord", handle: "Join the server", href: "https://discord.gg/TQtfCVkYqa", color: "#5865F2" },
-          ].map((s) => (
-            <a
-              key={s.label} href={s.href} target="_blank" rel="noopener noreferrer"
-              className="group flex items-center gap-4 rounded-2xl border border-[#8B2FC94D] bg-[#1D1038CC] p-4 backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-[#8B2FC999] hover:bg-[#1D1038E6]"
-            >
-              <span className="flex size-11 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: `${s.color}22` }}>
-                <span className="size-2.5 rounded-full" style={{ backgroundColor: s.color }} />
-              </span>
-              <span className="min-w-0">
-                <span className="block font-bold text-[#F4EFFF]">{s.label}</span>
-                <span className="block text-sm text-[#9D8FC4]">{s.handle}</span>
-              </span>
-            </a>
-          ))}
-        </div>
+      {/* Features -- spotlights one implemented mode at a time rather than
+          competing for space as another grid tile; Rank Bot for now. */}
+      <div className="mt-10 w-full max-w-4xl">
+        <h2 className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-[#9D8FC4]">Features</h2>
+        <button
+          onClick={() => onEnter(RANK_FEATURE.id)}
+          className="group flex w-full flex-col items-center gap-4 rounded-3xl border border-[#F5D93E4D] bg-gradient-to-br from-[#1D1038CC] to-[#2A1F0EE6] p-6 text-center backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-[#F5D93E99] sm:flex-row sm:text-left"
+        >
+          <span className="flex size-16 shrink-0 items-center justify-center rounded-2xl bg-[#F5D93E1F] transition-colors group-hover:bg-[#F5D93E33]">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor" className="text-[#F5D93E]" aria-hidden="true"><path d={RANK_FEATURE.icon} /></svg>
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[10px] font-bold uppercase tracking-[0.2em] text-[#F5D93E]">New Feature</span>
+            <span className="mt-1 block text-lg font-bold text-[#F4EFFF]">{RANK_FEATURE.label}</span>
+            <span className="mt-1 block text-sm leading-relaxed text-[#9D8FC4]">{RANK_FEATURE.desc}</span>
+          </span>
+        </button>
       </div>
 
-      <footer className="mt-6 pb-6 text-center text-xs text-[#9D8FC4]">
+      <div className="mt-10 mb-2 flex flex-wrap justify-center gap-3">
+        <button
+          onClick={() => setComingSoon("Donations are coming soon — thanks for wanting to support the project!")}
+          className="rounded-2xl border border-[#F5D93E4D] bg-[#1D1038CC] px-6 py-2.5 text-sm font-bold text-[#F5D93E] backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-[#F5D93E99] hover:bg-[#1D1038E6]"
+        >
+          Donate
+        </button>
+        <button
+          onClick={() => setComingSoon("A contact page is coming soon.")}
+          className="rounded-2xl border border-[#3EE7F533] bg-[#1D1038CC] px-6 py-2.5 text-sm font-bold text-[#3EE7F5] backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-[#3EE7F580] hover:bg-[#1D1038E6]"
+        >
+          Contact
+        </button>
+      </div>
+      {comingSoon && (
+        <p className="mb-4 max-w-xs text-center text-xs text-[#9D8FC4]">{comingSoon}</p>
+      )}
+
+      <footer className="mt-2 pb-6 text-center text-xs text-[#9D8FC4]">
         Built by <a href="https://www.youtube.com/@Zlegend27" target="_blank" rel="noopener noreferrer" className="text-[#3EE7F5] hover:underline">Zlegend27</a> — all rights reserved.
       </footer>
     </div>
