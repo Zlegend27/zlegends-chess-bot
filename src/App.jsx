@@ -2463,7 +2463,7 @@ export default function ZlegendsBot() {
             <div className="ctrls puzzleCtrls">
               <button className="btn ghost" onClick={() => startPuzzle(activePuzzle)}>Retry</button>
               <button className="btn gold" onClick={nextPuzzle}>Next Puzzle</button>
-              <button className="btn ghost" onClick={exitPuzzle}>Exit</button>
+              <button className="btn ghost" onClick={() => { exitPuzzle(); setSiteView("home"); }}>Exit</button>
             </div>
           )}
 
