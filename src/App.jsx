@@ -731,7 +731,14 @@ export default function ZlegendsBot() {
     runSearch(fullLine, 800, 0, { personality: BALANCED, useBook: false }).then((res) => {
       if (cancelled) return;
       if (res && res.move) {
-        setBestArrow({ from: mFrom(res.move), to: mTo(res.move) });
+        /* SAN of the suggestion, for the "Best: Nf3" text next to the
+           board -- on a phone the arrow alone is easy to misread. eng is
+           already replayed to this exact position by the review effect;
+           sanOf can still throw if the player slipped in an exploratory
+           move mid-search, so treat the label as best-effort. */
+        let san = null;
+        try { san = eng.sanOf(res.move); } catch { /* stale position */ }
+        setBestArrow({ from: mFrom(res.move), to: mTo(res.move), san });
         const whiteScore = eng.getSide() === 1 ? -res.score : res.score;
         setInfo({ depth: res.depth, score: whiteScore, nodes: res.nodes, time: res.time, pv: res.pv });
       } else {
@@ -831,10 +838,16 @@ export default function ZlegendsBot() {
     /* The search has no move to return at a finished game's final
        position (checkmate), so that last score defaults to a neutral 0
        rather than "this side is completely lost" -- without this fix,
-       the very move that delivers checkmate could get wrongly flagged
-       as a blunder purely from that missing data, when it's obviously
-       the best possible move available. */
-    if (result && result.reason === "Checkmate") grades[grades.length - 1] = null;
+       the very move that delivers checkmate gets wrongly flagged as a
+       blunder purely from that missing data. Detected off tempEng (which
+       has every move applied by now) rather than the `result` state:
+       when a pasted game kicks off grading in the same tick it loads,
+       the state closure still holds the pre-load value and a state-based
+       guard silently never fires. And mate earns "best", not a blank --
+       there is no better move than the one that ends the game. */
+    if (grades.length && tempEng.legalMoves().length === 0 && tempEng.inCheckNow()) {
+      grades[grades.length - 1] = "best";
+    }
     setMoveGrades(grades);
     setGrading(false);
   };
@@ -2084,6 +2097,29 @@ export default function ZlegendsBot() {
   );
   const analysisHint = (text) => <p className="m-0 text-[13px] leading-relaxed text-[#CBBDF0]">{text}</p>;
   const playerAdvantageCp = playerColor === 1 ? evalCp : -evalCp;
+  /* Post-game "report card": once Analyze has graded the moves, tally
+     each side's brilliants/mistakes/etc so the player gets a chess.com-
+     style game summary instead of having to scroll the scoresheet
+     counting ?? marks by hand. White's moves are the even plies. */
+  const GRADE_COLOR = { brilliant: "#3EE7F5", best: "#6FCF97", inaccuracy: "#F5D93E", mistake: "#F0A548", blunder: "#F05348" };
+  const gradeReport = (reviewing && moveGrades) ? (() => {
+    /* Pasted/shared games are someone else's moves -- plain White/Black
+       there, You/Bot only for games actually played here. */
+    const ownGame = mode !== "replay" && !pastedGame;
+    const whiteIsYou = ownGame && playerColor === 1;
+    const blackIsYou = ownGame && playerColor === -1;
+    const tally = (parity) => {
+      const counts = { brilliant: 0, best: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
+      moveGrades.forEach((g, i) => { if (g && i % 2 === parity) counts[g] += 1; });
+      return counts;
+    };
+    return {
+      cols: [
+        { label: whiteIsYou ? "You" : blackIsYou ? "Bot" : "White", counts: tally(0) },
+        { label: blackIsYou ? "You" : whiteIsYou ? "Bot" : "Black", counts: tally(1) },
+      ],
+    };
+  })() : null;
   const analysisContent = activePuzzle ? (
     rushMode ? (
       <div className="flex flex-col gap-2.5">
@@ -2113,7 +2149,33 @@ export default function ZlegendsBot() {
       {analysisHint(replayIndex === 0 ? activeOpening.summary : activeOpening.steps[replayIndex - 1])}
     </div>
   ) : (
-    info ? (
+    <div className="flex flex-col gap-3">
+      {grading && (
+        <div className="text-[12px] text-[#9D8FC4]">Grading moves… {gradeProgress}/{moveList.length}</div>
+      )}
+      {gradeReport && !grading && (
+        <div className="rounded-xl border border-[#8B2FC93D] bg-[#150C2466] p-3">
+          <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#9D8FC4]">Game report</div>
+          <div className="grid grid-cols-2 gap-3">
+            {gradeReport.cols.map((col) => (
+              <div key={col.label}>
+                <div className="mb-1.5 text-xs font-bold text-[#F4EFFF]">{col.label}</div>
+                <div className="flex flex-col gap-1">
+                  {Object.entries(col.counts).map(([g, n]) => (
+                    <div key={g} className="flex items-center justify-between text-[11px]">
+                      <span className="flex items-center gap-1.5 capitalize text-[#CBBDF0]">
+                        <b style={{ color: GRADE_COLOR[g], minWidth: 16 }}>{GRADE_TAG[g]}</b>{g}
+                      </span>
+                      <span className={n > 0 ? "font-bold text-[#F4EFFF]" : "text-[#9D8FC4]"}>{n}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {info ? (
       info.book ? (
         <div className="flex flex-col gap-2.5">
           {analysisChip("Opening book", "cyan")}
@@ -2147,7 +2209,8 @@ export default function ZlegendsBot() {
       )
     ) : (
       analysisHint("After each bot move, its eval, search depth, and the line it expects will show up here.")
-    )
+    )}
+    </div>
   );
 
   const inChk = eng.inCheckNow() && !result;
@@ -2171,6 +2234,14 @@ export default function ZlegendsBot() {
     const visRow = flipped ? r : 7 - r;
     return { x: visCol + 0.5, y: visRow + 0.5 };
   };
+  /* Best-move arrow geometry, precomputed as one path + one head polygon.
+     v1 drew two <line>s with an auto-oriented marker: the knight-move
+     joint showed a visible seam, and the marker overshot the target
+     square's center -- both read as "wonky", especially at phone sizes.
+     Now: a single polyline (round joins handle the knight bend cleanly),
+     the shaft starts offset from the origin center so it doesn't bury
+     the piece, stops short of the target center, and an explicitly
+     rotated triangle puts the arrow TIP exactly on the target center. */
   const arrowLine = (() => {
     if (!bestArrow || bestArrow.from === bestArrow.to) return null;
     const a = arrowPoint(bestArrow.from), b = arrowPoint(bestArrow.to);
@@ -2178,7 +2249,24 @@ export default function ZlegendsBot() {
     let bend = null;
     if (Math.abs(dx) === 2 && Math.abs(dy) === 1) bend = { x: a.x + dx, y: a.y };
     else if (Math.abs(dy) === 2 && Math.abs(dx) === 1) bend = { x: a.x, y: a.y + dy };
-    return { a, b, bend };
+    const norm = (vx, vy) => { const l = Math.hypot(vx, vy) || 1; return { x: vx / l, y: vy / l }; };
+    const first = bend || b;
+    const u0 = norm(first.x - a.x, first.y - a.y);       // direction leaving the origin
+    const prev = bend || a;
+    const u1 = norm(b.x - prev.x, b.y - prev.y);         // direction into the target
+    const HEAD_LEN = 0.42, HEAD_W = 0.5, START_OFF = 0.28;
+    const start = { x: a.x + u0.x * START_OFF, y: a.y + u0.y * START_OFF };
+    const shaftEnd = { x: b.x - u1.x * HEAD_LEN, y: b.y - u1.y * HEAD_LEN };
+    const perp = { x: -u1.y, y: u1.x };
+    const head = [
+      `${b.x},${b.y}`,
+      `${shaftEnd.x + perp.x * HEAD_W / 2},${shaftEnd.y + perp.y * HEAD_W / 2}`,
+      `${shaftEnd.x - perp.x * HEAD_W / 2},${shaftEnd.y - perp.y * HEAD_W / 2}`,
+    ].join(" ");
+    const path = bend
+      ? `M${start.x},${start.y} L${bend.x},${bend.y} L${shaftEnd.x},${shaftEnd.y}`
+      : `M${start.x},${start.y} L${shaftEnd.x},${shaftEnd.y}`;
+    return { path, head };
   })();
 
   const Tray = ({ pieces, colorClass }) => (
@@ -2300,33 +2388,17 @@ export default function ZlegendsBot() {
               <div className="board" role="grid" aria-label="Chess board" ref={boardRef}>
                 {rows}
                 {arrowLine && (() => {
-                  /* Standard theme mimics chess.com's thicker, flat,
-                     semi-transparent green best-move arrow; every other
-                     theme keeps this app's original thin glowing-yellow
-                     one. */
+                  /* One geometry for every theme now (see arrowLine above)
+                     -- only the color differs: chess.com green on the
+                     Standard board, this app's yellow everywhere else. */
                   const std = boardColorId === "standard";
                   const color = std ? "#15A310" : "#F5D93E";
-                  const opacity = std ? "0.8" : "0.85";
-                  const width = std ? "0.22" : "0.14";
-                  const headSize = std ? 4.4 : 3.2;
+                  const opacity = std ? 0.8 : 0.85;
                   return (
-                    <svg className="arrowLayer" viewBox="0 0 8 8" preserveAspectRatio="none">
-                      <defs>
-                        <marker id="bestArrowHead" markerWidth={headSize} markerHeight={headSize} refX={headSize * 0.47} refY={headSize / 2} orient="auto">
-                          <path d={`M0,0 L${headSize},${headSize / 2} L0,${headSize} Z`} fill={color} fillOpacity={opacity} />
-                        </marker>
-                      </defs>
-                      {arrowLine.bend ? (
-                        <>
-                          <line x1={arrowLine.a.x} y1={arrowLine.a.y} x2={arrowLine.bend.x} y2={arrowLine.bend.y}
-                            stroke={color} strokeOpacity={opacity} strokeWidth={width} strokeLinecap="round" />
-                          <line x1={arrowLine.bend.x} y1={arrowLine.bend.y} x2={arrowLine.b.x} y2={arrowLine.b.y}
-                            stroke={color} strokeOpacity={opacity} strokeWidth={width} strokeLinecap="round" markerEnd="url(#bestArrowHead)" />
-                        </>
-                      ) : (
-                        <line x1={arrowLine.a.x} y1={arrowLine.a.y} x2={arrowLine.b.x} y2={arrowLine.b.y}
-                          stroke={color} strokeOpacity={opacity} strokeWidth={width} strokeLinecap="round" markerEnd="url(#bestArrowHead)" />
-                      )}
+                    <svg className="arrowLayer" viewBox="0 0 8 8">
+                      <path d={arrowLine.path} fill="none" stroke={color} strokeOpacity={opacity}
+                        strokeWidth="0.26" strokeLinecap="round" strokeLinejoin="round" />
+                      <polygon points={arrowLine.head} fill={color} fillOpacity={opacity} />
                     </svg>
                   );
                 })()}
@@ -2424,20 +2496,54 @@ export default function ZlegendsBot() {
             </div>
           )}
 
-          {reviewing && (
-            <div className="ctrls reviewCtrls" style={{ justifyContent: "center" }}>
-              <button className="btn ghost" onClick={() => setReviewIndex(0)} disabled={reviewIndex === 0}>{"|◀"}</button>
-              <button className="btn ghost" onClick={() => setReviewIndex(i => Math.max(0, i - 1))} disabled={reviewIndex === 0}>{"◀"}</button>
-              <button className="btn ghost" onClick={() => setReviewIndex(i => Math.min(moveList.length, i + 1))} disabled={reviewIndex === moveList.length}>{"▶"}</button>
-              <button className="btn ghost" onClick={() => setReviewIndex(moveList.length)} disabled={reviewIndex === moveList.length}>{"▶|"}</button>
-              <button className={"btn" + (analyzing ? "" : " ghost")} onClick={toggleAnalyze}>
-                {analyzing ? (grading ? `Grading ${gradeProgress}/${moveList.length}…` : analysisBusy ? "Analyzing…" : "Analyzing") : "Analyze"}
-              </button>
-            </div>
-          )}
+          {reviewing && (() => {
+            /* Modern segmented stepper + a distinct Analyze toggle. The
+               .reviewCtrls class stays on the wrapper -- the mobile
+               media query keys its flex `order` off it. Every plain
+               button needs an explicit bg-* (no Tailwind preflight in
+               this build; without one they render native gray). */
+            const stepBtn = "flex h-9 w-9 items-center justify-center bg-transparent text-[#CBBDF0] transition-colors hover:text-[#F4EFFF] disabled:opacity-30 disabled:hover:text-[#CBBDF0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3EE7F5]";
+            const chev = (d) => <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={d} /></svg>;
+            return (
+              <div className="reviewCtrls mt-1 flex items-center justify-center gap-2">
+                <div className="flex items-center overflow-hidden rounded-xl border border-[#8B2FC966] bg-[#1D1038CC] backdrop-blur-sm">
+                  <button className={stepBtn} onClick={() => setReviewIndex(0)} disabled={reviewIndex === 0} aria-label="First move">
+                    {chev("M6 6h2v12H6zm3.5 6 8.5 6V6z")}
+                  </button>
+                  <button className={stepBtn} onClick={() => setReviewIndex(i => Math.max(0, i - 1))} disabled={reviewIndex === 0} aria-label="Previous move">
+                    {chev("M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z")}
+                  </button>
+                  <span className="min-w-[52px] px-1 text-center font-mono text-[11px] tabular-nums text-[#9D8FC4]">
+                    {reviewIndex}/{moveList.length}
+                  </span>
+                  <button className={stepBtn} onClick={() => setReviewIndex(i => Math.min(moveList.length, i + 1))} disabled={reviewIndex === moveList.length} aria-label="Next move">
+                    {chev("M8.59 16.59 10 18l6-6-6-6-1.41 1.41L13.17 12z")}
+                  </button>
+                  <button className={stepBtn} onClick={() => setReviewIndex(moveList.length)} disabled={reviewIndex === moveList.length} aria-label="Last move">
+                    {chev("M16 6h2v12h-2zM6 18l8.5-6L6 6z")}
+                  </button>
+                </div>
+                <button
+                  onClick={toggleAnalyze}
+                  className={`flex h-9 items-center gap-1.5 rounded-xl border px-3.5 text-xs font-bold tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3EE7F5] ${
+                    analyzing
+                      ? "border-[#3EE7F580] bg-[#3EE7F51F] text-[#3EE7F5]"
+                      : "border-[#8B2FC966] bg-[#1D1038CC] text-[#CBBDF0] hover:border-[#3EE7F566] hover:text-[#F4EFFF]"
+                  }`}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M12 2 9.5 9.5 2 12l7.5 2.5L12 22l2.5-7.5L22 12l-7.5-2.5L12 2z" />
+                  </svg>
+                  {analyzing ? (grading ? `Grading ${gradeProgress}/${moveList.length}` : "Analyzing") : "Analyze"}
+                </button>
+              </div>
+            );
+          })()}
           {analyzing && (
-            <div className="status analyzeHint" style={{ fontSize: 11, opacity: 0.8 }}>
-              Move any piece to explore — yellow arrow shows the bot's top pick
+            <div className="status analyzeHint" style={{ fontSize: 11, opacity: 0.85 }}>
+              {bestArrow?.san
+                ? <>Best move: <b style={{ color: boardColorId === "standard" ? "#4CBB47" : "#F5D93E", textTransform: "none" }}>{bestArrow.san}</b> · move any piece to explore</>
+                : analysisBusy ? "Finding the best move…" : "Move any piece to explore the position"}
             </div>
           )}
         </div>
