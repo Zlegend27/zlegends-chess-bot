@@ -17,6 +17,7 @@ const ICONS = {
   eye: "M12 5c-5 0-9.27 3.11-11 7 1.73 3.89 6 7 11 7s9.27-3.11 11-7c-1.73-3.89-6-7-11-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
   star: "M12 2l2.9 6.9L22 9.6l-5.5 4.8L18 22l-6-3.6L6 22l1.5-7.6L2 9.6l7.1-.7L12 2z",
   trophy: "M7 4V2h10v2h4v3c0 2.21-1.79 4-4 4h-.08A6.007 6.007 0 0 1 13 15.92V18h3v2H8v-2h3v-2.08A6.007 6.007 0 0 1 7.08 9H7c-2.21 0-4-1.79-4-4V4h4zm-2 2v1c0 1.1.9 2 2 2V6H5zm12 0v3c1.1 0 2-.9 2-2V6h-2z",
+  cap: "M12 3 1 9l11 6 9-4.91V17h2V9L12 3zm0 13.5L4.24 12.3 3 13l9 5 9-5-1.24-.7L12 16.5zM5 14.18v3.82c0 1.1 3.13 3 7 3s7-1.9 7-3v-3.82l-7 3.82-7-3.82z",
 };
 
 /** Play/Openings/Blind get bespoke icons instead of a single-fill path:
@@ -53,7 +54,8 @@ const MODES = [
   { id: "openings", label: "Openings Library", desc: "Study Italian, Sicilian, Ruy Lopez and more.", custom: true },
   { id: "spectate", label: "Spectate Bots", desc: "Watch two bots battle. No clicking required.", icon: ICONS.eye },
   { id: "blind", label: "Blind Chess", desc: "Play a full game by voice only. No board.", custom: true },
-  { id: "leaderboard", label: "Leaderboard", desc: "See the top Puzzle Rush solvers.", icon: ICONS.trophy },
+  { id: "lessons", label: "Lessons", desc: "Structured lessons to level up your game.", icon: ICONS.cap,
+    comingSoon: "Lessons are coming soon — we're putting the curriculum together." },
 ];
 
 /* The one mode this page spotlights instead of tiling -- same label/desc
@@ -117,7 +119,7 @@ export default function HomePage({ onEnter }) {
             return (
               <button
                 key={m.id}
-                onClick={() => onEnter(m.id)}
+                onClick={() => (m.comingSoon ? setComingSoon(m.comingSoon) : onEnter(m.id))}
                 className={`group flex aspect-square flex-col items-center justify-center gap-3 rounded-3xl border ${a.border} bg-[#1D1038CC] p-4 text-center backdrop-blur-sm transition hover:-translate-y-0.5 hover:bg-[#1D1038E6]`}
               >
                 <span className="flex h-14 shrink-0 items-center justify-center">
@@ -151,7 +153,19 @@ export default function HomePage({ onEnter }) {
         </button>
       </div>
 
-      <div className="mt-10 mb-2 flex flex-wrap justify-center gap-3">
+      {/* Leaderboard is a link to its own page (App.jsx routes "leaderboard"
+          straight to LeaderboardPage), not a mode-grid tile -- it's not a
+          mode you "enter" the way Play/Puzzles/etc. are, just a place to
+          check scores, so it gets its own small row instead. */}
+      <button
+        onClick={() => onEnter("leaderboard")}
+        className="mt-8 inline-flex items-center gap-2 rounded-xl border border-[#8B2FC94D] bg-[#1D1038CC] px-5 py-2 text-sm font-bold text-[#CBBDF0] backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-[#8B2FC999] hover:text-[#F4EFFF]"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={ICONS.trophy} /></svg>
+        Leaderboard
+      </button>
+
+      <div className="mt-6 mb-2 flex flex-wrap justify-center gap-3">
         <button
           onClick={() => setComingSoon("Donations are coming soon — thanks for wanting to support the project!")}
           className="rounded-2xl border border-[#F5D93E4D] bg-[#1D1038CC] px-6 py-2.5 text-sm font-bold text-[#F5D93E] backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-[#F5D93E99] hover:bg-[#1D1038E6]"
