@@ -26,7 +26,7 @@ import LeaderboardPage from "./components/LeaderboardPage";
 import { syncRankBotToSupabase, fetchRankBotFromSupabase, logRankBotMove } from "./utils/rankBot";
 import { ENGINE_VERSION } from "./utils/version";
 import { OPENINGS } from "./utils/openings";
-import { loadEcoOpenings, detectEcoOpening } from "./utils/ecoOpenings";
+import { loadEcoOpenings, detectEcoOpening, theoryPlyCount } from "./utils/ecoOpenings";
 import { stockfishBestMove, STOCKFISH_MIN_ELO } from "./engine/stockfishEngine";
 import "./App.css";
 
@@ -224,8 +224,12 @@ function pickTrackIndex(current, len, delta, shuffle) {
   return ((current + delta) % len + len) % len;
 }
 const PTS = { 1: 1, 2: 3, 3: 3, 4: 5, 5: 9 };
-const GRADE_TAG = { brilliant: "!!", best: "!", inaccuracy: "?!", mistake: "?", blunder: "??" };
-const GRADE_COLOR = { brilliant: "#3EE7F5", best: "#6FCF97", inaccuracy: "#F5D93E", mistake: "#F0A548", blunder: "#F05348" };
+/* "book" = memorized theory (tagged via the ECO line data, not engine
+   judgment); "miss" = the opponent just blundered and this move let the
+   punishment slip -- chess.com's vocabulary, and the distinction players
+   actually learn from: a miss is a found-nothing, not a played-badly. */
+const GRADE_TAG = { brilliant: "!!", best: "!", book: "≡", inaccuracy: "?!", miss: "✗", mistake: "?", blunder: "??" };
+const GRADE_COLOR = { brilliant: "#3EE7F5", best: "#6FCF97", book: "#9D8FC4", inaccuracy: "#F5D93E", miss: "#FF8A5C", mistake: "#F0A548", blunder: "#F05348" };
 const START_COUNT = { 1: 8, 2: 2, 3: 2, 4: 2, 5: 1 };
 
 /* Lichess's published move-accuracy curve: convert the eval to a win
@@ -272,7 +276,7 @@ function EvalGraph({ scores, grades, current, onSeek }) {
       <line x1="0" y1={H / 2} x2={W} y2={H / 2} stroke="#8B2FC9" strokeOpacity="0.5" strokeWidth="0.4" strokeDasharray="1.6 1.6" />
       <path d={line} fill="none" stroke="#3EE7F5" strokeOpacity="0.9" strokeWidth="0.6" />
       {grades && grades.map((g, i) => (
-        (g === "mistake" || g === "blunder") ? (
+        (g === "mistake" || g === "blunder" || g === "miss") ? (
           <circle key={i} cx={x(i + 1)} cy={y(i + 1)} r="1.6" fill={GRADE_COLOR[g]} stroke="#150C24" strokeWidth="0.5" />
         ) : null
       ))}
@@ -483,6 +487,9 @@ export default function ZlegendsBot() {
      N+1) drive the eval graph + accuracy numbers, bestSans powers the
      "best was X" coaching line on graded mistakes. */
   const [gradeDetail, setGradeDetail] = useState(null);
+  /* Practice-your-mistakes drill state: { queue, idx, feedback, revealed,
+     done } while a drill is running, null otherwise. See startPractice. */
+  const [practice, setPractice] = useState(null);
   const [grading, setGrading] = useState(false);
   const [gradeProgress, setGradeProgress] = useState(0);
   const [pastedGame, setPastedGame] = useState(false);
@@ -826,12 +833,88 @@ export default function ZlegendsBot() {
 
   const toggleAnalyze = () => {
     if (!canAnalyze) return;
+    /* The analyze arrow is the answer key -- practice mode can't coexist
+       with it, so flipping analysis on (or off) ends the drill. */
+    if (practice) { setPractice(null); setHintMove(null); }
     setAnalyzing(a => {
       const next = !a;
       if (next && reviewing && !moveGrades && !grading) gradeMoves();
       return next;
     });
     setSelected(-1); setTargets([]); setBestArrow(null);
+  };
+
+  /* ---- practice-your-mistakes: replay each graded slip as a mini-puzzle
+     (lichess's "learn from your mistakes"). The queue is the plies whose
+     move earned mistake/blunder/miss -- your own moves for games played
+     here, both sides' for pasted/shared games. Each drill parks the
+     review at the position before the slip and checks whatever the
+     player moves against the best move the grading pass already found;
+     analysis stays off the whole time so the arrow can't leak the
+     answer. */
+  const practiceQueue = (moveGrades && gradeDetail) ? (() => {
+    const ownGame = mode !== "replay" && !pastedGame;
+    const parityWanted = ownGame ? (playerColor === 1 ? 0 : 1) : null;
+    const q = [];
+    moveGrades.forEach((g, i) => {
+      if ((g === "mistake" || g === "blunder" || g === "miss")
+        && (parityWanted == null || i % 2 === parityWanted)
+        && gradeDetail.bestSans[i]) q.push(i);
+    });
+    return q;
+  })() : [];
+
+  const startPractice = () => {
+    if (!practiceQueue.length) return;
+    setAnalyzing(false); setBestArrow(null); setHintMove(null);
+    setSelected(-1); setTargets([]);
+    setPractice({ queue: practiceQueue, idx: 0, feedback: null, revealed: false, done: false });
+    setReviewIndex(practiceQueue[0]);
+  };
+
+  const exitPractice = () => {
+    setPractice(null);
+    setHintMove(null);
+    setSelected(-1); setTargets([]);
+  };
+
+  const practiceNext = () => {
+    const p = practice;
+    if (!p) return;
+    setHintMove(null);
+    const idx = p.idx + 1;
+    if (idx >= p.queue.length) { setPractice({ ...p, done: true, feedback: null }); return; }
+    setPractice({ ...p, idx, feedback: null, revealed: false });
+    setReviewIndex(p.queue[idx]);
+  };
+
+  const practiceReveal = () => {
+    const p = practice;
+    if (!p || p.done) return;
+    const best = gradeDetail?.bestSans?.[p.queue[p.idx]];
+    const mv = eng.legalMoves().find(x => { try { return eng.sanOf(x) === best; } catch { return false; } });
+    if (mv) setHintMove({ from: mFrom(mv), to: mTo(mv) });
+    setPractice({ ...p, revealed: true });
+  };
+
+  const practiceMove = (m) => {
+    const p = practice;
+    if (!p || p.done) return;
+    const ply = p.queue[p.idx];
+    const best = gradeDetail?.bestSans?.[ply];
+    let san = null;
+    try { san = eng.sanOf(m); } catch { /* stale */ }
+    if (san && best && san === best) {
+      analysisMove(m); // plays it on the board, with the usual move sfx
+      setHintMove(null);
+      const last = p.idx + 1 >= p.queue.length;
+      if (last) { try { audio.sfxWin(); } catch { /* audio unavailable */ } }
+      setPractice({ ...p, feedback: "correct", done: last });
+    } else {
+      try { audio.sfxWrong(); } catch { /* audio unavailable */ }
+      setSelected(-1); setTargets([]);
+      setPractice({ ...p, feedback: "wrong" });
+    }
   };
 
   /* Move-quality grading: only needs N+1 searches for an N-ply game, not
@@ -873,9 +956,16 @@ export default function ZlegendsBot() {
       setGradeProgress(k + 1);
     }
     const tempEng = createEngine();
+    /* Plies still inside known opening theory get tagged "book" instead
+       of an engine grade -- shallow probes "grading" memorized theory
+       was pure noise. Falls back to 0 (no book tags) if the ECO data
+       chunk hasn't streamed in yet. */
+    const theoryPlies = ecoData ? theoryPlyCount(list, ecoData) : 0;
     const grades = [];
+    const losses = [];
     for (let i = 0; i < list.length; i++) {
       const loss = Math.max(0, scores[i] + scores[i + 1]);
+      losses.push(loss);
       let tag = classifyLoss(loss);
       const legal = tempEng.legalMoves();
       const move = legal.find(m => tempEng.sanOf(m) === list[i]);
@@ -892,6 +982,10 @@ export default function ZlegendsBot() {
         }
         if (tag !== "brilliant" && bestSans[i] === list[i]) tag = "best";
       }
+      if (i < theoryPlies) tag = "book";
+      /* A bad move right after the opponent's own blunder is a "miss" --
+         the advantage they handed over slipped away unpunished. */
+      else if ((tag === "mistake" || tag === "blunder") && i > 0 && losses[i - 1] >= 150) tag = "miss";
       grades.push(tag);
     }
     /* The search has no move to return at a finished game's final
@@ -1142,7 +1236,7 @@ export default function ZlegendsBot() {
     setSelected(-1); setTargets([]); setHintMove(null);
     setLastMove(applied.length ? { from: mFrom(applied[applied.length - 1]), to: mTo(applied[applied.length - 1]) } : null);
     setMoveList(startMoves); setInfo(null); setResult(null); setPromo(null); setEvalCp(eng.evalWhite()); setReviewIndex(null);
-    setMoveGrades(null); setGradeDetail(null); setGrading(false); setGradeProgress(0);
+    setMoveGrades(null); setGradeDetail(null); setPractice(null); setGrading(false); setGradeProgress(0);
     setPastedGame(false);
     setMode("play");
     setSpectateOpen(false);
@@ -1272,21 +1366,27 @@ export default function ZlegendsBot() {
      value was added, so the existing onClick/onKeyDown callers that
      ignore it see no behavior change. */
   const onSquare = (i64) => {
-    if ((spectateMode && !(spectatePaused && analyzing)) || (mode === "replay" && !analyzing) || thinking || promo) return "blocked";
+    /* A live practice drill accepts moves exactly like analysis mode
+       does, but only while parked at the drill's own position with no
+       exploratory moves on top -- wander off with the stepper and the
+       board goes read-only again until Resume. */
+    const inPractice = !!practice && !practice.done && practice.feedback !== "correct"
+      && reviewIndex === practice.queue[practice.idx] && analysisExtra.length === 0;
+    if ((spectateMode && !(spectatePaused && analyzing)) || (mode === "replay" && !analyzing && !inPractice) || thinking || promo) return "blocked";
     const inQuiz = !!quizOpening;
     const inPuzzle = !!activePuzzle;
     if (inPuzzle && puzzleSolved) return "blocked";
     const legal = eng.legalMoves();
     const sq120 = M64TO120[i64];
-    const sideToMove = (analyzing || inQuiz) ? eng.getSide() : playerColor;
-    if (!analyzing && !inQuiz && (result || eng.getSide() !== playerColor)) return "blocked";
+    const sideToMove = (analyzing || inQuiz || inPractice) ? eng.getSide() : playerColor;
+    if (!analyzing && !inQuiz && !inPractice && (result || eng.getSide() !== playerColor)) return "blocked";
     if (inQuiz && result) return "blocked";
     if (selected >= 0) {
       const from120 = M64TO120[selected];
       const candidates = legal.filter(m => mFrom(m) === from120 && mTo(m) === sq120);
       if (candidates.length > 0) {
         if (candidates.length > 1) { setPromo({ from: from120, to: sq120, moves: candidates }); return "promo"; }
-        inPuzzle ? puzzleMove(candidates[0]) : inQuiz ? quizMove(candidates[0]) : (analyzing ? analysisMove(candidates[0]) : playMove(candidates[0]));
+        inPuzzle ? puzzleMove(candidates[0]) : inQuiz ? quizMove(candidates[0]) : inPractice ? practiceMove(candidates[0]) : (analyzing ? analysisMove(candidates[0]) : playMove(candidates[0]));
         return "moved";
       }
     }
@@ -1382,7 +1482,7 @@ export default function ZlegendsBot() {
     setPuzzleSolved(false);
     setSelected(-1); setTargets([]); setLastMove(null); setHintMove(null);
     setMoveList([]); setInfo(null); setResult(null); setPromo(null); setEvalCp(0); setReviewIndex(null);
-    setMoveGrades(null); setGradeDetail(null); setGrading(false); setGradeProgress(0);
+    setMoveGrades(null); setGradeDetail(null); setPractice(null); setGrading(false); setGradeProgress(0);
     setPastedGame(false);
     rerender();
     if (color === -1) setTimeout(() => engineMoveRef.current([]), 60);
@@ -1986,7 +2086,7 @@ export default function ZlegendsBot() {
     const last = applied[applied.length - 1];
     setLastMove({ from: mFrom(last), to: mTo(last) });
     setEvalCp(eng.evalWhite());
-    setMoveGrades(null); setGradeDetail(null); setGrading(false); setGradeProgress(0);
+    setMoveGrades(null); setGradeDetail(null); setPractice(null); setGrading(false); setGradeProgress(0);
     setResult(checkGameOver());
     setPastedGame(true);
     setMode("play");
@@ -2168,7 +2268,7 @@ export default function ZlegendsBot() {
     const whiteIsYou = ownGame && playerColor === 1;
     const blackIsYou = ownGame && playerColor === -1;
     const tally = (parity) => {
-      const counts = { brilliant: 0, best: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
+      const counts = { brilliant: 0, best: 0, book: 0, inaccuracy: 0, miss: 0, mistake: 0, blunder: 0 };
       moveGrades.forEach((g, i) => { if (g && i % 2 === parity) counts[g] += 1; });
       return counts;
     };
@@ -2265,6 +2365,14 @@ export default function ZlegendsBot() {
               </div>
             ))}
           </div>
+          {practiceQueue.length > 0 && !practice && (
+            <button
+              onClick={startPractice}
+              className="mt-3 w-full rounded-lg border border-[#F5D93E4D] bg-[#F5D93E14] px-3 py-2 text-xs font-bold text-[#F5D93E] transition-colors hover:border-[#F5D93E99] hover:bg-[#F5D93E24] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3EE7F5]"
+            >
+              🎯 Practice your mistakes ({practiceQueue.length})
+            </button>
+          )}
         </div>
       )}
       {info ? (
@@ -2501,7 +2609,7 @@ export default function ZlegendsBot() {
                         <button key={pp} onClick={() => {
                           const m = promo.moves.find(x => mPromo(x) === pp);
                           setPromo(null);
-                          if (m) (activePuzzle ? puzzleMove(m) : quizOpening ? quizMove(m) : analyzing ? analysisMove(m) : playMove(m));
+                          if (m) (activePuzzle ? puzzleMove(m) : quizOpening ? quizMove(m) : (practice && !practice.done) ? practiceMove(m) : analyzing ? analysisMove(m) : playMove(m));
                         }}>
                           <img className={"pc " + (eng.getSide() === 1 ? "w" : "b")} style={{ width: 44, height: 44 }} src={pieceImgSrc(pp, eng.getSide() === 1)} alt="" draggable="false" />
                         </button>
@@ -2599,7 +2707,7 @@ export default function ZlegendsBot() {
             /* Jump between the moves that decided the game instead of
                stepping through every quiet ply -- grades[i] belongs to
                reviewIndex i+1 (the position after that move played). */
-            const isKeyMoment = (g) => g === "mistake" || g === "blunder";
+            const isKeyMoment = (g) => g === "mistake" || g === "blunder" || g === "miss";
             const prevMistake = moveGrades ? (() => {
               for (let i = reviewIndex - 1; i >= 1; i--) if (isKeyMoment(moveGrades[i - 1])) return i;
               return null;
@@ -2663,20 +2771,63 @@ export default function ZlegendsBot() {
               </div>
             );
           })()}
-          {reviewing && moveGrades && reviewIndex >= 1 && (() => {
+          {practice && (() => {
+            /* Practice drill banner. States: finished the whole queue,
+               wandered off the drill position (stepper), solved this one,
+               or still trying. Kept under the stepper where the coaching
+               line normally lives -- which stays hidden during practice,
+               since it literally prints the answer. */
+            const btn = "rounded-lg border border-[#8B2FC966] bg-transparent px-2.5 py-1 text-[11px] font-bold text-[#CBBDF0] transition-colors hover:border-[#3EE7F566] hover:text-[#F4EFFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3EE7F5]";
+            const atDrill = reviewIndex === practice.queue[practice.idx];
+            const ply = practice.queue[practice.idx];
+            const sideName = ply % 2 === 0 ? "White" : "Black";
+            return (
+              <div className="reviewCtrls mt-1.5 flex flex-wrap items-center justify-center gap-2 rounded-xl border border-[#F5D93E4D] bg-[#1D1038CC] px-3 py-2 text-[12px] text-[#F4EFFF] backdrop-blur-sm" style={{ maxWidth: 420 }}>
+                {practice.done ? (
+                  <>
+                    <span>🎉 That's all {practice.queue.length} — nice work!</span>
+                    <button className={btn} onClick={exitPractice}>Done</button>
+                  </>
+                ) : practice.feedback === "correct" ? (
+                  <>
+                    <span className="font-bold text-[#6FCF97]">Correct!</span>
+                    <button className={btn} onClick={practiceNext}>Next puzzle →</button>
+                    <button className={btn} onClick={exitPractice}>Exit</button>
+                  </>
+                ) : !atDrill ? (
+                  <>
+                    <span className="text-[#9D8FC4]">Practice paused</span>
+                    <button className={btn} onClick={() => setReviewIndex(ply)}>Resume</button>
+                    <button className={btn} onClick={exitPractice}>Exit</button>
+                  </>
+                ) : (
+                  <>
+                    <span>
+                      <b className="text-[#F5D93E]">{practice.idx + 1}/{practice.queue.length}</b> · Find the better move for {sideName}
+                      {practice.feedback === "wrong" && <b className="text-[#F05348]"> — not quite, try again</b>}
+                    </span>
+                    {!practice.revealed && <button className={btn} onClick={practiceReveal}>Show answer</button>}
+                    <button className={btn} onClick={practiceNext}>Skip</button>
+                    <button className={btn} onClick={exitPractice}>Exit</button>
+                  </>
+                )}
+              </div>
+            );
+          })()}
+          {reviewing && moveGrades && reviewIndex >= 1 && !practice && (() => {
             /* "You played Qh5?, best was Nf3" -- the coaching line for the
                move currently on the board, straight from the bestSans the
                grading pass already computed. Only graded slips get it;
                clean moves need no second-guessing. */
             const g = moveGrades[reviewIndex - 1];
-            if (g !== "inaccuracy" && g !== "mistake" && g !== "blunder") return null;
+            if (g !== "inaccuracy" && g !== "mistake" && g !== "blunder" && g !== "miss") return null;
             const best = gradeDetail?.bestSans?.[reviewIndex - 1];
             const played = moveList[reviewIndex - 1];
             if (!best || best === played) return null;
             return (
               <div className="status analyzeHint" style={{ fontSize: 11, opacity: 0.9, textTransform: "none" }}>
                 <b style={{ color: GRADE_COLOR[g] }}>{played}{GRADE_TAG[g]}</b>
-                <span style={{ opacity: 0.8 }}> — best was </span>
+                <span style={{ opacity: 0.8 }}> — {g === "miss" ? "missed" : "best was"} </span>
                 <b style={{ color: "#6FCF97" }}>{best}</b>
               </div>
             );

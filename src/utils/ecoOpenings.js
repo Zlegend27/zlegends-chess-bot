@@ -11,6 +11,25 @@ export function loadEcoOpenings() {
   return dataPromise;
 }
 
+/* How many of the game's opening plies are known theory: the length of
+   the longest line whose moves the game followed exactly from move 1.
+   Used by move grading to tag those plies "book" instead of running
+   engine judgment on memorized theory (whose shallow-probe "grades"
+   were mostly noise anyway). */
+export function theoryPlyCount(moveList, data) {
+  let best = 0;
+  for (const op of data) {
+    const len = Math.min(moveList.length, op.moves.length);
+    if (len <= best) continue;
+    let matches = true;
+    for (let i = 0; i < len; i++) {
+      if (moveList[i] !== op.moves[i]) { matches = false; break; }
+    }
+    if (matches) best = len;
+  }
+  return best;
+}
+
 /* Longest common SAN-prefix match, same idea as the curated list's own
    detector -- once the game runs past a line's own moves it keeps
    naming that opening, since there's nothing deeper to compare against. */
