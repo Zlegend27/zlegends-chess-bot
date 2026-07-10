@@ -1,0 +1,85 @@
+/* Six tools shared between the desktop "Explore" dock and the mobile
+ *  bottom nav -- ONE list so they can't drift apart the way the v0
+ *  reference design's two components did (its ToolDock had all 6 tools
+ *  including Blind Chess, but its BottomNav only had 5 and silently
+ *  dropped Blind Chess; mobile is the primary surface here, so that's
+ *  the worse place to lose a whole game mode). */
+const TOOLS = [
+  { id: "music", label: "Music", icon: "M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z" },
+  { id: "openings", label: "Openings", icon: "M6 2a2 2 0 0 0-2 2v16l8-4 8 4V4a2 2 0 0 0-2-2H6z" },
+  { id: "puzzles", label: "Puzzles", icon: "M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5C13 2.12 11.88 1 10.5 1S8 2.12 8 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.49 0 2.7 1.21 2.7 2.7s-1.21 2.7-2.7 2.7H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.49 1.21-2.7 2.7-2.7s2.7 1.21 2.7 2.7V22H17c1.1 0 2-.9 2-2v-4h1.5c1.38 0 2.5-1.12 2.5-2.5S21.88 11 20.5 11z" },
+  { id: "spectate", label: "Spectate", icon: "M12 5c-5 0-9.27 3.11-11 7 1.73 3.89 6 7 11 7s9.27-3.11 11-7c-1.73-3.89-6-7-11-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" },
+  { id: "blind", label: "Blind Chess", icon: "M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z" },
+  { id: "settings", label: "Settings", icon: "M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.5.5 0 0 0-.59.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32c.14.24.42.32.66.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.24.1.51 0 .59-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" },
+];
+
+function Icon({ d, className }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d={d} />
+    </svg>
+  );
+}
+
+/** Desktop-only grid, sits in the right-hand panel column below the
+ *  scoresheet/analysis card. Hidden below the lg breakpoint -- BottomNav
+ *  covers mobile instead so the two never show at once. */
+export function ExploreDock({ onSelect, active }) {
+  return (
+    <section aria-label="More features" className="hidden lg:block">
+      <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-[#9D8FC4]">Explore</p>
+      <div className="grid grid-cols-3 gap-2">
+        {TOOLS.map((t) => {
+          const isActive = active === t.id;
+          return (
+            <button
+              key={t.id}
+              onClick={() => onSelect(t.id)}
+              aria-label={t.label}
+              className={`group flex flex-col items-center gap-2 rounded-xl border px-2 py-3 text-center backdrop-blur-sm transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3EE7F5] ${
+                isActive ? "border-[#3EE7F580] bg-[#1D1038E6]" : "border-[#8B2FC933] bg-[#1D1038CC] hover:border-[#3EE7F566]"
+              }`}
+            >
+              <span className={`flex size-8 items-center justify-center rounded-lg transition-colors ${isActive ? "bg-[#3EE7F52E] text-[#3EE7F5]" : "bg-[#8B2FC926] text-[#3EE7F5] group-hover:bg-[#3EE7F51F]"}`}>
+                <Icon d={t.icon} />
+              </span>
+              <span className="text-[11px] font-bold leading-tight text-[#F4EFFF]">{t.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/** Fixed bottom bar, mobile-only (hidden at the lg breakpoint where
+ *  ExploreDock takes over). All 6 tools, unlike the reference design's
+ *  version of this component. */
+export function BottomNav({ onSelect, active }) {
+  return (
+    <nav
+      aria-label="Main features"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-[#8B2FC940] bg-[#0E0620E6] backdrop-blur-md lg:hidden"
+      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+    >
+      <div className="flex h-16 items-center justify-around px-1">
+        {TOOLS.map((t) => {
+          const isActive = active === t.id;
+          return (
+            <button
+              key={t.id}
+              onClick={() => onSelect(t.id)}
+              aria-label={t.label}
+              className={`flex flex-1 flex-col items-center justify-center gap-0.5 rounded-lg border-0 bg-transparent py-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3EE7F5] ${
+                isActive ? "text-[#3EE7F5]" : "text-[#9D8FC4] hover:text-[#F4EFFF]"
+              }`}
+            >
+              <Icon d={t.icon} className={isActive ? "scale-110 transition-transform" : "transition-transform"} />
+              <span className="text-[10px] font-semibold tracking-wide">{t.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}

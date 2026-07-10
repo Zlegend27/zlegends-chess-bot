@@ -267,9 +267,13 @@ select:hover{ border-color:var(--cyan); }
   .statusRow{ order:4; }
   .replayCtrls, .reviewCtrls, .analyzeHint{ order:5; }
   .playCtrls, .puzzleCtrls{ order:6; }
-  .scoreBox{ order:7; }
-  .analysisBox{ order:8; }
-  .iconRow{ order:9; }
+  /* GamePanel (React) replaced the old separate .scoreBox/.analysisBox
+     divs with one component -- .gamePanelSlot is the wrapper div App.jsx
+     puts around it purely so this order rule still has something to
+     target. ExploreDock's own .iconRow-era order rule is gone too, but
+     that component is hidden entirely on mobile (BottomNav, fixed/out of
+     flow, covers this breakpoint instead), so it never needed one. */
+  .gamePanelSlot{ order:7; }
 }
 /* Desktop: the 440px cap above was sized for phones and left large windows
    mostly empty around a small board. Past the mobile breakpoint, let the

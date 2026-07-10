@@ -7,9 +7,11 @@ import { createAudio } from "./audio/chiptune";
 import { getSupabase } from "./utils/supabase";
 import { MP3_PLAYLISTS, THEME_ID, loadPlaylistTracks } from "./utils/musicLibrary";
 import PixelAvatar, { ZPAL, ZPIX, BPAL, BPIX, PPAL, PPIX } from "./components/PixelAvatar";
-import SocialLinks from "./components/SocialLinks";
 import StarField from "./components/StarField";
 import HomePage from "./components/HomePage";
+import SiteHeader from "./components/SiteHeader";
+import { ExploreDock, BottomNav } from "./components/ExploreNav";
+import GamePanel from "./components/GamePanel";
 import { loadSetting, saveSetting } from "./utils/storage";
 import { buildPgn, parsePgnMoves, replayForeignPgn } from "./utils/pgn";
 import { encodeGame, decodeGame, getSharedHash, replayIntoEngine } from "./utils/share";
@@ -410,6 +412,18 @@ export default function ZlegendsBot() {
   const openSettings = () => {
     setSettingsOpen(true);
     if (!ratingInfo) estimateRating().then(setRatingInfo);
+  };
+  /* Single dispatcher for ExploreDock (desktop)/BottomNav (mobile) --
+     both fire the exact same real openers the old iconRow buttons did
+     (ensurePuzzlesLoaded included), just funneled through one id-keyed
+     function instead of one-off onClick per icon. */
+  const onToolSelect = (id) => {
+    if (id === "music") setMusicOpen(true);
+    else if (id === "openings") setOpeningsOpen(true);
+    else if (id === "puzzles") { setPuzzlesOpen(true); ensurePuzzlesLoaded(); }
+    else if (id === "spectate") setSpectateOpen(true);
+    else if (id === "blind") setBlindOpen(true);
+    else if (id === "settings") openSettings();
   };
   const [displayName, setDisplayNameState] = useState(() => getDisplayName());
   const displayNameRef = useRef(displayName);
@@ -1836,6 +1850,71 @@ export default function ZlegendsBot() {
   const shownPly = reviewing ? reviewIndex : moveList.length;
   const curMoveIdx = shownPly - 1;
 
+  /* GamePanel's Analysis tab content -- unchanged logic from before the
+     Scoresheet/Bot Analysis boxes merged into one tabbed card, just
+     computed here instead of inline JSX so it can be handed to GamePanel
+     as a prop. Still five mutually-exclusive real states (puzzle/rush,
+     quiz, opening replay, normal bot analysis), nothing stubbed. */
+  const analysisLabel = activePuzzle ? (rushMode ? "Rush" : "Puzzle") : quizOpening ? "Quiz" : activeOpening ? "Opening" : "Analysis";
+  /* Shared by ExploreDock and BottomNav so the currently-open tool
+     highlights consistently on both. */
+  const activeToolId = musicOpen ? "music" : openingsOpen ? "openings" : puzzlesOpen ? "puzzles"
+    : spectateOpen ? "spectate" : blindOpen ? "blind" : settingsOpen ? "settings" : null;
+  const analysisContent = activePuzzle ? (
+    rushMode ? (
+      <>
+        <div className="boxHead">Puzzle Rush · {pz.RATING_BANDS[rushBandIdx]?.label || ""} · {formatClock(rushTimeLeft)} left</div>
+        <div className="pv">
+          {puzzleFeedback || `Solved ${rushSolved} · Misses ${rushMistakes}/3 · find the best move for ${eng.getSide() === 1 ? "White" : "Black"}.`}
+        </div>
+      </>
+    ) : (
+      <>
+        <div className="boxHead">Puzzle · rated {activePuzzle.rating}</div>
+        <div className="pv">
+          {puzzleSolved
+            ? "Solved! Nice work."
+            : puzzleFeedback || `Find the best move for ${eng.getSide() === 1 ? "White" : "Black"}.`}
+        </div>
+      </>
+    )
+  ) : quizOpening ? (
+    <>
+      <div className="boxHead">Quiz: {quizOpening.name}</div>
+      <div className="pv">
+        {quizFeedback || `Play ${eng.getSide() === 1 ? "White" : "Black"}'s move ${moveList.length + 1} of ${quizOpening.moves.length} from memory.`}
+      </div>
+    </>
+  ) : activeOpening ? (
+    <>
+      <div className="boxHead">{activeOpening.name} · {activeOpening.eco}</div>
+      <div className="pv">
+        {replayIndex === 0 ? activeOpening.summary : activeOpening.steps[replayIndex - 1]}
+      </div>
+    </>
+  ) : (
+    <>
+      <div className="boxHead">Bot Analysis</div>
+      {info ? (
+        info.book ? (
+          <div className="pv">Playing from the opening book.</div>
+        ) : (
+          <>
+            <div className="astats">
+              <div><b>{evalLabel}</b><span>eval</span></div>
+              <div><b>{info.depth}</b><span>depth</span></div>
+              <div><b>{(info.nodes / 1000).toFixed(0)}k</b><span>nodes</span></div>
+              <div><b>{(info.time / 1000).toFixed(1)}s</b><span>time</span></div>
+            </div>
+            {info.pv.length > 0 && <div className="pv">line: {info.pv.join(" ")}</div>}
+          </>
+        )
+      ) : (
+        <div className="pv">After each of its moves, the bot posts its eval, search depth, node count, and the line it expects.</div>
+      )}
+    </>
+  );
+
   const inChk = eng.inCheckNow() && !result;
   const replayLabel = activeOpening ? activeOpening.name : "Shared game";
   const status = spectateMode
@@ -1901,11 +1980,7 @@ export default function ZlegendsBot() {
   return (
     <div className={"root" + (hideEvalBar ? " noEval" : "")} style={{ "--boardLight": getBoardColor(boardColorId).light, "--boardDark": getBoardColor(boardColorId).dark }}>
       <StarField />
-      <div className="hdr">
-        <div className="eyebrow"><span className="live" />{"Zlegend27"}<SocialLinks /></div>
-        <h1>Zlegend's Chess Bot</h1>
-        <div className="sub">can you beat it??</div>
-      </div>
+      <SiteHeader onHome={() => setSiteView("home")} />
 
       <div className="layout">
         <div className="boardCol">
@@ -2082,97 +2157,15 @@ export default function ZlegendsBot() {
         </div>
 
         <div className="panel">
-          <div className="box scoreBox">
-            <div className="boxHead" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span>Scoresheet</span>
-              {moveList.length > 0 ? (
-                <button className="btn ghost" style={{ padding: "4px 8px", fontSize: 10 }} onClick={onCopyPgn}>Copy PGN</button>
-              ) : (
-                <button className="btn ghost" style={{ padding: "4px 8px", fontSize: 10 }} onClick={() => { setPasteOpen(true); setPasteError(null); }}>Paste PGN</button>
-              )}
-            </div>
-            <div className="rows">
-              {pairs.length === 0 && <div className="empty">{"No moves yet — white to play."}</div>}
-              {pairs.map(([w, b], i) => {
-                const wGrade = moveGrades && moveGrades[i * 2];
-                const bGrade = moveGrades && moveGrades[i * 2 + 1];
-                return (
-                  <div className="mrow" key={i}>
-                    <span className="num">{i + 1}.</span>
-                    <span
-                      className={curMoveIdx === i * 2 ? "cur" : ""}
-                      style={reviewing ? { cursor: "pointer" } : undefined}
-                      onClick={reviewing ? () => setReviewIndex(i * 2 + 1) : undefined}>
-                      {w}{wGrade && <span className={"moveGrade " + wGrade}>{GRADE_TAG[wGrade]}</span>}
-                    </span>
-                    <span
-                      className={curMoveIdx === i * 2 + 1 ? "cur" : ""}
-                      style={reviewing && b ? { cursor: "pointer" } : undefined}
-                      onClick={reviewing && b ? () => setReviewIndex(i * 2 + 2) : undefined}>
-                      {b || ""}{bGrade && <span className={"moveGrade " + bGrade}>{GRADE_TAG[bGrade]}</span>}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-            {pgnToast && <div className="toast">{pgnToast}</div>}
-          </div>
-
-          <div className="box analysisBox">
-            {activePuzzle ? (
-              rushMode ? (
-                <>
-                  <div className="boxHead">Puzzle Rush · {pz.RATING_BANDS[rushBandIdx]?.label || ""} · {formatClock(rushTimeLeft)} left</div>
-                  <div className="pv">
-                    {puzzleFeedback || `Solved ${rushSolved} · Misses ${rushMistakes}/3 · find the best move for ${eng.getSide() === 1 ? "White" : "Black"}.`}
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="boxHead">Puzzle · rated {activePuzzle.rating}</div>
-                  <div className="pv">
-                    {puzzleSolved
-                      ? "Solved! Nice work."
-                      : puzzleFeedback || `Find the best move for ${eng.getSide() === 1 ? "White" : "Black"}.`}
-                  </div>
-                </>
-              )
-            ) : quizOpening ? (
-              <>
-                <div className="boxHead">Quiz: {quizOpening.name}</div>
-                <div className="pv">
-                  {quizFeedback || `Play ${eng.getSide() === 1 ? "White" : "Black"}'s move ${moveList.length + 1} of ${quizOpening.moves.length} from memory.`}
-                </div>
-              </>
-            ) : activeOpening ? (
-              <>
-                <div className="boxHead">{activeOpening.name} · {activeOpening.eco}</div>
-                <div className="pv">
-                  {replayIndex === 0 ? activeOpening.summary : activeOpening.steps[replayIndex - 1]}
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="boxHead">Bot Analysis</div>
-                {info ? (
-                  info.book ? (
-                    <div className="pv">Playing from the opening book.</div>
-                  ) : (
-                    <>
-                      <div className="astats">
-                        <div><b>{evalLabel}</b><span>eval</span></div>
-                        <div><b>{info.depth}</b><span>depth</span></div>
-                        <div><b>{(info.nodes / 1000).toFixed(0)}k</b><span>nodes</span></div>
-                        <div><b>{(info.time / 1000).toFixed(1)}s</b><span>time</span></div>
-                      </div>
-                      {info.pv.length > 0 && <div className="pv">line: {info.pv.join(" ")}</div>}
-                    </>
-                  )
-                ) : (
-                  <div className="pv">After each of its moves, the bot posts its eval, search depth, node count, and the line it expects.</div>
-                )}
-              </>
-            )}
+          <div className="gamePanelSlot">
+            <GamePanel
+              pairs={pairs} moveGrades={moveGrades} curMoveIdx={curMoveIdx} reviewing={reviewing}
+              onReviewIndex={setReviewIndex} gradeTag={GRADE_TAG}
+              hasMoves={moveList.length > 0} onCopyPgn={onCopyPgn}
+              onPastePgn={() => { setPasteOpen(true); setPasteError(null); }}
+              pgnToast={pgnToast}
+              analysisContent={analysisContent} analysisLabel={analysisLabel}
+            />
           </div>
 
           {mode === "play" && !activePuzzle && !spectateMode && (
@@ -2230,40 +2223,18 @@ export default function ZlegendsBot() {
             </div>
           )}
 
-          <div className="ctrls iconRow">
-            <button className="btn ghost" style={{ display: "flex", alignItems: "center", padding: "10px 14px" }} onClick={() => setMusicOpen(true)} aria-label="Juice Box" title="Juice Box">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z" />
-              </svg>
-            </button>
-            <button className="btn ghost" style={{ display: "flex", alignItems: "center", gap: 6 }} onClick={() => setOpeningsOpen(true)}>
-              <PixelAvatar rows={BPIX} pal={BPAL} size={16} />
-              Openings
-            </button>
-            <button className="btn ghost" style={{ display: "flex", alignItems: "center", padding: "10px 14px" }}
-              onClick={() => { setPuzzlesOpen(true); ensurePuzzlesLoaded(); }}
-              onMouseEnter={ensurePuzzlesLoaded}
-              aria-label="Puzzles" title="Puzzles">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5C13 2.12 11.88 1 10.5 1S8 2.12 8 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.49 0 2.7 1.21 2.7 2.7s-1.21 2.7-2.7 2.7H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.49 1.21-2.7 2.7-2.7s2.7 1.21 2.7 2.7V22H17c1.1 0 2-.9 2-2v-4h1.5c1.38 0 2.5-1.12 2.5-2.5S21.88 11 20.5 11z" />
-              </svg>
-            </button>
-            <button className="btn ghost" style={{ display: "flex", alignItems: "center", padding: "10px 14px" }} onClick={() => setSpectateOpen(true)} aria-label="Spectate bots" title="Spectate bots">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M12 5c-5 0-9.27 3.11-11 7 1.73 3.89 6 7 11 7s9.27-3.11 11-7c-1.73-3.89-6-7-11-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
-              </svg>
-            </button>
-            <button className="btn ghost" style={{ display: "flex", alignItems: "center", padding: "10px 14px" }} onClick={() => setBlindOpen(true)} aria-label="Blind Chess" title="Blind Chess — play by voice">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z" />
-              </svg>
-            </button>
-            <button className="btn ghost" style={{ fontSize: 18, lineHeight: 1, padding: "10px 14px" }} onClick={openSettings} aria-label="Settings" title="Settings">
-              <span aria-hidden="true">⚙</span>
-            </button>
-          </div>
+          <ExploreDock onSelect={onToolSelect} active={activeToolId} />
         </div>
       </div>
+
+      {/* Fixed mobile nav, all 6 tools -- ExploreDock (above) covers the
+         same 6 for desktop (lg:hidden on this one, hidden lg:block on
+         that one, so exactly one shows at a time). Lives outside
+         .layout/.panel since position:fixed doesn't need their width
+         constraints; a spacer right below reserves its height so it
+         can't cover the last bit of page content on mobile. */}
+      <BottomNav onSelect={onToolSelect} active={activeToolId} />
+      <div className="h-16 lg:hidden" aria-hidden="true" />
 
       {blindOpen && (
         <Suspense fallback={null}>
