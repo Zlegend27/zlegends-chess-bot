@@ -296,6 +296,20 @@ select:hover{ border-color:var(--cyan); }
 .promoBox button{ font-size:32px; padding:4px 10px; background:transparent; border:none; cursor:pointer;
   border-radius:6px; transition:background .15s ease; }
 .promoBox button:hover{ background:#3EE7F522; }
+
+/* Every "View Leaderboard" trigger in the app uses this -- small and
+   plain rather than the loud uppercase-italic .btn treatment (or the
+   32px promo-picker button style above, which this needs to outrank),
+   since it's a secondary link to a whole separate page
+   (LeaderboardPage.jsx), not an in-place action. Promo-box parents are
+   flex-column with default align-items:stretch, so align-self:center is
+   what keeps it from filling the modal's width like the other buttons. */
+.leaderboardBtn, .promoBox .leaderboardBtn{ align-self:center; width:auto; margin-top:2px; padding:5px 14px;
+  font-family:inherit; font-style:normal; font-weight:700; font-size:11px;
+  text-transform:none; letter-spacing:normal; cursor:pointer;
+  background:transparent; border:1px solid #8B2FC966; border-radius:6px;
+  color:var(--liliac); box-shadow:none; transition:border-color .15s ease, color .15s ease, background .15s ease; }
+.leaderboardBtn:hover, .promoBox .leaderboardBtn:hover{ border-color:var(--cyan); color:var(--cyan); background:#3EE7F511; }
 .toast{ font-family:ui-monospace,Consolas,monospace; font-size:11px; color:var(--cyan); margin-top:6px; }
 .errBox{ min-height:100vh; min-height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center;
   gap:12px; background:var(--void,#0E0620); color:#F4EFFF; font-family:'Trebuchet MS','Segoe UI',system-ui,sans-serif;

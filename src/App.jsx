@@ -20,7 +20,9 @@ import { PIECE_SETS, getPieceSet } from "./utils/pieceSets";
 import { BOARD_COLORS, getBoardColor } from "./utils/boardColors";
 import { saveGame, estimateRating } from "./utils/gameHistory";
 import { getDisplayName, setDisplayName } from "./utils/playerIdentity";
-import { submitRushScore, fetchLeaderboard } from "./utils/leaderboard";
+import { submitRushScore } from "./utils/leaderboard";
+import { RUSH_DURATIONS } from "./utils/rushDurations";
+import LeaderboardPage from "./components/LeaderboardPage";
 import { syncRankBotToSupabase, fetchRankBotFromSupabase, logRankBotMove } from "./utils/rankBot";
 import { ENGINE_VERSION } from "./utils/version";
 import { OPENINGS } from "./utils/openings";
@@ -189,11 +191,6 @@ function pickTrackIndex(current, len, delta, shuffle) {
 const PTS = { 1: 1, 2: 3, 3: 3, 4: 5, 5: 9 };
 const GRADE_TAG = { brilliant: "!!", best: "!", inaccuracy: "?!", mistake: "?", blunder: "??" };
 const START_COUNT = { 1: 8, 2: 2, 3: 2, 4: 2, 5: 1 };
-const RUSH_DURATIONS = [
-  { seconds: 60, label: "1 Minute" },
-  { seconds: 180, label: "3 Minutes" },
-  { seconds: 300, label: "5 Minutes" },
-];
 const formatClock = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 /* Puzzle Rush difficulty ramp: climb one rating band every 3 solves in a
    row, drop back one band on a miss so a rough patch doesn't strand the
@@ -435,13 +432,13 @@ export default function ZlegendsBot() {
     setDisplayNameState(saved);
     setNameEditOpen(false);
   };
-  const [leaderboardOpen, setLeaderboardOpen] = useState(false);
+  /* Leaderboard lives on its own page (LeaderboardPage.jsx), not a modal
+     -- every "View Leaderboard" trigger should call this rather than
+     opening an overlay, now and for any future leaderboard entry point. */
   const [leaderboardDuration, setLeaderboardDuration] = useState(60);
-  const [leaderboardRows, setLeaderboardRows] = useState(null);
-  const loadLeaderboard = (duration) => {
+  const openLeaderboard = (duration) => {
     setLeaderboardDuration(duration);
-    setLeaderboardRows(null);
-    fetchLeaderboard(duration).then(setLeaderboardRows);
+    setSiteView("leaderboard");
   };
   /* One-time recalibration (v2): the original dial logic could only ever
      drift down -- its step-up bar sat under the probe searches' noise
@@ -521,6 +518,7 @@ export default function ZlegendsBot() {
   const [quizFeedback, setQuizFeedback] = useState(null);
   const [quizDoneToast, setQuizDoneToast] = useState(null);
   const [puzzlesOpen, setPuzzlesOpen] = useState(false);
+  const [rankedPuzzlesOpen, setRankedPuzzlesOpen] = useState(false);
   const [blindOpen, setBlindOpen] = useState(false);
   const [puzzlesData, setPuzzlesData] = useState(null);
   const puzzlesLoadingRef = useRef(false);
@@ -1399,9 +1397,9 @@ export default function ZlegendsBot() {
       else if (settingsOpen) setSettingsOpen(false);
       else if (nameEditOpen) setNameEditOpen(false);
       else if (shareLinkFallback) setShareLinkFallback(null);
-      else if (leaderboardOpen) setLeaderboardOpen(false);
       else if (rushMode && rushResult) exitRush();
       else if (rushOpen) { setRushOpen(false); setPuzzlesOpen(true); }
+      else if (rankedPuzzlesOpen) { setRankedPuzzlesOpen(false); setPuzzlesOpen(true); }
       else if (puzzlesOpen) setPuzzlesOpen(false);
       else if (openingsOpen) setOpeningsOpen(false);
       else if (musicOpen) setMusicOpen(false);
@@ -1411,7 +1409,7 @@ export default function ZlegendsBot() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pieceDesignsOpen, boardColorsOpen, settingsOpen, nameEditOpen, shareLinkFallback, leaderboardOpen, rushMode, rushResult, rushOpen, puzzlesOpen, openingsOpen, musicOpen, spectateOpen, pasteOpen]);
+  }, [pieceDesignsOpen, boardColorsOpen, settingsOpen, nameEditOpen, shareLinkFallback, rushMode, rushResult, rushOpen, rankedPuzzlesOpen, puzzlesOpen, openingsOpen, musicOpen, spectateOpen, pasteOpen]);
 
   /* Puzzle Rush countdown -- ticks once a second while a rush is live and
      hasn't already ended from 3 mistakes, pausing entirely once rushResult
@@ -2040,6 +2038,10 @@ export default function ZlegendsBot() {
     return <HomePage onEnter={enterMode} />;
   }
 
+  if (siteView === "leaderboard") {
+    return <LeaderboardPage initialDuration={leaderboardDuration} onBack={() => setSiteView("play")} />;
+  }
+
   return (
     <div className={"root" + (hideEvalBar ? " noEval" : "") + (boardColorId === "standard" ? " theme-standard" : "")} style={{ "--boardLight": getBoardColor(boardColorId).light, "--boardDark": getBoardColor(boardColorId).dark }}>
       <StarField />
@@ -2419,7 +2421,7 @@ export default function ZlegendsBot() {
             <button className="modalCloseX" onClick={() => setPuzzlesOpen(false)} aria-label="Close Puzzles" title="Close">✕</button>
             <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <PixelAvatar rows={PPIX} pal={PPAL} size={18} />
-              Puzzles — Pick a Rating
+              Puzzles
             </div>
             {!puzzlesData ? (
               <div className="pv" style={{ padding: "8px 2px" }}>Loading puzzles…</div>
@@ -2432,21 +2434,11 @@ export default function ZlegendsBot() {
                     {dailySolvedDate === todayKey() ? "Solved today ✓" : "One puzzle, same for everyone today"}
                   </div>
                 </div>
-                {pz.RATING_BANDS.map(band => {
-                  const pool = puzzlesInBand(band);
-                  return (
-                    <div key={band.id} style={{ cursor: pool.length ? "pointer" : "default", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E", opacity: pool.length ? 1 : 0.4 }}
-                      onClick={() => {
-                        if (!pool.length) return;
-                        setPuzzleBand(band);
-                        setPuzzlesOpen(false);
-                        startPuzzle(pool[(Math.random() * pool.length) | 0]);
-                      }}>
-                      <div style={{ fontWeight: 700 }}>{band.label} <span style={{ opacity: 0.6, fontWeight: "normal" }}>({band.min}–{band.max === 9999 ? "2000+" : band.max})</span></div>
-                      <div style={{ fontSize: 11, opacity: 0.75 }}>{pool.length} puzzle{pool.length === 1 ? "" : "s"}</div>
-                    </div>
-                  );
-                })}
+                <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E" }}
+                  onClick={() => { setPuzzlesOpen(false); setRankedPuzzlesOpen(true); }}>
+                  <div style={{ fontWeight: 700, color: "var(--liliac)" }}>🎯 Ranked Puzzles</div>
+                  <div style={{ fontSize: 11, opacity: 0.75 }}>Pick a rating band, Beginner to Expert</div>
+                </div>
                 <div style={{ cursor: "pointer", padding: "8px 2px" }}
                   onClick={() => { setPuzzlesOpen(false); setRushOpen(true); }}>
                   <div style={{ fontWeight: 700, color: "var(--yellow)" }}>⚡ Puzzle Rush</div>
@@ -2454,6 +2446,35 @@ export default function ZlegendsBot() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {rankedPuzzlesOpen && (
+        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) { setRankedPuzzlesOpen(false); setPuzzlesOpen(true); } }}>
+          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
+            <button className="modalCloseX" onClick={() => { setRankedPuzzlesOpen(false); setPuzzlesOpen(true); }} aria-label="Close Ranked Puzzles" title="Close">✕</button>
+            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <PixelAvatar rows={PPIX} pal={PPAL} size={18} />
+              Ranked Puzzles — Pick a Rating
+            </div>
+            <div className="rows" style={{ maxHeight: "none" }}>
+              {pz.RATING_BANDS.map(band => {
+                const pool = puzzlesInBand(band);
+                return (
+                  <div key={band.id} style={{ cursor: pool.length ? "pointer" : "default", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E", opacity: pool.length ? 1 : 0.4 }}
+                    onClick={() => {
+                      if (!pool.length) return;
+                      setPuzzleBand(band);
+                      setRankedPuzzlesOpen(false);
+                      startPuzzle(pool[(Math.random() * pool.length) | 0]);
+                    }}>
+                    <div style={{ fontWeight: 700 }}>{band.label} <span style={{ opacity: 0.6, fontWeight: "normal" }}>({band.min}–{band.max === 9999 ? "2000+" : band.max})</span></div>
+                    <div style={{ fontSize: 11, opacity: 0.75 }}>{pool.length} puzzle{pool.length === 1 ? "" : "s"}</div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
@@ -2481,7 +2502,7 @@ export default function ZlegendsBot() {
               <span>Lifetime solved: <b>{rushLifetime}</b></span>
               <button className="btn ghost" style={{ padding: "4px 10px", fontSize: 10 }} onClick={resetRushCounter}>Reset</button>
             </div>
-            <button className="btn ghost" onClick={() => { setRushOpen(false); setLeaderboardOpen(true); loadLeaderboard(rushDuration); }}>🏆 Leaderboard</button>
+            <button className="leaderboardBtn" onClick={() => openLeaderboard(rushDuration)}>🏆 View Leaderboard</button>
           </div>
         </div>
       )}
@@ -2512,38 +2533,7 @@ export default function ZlegendsBot() {
               </div>
             )}
             <button className="btn gold" onClick={retryRush}>Try Again</button>
-            <button className="btn ghost" onClick={() => { setLeaderboardOpen(true); loadLeaderboard(rushDuration); }}>🏆 Leaderboard</button>
-          </div>
-        </div>
-      )}
-
-      {leaderboardOpen && (
-        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 51 }} onClick={e => { if (e.target === e.currentTarget) setLeaderboardOpen(false); }}>
-          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
-            <button className="modalCloseX" onClick={() => setLeaderboardOpen(false)} aria-label="Close Leaderboard" title="Close">✕</button>
-            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              🏆 Puzzle Rush Leaderboard
-            </div>
-            <div className="ctrls">
-              {RUSH_DURATIONS.map(d => (
-                <button key={d.seconds} className={"btn" + (leaderboardDuration === d.seconds ? "" : " ghost")}
-                  onClick={() => loadLeaderboard(d.seconds)}>{d.label}</button>
-              ))}
-            </div>
-            <div className="rows" style={{ maxHeight: 280 }}>
-              {leaderboardRows === null ? (
-                <div className="pv" style={{ padding: "8px 2px" }}>Loading…</div>
-              ) : leaderboardRows.length === 0 ? (
-                <div className="pv" style={{ padding: "8px 2px" }}>No scores yet for this duration — be the first!</div>
-              ) : (
-                leaderboardRows.map((row, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "6px 2px", borderBottom: "1px solid #8B2FC92E" }}>
-                    <span>#{i + 1} {row.display_name || "Anonymous"}</span>
-                    <b>{row.solved}</b>
-                  </div>
-                ))
-              )}
-            </div>
+            <button className="leaderboardBtn" onClick={() => openLeaderboard(rushDuration)}>🏆 View Leaderboard</button>
           </div>
         </div>
       )}
