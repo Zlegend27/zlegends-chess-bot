@@ -64,6 +64,30 @@ export const BPIX = [
   "oooooo.oooooo",
 ];
 
+/* ---------------- pixel ship icon (Home nav button) ----------------
+ * Stylized pixel-art take on the "Zlegend's Retrograde" ship art --
+ * gradient hull (blue nose -> violet -> magenta tail), a pink ring
+ * crossing the middle, a small teal planet by the nose, and a dark
+ * cockpit-window strip. Same rows/palette convention as ZPIX above. */
+export const SPAL = {
+  n: "#150C24", l: "#8FD9E8", b: "#8B93E8", v: "#6B4FC9", m: "#B06FE0",
+  r: "#FF6FD8", t: "#7FE8C8", d: "#2E8F73", k: "#1B1030", c: "#9CF0FF",
+};
+export const SPIX = [
+  ".................ntt",
+  "...............nlldt",
+  "............nlllllln",
+  ".........nbbbbbbbbn",
+  "......nbbbbbbbrbbbn",
+  "....nvvvvvvrvvvvvn",
+  "...nvvvvvrvvvvvvn",
+  "..nvvvkckcvvvvvn",
+  "..nvvvckckvvvvn",
+  ".nmmrmmmmmmmmn",
+  ".nmmmmmmmmmmn",
+  "..nmnmnmmmn",
+];
+
 /* ---------------- pixel star icon (Puzzles button) ---------------- */
 export const PPAL = { o: "#F5D93E" };
 export const PPIX = [
@@ -80,7 +104,7 @@ export const PPIX = [
   ".....o.....",
 ];
 
-export default function PixelAvatar({ rows, pal, size }) {
+export default function PixelAvatar({ rows, pal, size, className }) {
   const rects = [];
   let cols = 0;
   rows.forEach((row, y) => {
@@ -91,7 +115,7 @@ export default function PixelAvatar({ rows, pal, size }) {
     }
   });
   return (
-    <svg viewBox={`0 0 ${cols} ${rows.length}`} width={size} height={size} style={{ imageRendering: "pixelated", shapeRendering: "crispEdges" }}>
+    <svg viewBox={`0 0 ${cols} ${rows.length}`} width={size} height={size} className={className} style={{ imageRendering: "pixelated", shapeRendering: "crispEdges" }} aria-hidden="true">
       {rects}
     </svg>
   );

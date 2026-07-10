@@ -1,3 +1,5 @@
+import PixelAvatar, { SPAL, SPIX } from "./PixelAvatar";
+
 /* Four tools shared between the desktop "Explore" dock and the mobile
  *  bottom nav -- ONE list so they can't drift apart the way the v0
  *  reference design's two components did (its ToolDock had 6 tools but
@@ -8,9 +10,10 @@
  *  just Home (back to that grid), Login (placeholder, no auth wired up
  *  yet), Music, and Settings.
  *
- *  "home" uses a bespoke ShipIcon (see below) rather than a plain path,
- *  modeled on the "Zlegend's Retrograde" ship artwork -- gradient hull,
- *  pink halo ring, dark cockpit strip. */
+ *  "home" uses the SPIX pixel-art ship sprite (see PixelAvatar.jsx)
+ *  instead of a plain path -- same pixel-grid convention as the
+ *  Zlegend2700 bot avatar, so it actually looks like the ship art
+ *  rather than a smooth vector approximation. */
 const TOOLS = [
   { id: "home", label: "Home" },
   { id: "login", label: "Login", icon: "M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5z" },
@@ -26,41 +29,9 @@ function Icon({ d, size = 18, className }) {
   );
 }
 
-/** Stand-in for the "Zlegend's Retrograde" ship artwork -- a delta hull in
- *  the same pastel purple-to-mint gradient, a pink halo ring swept across
- *  it, and a dark cockpit-window strip near the nose. Rendered much larger
- *  than the other nav icons since it's the one with real "art" to show
- *  off, not just a glyph. */
-function ShipIcon({ size = 34, className }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" className={className} aria-hidden="true">
-      <defs>
-        <linearGradient id="shipHullGrad" x1="2" y1="19" x2="22" y2="2" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="#8B6FE0" />
-          <stop offset="0.55" stopColor="#5AC8E8" />
-          <stop offset="1" stopColor="#9FF0C8" />
-        </linearGradient>
-      </defs>
-      <path
-        d="M2 18 L13 5 L22 2 L16 10.5 Q12.5 15 7.5 16.5 Z"
-        fill="url(#shipHullGrad)"
-        stroke="#150C24"
-        strokeWidth="0.7"
-        strokeLinejoin="round"
-      />
-      <ellipse
-        cx="11.5" cy="10" rx="7.6" ry="2.1"
-        fill="none" stroke="#F272D9" strokeWidth="1.1"
-        transform="rotate(-24 11.5 10)"
-      />
-      <rect x="5.2" y="12.6" width="3.4" height="1.5" rx="0.3" fill="#150C24" transform="rotate(-24 6.9 13.35)" />
-    </svg>
-  );
-}
-
 function toolIcon(t, { size, className } = {}) {
   return t.id === "home"
-    ? <ShipIcon size={size ?? 34} className={className} />
+    ? <PixelAvatar rows={SPIX} pal={SPAL} size={size ?? 34} className={className} />
     : <Icon d={t.icon} size={size ?? 18} className={className} />;
 }
 
