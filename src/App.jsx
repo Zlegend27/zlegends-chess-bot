@@ -225,7 +225,61 @@ function pickTrackIndex(current, len, delta, shuffle) {
 }
 const PTS = { 1: 1, 2: 3, 3: 3, 4: 5, 5: 9 };
 const GRADE_TAG = { brilliant: "!!", best: "!", inaccuracy: "?!", mistake: "?", blunder: "??" };
+const GRADE_COLOR = { brilliant: "#3EE7F5", best: "#6FCF97", inaccuracy: "#F5D93E", mistake: "#F0A548", blunder: "#F05348" };
 const START_COUNT = { 1: 8, 2: 2, 3: 2, 4: 2, 5: 1 };
+
+/* Lichess's published move-accuracy curve: convert the eval to a win
+   percentage before and after each move, and score how much winning
+   chance the move burned. Using win% rather than raw centipawns is what
+   keeps accuracy fair across positions -- dropping 100cp in a dead-even
+   game matters, dropping it while up a queen doesn't. */
+const winPctOf = (cp) => 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * cp)) - 1);
+const moveAccuracy = (wpBefore, wpAfter) => {
+  const drop = Math.max(0, wpBefore - wpAfter);
+  return Math.max(0, Math.min(100, 103.1668 * Math.exp(-0.04354 * drop) - 3.1669));
+};
+
+/* Clickable eval graph for the post-game report -- the same "story of
+   the game" area chart chess.com/lichess center their review on. scores
+   come straight from gradeMoves (side-to-move perspective, one per ply
+   plus the final position); the light region is White's share of the
+   game, squashed with the same atan the eval bar next to the board
+   uses. Tap or drag anywhere to jump the review to that ply. */
+function EvalGraph({ scores, grades, current, onSeek }) {
+  const n = scores.length - 1;
+  if (n < 1) return null;
+  const W = 100, H = 34;
+  const whiteCp = (k) => (k % 2 === 0 ? scores[k] : -scores[k]);
+  const y = (k) => (1 - Math.atan(whiteCp(k) / 300) / (Math.PI / 2)) * (H / 2);
+  const x = (k) => (k / n) * W;
+  let line = `M${x(0)},${y(0)}`;
+  for (let k = 1; k <= n; k++) line += ` L${x(k)},${y(k)}`;
+  const seek = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const frac = (e.clientX - rect.left) / rect.width;
+    onSeek(Math.max(0, Math.min(n, Math.round(frac * n))));
+  };
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
+      className="block h-16 w-full cursor-pointer rounded-lg"
+      style={{ background: "#150C24", touchAction: "none" }}
+      onPointerDown={seek}
+      onPointerMove={(e) => { if (e.buttons === 1) seek(e); }}
+      role="slider" aria-label="Game evaluation graph" aria-valuemin={0} aria-valuemax={n} aria-valuenow={current}
+    >
+      <path d={`${line} L${W},${H} L0,${H} Z`} fill="#E9E4F5" fillOpacity="0.85" />
+      <line x1="0" y1={H / 2} x2={W} y2={H / 2} stroke="#8B2FC9" strokeOpacity="0.5" strokeWidth="0.4" strokeDasharray="1.6 1.6" />
+      <path d={line} fill="none" stroke="#3EE7F5" strokeOpacity="0.9" strokeWidth="0.6" />
+      {grades && grades.map((g, i) => (
+        (g === "mistake" || g === "blunder") ? (
+          <circle key={i} cx={x(i + 1)} cy={y(i + 1)} r="1.6" fill={GRADE_COLOR[g]} stroke="#150C24" strokeWidth="0.5" />
+        ) : null
+      ))}
+      <line x1={x(current)} y1="0" x2={x(current)} y2={H} stroke="#F5D93E" strokeWidth="0.6" strokeOpacity="0.9" />
+    </svg>
+  );
+}
 const formatClock = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 /* Puzzle Rush difficulty ramp: climb one rating band every 3 solves in a
    row, drop back one band on a miss so a rough patch doesn't strand the
@@ -424,6 +478,11 @@ export default function ZlegendsBot() {
   const [reviewIndex, setReviewIndex] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [moveGrades, setMoveGrades] = useState(null);
+  /* Everything else gradeMoves computes along the way, kept instead of
+     discarded: per-ply eval scores (side-to-move perspective, length
+     N+1) drive the eval graph + accuracy numbers, bestSans powers the
+     "best was X" coaching line on graded mistakes. */
+  const [gradeDetail, setGradeDetail] = useState(null);
   const [grading, setGrading] = useState(false);
   const [gradeProgress, setGradeProgress] = useState(0);
   const [pastedGame, setPastedGame] = useState(false);
@@ -849,6 +908,7 @@ export default function ZlegendsBot() {
       grades[grades.length - 1] = "best";
     }
     setMoveGrades(grades);
+    setGradeDetail({ scores, bestSans });
     setGrading(false);
   };
 
@@ -1082,7 +1142,7 @@ export default function ZlegendsBot() {
     setSelected(-1); setTargets([]); setHintMove(null);
     setLastMove(applied.length ? { from: mFrom(applied[applied.length - 1]), to: mTo(applied[applied.length - 1]) } : null);
     setMoveList(startMoves); setInfo(null); setResult(null); setPromo(null); setEvalCp(eng.evalWhite()); setReviewIndex(null);
-    setMoveGrades(null); setGrading(false); setGradeProgress(0);
+    setMoveGrades(null); setGradeDetail(null); setGrading(false); setGradeProgress(0);
     setPastedGame(false);
     setMode("play");
     setSpectateOpen(false);
@@ -1322,7 +1382,7 @@ export default function ZlegendsBot() {
     setPuzzleSolved(false);
     setSelected(-1); setTargets([]); setLastMove(null); setHintMove(null);
     setMoveList([]); setInfo(null); setResult(null); setPromo(null); setEvalCp(0); setReviewIndex(null);
-    setMoveGrades(null); setGrading(false); setGradeProgress(0);
+    setMoveGrades(null); setGradeDetail(null); setGrading(false); setGradeProgress(0);
     setPastedGame(false);
     rerender();
     if (color === -1) setTimeout(() => engineMoveRef.current([]), 60);
@@ -1926,7 +1986,7 @@ export default function ZlegendsBot() {
     const last = applied[applied.length - 1];
     setLastMove({ from: mFrom(last), to: mTo(last) });
     setEvalCp(eng.evalWhite());
-    setMoveGrades(null); setGrading(false); setGradeProgress(0);
+    setMoveGrades(null); setGradeDetail(null); setGrading(false); setGradeProgress(0);
     setResult(checkGameOver());
     setPastedGame(true);
     setMode("play");
@@ -2101,7 +2161,6 @@ export default function ZlegendsBot() {
      each side's brilliants/mistakes/etc so the player gets a chess.com-
      style game summary instead of having to scroll the scoresheet
      counting ?? marks by hand. White's moves are the even plies. */
-  const GRADE_COLOR = { brilliant: "#3EE7F5", best: "#6FCF97", inaccuracy: "#F5D93E", mistake: "#F0A548", blunder: "#F05348" };
   const gradeReport = (reviewing && moveGrades) ? (() => {
     /* Pasted/shared games are someone else's moves -- plain White/Black
        there, You/Bot only for games actually played here. */
@@ -2113,10 +2172,27 @@ export default function ZlegendsBot() {
       moveGrades.forEach((g, i) => { if (g && i % 2 === parity) counts[g] += 1; });
       return counts;
     };
+    /* Accuracy + performance rating per side, from the same per-ply
+       scores the graph plots. Accuracy is the lichess win%-drop curve
+       (see moveAccuracy); performance reuses Rank Bot's loss->implied-
+       Elo mapping, averaged over the side's moves and rounded to 50. */
+    const sideStats = (parity) => {
+      if (!gradeDetail) return null;
+      const s = gradeDetail.scores;
+      const accs = [], perfs = [];
+      for (let i = parity; i + 1 < s.length; i += 2) {
+        if (Math.abs(s[i]) > MATE - 2000 || Math.abs(s[i + 1]) > MATE - 2000) continue;
+        accs.push(moveAccuracy(winPctOf(s[i]), winPctOf(-s[i + 1])));
+        perfs.push(rankBotLossToPerf(Math.max(0, s[i] + s[i + 1])));
+      }
+      if (!accs.length) return null;
+      const mean = (a) => a.reduce((x, v) => x + v, 0) / a.length;
+      return { acc: Math.round(mean(accs)), perf: Math.round(mean(perfs) / 50) * 50 };
+    };
     return {
       cols: [
-        { label: whiteIsYou ? "You" : blackIsYou ? "Bot" : "White", counts: tally(0) },
-        { label: blackIsYou ? "You" : whiteIsYou ? "Bot" : "Black", counts: tally(1) },
+        { label: whiteIsYou ? "You" : blackIsYou ? "Bot" : "White", counts: tally(0), stats: sideStats(0) },
+        { label: blackIsYou ? "You" : whiteIsYou ? "Bot" : "Black", counts: tally(1), stats: sideStats(1) },
       ],
     };
   })() : null;
@@ -2156,6 +2232,22 @@ export default function ZlegendsBot() {
       {gradeReport && !grading && (
         <div className="rounded-xl border border-[#8B2FC93D] bg-[#150C2466] p-3">
           <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#9D8FC4]">Game report</div>
+          {gradeReport.cols.some(c => c.stats) && (
+            <div className="mb-2.5 grid grid-cols-2 gap-2">
+              {gradeReport.cols.map((col) => (
+                <div key={col.label} className="rounded-lg bg-[#1D1038CC] px-2.5 py-2 text-center">
+                  <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#9D8FC4]">{col.label}</div>
+                  <div className="mt-0.5 text-xl font-bold leading-none text-[#3EE7F5]">{col.stats ? `${col.stats.acc}%` : "—"}</div>
+                  <div className="mt-1 text-[10px] text-[#9D8FC4]">{col.stats ? `~${col.stats.perf} rated play` : "accuracy"}</div>
+                </div>
+              ))}
+            </div>
+          )}
+          {gradeDetail && (
+            <div className="mb-2.5">
+              <EvalGraph scores={gradeDetail.scores} grades={moveGrades} current={reviewIndex} onSeek={setReviewIndex} />
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             {gradeReport.cols.map((col) => (
               <div key={col.label}>
@@ -2504,6 +2596,23 @@ export default function ZlegendsBot() {
                this build; without one they render native gray). */
             const stepBtn = "flex h-9 w-9 items-center justify-center bg-transparent text-[#CBBDF0] transition-colors hover:text-[#F4EFFF] disabled:opacity-30 disabled:hover:text-[#CBBDF0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3EE7F5]";
             const chev = (d) => <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={d} /></svg>;
+            /* Jump between the moves that decided the game instead of
+               stepping through every quiet ply -- grades[i] belongs to
+               reviewIndex i+1 (the position after that move played). */
+            const isKeyMoment = (g) => g === "mistake" || g === "blunder";
+            const prevMistake = moveGrades ? (() => {
+              for (let i = reviewIndex - 1; i >= 1; i--) if (isKeyMoment(moveGrades[i - 1])) return i;
+              return null;
+            })() : null;
+            const nextMistake = moveGrades ? (() => {
+              for (let i = reviewIndex + 1; i <= moveList.length; i++) if (isKeyMoment(moveGrades[i - 1])) return i;
+              return null;
+            })() : null;
+            const bang = (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M11 4h2v11h-2zM11 17.5h2v2.5h-2z" />
+              </svg>
+            );
             return (
               <div className="reviewCtrls mt-1 flex items-center justify-center gap-2">
                 <div className="flex items-center overflow-hidden rounded-xl border border-[#8B2FC966] bg-[#1D1038CC] backdrop-blur-sm">
@@ -2522,6 +2631,21 @@ export default function ZlegendsBot() {
                   <button className={stepBtn} onClick={() => setReviewIndex(moveList.length)} disabled={reviewIndex === moveList.length} aria-label="Last move">
                     {chev("M16 6h2v12h-2zM6 18l8.5-6L6 6z")}
                   </button>
+                  {moveGrades && (
+                    <>
+                      <span className="h-5 w-px bg-[#8B2FC966]" aria-hidden="true" />
+                      <button className={stepBtn.replace("w-9 ", "px-1 ") + " -space-x-1 text-[#F05348] hover:text-[#FF7B6E] disabled:hover:text-[#F05348]"}
+                        onClick={() => setReviewIndex(prevMistake)} disabled={prevMistake == null}
+                        aria-label="Previous mistake" title="Previous mistake">
+                        {chev("M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z")}{bang}
+                      </button>
+                      <button className={stepBtn.replace("w-9 ", "px-1 ") + " -space-x-1 text-[#F05348] hover:text-[#FF7B6E] disabled:hover:text-[#F05348]"}
+                        onClick={() => setReviewIndex(nextMistake)} disabled={nextMistake == null}
+                        aria-label="Next mistake" title="Next mistake">
+                        {bang}{chev("M8.59 16.59 10 18l6-6-6-6-1.41 1.41L13.17 12z")}
+                      </button>
+                    </>
+                  )}
                 </div>
                 <button
                   onClick={toggleAnalyze}
@@ -2536,6 +2660,24 @@ export default function ZlegendsBot() {
                   </svg>
                   {analyzing ? (grading ? `Grading ${gradeProgress}/${moveList.length}` : "Analyzing") : "Analyze"}
                 </button>
+              </div>
+            );
+          })()}
+          {reviewing && moveGrades && reviewIndex >= 1 && (() => {
+            /* "You played Qh5?, best was Nf3" -- the coaching line for the
+               move currently on the board, straight from the bestSans the
+               grading pass already computed. Only graded slips get it;
+               clean moves need no second-guessing. */
+            const g = moveGrades[reviewIndex - 1];
+            if (g !== "inaccuracy" && g !== "mistake" && g !== "blunder") return null;
+            const best = gradeDetail?.bestSans?.[reviewIndex - 1];
+            const played = moveList[reviewIndex - 1];
+            if (!best || best === played) return null;
+            return (
+              <div className="status analyzeHint" style={{ fontSize: 11, opacity: 0.9, textTransform: "none" }}>
+                <b style={{ color: GRADE_COLOR[g] }}>{played}{GRADE_TAG[g]}</b>
+                <span style={{ opacity: 0.8 }}> — best was </span>
+                <b style={{ color: "#6FCF97" }}>{best}</b>
               </div>
             );
           })()}
