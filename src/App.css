@@ -112,6 +112,11 @@
   flex:none; min-width:64px; text-align:center; }
 .rushClock.low{ color:#FF4C5B; text-shadow:0 0 12px #FF4C5B88; animation:rushClockPulse 1s ease-in-out infinite; }
 @keyframes rushClockPulse{ 0%,100%{ opacity:1; } 50%{ opacity:.5; } }
+/* Blind Chess's lazy-load Suspense fallback -- an indeterminate bar
+   sliding back and forth, since there's no real progress percentage to
+   report (dynamic import()). */
+.loadingBarFill{ animation:loadingBarSlide 1.1s ease-in-out infinite; }
+@keyframes loadingBarSlide{ 0%{ transform:translateX(-100%); } 100%{ transform:translateX(166%); } }
 .rushHudBody{ flex:1; min-width:0; display:flex; flex-direction:column; gap:5px; }
 .rushHudTop{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
 .rushHudBand{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--yellow); }
@@ -430,7 +435,7 @@ select:hover{ border-color:var(--cyan); }
    modal entrances. One-shot functional transitions (button presses)
    are quick enough to keep. */
 @media (prefers-reduced-motion: reduce){
-  .star, .eyebrow .live, .bang, .sq.botLast::before{ animation:none; }
+  .star, .eyebrow .live, .bang, .sq.botLast::before, .loadingBarFill{ animation:none; }
   .promoOv, .promoBox{ animation:none; }
   .evalbar .pfill{ transition:none; }
 }

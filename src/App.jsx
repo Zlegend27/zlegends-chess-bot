@@ -2997,7 +2997,16 @@ export default function ZlegendsBot() {
       <SocialBanner />
 
       {blindOpen && (
-        <Suspense fallback={null}>
+        <Suspense fallback={
+          <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }}>
+            <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }} role="status" aria-label="Loading Blind Chess">
+              <div className="boxHead">Blind Chess</div>
+              <div style={{ height: 10, borderRadius: 999, overflow: "hidden", background: "#150C24" }}>
+                <div className="loadingBarFill" style={{ width: "60%", height: "100%", borderRadius: 999, background: "var(--cyan)" }} />
+              </div>
+            </div>
+          </div>
+        }>
           <BlindMode onClose={() => setBlindOpen(false)} />
         </Suspense>
       )}
