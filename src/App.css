@@ -53,7 +53,7 @@
    up with the board's left edge rather than the evalbar's — otherwise the
    board reads as shifted right relative to the cards above/below it. */
 .card{ display:flex; align-items:center; gap:10px; background:#1D1038CC;
-  border:1px solid #8B2FC966; border-radius:10px; padding:8px 12px 8px 24px;
+  border:1px solid #8B2FC966; border-radius:12px; padding:8px 12px 8px 24px;
   box-shadow:0 0 18px #8B2FC922, inset 0 0 22px #8B2FC91A; width:calc(min(88vw,440px) + 24px); box-sizing:border-box; }
 .card.turnGlow{ border-color:var(--cyan); box-shadow:0 0 18px #3EE7F544, inset 0 0 22px #3EE7F51A; }
 .avatarBox{ background:#120A26; border-radius:8px; padding:4px; border:1px solid #ffffff18; flex:none; }
@@ -196,7 +196,7 @@
   border:2px solid var(--yellow); border-radius:12px; padding:2px 10px; font-size:12px;
   letter-spacing:.06em; text-transform:uppercase; }
 .panel{ width:min(88vw,300px); display:flex; flex-direction:column; gap:12px; }
-.box{ background:#1D1038CC; border:1px solid #8B2FC966; border-radius:10px; padding:12px 14px;
+.box{ background:#1D1038CC; border:1px solid #8B2FC966; border-radius:12px; padding:12px 14px;
   box-shadow:0 0 18px #8B2FC922; }
 .boxHead{ font-size:11px; font-weight:700; letter-spacing:.26em; text-transform:uppercase;
   color:var(--cyan); text-shadow:0 0 8px #3EE7F566; margin-bottom:8px; }
@@ -318,7 +318,7 @@ select:hover{ border-color:var(--cyan); }
 .promoOv{ position:absolute; inset:0; background:#0E0620CC; display:flex; align-items:center;
   justify-content:center; z-index:10; border-radius:4px; animation:ovFade .15s ease-out; }
 @keyframes ovFade{ from{ opacity:0; } to{ opacity:1; } }
-.promoBox{ background:var(--panel); border:1px solid var(--cyan); border-radius:10px; padding:10px;
+.promoBox{ background:var(--panel); border:1px solid var(--cyan); border-radius:12px; padding:10px;
   display:flex; gap:6px; box-shadow:0 0 30px #3EE7F566; position:relative;
   animation:boxPop .18s cubic-bezier(.34,1.4,.64,1); }
 @keyframes boxPop{ from{ opacity:0; transform:scale(.94) translateY(6px); } to{ opacity:1; transform:none; } }

@@ -1722,6 +1722,18 @@ export default function ZlegendsBot() {
   }, []);
   useEffect(() => {
     const box = document.querySelector(".promoOv .promoBox");
+    if (box) {
+      /* role/aria-modal/aria-label set programmatically here rather than
+         in each of the ~15 individual modal blocks -- same generic
+         approach as the trap/lock above. aria-label reuses whatever
+         heading text the modal already renders (.boxHead, or the plain
+         "Your Name" style header some modals use) so no modal needs an
+         id wired up for aria-labelledby. */
+      box.setAttribute("role", "dialog");
+      box.setAttribute("aria-modal", "true");
+      const heading = box.querySelector(".boxHead, h1, h2, h3");
+      if (heading) box.setAttribute("aria-label", heading.textContent.trim());
+    }
     if (box && !modalOpenRef.current) {
       modalOpenRef.current = true;
       modalPrevFocusRef.current = document.activeElement;
@@ -2638,7 +2650,7 @@ export default function ZlegendsBot() {
 
           <div className="boardWrap">
             {!hideEvalBar && (
-              <div className="evalbar" title={"Eval " + evalLabel}>
+              <div className="evalbar" title={"Eval " + evalLabel} role="img" aria-label={`Evaluation: ${evalLabel}, ${playerAdvantageCp >= 0 ? "you're ahead" : "bot is ahead"}`}>
                 <div className="pfill" style={{ height: playerShare + "%" }} />
                 <div className="tick" />
               </div>

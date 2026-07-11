@@ -49,7 +49,7 @@ export default function GamePanel({
             {pairs.length === 0 ? (
               <p className="text-sm italic text-[#9D8FC4]">No moves yet — white to play.</p>
             ) : (
-              <div className="grid max-h-56 grid-cols-[auto_1fr_1fr] gap-x-3 gap-y-1 overflow-y-auto font-mono text-sm">
+              <div className="grid max-h-56 md:max-h-72 grid-cols-[auto_1fr_1fr] gap-x-3 gap-y-1 overflow-y-auto font-mono text-sm">
                 {pairs.map(([w, b], i) => {
                   const wGrade = moveGrades && moveGrades[i * 2];
                   const bGrade = moveGrades && moveGrades[i * 2 + 1];

@@ -167,25 +167,30 @@ export default function HomePage({ onEnter }) {
         </button>
       </div>
 
-      <div className="mt-6 mb-2 flex flex-wrap justify-center gap-3">
+      <SocialBanner />
+
+      {/* Demoted from button-weight CTAs to plain text links -- neither
+         goes anywhere real yet (still just a "coming soon" toast), and a
+         gold/cyan bordered button next to Leaderboard read as an equally
+         real destination. Footer-level text is honest about that without
+         hiding them. */}
+      <div className="mt-3 flex flex-wrap justify-center gap-4 text-xs">
         <button
           onClick={() => setComingSoon("Donations are coming soon — thanks for wanting to support the project!")}
-          className="rounded-2xl border border-[#F5D93E4D] bg-[#1D1038CC] px-6 py-2.5 text-sm font-bold text-[#F5D93E] backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-[#F5D93E99] hover:bg-[#1D1038E6]"
+          className="bg-transparent font-bold text-[#9D8FC4] underline decoration-dotted underline-offset-4 transition-colors hover:text-[#F5D93E]"
         >
           Donate
         </button>
         <button
           onClick={() => setComingSoon("A contact page is coming soon.")}
-          className="rounded-2xl border border-[#3EE7F533] bg-[#1D1038CC] px-6 py-2.5 text-sm font-bold text-[#3EE7F5] backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-[#3EE7F580] hover:bg-[#1D1038E6]"
+          className="bg-transparent font-bold text-[#9D8FC4] underline decoration-dotted underline-offset-4 transition-colors hover:text-[#3EE7F5]"
         >
           Contact
         </button>
       </div>
       {comingSoon && (
-        <p className="mb-4 max-w-xs text-center text-xs text-[#9D8FC4]">{comingSoon}</p>
+        <p className="mt-2 mb-1 max-w-xs text-center text-xs text-[#9D8FC4]">{comingSoon}</p>
       )}
-
-      <SocialBanner />
 
       <footer className="mt-2 pb-6 text-center text-xs text-[#9D8FC4]">
         Built by <a href="https://www.youtube.com/@Zlegend27" target="_blank" rel="noopener noreferrer" className="text-[#3EE7F5] hover:underline">Zlegend27</a> — all rights reserved.
