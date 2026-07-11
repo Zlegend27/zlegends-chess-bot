@@ -472,6 +472,13 @@ export default function ZlegendsBot() {
   const [result, setResult] = useState(null);
   const [promo, setPromo] = useState(null);
   const [colorPick, setColorPick] = useState(false);
+  /* Inline "abandon this game?" step before New wipes a game that's
+     actually in progress -- New used to jump straight to the color
+     picker regardless, so one misclick could lose a real game with zero
+     warning. Only gates past a few opening moves (nothing worth losing
+     yet before that) and skips entirely once the game already ended
+     (New after checkmate isn't "abandoning" anything). */
+  const [newGameConfirm, setNewGameConfirm] = useState(false);
   const [difficultyIdx, setDifficultyIdx] = useState(() => loadSetting("difficultyIdx", 2));
   const [gameStyle, setGameStyle] = useState(() => randomStyle());
   const [evalCp, setEvalCp] = useState(() => eng.evalWhite());
@@ -1464,6 +1471,7 @@ export default function ZlegendsBot() {
   };
 
   const newGame = (color) => {
+    setNewGameConfirm(false);
     maybeCountAbandonedRankGame();
     if (mode === "replay") {
       history.replaceState(null, "", window.location.pathname + window.location.search);
@@ -2906,7 +2914,10 @@ export default function ZlegendsBot() {
 
           {mode === "play" && !activePuzzle && !spectateMode && (
             <div className="ctrls playCtrls">
-              <button className="btn" onClick={() => { setPromo(null); setColorPick(true); }}>New</button>
+              <button className="btn" onClick={() => {
+                if (!result && eng.plyCount() > 4) setNewGameConfirm(true);
+                else { setPromo(null); setColorPick(true); }
+              }}>New</button>
               <button className="btn" onClick={undo} disabled={thinking || !!result || eng.plyCount() === 0}>Undo</button>
               <button className="btn ghost" onClick={onHint}
                 disabled={thinking || hinting || !!result || !!promo || !!quizOpening || eng.getSide() !== playerColor}>
@@ -2919,6 +2930,15 @@ export default function ZlegendsBot() {
               {result && <button className="btn gold" onClick={() => newGame(playerColor)}>Rematch!</button>}
               {shareToast && <div className="toast">{shareToast}</div>}
               {quizDoneToast && <div className="toast">{quizDoneToast}</div>}
+            </div>
+          )}
+          {newGameConfirm && (
+            <div className="newGameConfirm">
+              <span>Abandon this game?</span>
+              <button className="btn gold" style={{ minHeight: 30, padding: "5px 12px", fontSize: 11 }}
+                onClick={() => { setNewGameConfirm(false); setPromo(null); setColorPick(true); }}>Yes, start new</button>
+              <button className="btn ghost" style={{ minHeight: 30, padding: "5px 12px", fontSize: 11 }}
+                onClick={() => setNewGameConfirm(false)}>Cancel</button>
             </div>
           )}
 

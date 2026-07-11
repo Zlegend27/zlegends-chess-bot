@@ -111,7 +111,7 @@ export default function HomePage({ onEnter }) {
               <button
                 key={m.id}
                 onClick={() => (m.comingSoon ? setComingSoon(m.comingSoon) : onEnter(m.id))}
-                className={`group flex aspect-square flex-col items-center justify-center gap-3 rounded-3xl border ${a.border} bg-[#1D1038CC] p-4 text-center backdrop-blur-sm transition hover:-translate-y-0.5 hover:bg-[#1D1038E6]`}
+                className={`group flex aspect-square flex-col items-center justify-center gap-3 rounded-3xl border ${a.border} bg-[#1D1038CC] p-4 text-center backdrop-blur-sm transition hover:-translate-y-0.5 hover:bg-[#1D1038E6] hover:shadow-[0_8px_24px_#3EE7F522]`}
               >
                 <span className="flex h-14 shrink-0 items-center justify-center">
                   {m.custom ? renderIcon(m.id) : (

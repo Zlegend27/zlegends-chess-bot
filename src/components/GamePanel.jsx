@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 /** Replaces the old always-both-visible Scoresheet + Bot Analysis boxes
  *  with one tabbed card. The Analysis tab's actual content (bot eval vs.
@@ -12,6 +12,22 @@ export default function GamePanel({
   analysisContent, analysisLabel = "Analysis",
 }) {
   const [tab, setTab] = useState("moves");
+
+  /* App.jsx clears pgnToast with a hard setTimeout, which used to make
+     the message vanish instantly. Mirroring it into local state that
+     outlives the parent's null lets the CSS opacity transition actually
+     play before the node unmounts, instead of snapping. */
+  const [toastText, setToastText] = useState(null);
+  const [toastVisible, setToastVisible] = useState(false);
+  useEffect(() => {
+    if (pgnToast) { setToastText(pgnToast); setToastVisible(true); }
+    else setToastVisible(false);
+  }, [pgnToast]);
+  useEffect(() => {
+    if (toastVisible || !toastText) return;
+    const t = setTimeout(() => setToastText(null), 300);
+    return () => clearTimeout(t);
+  }, [toastVisible, toastText]);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-[#8B2FC966] bg-[#1D1038CC] backdrop-blur-sm">
@@ -59,7 +75,11 @@ export default function GamePanel({
                 })}
               </div>
             )}
-            {pgnToast && <div className="mt-2 font-mono text-xs text-[#3EE7F5]">{pgnToast}</div>}
+            {toastText && (
+              <div className={`mt-2 font-mono text-xs text-[#3EE7F5] transition-opacity duration-300 ${toastVisible ? "opacity-100" : "opacity-0"}`}>
+                {toastText}
+              </div>
+            )}
           </div>
         ) : (
           analysisContent

@@ -340,6 +340,13 @@ select:hover{ border-color:var(--cyan); }
   color:var(--liliac); box-shadow:none; transition:border-color .15s ease, color .15s ease, background .15s ease; }
 .leaderboardBtn:hover, .promoBox .leaderboardBtn:hover{ border-color:var(--cyan); color:var(--cyan); background:#3EE7F511; }
 .toast{ font-family:ui-monospace,Consolas,monospace; font-size:11px; color:var(--cyan); margin-top:6px; }
+/* Inline "abandon this game?" step before New wipes real progress --
+   deliberately not a modal (see App.jsx's newGameConfirm), just a
+   warm-toned strip under the controls row so it can't be missed but
+   also can't block anything else on the screen. */
+.newGameConfirm{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:8px;
+  padding:8px 10px; border-radius:8px; border:1px solid #F5D93E4D; background:#F5D93E14;
+  font-size:12px; color:var(--yellow); }
 .errBox{ min-height:100vh; min-height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center;
   gap:12px; background:var(--void,#0E0620); color:#F4EFFF; font-family:'Trebuchet MS','Segoe UI',system-ui,sans-serif;
   text-align:center; padding:24px; }

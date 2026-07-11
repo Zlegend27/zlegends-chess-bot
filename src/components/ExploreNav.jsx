@@ -63,7 +63,7 @@ export function TopNav({ onSelect, active }) {
   return (
     <nav
       aria-label="Main features"
-      className="relative mb-4 border-b border-[#8B2FC966] bg-[#1D1038CC] backdrop-blur-sm"
+      className="relative mb-4 border-b border-[#8B2FC999] bg-[#1D1038CC] shadow-[0_1px_0_#8B2FC944] backdrop-blur-sm"
       style={{
         width: "calc(100% + 28px + env(safe-area-inset-left) + env(safe-area-inset-right))",
         marginLeft: "calc(-14px - env(safe-area-inset-left))",
