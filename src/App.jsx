@@ -1676,6 +1676,57 @@ export default function ZlegendsBot() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pieceDesignsOpen, boardColorsOpen, settingsOpen, nameEditOpen, shareLinkFallback, rushMode, rushResult, rushOpen, rankedPuzzlesOpen, puzzlesOpen, openingsOpen, musicOpen, spectateOpen, pasteOpen]);
 
+  /* Modal accessibility, applied generically rather than per-modal: this
+     app has ~15 separate .promoOv/.promoBox blocks (one per open-state
+     boolean) rather than one shared <Modal> component, so wiring a ref
+     through each individually would be a lot of repetitive plumbing for
+     the same fix. Querying the live DOM instead means every current AND
+     future modal gets this for free with no per-modal changes needed.
+
+     Two concerns, handled separately since they have different triggers:
+     - Tab-trap: a keydown listener attached once, querying whichever
+       .promoBox is actually mounted at press-time -- always current, no
+       stale closures.
+     - Scroll-lock + initial-focus + focus-restore: these must fire only
+       on the OPEN/CLOSE transition, not every render, or a modal
+       containing a text input would steal focus back to itself on every
+       keystroke (each keystroke re-renders App). modalOpenRef tracks
+       "was a modal open as of the last time this ran" so the effect body
+       runs every render (cheap: one querySelector) but only acts when
+       that boolean actually flips. */
+  const modalOpenRef = useRef(false);
+  const modalPrevFocusRef = useRef(null);
+  const FOCUSABLE_SEL = 'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])';
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key !== "Tab") return;
+      const box = document.querySelector(".promoOv .promoBox");
+      if (!box) return;
+      const focusables = box.querySelectorAll(FOCUSABLE_SEL);
+      if (!focusables.length) return;
+      const first = focusables[0], last = focusables[focusables.length - 1];
+      if (!box.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+      else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+  useEffect(() => {
+    const box = document.querySelector(".promoOv .promoBox");
+    if (box && !modalOpenRef.current) {
+      modalOpenRef.current = true;
+      modalPrevFocusRef.current = document.activeElement;
+      document.body.style.overflow = "hidden";
+      box.querySelector(FOCUSABLE_SEL)?.focus();
+    } else if (!box && modalOpenRef.current) {
+      modalOpenRef.current = false;
+      document.body.style.overflow = "";
+      modalPrevFocusRef.current?.focus?.();
+      modalPrevFocusRef.current = null;
+    }
+  });
+
   /* Puzzle Rush countdown -- ticks once a second while a rush is live and
      hasn't already ended from 3 mistakes, pausing entirely once rushResult
      is set so a mistake-triggered end and a time-triggered end can't race. */
@@ -2673,7 +2724,7 @@ export default function ZlegendsBot() {
           </div>
 
           <div className="statusRow">
-            <span className={"status" + (result ? " over" : "")}>{status}</span>
+            <span className={"status" + (result ? " over" : "")} aria-live="polite">{status}</span>
             {inChk && <span className="bang">!!</span>}
             {mode === "replay" && <span className="replayBadge">{activeOpening ? "Opening" : "Replay"}</span>}
             {reviewing && <span className="replayBadge">Move {reviewIndex}/{moveList.length}</span>}
@@ -3084,7 +3135,7 @@ export default function ZlegendsBot() {
             </div>
             <div className="rushCounterRow">
               <span>Lifetime solved: <b>{rushLifetime}</b></span>
-              <button className="btn ghost" style={{ padding: "4px 10px", fontSize: 10 }} onClick={resetRushCounter}>Reset</button>
+              <button className="btn ghost" style={{ padding: "4px 10px", fontSize: 10, minHeight: 30 }} onClick={resetRushCounter}>Reset</button>
             </div>
             <button className="leaderboardBtn" onClick={() => openLeaderboard(rushDuration)}>🏆 View Leaderboard</button>
           </div>

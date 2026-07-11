@@ -35,7 +35,12 @@ export default function LeaderboardPage({ initialDuration = 60, onBack, onToolSe
       <StarField />
       <TopNav onSelect={onToolSelect} active={activeToolId} />
       <div className="hdr">
-        <h1 style={{ fontSize: 34 }}>🏆 Leaderboard</h1>
+        <h1 style={{ fontSize: 34, display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M7 4V2h10v2h4v3c0 2.21-1.79 4-4 4h-.08A6.007 6.007 0 0 1 13 15.92V18h3v2H8v-2h3v-2.08A6.007 6.007 0 0 1 7.08 9H7c-2.21 0-4-1.79-4-4V4h4zm-2 2v1c0 1.1.9 2 2 2V6H5zm12 0v3c1.1 0 2-.9 2-2V6h-2z" />
+          </svg>
+          Leaderboard
+        </h1>
         <div className="sub">Puzzle Rush · top solvers</div>
       </div>
 

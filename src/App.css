@@ -26,8 +26,12 @@
   text-shadow:0 0 10px #3EE7F5AA; }
 .eyebrow .live{ width:8px; height:8px; border-radius:50%; background:#FF4B4B;
   box-shadow:0 0 8px #FF4B4B; animation:blink 1.2s infinite; }
-.socialLinks{ display:inline-flex; align-items:center; gap:9px; margin-left:2px; }
-.socialIcon{ display:flex; color:var(--cyan); opacity:.8; text-shadow:none; transition:opacity .15s ease, filter .15s ease; }
+.socialLinks{ display:inline-flex; align-items:center; gap:3px; margin-left:2px; }
+/* Icons themselves stay 16px (unchanged visual size/rhythm) -- padding
+   brings the actual tap target to ~32px square, since the old bare
+   16x16px anchor was well under any reasonable touch-target minimum. */
+.socialIcon{ display:flex; align-items:center; justify-content:center; padding:8px;
+  color:var(--cyan); opacity:.8; text-shadow:none; transition:opacity .15s ease, filter .15s ease; }
 .socialIcon:hover{ opacity:1; filter:drop-shadow(0 0 6px #3EE7F5AA); }
 @keyframes blink{ 0%,100%{opacity:1} 50%{opacity:.35} }
 .hdr h1{
@@ -234,9 +238,9 @@
 .audioRow{ display:flex; align-items:center; gap:8px; }
 .jbHead{ display:flex; align-items:center; gap:8px; }
 .jbMole{ width:64px; height:auto; display:block; margin:0 auto; filter:drop-shadow(0 0 10px #8B2FC966); }
-.promoBox .modalCloseX{ position:absolute; top:8px; right:8px; width:24px; height:24px; padding:0;
+.promoBox .modalCloseX{ position:absolute; top:6px; right:6px; width:36px; height:36px; padding:0;
   border:1px solid #8B2FC966; border-radius:50%; background:#1D1038; color:var(--liliac);
-  font-size:12px; line-height:1; display:flex; align-items:center; justify-content:center;
+  font-size:14px; line-height:1; display:flex; align-items:center; justify-content:center;
   cursor:pointer; touch-action:manipulation; z-index:1;
   transition:background .15s ease, color .15s ease, transform .1s ease; }
 .promoBox .modalCloseX:hover{ background:#3EE7F522; color:var(--cyan); }
@@ -273,7 +277,8 @@ input[type=range]{ flex:1; min-width:0; accent-color:var(--magenta); }
 .btn{ font-family:'Arial Black',Impact,sans-serif; font-style:italic; font-size:12px;
   text-transform:uppercase; letter-spacing:.04em; cursor:pointer; touch-action:manipulation;
   background:linear-gradient(180deg,#A957E0,var(--violet)); color:#fff; border:none; border-radius:6px;
-  padding:9px 12px; box-shadow:0 3px 0 #150C24, 0 0 14px #8B2FC955;
+  padding:9px 12px; min-height:44px; box-sizing:border-box; display:inline-flex; align-items:center; justify-content:center;
+  box-shadow:0 3px 0 #150C24, 0 0 14px #8B2FC955;
   transition:filter .15s ease, transform .1s ease, box-shadow .1s ease; }
 .btn:hover:not(:disabled){ filter:brightness(1.15); }
 /* Pressing sinks the button into its own 3px drop shadow -- tactile
