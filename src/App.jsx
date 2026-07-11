@@ -285,6 +285,35 @@ function EvalGraph({ scores, grades, current, onSeek }) {
     </svg>
   );
 }
+/* Shared chrome for every dismissable promoOv/promoBox modal in this
+   file (Music, Puzzles, Settings, Rush, ...) -- backdrop-click and the
+   close-X both call the same onClose, matching what every one of these
+   blocks already did individually before this existed. Deliberately
+   NOT used for the piece-promotion/color-pick pickers (mid-move
+   required choices with no close X or backdrop-dismiss) or the Blind
+   Chess loading skeleton (a status display, not a real dialog) -- both
+   keep their own bespoke .promoOv/.promoBox markup since they're a
+   genuinely different shape, not an oversight.
+
+   role="dialog"/aria-modal/aria-label, the Tab focus trap, and the body
+   scroll-lock are all still handled generically by the DOM-querying
+   effect in ZlegendsBot (keyed off whichever .promoBox is actually
+   mounted) rather than duplicated here -- this component only owns the
+   JSX shape, not that behavior, so this stays a plain function rather
+   than needing access to any of that state. */
+function Modal({ open, onClose, closeLabel, zIndex = 50, minWidth = 260, maxWidth = 360, className, style, children }) {
+  if (!open) return null;
+  return (
+    <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className={"promoBox" + (className ? " " + className : "")} style={{ flexDirection: "column", gap: 12, minWidth, maxWidth, padding: "20px 24px", ...style }}>
+        <button className="modalCloseX" onClick={onClose} aria-label={closeLabel} title="Close">✕</button>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 const formatClock = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 /* Puzzle Rush difficulty ramp: climb one rating band every 3 solves in a
    row, drop back one band on a miss so a rough patch doesn't strand the
@@ -3012,10 +3041,8 @@ export default function ZlegendsBot() {
         </Suspense>
       )}
 
-      {musicOpen && (
-        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) setMusicOpen(false); }}>
-          <div className="promoBox jbBox" style={{ flexDirection: "column", gap: 12, width: 300, padding: "20px 24px" }}>
-            <button className="modalCloseX" onClick={() => setMusicOpen(false)} aria-label="Close Juice Box" title="Close">✕</button>
+      <Modal open={musicOpen} onClose={() => setMusicOpen(false)} closeLabel="Close Juice Box"
+        className="jbBox" style={{ width: 300, minWidth: undefined, maxWidth: undefined }}>
             <img src="/VIRTUOSO_MOLE.webp" alt="Juice Box" className="jbMole" />
             <select value={musicSource} onChange={e => setMusicSource(e.target.value)}>
               <option value="chiptune">Chiptune</option>
@@ -3066,15 +3093,10 @@ export default function ZlegendsBot() {
                 ))}
               </div>
             )}
-          </div>
-        </div>
-      )}
+      </Modal>
 
-
-      {openingsOpen && (
-        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) setOpeningsOpen(false); }}>
-          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, maxHeight: "80vh", overflowY: "auto", padding: "20px 24px" }}>
-            <button className="modalCloseX" onClick={() => setOpeningsOpen(false)} aria-label="Close Openings Library" title="Close">✕</button>
+      <Modal open={openingsOpen} onClose={() => setOpeningsOpen(false)} closeLabel="Close Openings Library"
+        style={{ maxHeight: "80vh", overflowY: "auto" }}>
             <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <PixelAvatar rows={BPIX} pal={BPAL} size={18} />
               Openings Library
@@ -3088,14 +3110,9 @@ export default function ZlegendsBot() {
                 </div>
               ))}
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
-      {puzzlesOpen && (
-        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) setPuzzlesOpen(false); }}>
-          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
-            <button className="modalCloseX" onClick={() => setPuzzlesOpen(false)} aria-label="Close Puzzles" title="Close">✕</button>
+      <Modal open={puzzlesOpen} onClose={() => setPuzzlesOpen(false)} closeLabel="Close Puzzles">
             <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <PixelAvatar rows={PPIX} pal={PPAL} size={18} />
               Puzzles
@@ -3123,14 +3140,9 @@ export default function ZlegendsBot() {
                 </div>
               </div>
             )}
-          </div>
-        </div>
-      )}
+      </Modal>
 
-      {rankedPuzzlesOpen && (
-        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) { setRankedPuzzlesOpen(false); setPuzzlesOpen(true); } }}>
-          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
-            <button className="modalCloseX" onClick={() => { setRankedPuzzlesOpen(false); setPuzzlesOpen(true); }} aria-label="Close Ranked Puzzles" title="Close">✕</button>
+      <Modal open={rankedPuzzlesOpen} onClose={() => { setRankedPuzzlesOpen(false); setPuzzlesOpen(true); }} closeLabel="Close Ranked Puzzles">
             <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <PixelAvatar rows={PPIX} pal={PPAL} size={18} />
               Ranked Puzzles — Pick a Rating
@@ -3152,14 +3164,9 @@ export default function ZlegendsBot() {
                 );
               })}
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
-      {rushOpen && (
-        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) { setRushOpen(false); setPuzzlesOpen(true); } }}>
-          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
-            <button className="modalCloseX" onClick={() => { setRushOpen(false); setPuzzlesOpen(true); }} aria-label="Close Puzzle Rush" title="Close">✕</button>
+      <Modal open={rushOpen} onClose={() => { setRushOpen(false); setPuzzlesOpen(true); }} closeLabel="Close Puzzle Rush">
             <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <PixelAvatar rows={PPIX} pal={PPAL} size={18} />
               Puzzle Rush
@@ -3180,45 +3187,42 @@ export default function ZlegendsBot() {
               <button className="btn ghost" style={{ padding: "4px 10px", fontSize: 10, minHeight: 30 }} onClick={resetRushCounter}>Reset</button>
             </div>
             <button className="leaderboardBtn" onClick={() => openLeaderboard(rushDuration)}>🏆 View Leaderboard</button>
-          </div>
-        </div>
-      )}
+      </Modal>
 
+      {/* Guarded outside Modal, not just via its `open` prop -- rushResult
+         is null except right when this is meant to show, and JSX children
+         are evaluated eagerly by the caller (React.createElement) before
+         Modal's own early-return ever runs, so rushResult.reason below
+         would throw on every other render without this. */}
       {rushMode && rushResult && (
-        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) exitRush(); }}>
-          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
-            <button className="modalCloseX" onClick={exitRush} aria-label="Exit Puzzle Rush" title="Close">✕</button>
-            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <PixelAvatar rows={PPIX} pal={PPAL} size={18} />
-              {rushResult.reason === "time" ? "Time's up!" : "3 misses — rush over!"}
-            </div>
-            <div className="pv" style={{ fontSize: 15 }}>
-              You solved <b>{rushResult.solved}</b> puzzle{rushResult.solved === 1 ? "" : "s"}.
-            </div>
-            {rushMissed.length > 0 && (
-              <div className="rushMissedList">
-                <div className="rushMissedHead">Missed puzzles</div>
-                {rushMissed.map((p, i) => (
-                  <div className="rushMissedRow" key={p.id + "-" + i}>
-                    <span className="rushMissedRating">Rated {p.rating}</span>
-                    <span className="rushMissedActions">
-                      <button className="btn ghost" onClick={() => reviewMissedPuzzle(p, false)}>Retry</button>
-                      <button className="btn ghost" onClick={() => reviewMissedPuzzle(p, true)}>Analyze</button>
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-            <button className="btn gold" onClick={retryRush}>Try Again</button>
-            <button className="leaderboardBtn" onClick={() => openLeaderboard(rushDuration)}>🏆 View Leaderboard</button>
+        <Modal open onClose={exitRush} closeLabel="Exit Puzzle Rush">
+          <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <PixelAvatar rows={PPIX} pal={PPAL} size={18} />
+            {rushResult.reason === "time" ? "Time's up!" : "3 misses — rush over!"}
           </div>
-        </div>
+          <div className="pv" style={{ fontSize: 15 }}>
+            You solved <b>{rushResult.solved}</b> puzzle{rushResult.solved === 1 ? "" : "s"}.
+          </div>
+          {rushMissed.length > 0 && (
+            <div className="rushMissedList">
+              <div className="rushMissedHead">Missed puzzles</div>
+              {rushMissed.map((p, i) => (
+                <div className="rushMissedRow" key={p.id + "-" + i}>
+                  <span className="rushMissedRating">Rated {p.rating}</span>
+                  <span className="rushMissedActions">
+                    <button className="btn ghost" onClick={() => reviewMissedPuzzle(p, false)}>Retry</button>
+                    <button className="btn ghost" onClick={() => reviewMissedPuzzle(p, true)}>Analyze</button>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          <button className="btn gold" onClick={retryRush}>Try Again</button>
+          <button className="leaderboardBtn" onClick={() => openLeaderboard(rushDuration)}>🏆 View Leaderboard</button>
+        </Modal>
       )}
 
-      {nameEditOpen && (
-        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 51 }} onClick={e => { if (e.target === e.currentTarget) setNameEditOpen(false); }}>
-          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
-            <button className="modalCloseX" onClick={() => setNameEditOpen(false)} aria-label="Close" title="Close">✕</button>
+      <Modal open={nameEditOpen} onClose={() => setNameEditOpen(false)} closeLabel="Close" zIndex={51}>
             <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               Your Name
             </div>
@@ -3232,14 +3236,9 @@ export default function ZlegendsBot() {
               style={{ width: "100%", boxSizing: "border-box", fontSize: 14, padding: "8px 10px", borderRadius: 8, background: "#150C24", color: "var(--white, #F4EFFF)", border: "1px solid #8B2FC966" }}
             />
             <button className="btn gold" onClick={saveDisplayName}>Save</button>
-          </div>
-        </div>
-      )}
+      </Modal>
 
-      {shareLinkFallback && (
-        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 51 }} onClick={e => { if (e.target === e.currentTarget) setShareLinkFallback(null); }}>
-          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 400, padding: "20px 24px" }}>
-            <button className="modalCloseX" onClick={() => setShareLinkFallback(null)} aria-label="Close" title="Close">✕</button>
+      <Modal open={!!shareLinkFallback} onClose={() => setShareLinkFallback(null)} closeLabel="Close" zIndex={51} maxWidth={400}>
             <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               Share This Game
             </div>
@@ -3247,7 +3246,7 @@ export default function ZlegendsBot() {
               Couldn't copy automatically — tap the link below to select it, or hit Copy.
             </div>
             <input
-              type="text" readOnly value={shareLinkFallback}
+              type="text" readOnly value={shareLinkFallback || ""}
               onFocus={e => e.target.select()}
               style={{ width: "100%", boxSizing: "border-box", fontSize: 12, padding: "8px 10px", borderRadius: 8, background: "#150C24", color: "var(--white, #F4EFFF)", border: "1px solid #8B2FC966" }}
             />
@@ -3259,14 +3258,9 @@ export default function ZlegendsBot() {
                 setTimeout(() => setShareToast(null), 2500);
               } catch { /* still selectable in the input above */ }
             }}>Copy</button>
-          </div>
-        </div>
-      )}
+      </Modal>
 
-      {settingsOpen && (
-        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) setSettingsOpen(false); }}>
-          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
-            <button className="modalCloseX" onClick={() => setSettingsOpen(false)} aria-label="Close Settings" title="Close">✕</button>
+      <Modal open={settingsOpen} onClose={() => setSettingsOpen(false)} closeLabel="Close Settings">
             <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span aria-hidden="true">⚙</span>
               Settings
@@ -3321,14 +3315,9 @@ export default function ZlegendsBot() {
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
-      {pieceDesignsOpen && (
-        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) { setPieceDesignsOpen(false); setSettingsOpen(true); } }}>
-          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
-            <button className="modalCloseX" onClick={() => { setPieceDesignsOpen(false); setSettingsOpen(true); }} aria-label="Close Piece Designs" title="Close">✕</button>
+      <Modal open={pieceDesignsOpen} onClose={() => { setPieceDesignsOpen(false); setSettingsOpen(true); }} closeLabel="Close Piece Designs">
             <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               Piece Designs
             </div>
@@ -3349,14 +3338,9 @@ export default function ZlegendsBot() {
                 </div>
               ))}
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
-      {boardColorsOpen && (
-        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) { setBoardColorsOpen(false); setSettingsOpen(true); } }}>
-          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
-            <button className="modalCloseX" onClick={() => { setBoardColorsOpen(false); setSettingsOpen(true); }} aria-label="Close Board Color" title="Close">✕</button>
+      <Modal open={boardColorsOpen} onClose={() => { setBoardColorsOpen(false); setSettingsOpen(true); }} closeLabel="Close Board Color">
             <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               Board Color
             </div>
@@ -3377,14 +3361,9 @@ export default function ZlegendsBot() {
                 </div>
               ))}
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
-      {spectateOpen && (
-        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) setSpectateOpen(false); }}>
-          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }}>
-            <button className="modalCloseX" onClick={() => setSpectateOpen(false)} aria-label="Close Spectate Bots" title="Close">✕</button>
+      <Modal open={spectateOpen} onClose={() => setSpectateOpen(false)} closeLabel="Close Spectate Bots">
             <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               Spectate Bots
             </div>
@@ -3414,14 +3393,9 @@ export default function ZlegendsBot() {
             </div>
             <button className="btn gold" style={{ fontSize: 12, padding: "8px 12px" }}
               onClick={() => startSpectate(spectateWhiteIdx, spectateBlackIdx, spectateOpeningId)}>Start Spectating</button>
-          </div>
-        </div>
-      )}
+      </Modal>
 
-      {pasteOpen && (
-        <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) setPasteOpen(false); }}>
-          <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 420, padding: "20px 24px" }}>
-            <button className="modalCloseX" onClick={() => setPasteOpen(false)} aria-label="Close Paste PGN" title="Close">✕</button>
+      <Modal open={pasteOpen} onClose={() => setPasteOpen(false)} closeLabel="Close Paste PGN" maxWidth={420}>
             <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               Paste PGN
             </div>
@@ -3437,9 +3411,7 @@ export default function ZlegendsBot() {
             />
             {pasteError && <div className="pv" style={{ fontSize: 11, color: "#F05348" }}>{pasteError}</div>}
             <button className="btn gold" onClick={loadPastedPgn} disabled={!pasteText.trim()}>Analyze</button>
-          </div>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }
