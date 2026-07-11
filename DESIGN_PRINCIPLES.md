@@ -37,10 +37,11 @@ here, follow this file and flag the conflict rather than silently picking one.
 
 ## Design tokens (don't reinvent these)
 
-Defined as CSS custom properties on `.root` in `src/App.css` — reference
-`var(--name)`, don't hardcode the hex again:
+Defined as CSS custom properties on `:root` in `src/tokens.css` (imported
+before `App.css`, so every token is available to everything) — reference
+`var(--name)`, don't hardcode the hex/value again:
 
-| Token | Hex | Use |
+| Token | Value | Use |
 |---|---|---|
 | `--void` / `--void2` | `#0E0620` / `#1A0B33` | page background gradient |
 | `--panel` | `#1D1038` | card/panel backgrounds |
@@ -51,20 +52,52 @@ Defined as CSS custom properties on `.root` in `src/App.css` — reference
 | `--liliac` | `#C9C2E8` | secondary text on dark backgrounds |
 | `--white` | `#F4EFFF` | primary text |
 | `--dim` | `#9D8FC4` | tertiary/muted text, labels |
+| `--font-display` | Arial Black/Impact stack | titles, buttons, card names, clocks |
+| `--font-body` | Trebuchet MS stack | descriptions, UI copy read at length |
+| `--font-mono` | ui-monospace stack | move lists, PGN, timestamps, eval numbers |
+| `--r-sm` / `--r-md` / `--r-lg` / `--r-pill` | `6px`/`12px`/`16px`/`999px` | buttons/inputs → cards/modals → Tailwind surfaces → toggles/badges |
 
-Board square colors (`--boardLight`/`--boardDark`) are theme-driven — see
-`src/utils/boardColors.js` — never hardcode board colors outside that file.
+Not every border-radius in `App.css` has been migrated onto the `--r-*` scale
+— genuinely one-off decorative values (a speech-bubble corner, a tiny inline
+badge) are left as literals rather than forced into a scale they don't
+belong to. Card/box/modal/button/select/toggle are the ones that matter and
+are on tokens; check there before adding a new literal near them.
 
-Fonts: **Arial Black / Impact** (italic, uppercase) for buttons, headers, and
-anything meant to feel like brand/UI chrome. Default system stack for body
-copy and anything read at length (descriptions, analysis text, chat-style
-content). Don't introduce a third font family.
+Board square colors (`--boardLight`/`--boardDark`) are the one exception —
+set per-instance via inline style on `.root` for the active board theme (see
+`src/utils/boardColors.js`), not static in `tokens.css`. Never hardcode board
+colors outside that file.
+
+## Two component languages, and why both are correct
+
+This app has two legitimate, intentionally different UI systems — don't
+"unify" them into one, that's a regression, not a cleanup:
+
+- **The CSS system** (`App.css`, using the tokens above): the play screen,
+  every modal (`.promoOv`/`.promoBox`), the board, and anything nested inside
+  them. `.btn` here is loud on purpose — italic Arial Black, uppercase — it's
+  this app's brand voice for in-game chrome.
+- **The Tailwind system**: `HomePage.jsx`, `ExploreNav.jsx`'s `TopNav`,
+  `LeaderboardPage.jsx` — the "app shell" pages a player sees between games.
+  These were deliberately designed with a calmer, card-based look (rounded
+  tiles, plain-weight labels) that reads as a modern app home screen rather
+  than in-game HUD chrome, and that distinction is the point, not an
+  oversight to fix. Don't migrate these onto `.btn`/`.btn.gold`/`.btn.ghost`
+  — a past external design review recommended exactly that (folding
+  everything into one button system with `.btn` variants for nav/icon use),
+  and the right call was to decline it: it would have overwritten
+  specifically-iterated recent design work for a consistency win that isn't
+  actually there (the two languages serve different screens, not the same
+  screen inconsistently).
+
+Within each system, stay internally consistent (that's rule 5 above). Across
+the boundary between them, the "inconsistency" is intentional.
 
 ## Component patterns already established
 
-- **Buttons**: `.btn` (primary gradient), `.btn.gold` (the one primary
-  action), `.btn.ghost` (secondary, transparent + border). Every plain
-  `<button>` needs an explicit `bg-*`/`bg-transparent` Tailwind class or
+- **Buttons (CSS system)**: `.btn` (primary gradient), `.btn.gold` (the one
+  primary action), `.btn.ghost` (secondary, transparent + border). Every
+  plain `<button>` needs an explicit `bg-*`/`bg-transparent` Tailwind class or
   background CSS — this project's Tailwind setup skips `preflight`, so an
   unstyled button silently renders native OS chrome. This has caused a real
   bug before; don't reintroduce it.

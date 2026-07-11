@@ -28,6 +28,7 @@ import { ENGINE_VERSION } from "./utils/version";
 import { OPENINGS } from "./utils/openings";
 import { loadEcoOpenings, detectEcoOpening, theoryPlyCount } from "./utils/ecoOpenings";
 import { stockfishBestMove, STOCKFISH_MIN_ELO } from "./engine/stockfishEngine";
+import "./tokens.css";
 import "./App.css";
 
 /* Loaded on demand: blind mode brings its own parser/describer/speech

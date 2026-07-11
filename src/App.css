@@ -1,16 +1,11 @@
+/* Color/font/radius custom properties live in tokens.css (imported
+   before this file), scoped to :root rather than repeated here --
+   .root only adds its own layout on top. --boardLight/--boardDark are
+   the exception: App.jsx overrides those two per-instance via inline
+   style for the active board theme, so they stay set here rather than
+   in the static :root block. */
 .root{
-  --void:#0E0620; --void2:#1A0B33; --panel:#1D1038;
-  --violet:#8B2FC9; --magenta:#D94BF0; --cyan:#3EE7F5; --yellow:#F5D93E;
-  --liliac:#C9C2E8; --sqdark:#4A2A7A; --white:#F4EFFF; --dim:#9D8FC4;
   --boardLight:#C9C2E8; --boardDark:#4A2A7A;
-  /* Three explicit font stacks -- everything in this file should
-     reference one of these rather than repeating (and slowly drifting
-     from) the literal stack. --font-display for titles/buttons/card
-     names/clocks, --font-body for descriptions/UI copy, --font-mono for
-     move lists/PGN/timestamps/eval numbers. */
-  --font-display:'Arial Black',Impact,'Haettenschweiler',sans-serif;
-  --font-body:'Trebuchet MS','Segoe UI',system-ui,sans-serif;
-  --font-mono:ui-monospace,'Cascadia Mono',Consolas,monospace;
   min-height:100vh; min-height:100dvh;
   background: radial-gradient(900px 500px at 50% 0%, #3A1560 0%, var(--void2) 45%, var(--void) 100%);
   color:var(--white);
@@ -61,7 +56,7 @@
    up with the board's left edge rather than the evalbar's — otherwise the
    board reads as shifted right relative to the cards above/below it. */
 .card{ display:flex; align-items:center; gap:10px; background:#1D1038CC;
-  border:1px solid #8B2FC966; border-radius:12px; padding:8px 12px 8px 24px;
+  border:1px solid #8B2FC966; border-radius:var(--r-md); padding:8px 12px 8px 24px;
   box-shadow:0 0 18px #8B2FC922, inset 0 0 22px #8B2FC91A; width:calc(min(88vw,440px) + 24px); box-sizing:border-box; }
 .card.turnGlow{ border-color:var(--cyan); box-shadow:0 0 18px #3EE7F544, inset 0 0 22px #3EE7F51A; }
 .avatarBox{ background:#120A26; border-radius:8px; padding:4px; border:1px solid #ffffff18; flex:none; }
@@ -209,7 +204,7 @@
   border:2px solid var(--yellow); border-radius:12px; padding:2px 10px; font-size:12px;
   letter-spacing:.06em; text-transform:uppercase; }
 .panel{ width:min(88vw,300px); display:flex; flex-direction:column; gap:12px; }
-.box{ background:#1D1038CC; border:1px solid #8B2FC966; border-radius:12px; padding:12px 14px;
+.box{ background:#1D1038CC; border:1px solid #8B2FC966; border-radius:var(--r-md); padding:12px 14px;
   box-shadow:0 0 18px #8B2FC922; }
 .boxHead{ font-size:11px; font-weight:700; letter-spacing:.26em; text-transform:uppercase;
   color:var(--cyan); text-shadow:0 0 8px #3EE7F566; margin-bottom:8px; }
@@ -219,7 +214,7 @@
    click-anywhere row whose own label text ("Show/Hide Eval Bar") was
    doing double duty as both the setting's name and its action. */
 .toggleSwitch{ position:relative; flex:none; width:42px; height:24px; padding:0;
-  border-radius:999px; border:1px solid #8B2FC966; background:#150C24; cursor:pointer;
+  border-radius:var(--r-pill); border:1px solid #8B2FC966; background:#150C24; cursor:pointer;
   transition:background .18s ease, border-color .18s ease; }
 .toggleSwitch.on{ background:#3EE7F544; border-color:#3EE7F5AA; }
 .toggleSwitch:focus-visible{ outline:2px solid var(--cyan); outline-offset:2px; }
@@ -289,7 +284,7 @@ input[type=range]{ flex:1; min-width:0; accent-color:var(--magenta); }
 .ctrls{ display:flex; gap:8px; flex-wrap:wrap; }
 .btn{ font-family:var(--font-display); font-style:italic; font-size:12px;
   text-transform:uppercase; letter-spacing:.04em; cursor:pointer; touch-action:manipulation;
-  background:linear-gradient(180deg,#A957E0,var(--violet)); color:#fff; border:none; border-radius:6px;
+  background:linear-gradient(180deg,#A957E0,var(--violet)); color:#fff; border:none; border-radius:var(--r-sm);
   padding:9px 12px; min-height:44px; box-sizing:border-box; display:inline-flex; align-items:center; justify-content:center;
   box-shadow:0 3px 0 #150C24, 0 0 14px #8B2FC955;
   transition:filter .15s ease, transform .1s ease, box-shadow .1s ease; }
@@ -316,7 +311,7 @@ input[type=text]:focus-visible, .promoBox button:focus-visible{
   background:transparent; color:var(--cyan); cursor:pointer; text-transform:none; opacity:.75; flex:none;
   transition:opacity .15s ease, background .15s ease; }
 .nameEditBtn:hover{ opacity:1; background:#3EE7F522; }
-select{ font-family:inherit; font-size:12px; font-weight:700; border-radius:6px; padding:8px;
+select{ font-family:inherit; font-size:12px; font-weight:700; border-radius:var(--r-sm); padding:8px;
   border:1px solid #8B2FC966; background:#1D1038; color:var(--white); cursor:pointer;
   transition:border-color .15s ease; }
 select:hover{ border-color:var(--cyan); }
@@ -331,7 +326,7 @@ select:hover{ border-color:var(--cyan); }
 .promoOv{ position:absolute; inset:0; background:#0E0620CC; display:flex; align-items:center;
   justify-content:center; z-index:10; border-radius:4px; animation:ovFade .15s ease-out; }
 @keyframes ovFade{ from{ opacity:0; } to{ opacity:1; } }
-.promoBox{ background:var(--panel); border:1px solid var(--cyan); border-radius:12px; padding:10px;
+.promoBox{ background:var(--panel); border:1px solid var(--cyan); border-radius:var(--r-md); padding:10px;
   display:flex; gap:6px; box-shadow:0 0 30px #3EE7F566; position:relative;
   animation:boxPop .18s cubic-bezier(.34,1.4,.64,1); }
 @keyframes boxPop{ from{ opacity:0; transform:scale(.94) translateY(6px); } to{ opacity:1; transform:none; } }
@@ -349,7 +344,7 @@ select:hover{ border-color:var(--cyan); }
 .leaderboardBtn, .promoBox .leaderboardBtn{ align-self:center; width:auto; margin-top:2px; padding:5px 14px;
   font-family:inherit; font-style:normal; font-weight:700; font-size:11px;
   text-transform:none; letter-spacing:normal; cursor:pointer;
-  background:transparent; border:1px solid #8B2FC966; border-radius:6px;
+  background:transparent; border:1px solid #8B2FC966; border-radius:var(--r-sm);
   color:var(--liliac); box-shadow:none; transition:border-color .15s ease, color .15s ease, background .15s ease; }
 .leaderboardBtn:hover, .promoBox .leaderboardBtn:hover{ border-color:var(--cyan); color:var(--cyan); background:#3EE7F511; }
 .toast{ font-family:var(--font-mono); font-size:11px; color:var(--cyan); margin-top:6px; }
@@ -361,14 +356,14 @@ select:hover{ border-color:var(--cyan); }
   padding:8px 10px; border-radius:8px; border:1px solid #F5D93E4D; background:#F5D93E14;
   font-size:12px; color:var(--yellow); }
 /* Renders as ErrorBoundary's fallback in main.jsx -- replaces <App/>
-   entirely on a crash, so it's never actually a descendant of .root and
-   can't rely on --font-body/--void resolving. Same var(--x, literal)
-   fallback pattern already used for background here, applied to the
-   font stack too rather than reverting to a second hardcoded copy that
-   could quietly drift from --font-body over time. */
+   entirely on a crash, so it's never actually a descendant of .root.
+   Safe to use the bare tokens directly (no var(--x, literal) fallback
+   needed) now that tokens.css scopes them to :root rather than .root --
+   the CSS import itself (a static top-of-module side effect) is already
+   in the page by the time anything could throw during render. */
 .errBox{ min-height:100vh; min-height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center;
-  gap:12px; background:var(--void,#0E0620); color:#F4EFFF;
-  font-family:var(--font-body,'Trebuchet MS','Segoe UI',system-ui,sans-serif);
+  gap:12px; background:var(--void); color:var(--white);
+  font-family:var(--font-body);
   text-align:center; padding:24px; }
 /* Mobile: board first, then action buttons, then scoresheet/analysis, then
    the Juice Box + Openings icon row. boardCol/panel go display:contents so
