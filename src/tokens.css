@@ -22,13 +22,18 @@
   --font-body:'Trebuchet MS','Segoe UI',system-ui,sans-serif;
   --font-mono:ui-monospace,'Cascadia Mono',Consolas,monospace;
 
-  /* Radius -- four stops. --r-sm for buttons/inputs/tags/inner
-     elements, --r-md for cards/boxes/modals, --r-lg for the newer
-     Tailwind-authored surfaces (HomePage tiles, TopNav), --r-pill for
-     toggles/badges/status pills. Not every border-radius in App.css
-     has been migrated to one of these yet -- a few genuinely one-off
-     values (the tiny 4px/7px/8px ones on small inline elements) are
-     left as literals rather than forcing them into a scale they don't
-     really belong to. */
-  --r-sm:6px; --r-md:12px; --r-lg:16px; --r-pill:999px;
+  /* Radius -- six stops (four from the original audit's proposal, plus
+     two more found while doing the full sweep: 8px and 4px each turned
+     out to recur 4-6 times across small inline elements, which is a
+     real pattern worth naming rather than force-fitting into --r-sm and
+     causing a visual shift). --r-2xs for tiny inline badges/tags,
+     --r-xs for small square frames (avatar box, mini stat boxes),
+     --r-sm for buttons/inputs, --r-md for cards/boxes/modals, --r-lg
+     for the newer Tailwind-authored surfaces (HomePage tiles, TopNav),
+     --r-pill for toggles/badges/status pills. A handful of genuinely
+     one-off values (an asymmetric speech-bubble corner, one 10px pill
+     used nowhere else) are still left as literals rather than forced
+     onto a scale they don't belong to -- every OTHER radius in App.css
+     is on one of these six now. */
+  --r-2xs:4px; --r-xs:8px; --r-sm:6px; --r-md:12px; --r-lg:16px; --r-pill:999px;
 }

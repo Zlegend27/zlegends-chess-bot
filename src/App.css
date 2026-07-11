@@ -59,11 +59,11 @@
   border:1px solid #8B2FC966; border-radius:var(--r-md); padding:8px 12px 8px 24px;
   box-shadow:0 0 18px #8B2FC922, inset 0 0 22px #8B2FC91A; width:calc(min(88vw,440px) + 24px); box-sizing:border-box; }
 .card.turnGlow{ border-color:var(--cyan); box-shadow:0 0 18px #3EE7F544, inset 0 0 22px #3EE7F51A; }
-.avatarBox{ background:#120A26; border-radius:8px; padding:4px; border:1px solid #ffffff18; flex:none; }
+.avatarBox{ background:#120A26; border-radius:var(--r-xs); padding:4px; border:1px solid #ffffff18; flex:none; }
 .avatarBox.reactionBox{ padding:6px; transition:box-shadow .3s ease, border-color .3s ease; }
 .avatarBox.reactionBox.angry{ border-color:#F05348; box-shadow:0 0 22px #F0534877; background:#1A0808; }
 .avatarBox.reactionBox.happy{ border-color:#48b2a7; box-shadow:0 0 22px #7cfff177; background:#08150F; }
-.reactionImg{ display:block; width:150px; max-width:40vw; height:auto; border-radius:6px; }
+.reactionImg{ display:block; width:150px; max-width:40vw; height:auto; border-radius:var(--r-sm); }
 .youAvatarImg{ display:block; width:36px; height:36px; object-fit:contain; }
 .cardName{ font-family:var(--font-display); font-style:italic; font-size:14px;
   text-transform:uppercase; letter-spacing:.04em; }
@@ -103,7 +103,7 @@
 .rushHud{ align-items:center; }
 .rushClock{ font-family:var(--font-display); font-size:22px; font-weight:900;
   font-variant-numeric:tabular-nums; color:var(--cyan); text-shadow:0 0 10px #3EE7F566;
-  background:#120A26; border:1px solid #ffffff18; border-radius:8px; padding:8px 10px;
+  background:#120A26; border:1px solid #ffffff18; border-radius:var(--r-xs); padding:8px 10px;
   flex:none; min-width:64px; text-align:center; }
 .rushClock.low{ color:#FF4C5B; text-shadow:0 0 12px #FF4C5B88; animation:rushClockPulse 1s ease-in-out infinite; }
 @keyframes rushClockPulse{ 0%,100%{ opacity:1; } 50%{ opacity:.5; } }
@@ -117,7 +117,7 @@
 .rushHudBand{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--yellow); }
 .rushHudSolved{ font-size:12px; font-weight:700; color:var(--white); }
 .rushMistakeBoxes{ display:flex; gap:6px; }
-.rushMistakeBox{ width:18px; height:18px; border-radius:4px; border:1.5px solid #FF4C5B77;
+.rushMistakeBox{ width:18px; height:18px; border-radius:var(--r-2xs); border:1.5px solid #FF4C5B77;
   background:#1D1038; transition:background .2s ease, box-shadow .2s ease; }
 .rushMistakeBox.filled{ background:#FF4C5B; box-shadow:0 0 8px #FF4C5B99; }
 .rushHudLifetime{ font-size:10px; color:var(--dim); font-style:italic; }
@@ -153,7 +153,13 @@
   border:1px solid #8B2FC955; display:flex; flex-direction:column-reverse; position:relative; flex:none; }
 .evalbar .pfill{ background:linear-gradient(#B7F6FF,var(--cyan)); box-shadow:0 0 10px #3EE7F5AA; transition:height .5s ease; }
 .evalbar .tick{ position:absolute; left:0; right:0; top:50%; height:1px; background:#ffffff33; }
-.board{ border:5px solid #120A26; outline:1px solid #8B2FC966; border-radius:8px;
+/* Numeric eval readout inside the bar itself -- see the JSX comment for
+   why a single fixed top position/color is always legible regardless
+   of which side is ahead. Rotated since the bar is only 14px wide. */
+.evalbar .evalNum{ position:absolute; top:3px; left:0; right:0; text-align:center;
+  font-family:var(--font-mono); font-size:7px; font-weight:700; line-height:1; letter-spacing:-.4px;
+  writing-mode:vertical-rl; color:#B7F6FF; pointer-events:none; z-index:1; }
+.board{ border:5px solid #120A26; outline:1px solid #8B2FC966; border-radius:var(--r-xs);
   box-shadow:0 0 30px #8B2FC94D, 0 16px 40px #00000088;
   width:min(88vw,440px); aspect-ratio:1; display:flex; flex-direction:column; user-select:none; position:relative;
   touch-action:none; }
@@ -201,7 +207,7 @@
   border:2px solid var(--cyan); border-radius:12px 12px 12px 2px; padding:1px 9px; font-size:15px;
   text-shadow:0 0 8px var(--cyan); box-shadow:0 0 12px #3EE7F566; animation:blink 1s infinite; }
 .replayBadge{ font-family:var(--font-display); background:#3A1560; color:var(--yellow);
-  border:2px solid var(--yellow); border-radius:12px; padding:2px 10px; font-size:12px;
+  border:2px solid var(--yellow); border-radius:var(--r-md); padding:2px 10px; font-size:12px;
   letter-spacing:.06em; text-transform:uppercase; }
 .panel{ width:min(88vw,300px); display:flex; flex-direction:column; gap:12px; }
 .box{ background:#1D1038CC; border:1px solid #8B2FC966; border-radius:var(--r-md); padding:12px 14px;
@@ -233,7 +239,7 @@
 .moveGrade.mistake{ color:#F0A548; }
 .moveGrade.blunder{ color:#F05348; }
 .boardGrade{ position:absolute; top:-4px; right:-4px; font-size:11px; font-weight:700;
-  padding:1px 3px; border-radius:6px; background:#150C24DD; z-index:4; line-height:1.2; }
+  padding:1px 3px; border-radius:var(--r-sm); background:#150C24DD; z-index:4; line-height:1.2; }
 .boardGrade.brilliant{ color:var(--cyan); box-shadow:0 0 6px #3EE7F588; }
 .boardGrade.best{ color:#6FCF97; }
 .boardGrade.book{ color:var(--dim); }
@@ -257,7 +263,7 @@
 .trackName{ font-family:var(--font-mono); font-size:12px; color:var(--yellow);
   text-shadow:0 0 8px #F5D93E44; flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .trackTag{ font-size:9px; font-weight:700; letter-spacing:.14em; text-transform:uppercase;
-  color:var(--dim); border:1px solid #8B2FC966; border-radius:4px; padding:1px 5px; flex:none; }
+  color:var(--dim); border:1px solid #8B2FC966; border-radius:var(--r-2xs); padding:1px 5px; flex:none; }
 .mp3Progress{ display:flex; align-items:center; gap:8px; }
 .mp3Time{ font-family:var(--font-mono); font-size:10px; color:var(--dim); width:30px; flex:none; text-align:center; }
 .playBtn{ width:38px; height:38px; border-radius:50%; border:2px solid var(--cyan);
@@ -272,9 +278,9 @@
 .playBtn:disabled{ opacity:.4; cursor:default; box-shadow:none; }
 .playBtn.sm.active{ border-color:var(--cyan); color:var(--cyan); background:#0E2E38; box-shadow:0 0 12px #3EE7F544; }
 .jbTrackList{ max-height:110px; overflow-y:auto; display:flex; flex-direction:column; gap:2px;
-  border:1px solid #8B2FC966; border-radius:8px; padding:4px; }
+  border:1px solid #8B2FC966; border-radius:var(--r-xs); padding:4px; }
 .promoBox .jbTrackRow{ background:transparent; border:none; text-align:left; color:var(--liliac);
-  font-family:var(--font-mono); font-size:11px; padding:4px 6px; border-radius:4px;
+  font-family:var(--font-mono); font-size:11px; padding:4px 6px; border-radius:var(--r-2xs);
   cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:none;
   transition:background .12s ease, color .12s ease; }
 .promoBox .jbTrackRow:hover{ background:#3EE7F522; }
@@ -307,7 +313,7 @@ input[type=range]{ flex:1; min-width:0; accent-color:var(--magenta); }
 .nameEditBtn:focus-visible, .jbTrackRow:focus-visible, input[type=range]:focus-visible,
 input[type=text]:focus-visible, .promoBox button:focus-visible{
   outline:2px solid var(--cyan); outline-offset:2px; }
-.nameEditBtn{ font-size:11px; line-height:1; padding:2px 4px; border:1px solid #3EE7F555; border-radius:4px;
+.nameEditBtn{ font-size:11px; line-height:1; padding:2px 4px; border:1px solid #3EE7F555; border-radius:var(--r-2xs);
   background:transparent; color:var(--cyan); cursor:pointer; text-transform:none; opacity:.75; flex:none;
   transition:opacity .15s ease, background .15s ease; }
 .nameEditBtn:hover{ opacity:1; background:#3EE7F522; }
@@ -320,18 +326,18 @@ select:hover{ border-color:var(--cyan); }
 .rows, .jbTrackList, .blindLog{ scrollbar-width:thin; scrollbar-color:#8B2FC966 transparent; }
 .rows::-webkit-scrollbar, .jbTrackList::-webkit-scrollbar, .blindLog::-webkit-scrollbar{ width:8px; }
 .rows::-webkit-scrollbar-thumb, .jbTrackList::-webkit-scrollbar-thumb, .blindLog::-webkit-scrollbar-thumb{
-  background:#8B2FC966; border-radius:4px; }
+  background:#8B2FC966; border-radius:var(--r-2xs); }
 .rows::-webkit-scrollbar-track, .jbTrackList::-webkit-scrollbar-track, .blindLog::-webkit-scrollbar-track{
   background:transparent; }
 .promoOv{ position:absolute; inset:0; background:#0E0620CC; display:flex; align-items:center;
-  justify-content:center; z-index:10; border-radius:4px; animation:ovFade .15s ease-out; }
+  justify-content:center; z-index:10; border-radius:var(--r-2xs); animation:ovFade .15s ease-out; }
 @keyframes ovFade{ from{ opacity:0; } to{ opacity:1; } }
 .promoBox{ background:var(--panel); border:1px solid var(--cyan); border-radius:var(--r-md); padding:10px;
   display:flex; gap:6px; box-shadow:0 0 30px #3EE7F566; position:relative;
   animation:boxPop .18s cubic-bezier(.34,1.4,.64,1); }
 @keyframes boxPop{ from{ opacity:0; transform:scale(.94) translateY(6px); } to{ opacity:1; transform:none; } }
 .promoBox button{ font-size:32px; padding:4px 10px; background:transparent; border:none; cursor:pointer;
-  border-radius:6px; transition:background .15s ease; }
+  border-radius:var(--r-sm); transition:background .15s ease; }
 .promoBox button:hover{ background:#3EE7F522; }
 
 /* Every "View Leaderboard" trigger in the app uses this -- small and
@@ -353,7 +359,7 @@ select:hover{ border-color:var(--cyan); }
    warm-toned strip under the controls row so it can't be missed but
    also can't block anything else on the screen. */
 .newGameConfirm{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:8px;
-  padding:8px 10px; border-radius:8px; border:1px solid #F5D93E4D; background:#F5D93E14;
+  padding:8px 10px; border-radius:var(--r-xs); border:1px solid #F5D93E4D; background:#F5D93E14;
   font-size:12px; color:var(--yellow); }
 /* Renders as ErrorBoundary's fallback in main.jsx -- replaces <App/>
    entirely on a crash, so it's never actually a descendant of .root.
@@ -411,7 +417,7 @@ select:hover{ border-color:var(--cyan); }
 .blindStatus{ font-size:11px; font-weight:700; letter-spacing:.2em; text-transform:uppercase;
   color:var(--yellow); text-shadow:0 0 8px #F5D93E44; }
 .blindLog{ flex:1 1 auto; min-height:180px; max-height:44vh; overflow-y:auto; display:flex;
-  flex-direction:column; gap:6px; padding:8px; border:1px solid #8B2FC94D; border-radius:8px;
+  flex-direction:column; gap:6px; padding:8px; border:1px solid #8B2FC94D; border-radius:var(--r-xs);
   background:#150C2488; }
 .blindMsg{ font-size:13px; line-height:1.45; color:var(--liliac); }
 .blindMsg.you{ color:var(--cyan); }
@@ -419,7 +425,7 @@ select:hover{ border-color:var(--cyan); }
   text-transform:uppercase; color:var(--dim); }
 .blindInputRow{ display:flex; gap:8px; }
 .blindInputRow input[type=text]{ flex:1; min-width:0; font-family:inherit; font-size:13px;
-  border-radius:6px; padding:9px 10px; background:#1D1038; color:var(--liliac);
+  border-radius:var(--r-sm); padding:9px 10px; background:#1D1038; color:var(--liliac);
   border:1px solid #8B2FC966; }
 .blindInputRow input[type=text]:focus{ outline:none; border-color:var(--cyan); }
 .blindCtrls .btn{ font-size:10px; padding:8px 10px; }

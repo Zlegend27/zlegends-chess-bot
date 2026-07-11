@@ -27,7 +27,7 @@ import { syncRankBotToSupabase, fetchRankBotFromSupabase, logRankBotMove } from 
 import { ENGINE_VERSION } from "./utils/version";
 import { OPENINGS } from "./utils/openings";
 import { loadEcoOpenings, detectEcoOpening, theoryPlyCount } from "./utils/ecoOpenings";
-import { stockfishBestMove, STOCKFISH_MIN_ELO } from "./engine/stockfishEngine";
+import { stockfishBestMove, STOCKFISH_MIN_ELO, warmUpStockfish } from "./engine/stockfishEngine";
 import "./tokens.css";
 import "./App.css";
 
@@ -372,6 +372,17 @@ export default function ZlegendsBot() {
     if (siteView !== "play" || ecoData) return;
     loadEcoOpenings().then(setEcoData);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [siteView]);
+  /* warmUpStockfish() has existed since this engine was added specifically
+     to avoid the first bot move absorbing the whole WASM download+init --
+     but nothing was actually calling it, so it was dead code and every
+     new player's first move (default difficulty is "2000 Elo", a
+     Stockfish tier) paid that stall in full. Same defer-until-play timing
+     as the ECO book above; the existing "Zlegend2700 is calculating…"
+     thinking state already covers the rare case someone moves faster than
+     a small single-threaded WASM build can finish loading. */
+  useEffect(() => {
+    if (siteView === "play") warmUpStockfish();
   }, [siteView]);
   const pieceImgSrc = (type, isWhite) => getPieceSet(pieceSetId).svgUrl(type, isWhite);
   const audioRef = useRef(null);
@@ -2683,6 +2694,18 @@ export default function ZlegendsBot() {
               <div className="evalbar" title={"Eval " + evalLabel} role="img" aria-label={`Evaluation: ${evalLabel}, ${playerAdvantageCp >= 0 ? "you're ahead" : "bot is ahead"}`}>
                 <div className="pfill" style={{ height: playerShare + "%" }} />
                 <div className="tick" />
+                {/* Numeric readout for power users, not just the fill
+                   height -- only past +/-0.5 so it's not fighting the
+                   tick mark right at a dead-even position. .pfill is
+                   height-driven from the bottom (column-reverse), and
+                   whiteShare/playerShare is clamped to [4,96] -- so the
+                   very top of the bar is *always* still background, even
+                   at a near-total advantage. One fixed position/color
+                   that's always legible, rather than needing to track
+                   which region currently owns which pixel. */}
+                {Math.abs(evalPawns) >= 0.5 && (
+                  <span className="evalNum">{evalLabel}</span>
+                )}
               </div>
             )}
             <div style={{ position: "relative", flex: 1 }}>

@@ -55,13 +55,14 @@ before `App.css`, so every token is available to everything) — reference
 | `--font-display` | Arial Black/Impact stack | titles, buttons, card names, clocks |
 | `--font-body` | Trebuchet MS stack | descriptions, UI copy read at length |
 | `--font-mono` | ui-monospace stack | move lists, PGN, timestamps, eval numbers |
-| `--r-sm` / `--r-md` / `--r-lg` / `--r-pill` | `6px`/`12px`/`16px`/`999px` | buttons/inputs → cards/modals → Tailwind surfaces → toggles/badges |
+| `--r-2xs` / `--r-xs` / `--r-sm` / `--r-md` / `--r-lg` / `--r-pill` | `4px`/`8px`/`6px`/`12px`/`16px`/`999px` | tiny inline badges → small square frames → buttons/inputs → cards/modals → Tailwind surfaces → toggles/badges |
 
-Not every border-radius in `App.css` has been migrated onto the `--r-*` scale
-— genuinely one-off decorative values (a speech-bubble corner, a tiny inline
-badge) are left as literals rather than forced into a scale they don't
-belong to. Card/box/modal/button/select/toggle are the ones that matter and
-are on tokens; check there before adding a new literal near them.
+Every border-radius in `App.css` is on this scale now except a small number
+of genuinely one-off decorative values (an asymmetric speech-bubble corner,
+one 10px pill used nowhere else) — those are left as literals rather than
+forced onto a scale they don't belong to. If you're about to add a new
+radius value, check this list first; `--r-xs`/`--r-2xs` exist specifically
+because 8px and 4px turned out to each recur 4-6 times before being named.
 
 Board square colors (`--boardLight`/`--boardDark`) are the one exception —
 set per-instance via inline style on `.root` for the active board theme (see
