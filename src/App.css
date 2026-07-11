@@ -3,10 +3,18 @@
   --violet:#8B2FC9; --magenta:#D94BF0; --cyan:#3EE7F5; --yellow:#F5D93E;
   --liliac:#C9C2E8; --sqdark:#4A2A7A; --white:#F4EFFF; --dim:#9D8FC4;
   --boardLight:#C9C2E8; --boardDark:#4A2A7A;
+  /* Three explicit font stacks -- everything in this file should
+     reference one of these rather than repeating (and slowly drifting
+     from) the literal stack. --font-display for titles/buttons/card
+     names/clocks, --font-body for descriptions/UI copy, --font-mono for
+     move lists/PGN/timestamps/eval numbers. */
+  --font-display:'Arial Black',Impact,'Haettenschweiler',sans-serif;
+  --font-body:'Trebuchet MS','Segoe UI',system-ui,sans-serif;
+  --font-mono:ui-monospace,'Cascadia Mono',Consolas,monospace;
   min-height:100vh; min-height:100dvh;
   background: radial-gradient(900px 500px at 50% 0%, #3A1560 0%, var(--void2) 45%, var(--void) 100%);
   color:var(--white);
-  font-family:'Trebuchet MS','Segoe UI',system-ui,sans-serif;
+  font-family:var(--font-body);
   display:flex; flex-direction:column; align-items:center;
   padding:calc(22px + env(safe-area-inset-top)) calc(14px + env(safe-area-inset-right)) calc(44px + env(safe-area-inset-bottom)) calc(14px + env(safe-area-inset-left));
   position:relative; overflow-x:hidden;
@@ -36,14 +44,14 @@
 @keyframes blink{ 0%,100%{opacity:1} 50%{opacity:.35} }
 .hdr h1{
   margin:6px 0 0; font-size:clamp(34px,7vw,54px); line-height:.95;
-  font-family:'Arial Black',Impact,'Haettenschweiler',sans-serif;
+  font-family:var(--font-display);
   font-style:italic; letter-spacing:.01em; transform:rotate(-1.5deg);
   background:linear-gradient(180deg,#FFFFFF 15%, #E9B8FF 45%, var(--magenta) 85%);
   -webkit-background-clip:text; background-clip:text; color:transparent;
   filter:drop-shadow(0 0 14px #D94BF066) drop-shadow(3px 3px 0 #150C24);
   text-transform:uppercase;
 }
-.hdr .sub{ margin-top:6px; font-family:'Arial Black',Impact,sans-serif; font-style:italic;
+.hdr .sub{ margin-top:6px; font-family:var(--font-display); font-style:italic;
   font-size:15px; color:var(--yellow); text-transform:uppercase; letter-spacing:.06em;
   text-shadow:0 0 12px #F5D93E66, 2px 2px 0 #150C24; transform:rotate(-1deg); }
 .layout{ display:flex; gap:22px; flex-wrap:wrap; justify-content:center; align-items:flex-start; z-index:1; width:100%; }
@@ -62,7 +70,7 @@
 .avatarBox.reactionBox.happy{ border-color:#48b2a7; box-shadow:0 0 22px #7cfff177; background:#08150F; }
 .reactionImg{ display:block; width:150px; max-width:40vw; height:auto; border-radius:6px; }
 .youAvatarImg{ display:block; width:36px; height:36px; object-fit:contain; }
-.cardName{ font-family:'Arial Black',Impact,sans-serif; font-style:italic; font-size:14px;
+.cardName{ font-family:var(--font-display); font-style:italic; font-size:14px;
   text-transform:uppercase; letter-spacing:.04em; }
 .cardName.bot{ color:var(--magenta); text-shadow:0 0 8px #D94BF055; }
 .cardName.you{ color:var(--cyan); text-shadow:0 0 8px #3EE7F555; }
@@ -83,7 +91,7 @@
 .trayEmpty{ font-size:11px; color:var(--dim); font-style:italic; }
 .trayEmpty.openingTag{ color:var(--cyan); font-style:normal; font-weight:700; }
 .puzzleMeta{ font-style:normal; line-height:1.3; margin-top:2px; }
-.lead{ font-family:'Arial Black',Impact,sans-serif; font-size:15px; color:var(--yellow);
+.lead{ font-family:var(--font-display); font-size:15px; color:var(--yellow);
   text-shadow:0 0 8px #F5D93E77, 1px 1px 0 #150C24; flex:none; }
 
 /* Standard board theme -- chess.com look: flat (no neon glow) green
@@ -98,7 +106,7 @@
    (no "facing an opponent" framing for a solo race against the clock).
    Shares .card's box/sizing so it drops into the same layout slot. */
 .rushHud{ align-items:center; }
-.rushClock{ font-family:'Arial Black',Impact,sans-serif; font-size:22px; font-weight:900;
+.rushClock{ font-family:var(--font-display); font-size:22px; font-weight:900;
   font-variant-numeric:tabular-nums; color:var(--cyan); text-shadow:0 0 10px #3EE7F566;
   background:#120A26; border:1px solid #ffffff18; border-radius:8px; padding:8px 10px;
   flex:none; min-width:64px; text-align:center; }
@@ -119,7 +127,7 @@
    avatar/mood/name (not "facing" anyone). Just what puzzle it is and
    its rating; the actual prompt/feedback text stays on the you-card
    below, same as it already does for every other mode. */
-.puzzleHudLabel{ font-family:'Arial Black',Impact,sans-serif; font-style:italic; font-size:13px;
+.puzzleHudLabel{ font-family:var(--font-display); font-style:italic; font-size:13px;
   text-transform:uppercase; letter-spacing:.03em; color:var(--cyan); text-shadow:0 0 8px #3EE7F555; }
 .rushCounterRow{ display:flex; align-items:center; justify-content:space-between; gap:10px;
   font-size:11px; color:var(--dim); }
@@ -183,16 +191,16 @@
 .pc.b{ filter:drop-shadow(0 2px 2px #00000088); }
 .dot{ position:absolute; width:26%; height:26%; border-radius:50%; background:#1D9EB3; box-shadow:0 0 0 2px #1D10384D, 0 0 8px #3EE7F599; z-index:1; }
 .dot.ring{ width:88%; height:88%; background:transparent; border:4px solid #1D9EB3; box-shadow:0 0 0 2px #1D10384D; }
-.coord{ position:absolute; font-size:10px; font-weight:700; opacity:.6; font-family:ui-monospace,Consolas,monospace; color:#150C24; }
+.coord{ position:absolute; font-size:10px; font-weight:700; opacity:.6; font-family:var(--font-mono); color:#150C24; }
 .sq.dark .coord{ color:#C9C2E8; }
 .coord.rk{ top:3px; left:4px; } .coord.fl{ bottom:2px; right:4px; }
 .statusRow{ display:flex; align-items:center; justify-content:center; gap:10px; min-height:26px; flex-wrap:wrap; }
 .status{ text-align:center; font-size:14px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:#CBBDF0; }
 .status.over{ color:var(--yellow); text-shadow:0 0 10px #F5D93E66; }
-.bang{ font-family:'Arial Black',Impact,sans-serif; background:#0E2E38; color:var(--cyan);
+.bang{ font-family:var(--font-display); background:#0E2E38; color:var(--cyan);
   border:2px solid var(--cyan); border-radius:12px 12px 12px 2px; padding:1px 9px; font-size:15px;
   text-shadow:0 0 8px var(--cyan); box-shadow:0 0 12px #3EE7F566; animation:blink 1s infinite; }
-.replayBadge{ font-family:'Arial Black',Impact,sans-serif; background:#3A1560; color:var(--yellow);
+.replayBadge{ font-family:var(--font-display); background:#3A1560; color:var(--yellow);
   border:2px solid var(--yellow); border-radius:12px; padding:2px 10px; font-size:12px;
   letter-spacing:.06em; text-transform:uppercase; }
 .panel{ width:min(88vw,300px); display:flex; flex-direction:column; gap:12px; }
@@ -200,7 +208,7 @@
   box-shadow:0 0 18px #8B2FC922; }
 .boxHead{ font-size:11px; font-weight:700; letter-spacing:.26em; text-transform:uppercase;
   color:var(--cyan); text-shadow:0 0 8px #3EE7F566; margin-bottom:8px; }
-.rows{ max-height:180px; overflow-y:auto; font-family:ui-monospace,'Cascadia Mono',Consolas,monospace; font-size:13px; }
+.rows{ max-height:180px; overflow-y:auto; font-family:var(--font-mono); font-size:13px; }
 
 /* Settings' Eval Bar row -- an actual on/off switch instead of a
    click-anywhere row whose own label text ("Show/Hide Eval Bar") was
@@ -234,7 +242,7 @@
 .boardGrade.mistake{ color:#F0A548; }
 .boardGrade.blunder{ color:#F05348; }
 .empty{ padding:10px 2px; color:var(--dim); font-size:12px; font-style:italic; }
-.pv{ margin-top:8px; font-family:ui-monospace,Consolas,monospace; font-size:12px; color:#B9AEE0; line-height:1.5; word-break:break-word; }
+.pv{ margin-top:8px; font-family:var(--font-mono); font-size:12px; color:#B9AEE0; line-height:1.5; word-break:break-word; }
 .audioRow{ display:flex; align-items:center; gap:8px; }
 .jbHead{ display:flex; align-items:center; gap:8px; }
 .jbMole{ width:64px; height:auto; display:block; margin:0 auto; filter:drop-shadow(0 0 10px #8B2FC966); }
@@ -246,12 +254,12 @@
 .promoBox .modalCloseX:hover{ background:#3EE7F522; color:var(--cyan); }
 .promoBox .modalCloseX:active{ transform:scale(.88); }
 .trackRow{ display:flex; align-items:center; gap:8px; margin-bottom:8px; }
-.trackName{ font-family:ui-monospace,Consolas,monospace; font-size:12px; color:var(--yellow);
+.trackName{ font-family:var(--font-mono); font-size:12px; color:var(--yellow);
   text-shadow:0 0 8px #F5D93E44; flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .trackTag{ font-size:9px; font-weight:700; letter-spacing:.14em; text-transform:uppercase;
   color:var(--dim); border:1px solid #8B2FC966; border-radius:4px; padding:1px 5px; flex:none; }
 .mp3Progress{ display:flex; align-items:center; gap:8px; }
-.mp3Time{ font-family:ui-monospace,Consolas,monospace; font-size:10px; color:var(--dim); width:30px; flex:none; text-align:center; }
+.mp3Time{ font-family:var(--font-mono); font-size:10px; color:var(--dim); width:30px; flex:none; text-align:center; }
 .playBtn{ width:38px; height:38px; border-radius:50%; border:2px solid var(--cyan);
   background:#0E2E38; color:var(--cyan); font-size:15px; cursor:pointer; flex:none;
   box-shadow:0 0 12px #3EE7F544; display:flex; align-items:center; justify-content:center; touch-action:manipulation;
@@ -266,15 +274,15 @@
 .jbTrackList{ max-height:110px; overflow-y:auto; display:flex; flex-direction:column; gap:2px;
   border:1px solid #8B2FC966; border-radius:8px; padding:4px; }
 .promoBox .jbTrackRow{ background:transparent; border:none; text-align:left; color:var(--liliac);
-  font-family:ui-monospace,Consolas,monospace; font-size:11px; padding:4px 6px; border-radius:4px;
+  font-family:var(--font-mono); font-size:11px; padding:4px 6px; border-radius:4px;
   cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:none;
   transition:background .12s ease, color .12s ease; }
 .promoBox .jbTrackRow:hover{ background:#3EE7F522; }
 .promoBox .jbTrackRow.cur{ background:#8B2FC933; color:var(--cyan); font-weight:700; }
 input[type=range]{ flex:1; min-width:0; accent-color:var(--magenta); }
-.volPct{ font-family:ui-monospace,Consolas,monospace; font-size:11px; color:var(--dim); width:34px; text-align:right; }
+.volPct{ font-family:var(--font-mono); font-size:11px; color:var(--dim); width:34px; text-align:right; }
 .ctrls{ display:flex; gap:8px; flex-wrap:wrap; }
-.btn{ font-family:'Arial Black',Impact,sans-serif; font-style:italic; font-size:12px;
+.btn{ font-family:var(--font-display); font-style:italic; font-size:12px;
   text-transform:uppercase; letter-spacing:.04em; cursor:pointer; touch-action:manipulation;
   background:linear-gradient(180deg,#A957E0,var(--violet)); color:#fff; border:none; border-radius:6px;
   padding:9px 12px; min-height:44px; box-sizing:border-box; display:inline-flex; align-items:center; justify-content:center;
@@ -339,7 +347,7 @@ select:hover{ border-color:var(--cyan); }
   background:transparent; border:1px solid #8B2FC966; border-radius:6px;
   color:var(--liliac); box-shadow:none; transition:border-color .15s ease, color .15s ease, background .15s ease; }
 .leaderboardBtn:hover, .promoBox .leaderboardBtn:hover{ border-color:var(--cyan); color:var(--cyan); background:#3EE7F511; }
-.toast{ font-family:ui-monospace,Consolas,monospace; font-size:11px; color:var(--cyan); margin-top:6px; }
+.toast{ font-family:var(--font-mono); font-size:11px; color:var(--cyan); margin-top:6px; }
 /* Inline "abandon this game?" step before New wipes real progress --
    deliberately not a modal (see App.jsx's newGameConfirm), just a
    warm-toned strip under the controls row so it can't be missed but
@@ -347,8 +355,15 @@ select:hover{ border-color:var(--cyan); }
 .newGameConfirm{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:8px;
   padding:8px 10px; border-radius:8px; border:1px solid #F5D93E4D; background:#F5D93E14;
   font-size:12px; color:var(--yellow); }
+/* Renders as ErrorBoundary's fallback in main.jsx -- replaces <App/>
+   entirely on a crash, so it's never actually a descendant of .root and
+   can't rely on --font-body/--void resolving. Same var(--x, literal)
+   fallback pattern already used for background here, applied to the
+   font stack too rather than reverting to a second hardcoded copy that
+   could quietly drift from --font-body over time. */
 .errBox{ min-height:100vh; min-height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center;
-  gap:12px; background:var(--void,#0E0620); color:#F4EFFF; font-family:'Trebuchet MS','Segoe UI',system-ui,sans-serif;
+  gap:12px; background:var(--void,#0E0620); color:#F4EFFF;
+  font-family:var(--font-body,'Trebuchet MS','Segoe UI',system-ui,sans-serif);
   text-align:center; padding:24px; }
 /* Mobile: board first, then action buttons, then scoresheet/analysis, then
    the Juice Box + Openings icon row. boardCol/panel go display:contents so
