@@ -374,6 +374,9 @@ select:hover{ border-color:var(--cyan); }
 .lessonBranchOptions{ display:flex; flex-direction:column; gap:8px; margin-bottom:8px; }
 .lessonNav{ display:flex; justify-content:space-between; gap:8px; margin-top:14px; }
 .lessonExit{ display:block; width:100%; margin-top:8px; opacity:.7; }
+.lessonPlayCtrls{ display:flex; gap:6px; flex-wrap:wrap; }
+.lessonPlayCtrls .btn{ min-height:36px; padding:6px 10px; font-size:11px; }
+.lessonAnalyzeBtn{ display:block; width:100%; margin-top:10px; font-size:11px; }
 /* Renders as ErrorBoundary's fallback in main.jsx -- replaces <App/>
    entirely on a crash, so it's never actually a descendant of .root.
    Safe to use the bare tokens directly (no var(--x, literal) fallback
