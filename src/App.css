@@ -361,6 +361,19 @@ select:hover{ border-color:var(--cyan); }
 .newGameConfirm{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:8px;
   padding:8px 10px; border-radius:var(--r-xs); border:1px solid #F5D93E4D; background:#F5D93E14;
   font-size:12px; color:var(--yellow); }
+
+/* LessonPlayer -- .box already gives the card chrome; these are just
+   the beat-content typography/spacing on top of it. */
+.lessonBox{ min-height:220px; }
+.lessonBeatCount{ font-family:var(--font-mono); font-size:11px; color:var(--dim); margin-bottom:8px; }
+.lessonPrompt{ font-weight:700; color:var(--white); margin:0 0 8px; line-height:1.4; }
+.lessonText{ font-size:13px; color:var(--liliac); line-height:1.5; margin:0 0 12px; }
+.lessonHint{ font-size:12px; color:var(--dim); font-style:italic; margin:0 0 10px; }
+.lessonTriedFeedback{ font-size:13px; font-weight:700; color:var(--yellow); margin:0 0 10px; }
+.lessonTriedFeedback.good{ color:var(--cyan); }
+.lessonBranchOptions{ display:flex; flex-direction:column; gap:8px; margin-bottom:8px; }
+.lessonNav{ display:flex; justify-content:space-between; gap:8px; margin-top:14px; }
+.lessonExit{ display:block; width:100%; margin-top:8px; opacity:.7; }
 /* Renders as ErrorBoundary's fallback in main.jsx -- replaces <App/>
    entirely on a crash, so it's never actually a descendant of .root.
    Safe to use the bare tokens directly (no var(--x, literal) fallback

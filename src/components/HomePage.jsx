@@ -54,8 +54,7 @@ const MODES = [
   { id: "openings", label: "Openings Library", desc: "Study Italian, Sicilian, Ruy Lopez and more.", custom: true },
   { id: "spectate", label: "Spectate Bots", desc: "Watch two bots battle. No clicking required.", icon: ICONS.eye },
   { id: "blind", label: "Blind Chess", desc: "Play a full game by voice only. No board.", custom: true },
-  { id: "lessons", label: "Lessons", desc: "Structured lessons to level up your game.", icon: ICONS.cap,
-    comingSoon: "Lessons are coming soon — we're putting the curriculum together." },
+  { id: "lessons", label: "Lessons", desc: "Structured lessons to level up your game.", icon: ICONS.cap },
 ];
 
 /* The one mode this page spotlights instead of tiling -- same label/desc

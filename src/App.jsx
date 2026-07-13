@@ -23,6 +23,7 @@ import { getDisplayName, setDisplayName } from "./utils/playerIdentity";
 import { submitRushScore } from "./utils/leaderboard";
 import { RUSH_DURATIONS } from "./utils/rushDurations";
 import LeaderboardPage from "./components/LeaderboardPage";
+import LessonsPage from "./components/LessonsPage";
 import { syncRankBotToSupabase, fetchRankBotFromSupabase, logRankBotMove } from "./utils/rankBot";
 import { ENGINE_VERSION } from "./utils/version";
 import { OPENINGS } from "./utils/openings";
@@ -2644,6 +2645,7 @@ export default function ZlegendsBot() {
      this just triggers the same state changes those already do. */
   const enterMode = (modeId) => {
     if (modeId === "leaderboard") { leaderboardReturnRef.current = "home"; setSiteView("leaderboard"); return; }
+    if (modeId === "lessons") { setSiteView("lessons"); return; }
     if (modeId === "settings") { setSiteView("play"); openSettings(); return; }
     setSiteView("play");
     if (modeId === "puzzles") { setPuzzlesOpen(true); ensurePuzzlesLoaded(); }
@@ -2666,6 +2668,16 @@ export default function ZlegendsBot() {
       <LeaderboardPage
         initialDuration={leaderboardDuration}
         onBack={() => setSiteView(leaderboardReturnRef.current)}
+        onToolSelect={onToolSelect}
+        activeToolId={activeToolId}
+      />
+    );
+  }
+
+  if (siteView === "lessons") {
+    return (
+      <LessonsPage
+        onBack={() => setSiteView("home")}
         onToolSelect={onToolSelect}
         activeToolId={activeToolId}
       />
