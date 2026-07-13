@@ -108,13 +108,15 @@ function rankBotLossToPerf(loss) {
 const RANK_BOT_EWMA_K = 0.06;
 /* A cp loss this big is a "throw" (hung piece / mate-in-sight ignored). */
 const RANK_BOT_THROW_CP = 300;
-/* Sandbagging guards: players deliberately hanging pieces to make the
-   bot easy. Two throws inside the recent-move window flip the game to
-   "suspect" -- further throws only move the dial at quarter weight --
-   and no single game may drag the dial down more than this many points
-   total, however it's played. Genuine collapses still register (capped),
-   while the material override + full-strength swing check elsewhere
-   means the bot punishes the hung pieces themselves either way. */
+/* Sandbagging/erratic-play guards: once throws pile up in the recent
+   window (more than THROWS_TO_SUSPECT of them), the dial moves at
+   quarter weight in BOTH directions -- v3 dampened only the downs,
+   which live telemetry showed backfiring for genuinely erratic players
+   (see the v3.1 notes in adjustRankBotDial). No single game may drag
+   the dial down more than MAX_GAME_DROP points total, however it's
+   played. Genuine collapses still register (capped), while the material
+   override + full-strength swing check elsewhere means the bot punishes
+   the hung pieces themselves either way. */
 const RANK_BOT_THROWS_TO_SUSPECT = 2;
 const RANK_BOT_SUSPECT_WEIGHT = 0.25;
 const RANK_BOT_MAX_GAME_DROP = 250;
@@ -1158,21 +1160,34 @@ export default function ZlegendsBot() {
       if (Math.abs(before.score) > MATE - 2000 || Math.abs(after.score) > MATE - 2000) return;
       const loss = Math.max(0, before.score + after.score);
       const window = rankBotWindowRef.current;
+      const prevLoss = window.length ? window[window.length - 1] : 0;
       window.push(loss);
       if (window.length > 8) window.shift();
       rankBotTrackedRef.current += 1;
       const eloBefore = rankBotEloRef.current;
       if (rankBotGameStartEloRef.current == null) rankBotGameStartEloRef.current = eloBefore;
-      /* Sandbag check: with 2+ throws already in the recent window,
-         further throws barely count -- someone repeatedly hanging pieces
-         is manipulating the dial, not revealing their level. (A genuine
-         collapse looks the same, but it's capped, not erased, and the
-         per-game floor below bounds the total damage either way.) */
+      /* v3.1 sandbag/erratic-play handling, retuned from the first game
+         of live v3 telemetry. v3 dampened only DOWN-steps while the
+         window looked suspect, which the data showed backfiring for a
+         genuinely erratic player: their hung pieces got discounted while
+         their (often forced) "perfect" replies pulled hard toward 3000,
+         so a 203cp-average-loss game still climbed 700+ Elo. Two fixes:
+         - A clean move immediately after a throw caps at 2400 implied
+           perf -- a lone 0-loss reply right after hanging a piece is
+           usually a forced recapture the probe scores as perfect, not
+           GM-level insight.
+         - Once the window is suspect (3+ throws), the dial dampens in
+           BOTH directions: uncertainty about whether play is genuine
+           should freeze the estimate, not ratchet it either way. The
+           game-outcome step still lands full-size at the end either
+           way, so manipulated games mostly just... lose. */
       const throwsInWindow = window.filter(l => l >= RANK_BOT_THROW_CP).length;
-      const suspect = loss >= RANK_BOT_THROW_CP && throwsInWindow > RANK_BOT_THROWS_TO_SUSPECT;
+      const windowSuspect = throwsInWindow > RANK_BOT_THROWS_TO_SUSPECT;
       const mult = rankBotGamesRef.current < RANK_BOT_CALIBRATION_GAMES ? RANK_BOT_CALIBRATION_MULT : 1;
-      let step = (rankBotLossToPerf(loss) - eloBefore) * RANK_BOT_EWMA_K * mult;
-      if (suspect && step < 0) step *= RANK_BOT_SUSPECT_WEIGHT;
+      let perf = rankBotLossToPerf(loss);
+      if (loss < 20 && prevLoss >= RANK_BOT_THROW_CP) perf = Math.min(perf, 2400);
+      let step = (perf - eloBefore) * RANK_BOT_EWMA_K * mult;
+      if (windowSuspect) step *= RANK_BOT_SUSPECT_WEIGHT;
       /* Per-game floor: however this game goes, the dial can't be dragged
          down more than RANK_BOT_MAX_GAME_DROP from where it started. */
       const gameFloor = Math.max(RANK_BOT_MIN_ELO, rankBotGameStartEloRef.current - RANK_BOT_MAX_GAME_DROP);
@@ -1271,6 +1286,7 @@ export default function ZlegendsBot() {
   spectateMoveRef.current = spectateMove;
 
   const startSpectate = (whiteIdx, blackIdx, openingId) => {
+    maybeSaveAbandonedGame();
     setSpectateWhiteIdx(whiteIdx); setSpectateBlackIdx(blackIdx);
     spectateWhiteRef.current = DIFFICULTIES[whiteIdx];
     spectateBlackRef.current = DIFFICULTIES[blackIdx];
@@ -1511,8 +1527,33 @@ export default function ZlegendsBot() {
     setDragFrom(-1); setDragOverSquare(-1); setDragPos(null);
   };
 
+  /* Telemetry showed days of active play producing almost no rows in the
+     games table -- sessions were real (rank_bot_moves proved it) but
+     nearly every game got abandoned mid-way, and only finished games
+     were saved. That's most of the dataset evaporating. Any real game
+     with 8+ plies now gets saved with reason "Abandoned" ("*" is PGN's
+     standard unfinished-game result) at every board-wiping entry point.
+     Guards: only live Play-mode games (not puzzles/quiz/spectate/replay/
+     pasted), not already over (game-end already saved it). Must run
+     BEFORE maybeCountAbandonedRankGame wherever both fire -- that nulls
+     rankBotGameUidRef, and this wants the uid so the game row stays
+     linked to its rank_bot_moves. estimateRating excludes these rows
+     (winner:null would otherwise count as a draw). */
+  const maybeSaveAbandonedGame = () => {
+    if (mode !== "play" || result || activePuzzle || quizOpening || spectateMode || pastedGame) return;
+    if (moveListRef.current.length < 8) return;
+    const isRankBot = difficultyRef.current.id === "rank";
+    saveGame({
+      difficultyLabel: difficultyRef.current.label, playerColor: playerColorRef.current, moveList: moveListRef.current,
+      result: { text: "*", reason: "Abandoned" }, finalEval: eng.evalWhite(), style: gameStyleRef.current.label,
+      engineVersion: ENGINE_VERSION,
+      gameUid: isRankBot ? rankBotGameUidRef.current : null, rankEloAtGame: isRankBot ? rankBotEloRef.current : null,
+    });
+  };
+
   const newGame = (color) => {
     setNewGameConfirm(false);
+    maybeSaveAbandonedGame();
     maybeCountAbandonedRankGame();
     if (mode === "replay") {
       history.replaceState(null, "", window.location.pathname + window.location.search);
@@ -1548,6 +1589,7 @@ export default function ZlegendsBot() {
   };
 
   const startQuiz = (opening) => {
+    maybeSaveAbandonedGame();
     eng.reset();
     moveListRef.current = [];
     setQuizOpening(opening);
@@ -1595,6 +1637,7 @@ export default function ZlegendsBot() {
   const puzzlesInBand = (band) => band ? pz.PUZZLES.filter(p => p.rating >= band.min && p.rating < band.max) : pz.PUZZLES;
 
   const startPuzzle = (puzzle) => {
+    maybeSaveAbandonedGame();
     eng.loadFen(puzzle.fen);
     moveListRef.current = [];
     setActivePuzzle(puzzle);
@@ -1646,7 +1689,10 @@ export default function ZlegendsBot() {
 
   const finishRush = (reason) => {
     setRushResult({ reason, solved: rushSolvedRef.current });
-    submitRushScore({ duration: rushDuration, solved: rushSolvedRef.current, displayName });
+    /* 0-solve runs (opened a duration once, bailed or timed out cold)
+       aren't scores -- a third of logged runs were these, pure noise in
+       the leaderboard data. */
+    if (rushSolvedRef.current > 0) submitRushScore({ duration: rushDuration, solved: rushSolvedRef.current, displayName });
     if (reason === "time") { try { audio.sfxTimeUp(); } catch { /* audio unavailable */ } }
   };
 
@@ -2188,6 +2234,7 @@ export default function ZlegendsBot() {
     if (!applied.length) { setPasteError("Couldn't match those moves to a legal game."); return; }
     if (applied.length < tokens.length) { setPasteError(`Only matched ${applied.length} of ${tokens.length} moves — loaded as far as it could.`); }
     else setPasteError(null);
+    maybeSaveAbandonedGame();
     eng.reset();
     replayIntoEngine(eng, sans);
     moveListRef.current = sans;

@@ -47,10 +47,14 @@ export async function estimateRating() {
   const supabase = await getSupabase();
   if (!supabase) return { error: true, message: "Rating isn't set up on this deployment yet." };
   try {
+    /* Abandoned games (saved for the analysis dataset with winner:null)
+       must not reach the fold below -- a null winner scores 0.5 there,
+       so every walked-away game would silently count as a draw. */
     const { data, error } = await supabase
       .from("games")
       .select("winner, player_color, difficulty_label")
       .eq("client_id", getClientId())
+      .neq("result_reason", "Abandoned")
       .in("difficulty_label", Object.keys(ANCHOR_ELO));
     if (error || !data) return { error: true, message: error?.message || "Couldn't load rating." };
     let rating = START_RATING;
