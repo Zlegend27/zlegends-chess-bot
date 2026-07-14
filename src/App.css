@@ -363,16 +363,39 @@ select:hover{ border-color:var(--cyan); }
   font-size:12px; color:var(--yellow); }
 
 /* LessonPlayer -- .box already gives the card chrome; these are just
-   the beat-content typography/spacing on top of it. */
-.lessonBox{ min-height:220px; }
-.lessonBeatCount{ font-family:var(--font-mono); font-size:11px; color:var(--dim); margin-bottom:8px; }
+   the beat-content typography/spacing on top of it. The panel is wider
+   than the Play screen's (400px vs 300px): every beat carries a speech
+   bubble plus its own buttons/questions, and the cramped column made
+   those feel like an afterthought. */
+.lessonPanel{ width:min(88vw,400px); }
+.lessonBox{ min-height:300px; display:flex; flex-direction:column; }
+.lessonCoachHead{ display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+.lessonCoachImg{ height:52px; width:auto; flex:none;
+  filter:drop-shadow(0 0 10px #3EE7F544); }
+.lessonCoachMeta{ flex:1; min-width:0; }
+.lessonCoachName{ font-family:var(--font-display); font-style:italic; font-size:15px;
+  text-transform:uppercase; letter-spacing:.05em; color:var(--cyan);
+  text-shadow:0 0 8px #3EE7F555; }
+.lessonVoiceBtn{ width:38px; height:38px; flex:none; display:flex; align-items:center; justify-content:center;
+  border:1px solid #8B2FC966; border-radius:50%; background:transparent; color:var(--liliac);
+  cursor:pointer; touch-action:manipulation; transition:border-color .15s ease, color .15s ease, background .15s ease; }
+.lessonVoiceBtn:hover{ border-color:var(--cyan); color:var(--cyan); background:#3EE7F511; }
+.lessonVoiceBtn:focus-visible{ outline:2px solid var(--cyan); outline-offset:2px; }
+/* The coach's speech bubble -- min-height sized for ~4 lines so the
+   controls below it don't jump around as different beats talk more or
+   less; tapping it skips the typewriter. */
+.lessonBubble{ background:#150C24; border:1px solid #8B2FC94D; border-radius:var(--r-md);
+  padding:12px 14px; min-height:96px; margin-bottom:12px; cursor:pointer;
+  font-size:14px; color:var(--liliac); line-height:1.55; }
+.lessonCaret{ color:var(--cyan); animation:blink 1s infinite; }
+.lessonBeatCount{ font-family:var(--font-mono); font-size:11px; color:var(--dim); }
 .lessonPrompt{ font-weight:700; color:var(--white); margin:0 0 8px; line-height:1.4; }
-.lessonText{ font-size:13px; color:var(--liliac); line-height:1.5; margin:0 0 12px; }
+.lessonText{ font-size:14px; color:var(--liliac); line-height:1.55; margin:0 0 12px; }
 .lessonHint{ font-size:12px; color:var(--dim); font-style:italic; margin:0 0 10px; }
-.lessonTriedFeedback{ font-size:13px; font-weight:700; color:var(--yellow); margin:0 0 10px; }
+.lessonTriedFeedback{ font-size:14px; font-weight:700; color:var(--yellow); margin:0 0 10px; }
 .lessonTriedFeedback.good{ color:var(--cyan); }
 .lessonBranchOptions{ display:flex; flex-direction:column; gap:8px; margin-bottom:8px; }
-.lessonNav{ display:flex; justify-content:space-between; gap:8px; margin-top:14px; }
+.lessonNav{ display:flex; justify-content:space-between; gap:8px; margin-top:auto; padding-top:14px; }
 .lessonExit{ display:block; width:100%; margin-top:8px; opacity:.7; }
 .lessonPlayCtrls{ display:flex; gap:6px; flex-wrap:wrap; }
 .lessonPlayCtrls .btn{ min-height:36px; padding:6px 10px; font-size:11px; }

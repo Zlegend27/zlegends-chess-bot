@@ -5,18 +5,43 @@
    can't disturb the main Play board/modes, same isolation convention
    BlindMode.jsx already uses.
 
+   The coach (the site mascot, public/lesson-coach.webp) "speaks" every
+   beat through a typewriter speech bubble, with a three-mode voice
+   toggle: chatter blips (Animal Crossing-style square-wave babble --
+   see utils/lessonVoice.js for why that's the "Zelda-ish" answer),
+   real TTS (Blind Chess's ranked-best browser voice), or muted.
+
    Every beat also offers "Analyze this position": free moves for both
-   sides on the live board plus an on-demand engine check (the same
-   vendored Stockfish worker the difficulty tiers use, full strength),
-   with Resume snapping cleanly back to the lesson. Interactivity over
-   reading -- same philosophy as the Openings Library's replay/quiz.
+   sides plus an on-demand engine check (the same vendored Stockfish
+   worker the difficulty tiers use, full strength), with Resume
+   snapping cleanly back to the lesson.
    ================================================================ */
 
 import { useEffect, useRef, useState } from "react";
 import { createEngine, M64TO120, M120TO64, mFrom, mTo } from "../engine/chessEngine";
 import { stockfishBestMove } from "../engine/stockfishEngine";
 import { replayIntoEngine } from "../utils/share";
+import { createSpeaker } from "../utils/speech";
+import { charBlip } from "../utils/lessonVoice";
+import { loadSetting, saveSetting } from "../utils/storage";
 import LessonBoard from "./LessonBoard";
+
+const TYPE_MS = 16;               // typewriter speed per character
+const VOICE_MODES = ["blips", "speech", "off"];
+
+const VoiceIcon = ({ mode }) => mode === "speech" ? (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4.03v8.05A4.5 4.5 0 0 0 16.5 12zM14 3.23v2.06A7 7 0 0 1 14 18.7v2.07A9 9 0 0 0 14 3.23z" />
+  </svg>
+) : mode === "blips" ? (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z" />
+  </svg>
+) : (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M3 9v6h4l5 5V4L7 9H3zm13.6 3 2.7-2.7-1.4-1.4-2.7 2.7-2.7-2.7-1.4 1.4 2.7 2.7-2.7 2.7 1.4 1.4 2.7-2.7 2.7 2.7 1.4-1.4-2.7-2.7z" />
+  </svg>
+);
 
 /** One chapter, played beat by beat. `onExit` returns to the chapter
  *  picker; `pieceSetId` is passed down so the lesson board matches
@@ -25,6 +50,8 @@ export default function LessonPlayer({ chapter, orientation = "white", pieceSetI
   const engRef = useRef(null);
   if (!engRef.current) engRef.current = createEngine();
   const eng = engRef.current;
+  const speakerRef = useRef(null);
+  if (!speakerRef.current) speakerRef.current = createSpeaker();
 
   const [beatIdx, setBeatIdx] = useState(0);
   const [, setTick] = useState(0);
@@ -49,9 +76,54 @@ export default function LessonPlayer({ chapter, orientation = "white", pieceSetI
   // analyze mode (available on every beat)
   const [analyzing, setAnalyzing] = useState(false);
   const [engineInfo, setEngineInfo] = useState(null); // { evalCp, bestSan } | "busy" | null
+  // coach voice
+  const [voiceMode, setVoiceMode] = useState(() => loadSetting("lessonVoiceMode", "blips"));
+  const [typedLen, setTypedLen] = useState(0);
 
   const beat = chapter.beats[beatIdx];
   const playthroughEnd = beat?.type === "playthrough" ? (beat.toPly ?? chapter.mainLine.length) : 0;
+
+  /* What the coach is currently saying -- ONE line at a time, so the
+     typewriter/voice always has a single source of truth. Reveals
+     (think answer, branch note, puzzle explanation) replace the prompt. */
+  const coachLine = analyzing
+    ? "Analysis board — move pieces for either side and try your own ideas."
+    : !beat ? ""
+    : beat.type === "playthrough" || beat.type === "narration" ? beat.text
+    : beat.type === "think" ? ((thinkTried || !beat.ideaMove) && thinkTried !== null ? beat.answer : beat.prompt)
+    : beat.type === "branch" ? (branchViewing != null ? beat.options[branchViewing].note : beat.prompt)
+    : beat.type === "puzzle" ? (puzzleSolved ? beat.explanation : beat.prompt)
+    : "";
+
+  /* Typewriter + voice, driven off coachLine changes. Blips fire as
+     characters land; TTS speaks the whole line up front; both stop the
+     instant the line changes (speaker.cancel + interval teardown). */
+  useEffect(() => {
+    setTypedLen(0);
+    const speaker = speakerRef.current;
+    speaker.cancel();
+    if (!coachLine) return;
+    if (voiceMode === "speech") speaker.speak(coachLine);
+    const t = setInterval(() => {
+      setTypedLen(len => {
+        if (len >= coachLine.length) { clearInterval(t); return len; }
+        const ch = coachLine[len];
+        if (voiceMode === "blips" && len % 2 === 0) charBlip(ch);
+        return len + 1;
+      });
+    }, TYPE_MS);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coachLine, voiceMode]);
+
+  useEffect(() => () => speakerRef.current.cancel(), []);
+
+  const cycleVoice = () => {
+    const next = VOICE_MODES[(VOICE_MODES.indexOf(voiceMode) + 1) % VOICE_MODES.length];
+    setVoiceMode(next);
+    saveSetting("lessonVoiceMode", next);
+    if (next !== "speech") speakerRef.current.cancel();
+  };
 
   /* Replays the main line up to a given ply (plus optional sideline
      moves) and repaints -- the single source of truth every beat
@@ -67,9 +139,6 @@ export default function LessonPlayer({ chapter, orientation = "white", pieceSetI
     rerender();
   };
 
-  /* replayIntoEngine doesn't return from/to squares -- cheapest correct
-     way to highlight the final move is replaying one ply short on a
-     scratch engine and looking the move up there. */
   function lastMoveFromSan(moveList) {
     if (!moveList.length) return null;
     const probe = createEngine();
@@ -94,8 +163,6 @@ export default function LessonPlayer({ chapter, orientation = "white", pieceSetI
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [beatIdx]);
 
-  /* Playthrough autoplay -- one ply per tick until the end, then stops.
-     Cleared on pause, beat change, or unmount. */
   useEffect(() => {
     if (!autoPlaying || beat?.type !== "playthrough") return;
     const t = setInterval(() => {
@@ -143,7 +210,7 @@ export default function LessonPlayer({ chapter, orientation = "white", pieceSetI
       eng.make(move);
       setLastMove({ from: mFrom(move), to: mTo(move) });
       setSelected(-1); setTargets([]);
-      setEngineInfo(null); // position changed; last eval is stale
+      setEngineInfo(null);
       rerender();
       return;
     }
@@ -201,7 +268,6 @@ export default function LessonPlayer({ chapter, orientation = "white", pieceSetI
   const resumeLesson = () => {
     setAnalyzing(false);
     setEngineInfo(null);
-    // snap back to wherever this beat's board is supposed to be
     if (beat.type === "playthrough") gotoPly(playPly);
     else if (beat.type === "branch" && branchViewing != null) gotoPly(beat.afterPly, beat.options[branchViewing].line);
     else gotoPly(beat.afterPly);
@@ -215,7 +281,7 @@ export default function LessonPlayer({ chapter, orientation = "white", pieceSetI
       try {
         const mv = uci && eng.moveFromUci(uci);
         if (mv) bestSan = eng.sanOf(mv);
-      } catch { /* position moved on / uci unmatched -- show eval only */ }
+      } catch { /* position moved on -- show eval only */ }
       const score = info ? (sideAtRequest === 1 ? info.score : -info.score) : 0;
       setEngineInfo({ evalCp: score, bestSan });
     }).catch(() => setEngineInfo(null));
@@ -229,6 +295,8 @@ export default function LessonPlayer({ chapter, orientation = "white", pieceSetI
       : (engineInfo.evalCp >= 0 ? "+" : "") + (engineInfo.evalCp / 100).toFixed(1))
     : null;
 
+  const typedDone = typedLen >= coachLine.length;
+
   return (
     <div className="layout">
       <div className="boardCol">
@@ -236,16 +304,31 @@ export default function LessonPlayer({ chapter, orientation = "white", pieceSetI
           lastMove={lastMove} onSquare={onSquare} pieceSetId={pieceSetId} />
       </div>
 
-      <div className="panel">
+      <div className="panel lessonPanel">
         <div className="box lessonBox">
-          <div className="lessonBeatCount">Step {beatIdx + 1} / {chapter.beats.length}</div>
+          <div className="lessonCoachHead">
+            <img src="/lesson-coach.webp" alt="" className="lessonCoachImg" />
+            <div className="lessonCoachMeta">
+              <div className="lessonCoachName">Coach</div>
+              <div className="lessonBeatCount">{analyzing ? "Analysis" : `Step ${beatIdx + 1} of ${chapter.beats.length}`}</div>
+            </div>
+            <button className="lessonVoiceBtn" onClick={cycleVoice}
+              aria-label={`Coach voice: ${voiceMode === "blips" ? "chatter" : voiceMode === "speech" ? "spoken" : "muted"} — click to change`}
+              title={voiceMode === "blips" ? "Voice: chatter blips" : voiceMode === "speech" ? "Voice: spoken" : "Voice: muted"}>
+              <VoiceIcon mode={voiceMode} />
+            </button>
+          </div>
+
+          {/* The bubble types itself out; tap it to skip to the full line. */}
+          <div className="lessonBubble" onClick={() => setTypedLen(coachLine.length)}>
+            {coachLine.slice(0, typedLen)}
+            {!typedDone && <span className="lessonCaret">▌</span>}
+          </div>
 
           {analyzing ? (
             <>
-              <p className="lessonPrompt">Analysis board</p>
-              <p className="lessonHint">Move pieces for either side — try your own ideas here.</p>
               {engineInfo === "busy" ? (
-                <p className="lessonText">Engine thinking…</p>
+                <p className="lessonHint">Engine thinking…</p>
               ) : engineInfo ? (
                 <p className="lessonText">
                   Engine: <b style={{ color: "var(--cyan)" }}>{evalLabel}</b>
@@ -261,7 +344,6 @@ export default function LessonPlayer({ chapter, orientation = "white", pieceSetI
             <>
               {beat.type === "playthrough" && (
                 <>
-                  <p className="lessonText">{beat.text}</p>
                   <div className="lessonPlayCtrls">
                     <button className="btn ghost" onClick={() => { setAutoPlaying(false); setPlayPly(beat.afterPly); }} disabled={playPly <= beat.afterPly} aria-label="First move">|◀</button>
                     <button className="btn ghost" onClick={() => { setAutoPlaying(false); setPlayPly(p => Math.max(beat.afterPly, p - 1)); }} disabled={playPly <= beat.afterPly} aria-label="Previous move">◀</button>
@@ -271,54 +353,40 @@ export default function LessonPlayer({ chapter, orientation = "white", pieceSetI
                     <button className="btn ghost" onClick={() => { setAutoPlaying(false); setPlayPly(p => Math.min(playthroughEnd, p + 1)); }} disabled={playPly >= playthroughEnd} aria-label="Next move">▶</button>
                     <button className="btn ghost" onClick={() => { setAutoPlaying(false); setPlayPly(playthroughEnd); }} disabled={playPly >= playthroughEnd} aria-label="Last move">▶|</button>
                   </div>
-                  <div className="lessonBeatCount" style={{ marginTop: 6 }}>
-                    Move {playPly} / {playthroughEnd}
-                  </div>
+                  <div className="lessonBeatCount" style={{ marginTop: 6 }}>Move {playPly} / {playthroughEnd}</div>
                 </>
               )}
 
-              {beat.type === "narration" && <p className="lessonText">{beat.text}</p>}
-
               {beat.type === "think" && (
                 <>
-                  <p className="lessonPrompt">{beat.prompt}</p>
                   {!thinkTried ? (
                     <p className="lessonHint">Try a move on the board, or reveal the idea.</p>
                   ) : (
                     <p className={"lessonTriedFeedback" + (thinkTried.matched ? " good" : "")}>
-                      {thinkTried.matched ? `${thinkTried.san} — that's the idea!` : `${thinkTried.san} — not what the coach played. Here's the idea:`}
+                      {thinkTried.matched ? `${thinkTried.san} — that's the idea!` : thinkTried.san ? `${thinkTried.san} — not what the coach played. Here's the idea:` : ""}
                     </p>
                   )}
-                  {(thinkTried || !beat.ideaMove) && <p className="lessonText">{beat.answer}</p>}
                   {!thinkTried && <button className="btn ghost" onClick={() => setThinkTried({ san: null, matched: false })}>Show the idea</button>}
                 </>
               )}
 
               {beat.type === "branch" && (
-                <>
-                  <p className="lessonPrompt">{beat.prompt}</p>
-                  {branchViewing == null ? (
-                    <div className="lessonBranchOptions">
-                      {beat.options.map((opt, i) => (
-                        <button key={i} className="btn ghost" onClick={() => viewBranchOption(i)}>
-                          {branchShown.has(i) ? "✓ " : ""}{opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <>
-                      <p className="lessonText">{beat.options[branchViewing].note}</p>
-                      <button className="btn ghost" onClick={returnToBranchPoint}>← Back to the branch point</button>
-                    </>
-                  )}
-                </>
+                branchViewing == null ? (
+                  <div className="lessonBranchOptions">
+                    {beat.options.map((opt, i) => (
+                      <button key={i} className="btn ghost" onClick={() => viewBranchOption(i)}>
+                        {branchShown.has(i) ? "✓ " : ""}{opt.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <button className="btn ghost" onClick={returnToBranchPoint}>← Back to the branch point</button>
+                )
               )}
 
               {beat.type === "puzzle" && (
                 <>
-                  <p className="lessonPrompt">{beat.prompt}</p>
                   {puzzleFeedback && <p className="lessonTriedFeedback">{puzzleFeedback}</p>}
-                  {puzzleSolved && <p className="lessonText">{beat.explanation}</p>}
                   {!puzzleSolved && !puzzleFeedback && <p className="lessonHint">Play the move on the board.</p>}
                 </>
               )}
