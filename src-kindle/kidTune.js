@@ -92,5 +92,17 @@ export function createKidAudio(initialVolume = 0.6) {
     } catch { /* audio unavailable */ }
   }
 
-  return { toggle, stop, setTune, setVolume, sfxMove, sfxCapture, sfxWin, sfxLose, isPlaying: () => playing };
+  /* A short, flat "buzz" for a single wrong try -- puzzles and Lessons
+     both use this for "not quite, try again" feedback. Deliberately not
+     sfxLose(): that's a slower sad melody meant for "the game/rush is
+     over", which reads as too dramatic for a moment you're meant to just
+     shrug off and try again. */
+  function sfxWrong() {
+    try {
+      tone(180, 0.16, "sawtooth", 0.14);
+      setTimeout(() => tone(140, 0.16, "sawtooth", 0.12), 90);
+    } catch { /* audio unavailable */ }
+  }
+
+  return { toggle, stop, setTune, setVolume, sfxMove, sfxCapture, sfxWin, sfxLose, sfxWrong, isPlaying: () => playing };
 }

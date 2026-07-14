@@ -18,7 +18,7 @@ import { AnimalIcon } from "./AnimalIcon";
 const TYPE_MS = 18;
 const FILES = "abcdefgh";
 
-export default function KidLessonPlayer({ chapter, renderPiece, boardVars, onExit, onComplete }) {
+export default function KidLessonPlayer({ chapter, renderPiece, boardVars, audio, onExit, onComplete }) {
   const engRef = useRef(null);
   if (!engRef.current) engRef.current = createEngine();
   const eng = engRef.current;
@@ -37,18 +37,35 @@ export default function KidLessonPlayer({ chapter, renderPiece, boardVars, onExi
 
   const [muted, setMuted] = useState(false);
   const [typedLen, setTypedLen] = useState(0);
+  const [boardShake, setBoardShake] = useState(false);
 
   const beat = chapter.beats[beatIdx];
 
-  const showPosition = (moves) => {
+  /* Most beats replay SAN from the true start position (matches the main
+     site's Lessons convention), but endgame/tactics positions are much
+     more naturally expressed as a FEN (`demoFen`) than a contrived legal
+     move sequence from move 1 -- `extra` (SAN) applies on top of
+     whichever base the beat uses, for revealing a think/quiz answer. */
+  const setupPosition = (extra = []) => {
     eng.reset();
-    replayIntoEngine(eng, moves);
-    if (moves.length) {
-      const probe = createEngine();
-      replayIntoEngine(probe, moves.slice(0, -1));
-      const mv = probe.legalMoves().find(m => probe.sanOf(m) === moves[moves.length - 1]);
-      setLastMove(mv ? { from: mFrom(mv), to: mTo(mv) } : null);
-    } else setLastMove(null);
+    let last = null;
+    if (beat?.demoFen) {
+      eng.loadFen(beat.demoFen);
+      for (const san of extra) {
+        const mv = eng.legalMoves().find(m => eng.sanOf(m) === san);
+        if (mv) { eng.make(mv); last = { from: mFrom(mv), to: mTo(mv) }; }
+      }
+    } else {
+      const allMoves = (beat?.demoMoves || []).concat(extra);
+      replayIntoEngine(eng, allMoves);
+      if (allMoves.length) {
+        const probe = createEngine();
+        replayIntoEngine(probe, allMoves.slice(0, -1));
+        const mv = probe.legalMoves().find(m => probe.sanOf(m) === allMoves[allMoves.length - 1]);
+        if (mv) last = { from: mFrom(mv), to: mTo(mv) };
+      }
+    }
+    setLastMove(last);
     setSelected(-1); setTargets([]);
     rerender();
   };
@@ -57,7 +74,7 @@ export default function KidLessonPlayer({ chapter, renderPiece, boardVars, onExi
     setThinkTried(null);
     setQuizPicked(null);
     setQuizSolved(false);
-    if (beat) showPosition(beat.demoMoves || []);
+    if (beat) setupPosition();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [beatIdx]);
 
@@ -95,11 +112,16 @@ export default function KidLessonPlayer({ chapter, renderPiece, boardVars, onExi
         const matched = beat.acceptable.includes(san);
         setThinkTried({ san, matched });
         setSelected(-1); setTargets([]);
+        if (!matched) {
+          audio?.sfxWrong();
+          setBoardShake(true);
+          setTimeout(() => setBoardShake(false), 400);
+        }
         /* Always land on a position that visually matches the answer
            text -- a correct guess gets played for real; a wrong one is
            replaced by the actual idea, so the board never contradicts
            what Owl just said. */
-        showPosition([...(beat.demoMoves || []), matched ? san : beat.acceptable[0]]);
+        setupPosition([matched ? san : beat.acceptable[0]]);
         return;
       }
     }
@@ -115,7 +137,9 @@ export default function KidLessonPlayer({ chapter, renderPiece, boardVars, onExi
     const opt = beat.options[i];
     if (opt.correct) {
       setQuizSolved(true);
-      if (opt.move) showPosition([...(beat.demoMoves || []), opt.move]);
+      if (opt.move) setupPosition([opt.move]);
+    } else {
+      audio?.sfxWrong();
     }
   };
 
@@ -170,7 +194,7 @@ export default function KidLessonPlayer({ chapter, renderPiece, boardVars, onExi
       <h2 className="kLessonTitle" style={{ marginTop: 4 }}>{chapter.title}</h2>
 
       <div className="kBoardWrap">
-        <div className="kBoard" style={boardVars} role="grid" aria-label="Chess board">{buildBoardRows()}</div>
+        <div className={"kBoard" + (boardShake ? " kWrongShake" : "")} style={boardVars} role="grid" aria-label="Chess board">{buildBoardRows()}</div>
       </div>
 
       <div className="kCoachPanel">

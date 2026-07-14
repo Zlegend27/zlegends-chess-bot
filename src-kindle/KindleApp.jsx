@@ -460,7 +460,7 @@ export default function KindleApp() {
         const idx = puzzleProgressRef.current.length;
         const expected = activePuzzle.moves[idx];
         if (san !== expected) {
-          audio.sfxLose();
+          audio.sfxWrong();
           setSelected(-1); setTargets([]);
           if (rushMode) {
             rushMistakesRef.current += 1;
@@ -669,7 +669,7 @@ export default function KindleApp() {
             </div>
             {!puzzleFeedback && !puzzleSolved && <div className="kMoves">{activePuzzle.hint}</div>}
             <div className="kBoardWrap">
-              <div className="kBoard" style={boardVars} role="grid" aria-label="Chess board" ref={boardRef}>{buildBoardRows(false, onPuzzleSquare)}</div>
+              <div className={"kBoard" + (puzzleFeedback === "wrong" ? " kWrongShake" : "")} style={boardVars} role="grid" aria-label="Chess board" ref={boardRef}>{buildBoardRows(false, onPuzzleSquare)}</div>
               {renderDragGhost()}
             </div>
             <div className="kCtrls">
@@ -760,6 +760,7 @@ export default function KindleApp() {
           chapter={chapter}
           renderPiece={renderPiece}
           boardVars={boardVars}
+          audio={audio}
           onExit={() => setLessonChapterId(null)}
           onComplete={() => setShop(s => markLessonComplete(s, chapter.id))}
         />

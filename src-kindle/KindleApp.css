@@ -77,6 +77,21 @@ body {
   display: flex; flex-direction: column; overflow: hidden;
   box-shadow: 0 6px 14px #00000022; touch-action: none;
 }
+/* Wrong-move feedback -- a quick side-to-side shake plus a momentary red
+   border flash, paired with kidTune.js's sfxWrong() buzz. Used by both
+   the puzzle board and the Lessons "think" board. */
+.kBoard.kWrongShake { animation: kShakeBoard 0.4s ease-in-out, kFlashRed 0.4s ease-out; }
+@keyframes kShakeBoard {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(7px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(3px); }
+}
+@keyframes kFlashRed {
+  0% { border-color: #FF4C5B; box-shadow: 0 0 0 4px #FF4C5B55, 0 6px 14px #00000022; }
+  100% { border-color: #E8622C; box-shadow: 0 6px 14px #00000022; }
+}
 .kRow { flex: 1; display: flex; }
 .kSq { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; }
 .kSq:focus-visible { outline: 4px solid #4EA8DE; outline-offset: -4px; z-index: 3; }
@@ -238,7 +253,7 @@ body {
   border-radius: 12px; background: #F5C6EC; color: #5B2A50; box-shadow: 0 3px 0 #D18FC0; cursor: pointer;
 }
 .kQuizOpt.correct { background: #6FCF97; color: #1E4620; box-shadow: 0 3px 0 #4F9E6E; }
-.kQuizOpt.wrong { background: #FF8FA3; color: #5C1626; box-shadow: 0 3px 0 #E85D77; }
+.kQuizOpt.wrong { background: #FF8FA3; color: #5C1626; box-shadow: 0 3px 0 #E85D77; animation: kShakeBoard 0.4s ease-in-out; }
 .kQuizOpt:disabled { opacity: 0.6; }
 .kLessonNav { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; }
 .kLessonNav button {
