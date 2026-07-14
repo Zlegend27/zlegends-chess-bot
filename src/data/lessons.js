@@ -49,7 +49,7 @@ export const LESSONS = [
     title: "Hyper-Accelerated Dragon",
     desc: "A Black repertoire against 1.e4 built around winning the fight for d5.",
     orientation: "black",
-    cover: "/lesson-coach.webp",
+    cover: "/blueeyes.webp",
     resources: [
       { label: "Lesson source: full analysis (chess.com)", url: "https://www.chess.com/analysis/collection/accelereated-dragon-opening-xqCV2qLz/3GSiyz3iAa/analysis" },
       { label: "Accelerated Dragon overview (Wikipedia)", url: "https://en.wikipedia.org/wiki/Sicilian_Defence,_Accelerated_Dragon_Variation" },

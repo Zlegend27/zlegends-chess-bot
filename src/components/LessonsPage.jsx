@@ -141,10 +141,10 @@ export default function LessonsPage({ onBack, onToolSelect, activeToolId }) {
                   <img src={lesson.cover} alt="" className="h-14 w-14 flex-none rounded-xl border border-[#F5D93E4D] object-cover" />
                 )}
                 <div className="min-w-0">
-                  <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#F5D93E]">Coach Bot · Theory Trainer</div>
-                  <div className="mt-1 font-bold text-[#F4EFFF]">Play the repertoire vs Coach Bot</div>
+                  <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#F5D93E]">🐉 Theory Trainer</div>
+                  <div className="mt-1 font-bold text-[#F4EFFF]">Play the repertoire vs the Accelerated Dragon</div>
                   <div className="mt-1 text-xs text-[#9D8FC4]">
-                    Coach Bot plays White straight from the lesson's lines — leave the book and it tells you what the repertoire move was. Engine takes over once theory runs out.
+                    It plays White straight from the lesson's lines — leave the book and it tells you what the repertoire move was. Engine takes over once theory runs out.
                   </div>
                 </div>
               </button>

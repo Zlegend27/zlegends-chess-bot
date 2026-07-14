@@ -175,7 +175,7 @@ export default function TheoryTrainer({ lesson, pieceSetId, onExit }) {
           <div className="lessonCoachHead">
             <img src={lesson.cover || "/lesson-coach.webp"} alt="" className="lessonCoachImg" />
             <div className="lessonCoachMeta">
-              <div className="lessonCoachName">Coach Bot</div>
+              <div className="lessonCoachName">Accelerated Dragon</div>
               <div className="lessonBeatCount">Theory Trainer · you play Black</div>
             </div>
           </div>
@@ -188,7 +188,7 @@ export default function TheoryTrainer({ lesson, pieceSetId, onExit }) {
                 Off the repertoire — the move here was{" "}
                 <b style={{ color: "var(--cyan)" }}>{deviation.expected.join(" or ")}</b>.
               </p>
-              <p className="lessonHint">Undo to stay in the lines, or keep playing — I'll switch to full-strength engine moves for White from here.</p>
+              <p className="lessonHint">Undo to stay in the lines, or keep playing — the engine takes over White's moves from here.</p>
               <button className="btn ghost" onClick={undoDeviation}>↩ Undo & try the book move</button>
             </>
           ) : inBook ? (
@@ -197,13 +197,13 @@ export default function TheoryTrainer({ lesson, pieceSetId, onExit }) {
               <p className="lessonText">
                 Following: {inBookLines.map(r => r.name).join(" · ")}
               </p>
-              {botThinking && <p className="lessonHint">Coach Bot is moving…</p>}
+              {botThinking && <p className="lessonHint">Thinking…</p>}
             </>
           ) : (
             <>
               <p className="lessonPrompt">Out of book</p>
-              <p className="lessonText">Known theory has run out — I'll play White from here with the engine. Convert your opening edge!</p>
-              {botThinking && <p className="lessonHint">Coach Bot is thinking…</p>}
+              <p className="lessonText">Known theory has run out — the engine plays White from here. Convert your opening edge!</p>
+              {botThinking && <p className="lessonHint">Thinking…</p>}
             </>
           )}
 
