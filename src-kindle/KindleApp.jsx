@@ -10,9 +10,14 @@ import { KID_PUZZLE_BANDS, kidPuzzlesInBand, kidDailyPuzzle } from "./kidPuzzles
 import {
   loadShopState, addCoins, spendCoins, buyHat, buyBoard, equipHat, equipBoard, HATS, BOARDS,
   buyTune, equipTune, buyAnimal, buyPiece, equipPiece, PIECES, setMusicVolume, markDailyPuzzleSolved,
+  markLessonComplete, recordRushResult,
 } from "./kidShop";
 import { cburnettPieceSvgUrl } from "../src/utils/cburnettPieceSvg";
 import { woodPieceSvgUrl } from "../src/utils/woodPieceSvg";
+import Confetti from "../src/components/Confetti";
+import { AnimalIcon } from "./AnimalIcon";
+import { KID_LESSON_CHAPTERS } from "./kidLessons";
+import KidLessonPlayer from "./KidLessonPlayer";
 
 /* Search runs in the same shared Worker the main bot uses (see
    src/engine/engineWorker.js) — the hardest tier ("Lion", 8s of search)
@@ -117,128 +122,6 @@ const TIPS = [
    the Lichess database (see that file's header) instead of a small
    hand-curated set. */
 
-const PALETTE = {
-  Bunny: { body: "#FFD8EA", ear: "#FFB6D9", accent: "#FF6FA5", blush: "#FFA6C9" },
-  Cat: { body: "#FFC98B", ear: "#FFB35C", accent: "#E8853B", blush: "#FF9E9E" },
-  Dog: { body: "#E8C08E", ear: "#B9803F", accent: "#8B5E34", blush: "#FFA6A6" },
-  Panda: { body: "#F7F7F7", ear: "#3A3A3A", accent: "#2B2B2B", blush: "#FFB8C6" },
-  Koala: { body: "#C7CAD1", ear: "#9297A3", accent: "#5B5F68", blush: "#FFB6B6" },
-  Raccoon: { body: "#B8B0A6", ear: "#5A5248", accent: "#3A342C", blush: "#FFAFAF" },
-  Otter: { body: "#A8785A", ear: "#7A5138", accent: "#4E331F", blush: "#FFC0A8" },
-  Fox: { body: "#FF9955", ear: "#FF7A2E", accent: "#C24E00", blush: "#FFC2C2", muzzle: "#FFF3E4" },
-  Owl: { body: "#D9B45C", ear: "#C99A3B", accent: "#7B5218", blush: "#FFC9A0", eye: "#7B4B12" },
-  Lion: { body: "#FFDD77", ear: "#F7A531", accent: "#E8790A", blush: "#FFB98A" },
-};
-
-/* Ear shape families for the four new unlockable animals -- rather than
-   hand-drawing a brand-new ear shape for each, they reuse Dog's rounded
-   ears or Cat's triangular ears (just recolored via PALETTE), which is
-   plenty of visual variety for a shop icon at this size. */
-const DOG_EARED = ["Dog", "Panda", "Koala"];
-const CAT_EARED = ["Cat", "Raccoon", "Otter"];
-
-function HatOverlay({ hat }) {
-  if (!hat || hat === "none") return null;
-  if (hat === "party") return (
-    <g>
-      <path d="M17 14 L24 -2 L31 14 Z" fill="#FF6FA5" stroke="#C2477A" strokeWidth="1.5" strokeLinejoin="round" />
-      <circle cx="24" cy="-3" r="2.6" fill="#FFD166" />
-      <circle cx="21" cy="10" r="1.6" fill="#FFD166" />
-      <circle cx="27" cy="7" r="1.6" fill="#4EA8DE" />
-    </g>
-  );
-  if (hat === "crown") return (
-    <g>
-      <path d="M12 14 L14 3 L20 10 L24 1 L28 10 L34 3 L36 14 Z" fill="#FFD166" stroke="#E8A93B" strokeWidth="1.5" strokeLinejoin="round" />
-      <circle cx="24" cy="2" r="1.8" fill="#FF6FA5" />
-    </g>
-  );
-  if (hat === "wizard") return (
-    <g>
-      <path d="M15 15 L24 -8 L33 15 Z" fill="#7C5CBF" stroke="#4E3A8A" strokeWidth="1.5" strokeLinejoin="round" />
-      <ellipse cx="24" cy="15" rx="12" ry="3" fill="#7C5CBF" stroke="#4E3A8A" strokeWidth="1.5" />
-      <path d="M24 3 L25.5 6.5 L29 7 L26.2 9.3 L27 13 L24 11 L21 13 L21.8 9.3 L19 7 L22.5 6.5 Z" fill="#FFD166" />
-    </g>
-  );
-  if (hat === "ninja") return (
-    <g>
-      <rect x="10" y="8" width="28" height="6" rx="2" fill="#3A3A3A" stroke="#1E1E1E" strokeWidth="1.5" />
-      <path d="M34 11 L44 6 L44 16 Z" fill="#3A3A3A" stroke="#1E1E1E" strokeWidth="1.5" strokeLinejoin="round" />
-    </g>
-  );
-  if (hat === "flower") return (
-    <g>
-      {[0, 60, 120, 180, 240, 300].map(angle => (
-        <ellipse key={angle} cx={24 + 9 * Math.cos((angle * Math.PI) / 180)} cy={9 + 9 * Math.sin((angle * Math.PI) / 180)}
-          rx="4.5" ry="3" fill="#FF9EC4" stroke="#E8679E" strokeWidth="1" transform={`rotate(${angle} ${24 + 9 * Math.cos((angle * Math.PI) / 180)} ${9 + 9 * Math.sin((angle * Math.PI) / 180)})`} />
-      ))}
-      <circle cx="24" cy="9" r="4" fill="#FFD166" stroke="#E8A93B" strokeWidth="1" />
-    </g>
-  );
-  return null;
-}
-
-function AnimalIcon({ kind, size = 46, hat }) {
-  const isOwl = kind === "Owl";
-  const isLion = kind === "Lion";
-  const isFox = kind === "Fox";
-  const pal = PALETTE[kind] || PALETTE.Bunny;
-  return (
-    <svg viewBox="0 0 48 48" width={size} height={size} className="kAnimal">
-      <HatOverlay hat={hat} />
-      {isLion && (
-        <circle cx="24" cy="30" r="21" fill="none" stroke={pal.ear} strokeWidth="4" strokeDasharray="5 4" />
-      )}
-      {kind === "Bunny" && (<>
-        <rect x="12" y="2" width="7" height="22" rx="3.5" fill={pal.body} stroke={pal.accent} strokeWidth="2" />
-        <rect x="29" y="2" width="7" height="22" rx="3.5" fill={pal.body} stroke={pal.accent} strokeWidth="2" />
-        <rect x="14" y="6" width="3" height="14" rx="1.5" fill={pal.ear} />
-        <rect x="31" y="6" width="3" height="14" rx="1.5" fill={pal.ear} />
-      </>)}
-      {CAT_EARED.includes(kind) && (<>
-        <path d="M10 16 L16 2 L22 16 Z" fill={pal.body} stroke={pal.accent} strokeWidth="2" strokeLinejoin="round" />
-        <path d="M26 16 L32 2 L38 16 Z" fill={pal.body} stroke={pal.accent} strokeWidth="2" strokeLinejoin="round" />
-        <path d="M13 13 L16 6 L19 13 Z" fill={pal.ear} />
-        <path d="M29 13 L32 6 L35 13 Z" fill={pal.ear} />
-      </>)}
-      {DOG_EARED.includes(kind) && (<>
-        <ellipse cx="9" cy="28" rx="7" ry="12" fill={pal.body} stroke={pal.accent} strokeWidth="2" />
-        <ellipse cx="39" cy="28" rx="7" ry="12" fill={pal.body} stroke={pal.accent} strokeWidth="2" />
-      </>)}
-      {isFox && (<>
-        <path d="M9 18 L16 3 L21 18 Z" fill={pal.body} stroke={pal.accent} strokeWidth="2" strokeLinejoin="round" />
-        <path d="M27 18 L32 3 L39 18 Z" fill={pal.body} stroke={pal.accent} strokeWidth="2" strokeLinejoin="round" />
-        <path d="M12 15 L16 8 L19 15 Z" fill={pal.muzzle} />
-        <path d="M29 15 L32 8 L36 15 Z" fill={pal.muzzle} />
-      </>)}
-      {isOwl && (<>
-        <path d="M13 11 L18 3 L20 12 Z" fill={pal.body} stroke={pal.accent} strokeWidth="2" strokeLinejoin="round" />
-        <path d="M35 11 L30 3 L28 12 Z" fill={pal.body} stroke={pal.accent} strokeWidth="2" strokeLinejoin="round" />
-      </>)}
-      {isLion && (<>
-        <path d="M8 20 L14 8 L18 20 Z" fill={pal.ear} stroke={pal.accent} strokeWidth="2" strokeLinejoin="round" />
-        <path d="M40 20 L34 8 L30 20 Z" fill={pal.ear} stroke={pal.accent} strokeWidth="2" strokeLinejoin="round" />
-      </>)}
-      <circle cx="24" cy="30" r="15" fill={pal.body} stroke={pal.accent} strokeWidth="2" />
-      <circle cx="15" cy="34" r="3" fill={pal.blush} opacity="0.85" />
-      <circle cx="33" cy="34" r="3" fill={pal.blush} opacity="0.85" />
-      {isFox && <ellipse cx="24" cy="34" rx="7" ry="8" fill={pal.muzzle} />}
-      {isOwl ? (<>
-        <circle cx="17" cy="28" r="5.5" fill="#fff" stroke={pal.accent} strokeWidth="2" />
-        <circle cx="31" cy="28" r="5.5" fill="#fff" stroke={pal.accent} strokeWidth="2" />
-        <circle cx="17" cy="28" r="2.2" fill={pal.eye} />
-        <circle cx="31" cy="28" r="2.2" fill={pal.eye} />
-        <path d="M22 33 L26 33 L24 38 Z" fill="#F2A65A" />
-      </>) : (<>
-        <circle cx="19" cy="27" r="2" fill="#3a2a1a" />
-        <circle cx="29" cy="27" r="2" fill="#3a2a1a" />
-        <path d="M22 33 L26 33 L24 36 Z" fill="#3a2a1a" />
-        <path d="M24 36 L24 39 M24 39 L20 41 M24 39 L28 41" stroke="#3a2a1a" strokeWidth="1.5" fill="none" />
-      </>)}
-    </svg>
-  );
-}
-
 export default function KindleApp() {
   const engRef = useRef(null);
   if (!engRef.current) engRef.current = createEngine();
@@ -272,6 +155,8 @@ export default function KindleApp() {
   const [musicOn, setMusicOn] = useState(false);
 
   const [view, setView] = useState("play");
+  const [lessonChapterId, setLessonChapterId] = useState(null);
+  const [winBurst, setWinBurst] = useState(0);
   const [playerColor, setPlayerColor] = useState(1);
   const [selected, setSelected] = useState(-1);
   const [targets, setTargets] = useState([]);
@@ -360,7 +245,11 @@ export default function KindleApp() {
 
   const announceResult = (over) => {
     if (!over) return;
-    if (over.winner === playerColor) { audio.sfxWin(); setShop(s => addCoins(s, botCoinReward(difficultyIdx))); }
+    if (over.winner === playerColor) {
+      audio.sfxWin();
+      setShop(s => addCoins(s, botCoinReward(difficultyIdx)));
+      setWinBurst(n => n + 1);
+    }
     else if (over.winner === 0) { /* draw: no stinger, keep it neutral */ }
     else audio.sfxLose();
   };
@@ -533,7 +422,9 @@ export default function KindleApp() {
   };
 
   const finishRush = (reason) => {
-    setRushResult({ reason, solved: rushSolvedRef.current });
+    const prevBest = shop.bestRushStreak[String(rushDuration)] || 0;
+    setRushResult({ reason, solved: rushSolvedRef.current, newBest: rushSolvedRef.current > prevBest });
+    setShop(s => recordRushResult(s, rushDuration, rushSolvedRef.current));
   };
 
   const retryRush = () => startRush(rushDuration);
@@ -796,21 +687,28 @@ export default function KindleApp() {
               Solve as many puzzles as you can! Three wrong answers or running out of time ends the rush.
             </div>
             <div className="kCtrls" style={{ flexDirection: "column", width: "min(92vw, 380px)" }}>
-              {RUSH_DURATIONS.map(d => (
-                <button key={d.seconds} onClick={() => startRush(d.seconds)}>{d.label}</button>
-              ))}
+              {RUSH_DURATIONS.map(d => {
+                const best = shop.bestRushStreak[String(d.seconds)] || 0;
+                return (
+                  <button key={d.seconds} onClick={() => startRush(d.seconds)}>
+                    {d.label}{best > 0 ? ` — best ${best} 🏆` : ""}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
 
         {rushMode && rushResult && (
           <div className="kShopOv" onClick={e => { if (e.target === e.currentTarget) exitRush(); }}>
+            {rushResult.newBest && <Confetti key={rushResult.solved} />}
             <button className="kCloseX" onClick={exitRush} aria-label="Exit Puzzle Rush">✕</button>
             <h2 className="kLessonTitle" style={{ textAlign: "center" }}>
               {rushResult.reason === "time" ? "Time's up!" : "3 misses — rush over!"}
             </h2>
             <div className="kMoves" style={{ width: "min(92vw, 380px)", textAlign: "center", fontSize: 16 }}>
               You solved <b>{rushResult.solved}</b> puzzle{rushResult.solved === 1 ? "" : "s"}!
+              {rushResult.newBest && <><br /><b className="kNewBest">🏆 New personal best!</b></>}
             </div>
             <div className="kCtrls">
               <button onClick={retryRush}>Try Again</button>
@@ -850,6 +748,59 @@ export default function KindleApp() {
     );
   }
 
+  /* Lessons hub -- a chapter picker distinct from "How to Play" above:
+     that one covers piece movement, this one covers the concepts (why
+     you play the moves you play), same split the main site draws
+     between the rules a player already knows and the Lessons feature. */
+  if (view === "lessonsHub") {
+    if (lessonChapterId) {
+      const chapter = KID_LESSON_CHAPTERS.find(c => c.id === lessonChapterId);
+      return (
+        <KidLessonPlayer
+          chapter={chapter}
+          renderPiece={renderPiece}
+          boardVars={boardVars}
+          onExit={() => setLessonChapterId(null)}
+          onComplete={() => setShop(s => markLessonComplete(s, chapter.id))}
+        />
+      );
+    }
+    return (
+      <div className="kRoot" onClick={e => { if (e.target === e.currentTarget) setView("play"); }}>
+        <button className="kCloseX" onClick={() => setView("play")} aria-label="Close Lessons">✕</button>
+        <Critters />
+        <div className="kHdr">
+          <AnimalIcon kind="Owl" />
+          <h1>Kinnda Chess</h1>
+        </div>
+        <h2 className="kLessonTitle">Lessons</h2>
+        <div className="kLessons">
+          {KID_LESSON_CHAPTERS.map(c => (
+            c.comingSoon ? (
+              <div className="kLessonCard kLessonLocked" key={c.id}>
+                <span className="kLessonLockIcon">🔒</span>
+                <div>
+                  <div className="kLessonName">{c.title}</div>
+                  <div className="kLessonText">{c.subtitle} — coming soon!</div>
+                </div>
+              </div>
+            ) : (
+              <button className="kLessonCard kLessonPickable" key={c.id} onClick={() => setLessonChapterId(c.id)}>
+                <AnimalIcon kind={c.teacher} size={40} />
+                <div>
+                  <div className="kLessonName">
+                    {c.title}{shop.completedLessons.includes(c.id) ? " ✓" : ""}
+                  </div>
+                  <div className="kLessonText">{c.subtitle}</div>
+                </div>
+              </button>
+            )
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   const flipped = playerColor === -1;
   const rows = buildBoardRows(flipped, onSquare);
 
@@ -870,6 +821,7 @@ export default function KindleApp() {
           : "Nice try! Better luck next time!")
     : thinking ? `${opponentName} is thinking...`
     : eng.getSide() === playerColor ? "Your move!" : `${opponentName}'s move`;
+  const mood = !result ? undefined : result.winner === 0 ? undefined : result.winner === playerColor ? "happy" : "sad";
 
   const Tray = ({ pieces }) => (
     <div className="kTray">
@@ -882,17 +834,23 @@ export default function KindleApp() {
   return (
     <div className="kRoot">
       <Critters />
+      {result && result.winner === playerColor && <Confetti key={winBurst} />}
       <div className="kHdr">
-        <AnimalIcon kind={DIFFICULTIES[difficultyIdx].label} hat={equippedHat} />
-        <h1>Kinnda Chess</h1>
-        <span className="kCoinBadge">🪙 {shop.coins}</span>
-        <button className="kShopBtn" onClick={() => setShopOpen(true)} title="Shop">🛍️</button>
-        <button className="kMusicBtn" onClick={() => setMusicOn(audio.toggle())} title={musicOn ? "Pause music" : "Play music"}>
-          {musicOn ? "♪⏸" : "♪▶"}
-        </button>
-        <input type="range" className="kVolume" min="0" max="100" value={shop.musicVolume}
-          onChange={e => setShop(s => setMusicVolume(s, Number(e.target.value)))}
-          title="Music volume" aria-label="Music volume" />
+        <div className="kHdrLeft">
+          <AnimalIcon kind={opponentName} hat={equippedHat} mood={mood} />
+          <h1>Kinnda Chess</h1>
+        </div>
+        <div className="kHdrRight">
+          <span className="kCoinBadge">🪙 {shop.coins}</span>
+          <button className="kIconBtn kLessonBtn" onClick={() => setView("lessonsHub")} title="Lessons">🎓</button>
+          <button className="kIconBtn kShopBtn" onClick={() => setShopOpen(true)} title="Shop">🛍️</button>
+          <button className="kIconBtn kMusicBtn" onClick={() => setMusicOn(audio.toggle())} title={musicOn ? "Pause music" : "Play music"}>
+            {musicOn ? "♪⏸" : "♪▶"}
+          </button>
+          <input type="range" className="kVolume" min="0" max="100" value={shop.musicVolume}
+            onChange={e => setShop(s => setMusicVolume(s, Number(e.target.value)))}
+            title="Music volume" aria-label="Music volume" />
+        </div>
       </div>
       <div className="kStatus">{status}</div>
 
@@ -925,10 +883,10 @@ export default function KindleApp() {
       <div className="kMoves">{moveText || "No moves yet - good luck!"}</div>
 
       <div className="kCtrls">
-        <button onClick={() => newGame(1)}>Play White</button>
-        <button onClick={() => newGame(-1)}>Play Black</button>
-        <button onClick={undo} disabled={thinking || !!result || eng.plyCount() === 0}>Undo</button>
-        <button onClick={onHint} disabled={thinking || !!result || !!promo || hinting || eng.getSide() !== playerColor || shop.coins < HINT_COST}
+        <button className="kBtnGreen" onClick={() => newGame(1)}>Play White</button>
+        <button className="kBtnBlue" onClick={() => newGame(-1)}>Play Black</button>
+        <button className="kBtnGhost" onClick={undo} disabled={thinking || !!result || eng.plyCount() === 0}>Undo</button>
+        <button className="kBtnGold" onClick={onHint} disabled={thinking || !!result || !!promo || hinting || eng.getSide() !== playerColor || shop.coins < HINT_COST}
           title={`Costs ${HINT_COST} coin`}>
           {hinting ? "Thinking…" : `💡 Hint (${HINT_COST}🪙)`}
         </button>
@@ -936,9 +894,10 @@ export default function KindleApp() {
           {DIFFICULTIES.map((d, i) => (!d.unlockable || shop.ownedAnimals.includes(d.id)) &&
             <option key={i} value={i}>{d.label} ({d.elo})</option>)}
         </select>
-        <button onClick={() => setView("lessons")}>How to Play</button>
-        <button onClick={() => setView("puzzle")} disabled={thinking}>Puzzles</button>
-        {result && <button onClick={() => newGame(playerColor)}>Play Again!</button>}
+        <button className="kBtnPurple" onClick={() => setView("lessonsHub")}>🎓 Lessons</button>
+        <button className="kBtnPurple" onClick={() => setView("lessons")}>How to Play</button>
+        <button className="kBtnPurple" onClick={() => setView("puzzle")} disabled={thinking}>Puzzles</button>
+        {result && <button className="kBtnPink" onClick={() => newGame(playerColor)}>Play Again!</button>}
       </div>
 
       {shopOpen && (

@@ -29,11 +29,15 @@ body {
   background: #FFF3C4; color: #8A5A00; border-radius: 999px; padding: 5px 10px 5px 6px;
   box-shadow: 0 2px 0 #E8C46A;
 }
-.kShopBtn {
+.kIconBtn {
   font-family: inherit; font-size: 15px; padding: 6px 10px; border: none; border-radius: 50%;
-  background: #C6E48B; color: #33530F; box-shadow: 0 3px 0 #9CC463; cursor: pointer;
+  cursor: pointer; flex: none;
 }
-.kShopBtn:active { box-shadow: 0 1px 0 #9CC463; transform: translateY(2px); }
+.kIconBtn:active { transform: translateY(2px); }
+.kShopBtn { background: #C6E48B; color: #33530F; box-shadow: 0 3px 0 #9CC463; }
+.kShopBtn:active { box-shadow: 0 1px 0 #9CC463; }
+.kLessonBtn { background: #C9B8F5; color: #3A2A66; box-shadow: 0 3px 0 #9E85D6; }
+.kLessonBtn:active { box-shadow: 0 1px 0 #9E85D6; }
 
 .kShopGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
 .kShopItem {
@@ -48,15 +52,17 @@ body {
 .kShopItem button.kEquipped { background: #FFD166; color: #5B3E27; box-shadow: 0 2px 0 #E8A93B; }
 .kShopItem button:disabled { opacity: 0.5; box-shadow: none; }
 
-.kHdr { display: flex; align-items: center; gap: 10px; }
+/* Two flex groups instead of one long row -- lets the header wrap onto
+   two lines on narrow screens (left: mascot+title, right: coins/shop/
+   music/volume) instead of everything squeezing into one cramped row. */
+.kHdr { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; width: min(94vw, 430px); }
+.kHdrLeft { display: flex; align-items: center; gap: 8px; }
+.kHdrRight { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .kRoot h1 { font-size: 28px; margin: 4px 0; color: #E8622C; text-shadow: 2px 2px 0 #FFD8A8; }
 .kStatus { font-size: 19px; font-weight: bold; margin: 8px 0 10px; text-align: center; color: #5B3E27; }
 
-.kMusicBtn {
-  font-family: inherit; font-size: 16px; padding: 6px 10px; border: none; border-radius: 50%;
-  background: #FFD166; color: #5B3E27; box-shadow: 0 3px 0 #E8A93B; cursor: pointer;
-}
-.kMusicBtn:active { box-shadow: 0 1px 0 #E8A93B; transform: translateY(2px); }
+.kMusicBtn { background: #FFD166; color: #5B3E27; box-shadow: 0 3px 0 #E8A93B; }
+.kMusicBtn:active { box-shadow: 0 1px 0 #E8A93B; }
 .kVolume { width: 60px; accent-color: #FFD166; }
 
 .kCaptureRow { display: flex; align-items: center; gap: 8px; width: min(94vw, 430px); margin: 4px 0; }
@@ -130,26 +136,63 @@ body {
   min-height: 40px; max-height: 100px; overflow-y: auto; background: #FFFDF7;
 }
 
+/* Every button here carries an explicit color class now instead of the
+   old position-based (:nth-of-type/:last-of-type) coloring -- that broke
+   silently any time a button was added, removed, or reordered (e.g. the
+   conditional "Play Again!" button used to steal whichever color
+   :last-of-type happened to land on). Unclassed buttons (other views:
+   puzzle picker, rush overlay, etc.) keep the original green default. */
 .kCtrls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; width: min(94vw, 430px); justify-content: center; }
 .kCtrls button, .kCtrls select {
   font-family: inherit; font-size: 15px; padding: 10px 14px; border: none; border-radius: 14px;
   background: #6FCF97; color: #1E4620; box-shadow: 0 3px 0 #4F9E6E; cursor: pointer;
 }
-.kCtrls button:nth-of-type(2) { background: #4EA8DE; color: #10314A; box-shadow: 0 3px 0 #35789E; }
-.kCtrls button:nth-of-type(3) { background: #FFD166; color: #5B3E27; box-shadow: 0 3px 0 #E8A93B; }
 .kCtrls select { background: #F5C6EC; color: #5B2A50; box-shadow: 0 3px 0 #D18FC0; }
-.kCtrls button:last-of-type { background: #FF8FA3; color: #5C1626; box-shadow: 0 3px 0 #E85D77; }
+.kCtrls button.kBtnGreen { background: #6FCF97; color: #1E4620; box-shadow: 0 3px 0 #4F9E6E; }
+.kCtrls button.kBtnBlue { background: #4EA8DE; color: #10314A; box-shadow: 0 3px 0 #35789E; }
+.kCtrls button.kBtnGold { background: #FFD166; color: #5B3E27; box-shadow: 0 3px 0 #E8A93B; }
+.kCtrls button.kBtnPurple { background: #C9B8F5; color: #3A2A66; box-shadow: 0 3px 0 #9E85D6; }
+.kCtrls button.kBtnPink { background: #FF8FA3; color: #5C1626; box-shadow: 0 3px 0 #E85D77; }
+.kCtrls button.kBtnGhost { background: #FFFDF7; color: #5B3E27; box-shadow: 0 3px 0 #D8CBB0; }
 .kCtrls button:active { transform: translateY(2px); box-shadow: none; }
 .kCtrls button:disabled { opacity: 0.45; box-shadow: none; transform: none; }
+.kNewBest { color: #E8A93B; font-size: 15px; }
 
 .kAnimal { flex: none; animation: kBounce 2.2s ease-in-out infinite; overflow: visible; }
 @keyframes kBounce {
   0%, 100% { transform: translateY(0) rotate(0deg); }
   50% { transform: translateY(-3px) rotate(-3deg); }
 }
+/* Mood swings on win/loss -- happy speeds up and lifts the bounce, sad
+   slows it to a droop. Purely cosmetic, driven by AnimalIcon's `mood`
+   prop (see the main Play view's `mood` const). */
+.kAnimalhappy { animation: kBounceHappy 0.9s ease-in-out infinite; }
+@keyframes kBounceHappy {
+  0%, 100% { transform: translateY(0) rotate(-4deg) scale(1); }
+  50% { transform: translateY(-7px) rotate(4deg) scale(1.06); }
+}
+.kAnimalsad { animation: kBounceSad 2.6s ease-in-out infinite; }
+@keyframes kBounceSad {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(2px) rotate(-2deg); }
+}
 
-.kLessonTitle { font-size: 21px; margin: 14px 0 8px; width: 380px; color: #E8622C; }
-.kLessons { width: 380px; display: flex; flex-direction: column; gap: 10px; }
+/* Ported from the main site's Confetti.jsx -- same component, but that
+   component's CSS lives in src/App.css which the Kindle bundle doesn't
+   include, so the class names are redefined here with kid-palette
+   colors instead of the main site's neon ones. */
+.confettiLayer { position: fixed; inset: 0; pointer-events: none; z-index: 80; overflow: hidden; }
+.confettiPiece {
+  position: absolute; top: -12px; border-radius: 1px;
+  animation-name: confettiFall; animation-timing-function: ease-in; animation-fill-mode: forwards;
+}
+@keyframes confettiFall {
+  0% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+  100% { transform: translate(var(--drift), 108vh) rotate(540deg); opacity: 0; }
+}
+
+.kLessonTitle { font-size: 21px; margin: 14px 0 8px; width: min(94vw, 380px); color: #E8622C; }
+.kLessons { width: min(94vw, 380px); display: flex; flex-direction: column; gap: 10px; }
 .kLessonCard {
   display: flex; align-items: center; gap: 12px; border-radius: 14px; padding: 10px 12px;
   background: #FFFDF7; box-shadow: 0 3px 8px #00000014;
@@ -157,7 +200,54 @@ body {
 .kLessonPc { font-size: 36px; flex: none; }
 .kLessonName { font-size: 16px; font-weight: bold; margin-bottom: 2px; color: #E8622C; }
 .kLessonText { font-size: 13px; line-height: 1.35; }
-.kTips { width: 380px; font-size: 14px; line-height: 1.5; padding-left: 22px; margin: 0 0 10px; }
+.kTips { width: min(94vw, 380px); font-size: 14px; line-height: 1.5; padding-left: 22px; margin: 0 0 10px; }
+
+/* Lessons hub -- chapter picker cards, locked/pickable variants. */
+.kLessonLocked { opacity: 0.55; }
+.kLessonLockIcon { font-size: 28px; flex: none; }
+.kLessonPickable {
+  font-family: inherit; text-align: left; border: none; cursor: pointer; width: 100%;
+  transition: transform 0.15s ease;
+}
+.kLessonPickable:active { transform: translateY(2px); }
+
+/* Kid Lessons player -- Owl's narration panel, reusing the main game's
+   card chrome (kLessonCard-style background/shadow) rather than
+   inventing a new one. */
+.kCoachPanel {
+  width: min(94vw, 430px); margin-top: 14px; padding: 12px 14px; border-radius: 16px;
+  background: #FFFDF7; box-shadow: 0 3px 8px #00000014; display: flex; flex-direction: column; gap: 8px;
+}
+.kCoachHead { display: flex; align-items: center; gap: 10px; }
+.kCoachMeta { flex: 1; min-width: 0; }
+.kCoachName { font-size: 16px; font-weight: bold; color: #E8622C; }
+.kCoachStep { font-size: 12px; color: #8A6A4B; }
+.kCoachMute { background: #FFE9C4; color: #8A5A00; box-shadow: 0 3px 0 #E8C46A; }
+.kCoachBubble {
+  background: #FFF3D6; border: 2px solid #F2C48A; border-radius: 12px; padding: 12px 14px;
+  min-height: 84px; font-size: 15px; line-height: 1.5; color: #5B3E27; cursor: pointer;
+}
+.kCoachCaret { color: #E8622C; animation: kBlink 1s infinite; }
+@keyframes kBlink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+.kThinkHint { font-size: 13px; font-style: italic; color: #8A6A4B; margin: 0; }
+.kThinkFeedback { font-size: 14px; font-weight: bold; color: #E8622C; margin: 0; }
+.kThinkFeedback.good { color: #4F9E6E; }
+.kQuizOptions { display: flex; flex-direction: column; gap: 8px; }
+.kQuizOpt {
+  font-family: inherit; font-size: 14px; text-align: left; padding: 10px 12px; border: none;
+  border-radius: 12px; background: #F5C6EC; color: #5B2A50; box-shadow: 0 3px 0 #D18FC0; cursor: pointer;
+}
+.kQuizOpt.correct { background: #6FCF97; color: #1E4620; box-shadow: 0 3px 0 #4F9E6E; }
+.kQuizOpt.wrong { background: #FF8FA3; color: #5C1626; box-shadow: 0 3px 0 #E85D77; }
+.kQuizOpt:disabled { opacity: 0.6; }
+.kLessonNav { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; }
+.kLessonNav button {
+  font-family: inherit; font-size: 14px; padding: 10px 16px; border: none; border-radius: 12px;
+  background: #6FCF97; color: #1E4620; box-shadow: 0 3px 0 #4F9E6E; cursor: pointer;
+}
+.kLessonNav button:disabled { opacity: 0.4; box-shadow: none; }
+.kLessonNav button:active { transform: translateY(2px); box-shadow: none; }
+.kLessonNext { background: #FFD166; color: #5B3E27; box-shadow: 0 3px 0 #E8A93B; }
 
 .kErrBox { padding: 24px; text-align: center; }
 .kErrBox button { font-family: inherit; font-size: 14px; padding: 8px 14px; border: none; border-radius: 12px; background: #FFD166; margin-top: 10px; }

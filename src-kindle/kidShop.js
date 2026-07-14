@@ -38,6 +38,7 @@ function defaultState() {
     ownedHats: ["none"], ownedBoards: ["classic"], ownedTunes: ["classic"], ownedAnimals: [], ownedPieces: ["classic"],
     equippedHat: "none", equippedBoard: "classic", equippedTune: "classic", equippedPiece: "classic",
     musicVolume: 60, dailyPuzzleSolvedDate: null,
+    completedLessons: [], bestRushStreak: {},
   };
 }
 
@@ -151,6 +152,28 @@ export function markDailyPuzzleSolved(state, dateKey) {
 export function buyAnimal(state, animalId, price) {
   if (state.ownedAnimals.includes(animalId) || state.coins < price) return state;
   const next = { ...state, coins: state.coins - price, ownedAnimals: [...state.ownedAnimals, animalId] };
+  save(next);
+  return next;
+}
+
+/** One-time coin reward for finishing a Lessons chapter -- no-ops on
+ *  repeat playthroughs (coins were already paid out) so a kid can revisit
+ *  a chapter to review without farming it. */
+export function markLessonComplete(state, lessonId, reward = 20) {
+  if (state.completedLessons.includes(lessonId)) return state;
+  const next = { ...state, coins: state.coins + reward, completedLessons: [...state.completedLessons, lessonId] };
+  save(next);
+  return next;
+}
+
+/** Personal-best tracker for Puzzle Rush, keyed by duration -- a kid's
+ *  own trophy case instead of a public leaderboard, which feels wrong to
+ *  ship for a kids product. */
+export function recordRushResult(state, seconds, solved) {
+  const key = String(seconds);
+  const prevBest = state.bestRushStreak[key] || 0;
+  if (solved <= prevBest) return state;
+  const next = { ...state, bestRushStreak: { ...state.bestRushStreak, [key]: solved } };
   save(next);
   return next;
 }
