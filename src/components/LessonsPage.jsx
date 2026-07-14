@@ -92,12 +92,17 @@ export default function LessonsPage({ onBack, onToolSelect, activeToolId }) {
               <button
                 key={l.id}
                 onClick={() => setLessonId(l.id)}
-                className="rounded-2xl border border-[#8B2FC966] bg-[#1D1038CC] px-4 py-3 text-left backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-[#3EE7F566] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3EE7F5]"
+                className="flex items-center gap-3 rounded-2xl border border-[#8B2FC966] bg-[#1D1038CC] px-4 py-3 text-left backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-[#3EE7F566] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3EE7F5]"
               >
-                <div className="font-bold text-[#F4EFFF]">{l.title}</div>
-                <div className="mt-1 text-xs text-[#9D8FC4]">{l.desc}</div>
-                <div className="mt-2 text-[11px] font-bold uppercase tracking-[0.14em] text-[#3EE7F5]">
-                  {ready} of {l.chapters.length} chapters ready
+                {l.cover && (
+                  <img src={l.cover} alt="" className="h-14 w-14 flex-none rounded-xl border border-[#8B2FC966] object-cover" />
+                )}
+                <div className="min-w-0">
+                  <div className="font-bold text-[#F4EFFF]">{l.title}</div>
+                  <div className="mt-1 text-xs text-[#9D8FC4]">{l.desc}</div>
+                  <div className="mt-2 text-[11px] font-bold uppercase tracking-[0.14em] text-[#3EE7F5]">
+                    {ready} of {l.chapters.length} chapters ready
+                  </div>
                 </div>
               </button>
             );
@@ -130,12 +135,17 @@ export default function LessonsPage({ onBack, onToolSelect, activeToolId }) {
             {lesson.repertoire?.length > 0 && (
               <button
                 onClick={() => setTrainerOpen(true)}
-                className="rounded-2xl border border-[#F5D93E4D] bg-gradient-to-br from-[#1D1038CC] to-[#2A1F0EE6] px-4 py-3 text-left backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-[#F5D93E99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3EE7F5]"
+                className="flex items-center gap-3 rounded-2xl border border-[#F5D93E4D] bg-gradient-to-br from-[#1D1038CC] to-[#2A1F0EE6] px-4 py-3 text-left backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-[#F5D93E99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3EE7F5]"
               >
-                <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#F5D93E]">🐉 Theory Trainer</div>
-                <div className="mt-1 font-bold text-[#F4EFFF]">Play the repertoire vs the bot</div>
-                <div className="mt-1 text-xs text-[#9D8FC4]">
-                  The bot plays White straight from the lesson's lines — leave the book and it tells you what the repertoire move was. Engine takes over once theory runs out.
+                {lesson.cover && (
+                  <img src={lesson.cover} alt="" className="h-14 w-14 flex-none rounded-xl border border-[#F5D93E4D] object-cover" />
+                )}
+                <div className="min-w-0">
+                  <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#F5D93E]">Coach Bot · Theory Trainer</div>
+                  <div className="mt-1 font-bold text-[#F4EFFF]">Play the repertoire vs Coach Bot</div>
+                  <div className="mt-1 text-xs text-[#9D8FC4]">
+                    Coach Bot plays White straight from the lesson's lines — leave the book and it tells you what the repertoire move was. Engine takes over once theory runs out.
+                  </div>
                 </div>
               </button>
             )}

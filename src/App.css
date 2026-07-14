@@ -375,7 +375,7 @@ select:hover{ border-color:var(--cyan); }
 .lessonCoachMeta{ flex:1; min-width:0; }
 .lessonCoachName{ font-family:var(--font-display); font-style:italic; font-size:15px;
   text-transform:uppercase; letter-spacing:.05em; color:var(--cyan);
-  text-shadow:0 0 8px #3EE7F555; }
+  text-shadow:0 0 8px #3EE7F555; white-space:nowrap; }
 .lessonVoiceBtn{ width:38px; height:38px; flex:none; display:flex; align-items:center; justify-content:center;
   border:1px solid #8B2FC966; border-radius:50%; background:transparent; color:var(--liliac);
   cursor:pointer; touch-action:manipulation; transition:border-color .15s ease, color .15s ease, background .15s ease; }

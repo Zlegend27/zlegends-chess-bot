@@ -309,11 +309,11 @@ export default function LessonPlayer({ chapter, orientation = "white", pieceSetI
           <div className="lessonCoachHead">
             <img src="/lesson-coach.webp" alt="" className="lessonCoachImg" />
             <div className="lessonCoachMeta">
-              <div className="lessonCoachName">Coach</div>
+              <div className="lessonCoachName">Coach Bot</div>
               <div className="lessonBeatCount">{analyzing ? "Analysis" : `Step ${beatIdx + 1} of ${chapter.beats.length}`}</div>
             </div>
             <button className="lessonVoiceBtn" onClick={cycleVoice}
-              aria-label={`Coach voice: ${voiceMode === "blips" ? "chatter" : voiceMode === "speech" ? "spoken" : "muted"} — click to change`}
+              aria-label={`Coach Bot voice: ${voiceMode === "blips" ? "chatter" : voiceMode === "speech" ? "spoken" : "muted"} — click to change`}
               title={voiceMode === "blips" ? "Voice: chatter blips" : voiceMode === "speech" ? "Voice: spoken" : "Voice: muted"}>
               <VoiceIcon mode={voiceMode} />
             </button>
@@ -363,7 +363,7 @@ export default function LessonPlayer({ chapter, orientation = "white", pieceSetI
                     <p className="lessonHint">Try a move on the board, or reveal the idea.</p>
                   ) : (
                     <p className={"lessonTriedFeedback" + (thinkTried.matched ? " good" : "")}>
-                      {thinkTried.matched ? `${thinkTried.san} — that's the idea!` : thinkTried.san ? `${thinkTried.san} — not what the coach played. Here's the idea:` : ""}
+                      {thinkTried.matched ? `${thinkTried.san} — that's the idea!` : thinkTried.san ? `${thinkTried.san} — not quite what I had in mind. Here's the idea:` : ""}
                     </p>
                   )}
                   {!thinkTried && <button className="btn ghost" onClick={() => setThinkTried({ san: null, matched: false })}>Show the idea</button>}

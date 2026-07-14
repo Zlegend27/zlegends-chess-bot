@@ -49,8 +49,9 @@ export const LESSONS = [
     title: "Hyper-Accelerated Dragon",
     desc: "A Black repertoire against 1.e4 built around winning the fight for d5.",
     orientation: "black",
+    cover: "/lesson-coach.webp",
     resources: [
-      { label: "Coach's analysis board (chess.com)", url: "https://www.chess.com/analysis/collection/accelereated-dragon-opening-xqCV2qLz/3GSiyz3iAa/analysis" },
+      { label: "Lesson source: full analysis (chess.com)", url: "https://www.chess.com/analysis/collection/accelereated-dragon-opening-xqCV2qLz/3GSiyz3iAa/analysis" },
       { label: "Accelerated Dragon overview (Wikipedia)", url: "https://en.wikipedia.org/wiki/Sicilian_Defence,_Accelerated_Dragon_Variation" },
       { label: "Explore the position yourself (Lichess analysis)", url: "https://lichess.org/analysis/pgn/1.%20e4%20c5%202.%20Nf3%20g6" },
     ],
@@ -95,7 +96,7 @@ export const LESSONS = [
           {
             type: "branch",
             afterPly: 13,
-            prompt: "There's more than one good plan here. The coach shows two:",
+            prompt: "There's more than one good plan here — let me show you two:",
             options: [
               {
                 label: "Bishop-trade plan: …d6 and …Bg4",
@@ -103,16 +104,16 @@ export const LESSONS = [
                 note: "Trading the light-squared bishop is usually a concession — but here it's a trick. After ...Bg4, h3 Bxf3 Qxf3, the d4 square has lost its last defender: ...Nd4 hits the queen with tempo and the knight is a monster. Black is very comfortable.",
               },
               {
-                label: "The game plan: …e6 then …d5 (recommended)",
+                label: "My recommendation: …e6 then …d5",
                 line: ["e6"],
-                note: "The simple recommendation: ...e6 prepares ...d5, and nothing White has can stop it. Control of the center first — then Black decides whether to attack on the queenside or kingside depending on what White does.",
+                note: "Here's the simple idea I'd play: ...e6 prepares ...d5, and nothing White has can stop it. Control of the center first — then Black decides whether to attack on the queenside or kingside depending on what White does.",
               },
             ],
           },
           {
             type: "branch",
             afterPly: 14,
-            prompt: "Before White's reply — a question students always ask: can't White just grab space with e5 here?",
+            prompt: "Before White's reply — a question I get all the time: can't White just grab space with e5 here?",
             options: [
               {
                 label: "See 8.e5 on the board",
@@ -148,7 +149,7 @@ export const LESSONS = [
           {
             type: "branch",
             afterPly: 28,
-            prompt: "Honest coaching note: Black's last move (…Qd7) was slightly inaccurate. White had one good try here:",
+            prompt: "Quick honesty check: Black's last move (…Qd7) was slightly inaccurate. White actually had one good try here:",
             options: [
               {
                 label: "White's best try: 15.Ne5",
@@ -160,7 +161,7 @@ export const LESSONS = [
           {
             type: "puzzle",
             afterPly: 29,
-            prompt: "White just played 15.Be3?? — and the coach says: pause and win a piece. Look for forcing moves and overloaded defenders. (Two Black moves to find.)",
+            prompt: "White just played 15.Be3?? — pause here and find the win. Look for forcing moves and overloaded defenders. (Two Black moves to find.)",
             solution: ["Nxb3", "cxb3", "d4"],
             explanation: "Simple chess: trades first, then the fork. 15...Nxb3 16.cxb3 clears the d4 square — and now ...d4! hits the e3-bishop and c3-knight at once, while the g4-bishop still pins the f3-knight against the queen. Too many problems: whatever White tries, a piece falls.",
           },
