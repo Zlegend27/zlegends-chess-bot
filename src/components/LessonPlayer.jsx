@@ -64,6 +64,9 @@ export default function LessonPlayer({ chapter, orientation = "white", pieceSetI
   // playthrough-beat state
   const [playPly, setPlayPly] = useState(0);
   const [autoPlaying, setAutoPlaying] = useState(false);
+  // narration-beat "how we got here" recap state
+  const [recapPly, setRecapPly] = useState(null); // null = not recapping, else 0..beat.afterPly
+  const [recapPlaying, setRecapPlaying] = useState(false);
   // think-beat state
   const [thinkTried, setThinkTried] = useState(null); // { san, matched } | null
   // branch-beat state
@@ -156,6 +159,8 @@ export default function LessonPlayer({ chapter, orientation = "white", pieceSetI
     setPuzzleSolved(false);
     setAnalyzing(false);
     setAutoPlaying(false);
+    setRecapPly(null);
+    setRecapPlaying(false);
     if (beat) {
       setPlayPly(beat.afterPly);
       gotoPly(beat.afterPly);
@@ -178,6 +183,26 @@ export default function LessonPlayer({ chapter, orientation = "white", pieceSetI
     if (beat?.type === "playthrough") gotoPly(playPly);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playPly]);
+
+  /* Narration beats jump straight to the position -- "how we got here"
+     lets a newer player scrub/play back through the moves since the last
+     beat's own board, same first/prev/play/next/last controls as the
+     opening playthrough, just scoped to 0..beat.afterPly. */
+  useEffect(() => {
+    if (!recapPlaying || beat?.type !== "narration") return;
+    const t = setInterval(() => {
+      setRecapPly(p => {
+        if (p >= beat.afterPly) { setRecapPlaying(false); return p; }
+        return p + 1;
+      });
+    }, 1100);
+    return () => clearInterval(t);
+  }, [recapPlaying, beat]);
+
+  useEffect(() => {
+    if (beat?.type === "narration" && recapPly != null) gotoPly(recapPly);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recapPly]);
 
   const atLastBeat = beatIdx >= chapter.beats.length - 1;
   const next = () => setBeatIdx(i => Math.min(chapter.beats.length - 1, i + 1));
@@ -268,6 +293,8 @@ export default function LessonPlayer({ chapter, orientation = "white", pieceSetI
   const resumeLesson = () => {
     setAnalyzing(false);
     setEngineInfo(null);
+    setRecapPly(null);
+    setRecapPlaying(false);
     if (beat.type === "playthrough") gotoPly(playPly);
     else if (beat.type === "branch" && branchViewing != null) gotoPly(beat.afterPly, beat.options[branchViewing].line);
     else gotoPly(beat.afterPly);
@@ -355,6 +382,31 @@ export default function LessonPlayer({ chapter, orientation = "white", pieceSetI
                   </div>
                   <div className="lessonBeatCount" style={{ marginTop: 6 }}>Move {playPly} / {playthroughEnd}</div>
                 </>
+              )}
+
+              {beat.type === "narration" && beat.afterPly > 0 && (
+                recapPly == null ? (
+                  <button className="btn ghost lessonAnalyzeBtn" onClick={() => setRecapPly(0)}>
+                    ▶ Show how we got here
+                  </button>
+                ) : (
+                  <>
+                    <div className="lessonPlayCtrls">
+                      <button className="btn ghost" onClick={() => { setRecapPlaying(false); setRecapPly(0); }} disabled={recapPly <= 0} aria-label="First move">|◀</button>
+                      <button className="btn ghost" onClick={() => { setRecapPlaying(false); setRecapPly(p => Math.max(0, p - 1)); }} disabled={recapPly <= 0} aria-label="Previous move">◀</button>
+                      <button className="btn ghost" onClick={() => setRecapPlaying(a => !a)} disabled={recapPly >= beat.afterPly}>
+                        {recapPlaying ? "❚❚" : "▶ Play"}
+                      </button>
+                      <button className="btn ghost" onClick={() => { setRecapPlaying(false); setRecapPly(p => Math.min(beat.afterPly, p + 1)); }} disabled={recapPly >= beat.afterPly} aria-label="Next move">▶</button>
+                      <button className="btn ghost" onClick={() => { setRecapPlaying(false); setRecapPly(beat.afterPly); }} disabled={recapPly >= beat.afterPly} aria-label="Last move">▶|</button>
+                    </div>
+                    <div className="lessonBeatCount" style={{ marginTop: 6 }}>Move {recapPly} / {beat.afterPly}</div>
+                    <button className="btn ghost" style={{ marginTop: 6 }}
+                      onClick={() => { setRecapPlaying(false); setRecapPly(null); gotoPly(beat.afterPly); }}>
+                      ✕ Close replay
+                    </button>
+                  </>
+                )
               )}
 
               {beat.type === "think" && (
