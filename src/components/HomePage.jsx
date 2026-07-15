@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import StarField from "./StarField";
 import SocialBanner from "./SocialBanner";
 import PixelAvatar, { ZPAL, ZPIX } from "./PixelAvatar";
+import BotBubble from "./BotBubble";
+import { pickWelcomeLine } from "../utils/botLines";
 
 /* Same inline-SVG-path convention already used for the Juice Box/Puzzles/
    Spectate icons elsewhere in the app (see App.jsx's icon row) -- kept
@@ -78,7 +80,7 @@ const accentFor = (m) => (m.featured ? ACCENT.play : ACCENT.cyan);
  *  padding) as its outer wrapper purely for free theming -- .root's own
  *  CSS never targets descendants by type/class the way e.g. .promoBox
  *  does, so nesting new markup inside it can't be fought by anything. */
-export default function HomePage({ onEnter }) {
+export default function HomePage({ onEnter, firstVisit, rankElo, rankGames }) {
   /* Donate/Contact have no real destination yet ("later will flesh out a
      contact page and set up donations") -- onEnter only knows the modes
      App.jsx's enterMode handles, and silently falls through to the Play
@@ -86,6 +88,16 @@ export default function HomePage({ onEnter }) {
      for a button that says Donate. A local toast instead of routing
      through onEnter keeps them honest about not being wired up yet. */
   const [comingSoon, setComingSoon] = useState(null);
+  /* ZLEGEND2700's welcome beat -- picked once per HomePage mount (not on
+     every render) so it doesn't reroll mid-typewriter, and dismissible
+     without needing to persist that choice anywhere: it's flavor, not a
+     tutorial the player is obligated to read every time. */
+  const [dismissed, setDismissed] = useState(false);
+  const welcomeLine = useMemo(
+    () => pickWelcomeLine({ firstVisit, rankElo, games: rankGames }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
   return (
     <div className="root">
       <StarField />
@@ -97,6 +109,12 @@ export default function HomePage({ onEnter }) {
       <p className="mt-4 max-w-sm text-center text-sm leading-relaxed text-[#CBBDF0]">
         A custom chess engine that adapts, attacks, and surprises. Challenge it at any level — or train until you can.
       </p>
+
+      {!dismissed && (
+        <div className="mt-5">
+          <BotBubble line={welcomeLine} onDismiss={() => setDismissed(true)} />
+        </div>
+      )}
 
       {/* App-icon style grid -- big square tiles (icon + label only, no
           description) rather than the horizontal list-style cards this

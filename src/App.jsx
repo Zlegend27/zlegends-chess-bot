@@ -13,6 +13,8 @@ import HomePage from "./components/HomePage";
 import { TopNav } from "./components/ExploreNav";
 import SocialBanner from "./components/SocialBanner";
 import GamePanel from "./components/GamePanel";
+import BotBubble from "./components/BotBubble";
+import { pickPostGameLine } from "./utils/botLines";
 import { loadSetting, saveSetting } from "./utils/storage";
 import { buildPgn, parsePgnMoves, replayForeignPgn } from "./utils/pgn";
 import { encodeGame, decodeGame, getSharedHash, replayIntoEngine } from "./utils/share";
@@ -468,6 +470,11 @@ export default function ZlegendsBot() {
      requirement while still feeling immediate). Only fires once, ever,
      and only if they haven't already picked a source themselves. */
   const themeAutoplayArmedRef = useRef(!loadSetting("visitedBefore", false) && loadSetting("musicSource", "chiptune") === "chiptune");
+  /* Read once, before the "mark visited" effect below flips the flag --
+     HomePage's welcome beat needs to know if this is a genuine first
+     visit, independent of whether theme-music autoplay is armed (that
+     one also requires musicSource === "chiptune"). */
+  const isFirstVisitRef = useRef(!loadSetting("visitedBefore", false));
 
   /* engine search runs in a worker so it never blocks the audio scheduler or UI */
   const workerRef = useRef(null);
@@ -514,6 +521,13 @@ export default function ZlegendsBot() {
   const [thinking, setThinking] = useState(false);
   const [info, setInfo] = useState(null);
   const [result, setResult] = useState(null);
+  /* ZLEGEND2700's post-game one-liner -- picked once when `result`
+     transitions from null to a real result object (a fresh object every
+     time a game actually ends), not recomputed on unrelated re-renders.
+     Deliberately cheap: no move grading involved (that's a whole
+     Stockfish pass now), just the final result + material + which
+     "personality of the day" the bot was playing as. */
+  const [botLine, setBotLine] = useState(null);
   const [promo, setPromo] = useState(null);
   const [colorPick, setColorPick] = useState(false);
   /* Inline "abandon this game?" step before New wipes a game that's
@@ -2081,6 +2095,13 @@ export default function ZlegendsBot() {
       mp3Audio.removeEventListener("canplay", onReady);
     };
   }, []);
+  /* "visitedBefore" needs to be unconditional -- it now also drives
+     HomePage's welcome-beat line (see isFirstVisitRef above), not just
+     autoplay-arming, so it has to flip for every first-time visitor, not
+     only ones who still had chiptune as their music source. */
+  useEffect(() => {
+    saveSetting("visitedBefore", true);
+  }, []);
   /* Cues the theme track (metadata + src only, not full playback) as soon
      as a genuine first-time visitor loads the page, so it's ready to go
      the instant they satisfy the browser's user-gesture requirement for
@@ -2088,7 +2109,6 @@ export default function ZlegendsBot() {
      have to wait on a fresh Storage round trip before anything could play. */
   useEffect(() => {
     if (!themeAutoplayArmedRef.current) return;
-    saveSetting("visitedBefore", true);
     setMusicSourceState(THEME_ID);
     saveSetting("musicSource", THEME_ID);
     loadMp3Playlist(THEME_ID);
@@ -2344,6 +2364,18 @@ export default function ZlegendsBot() {
   const botTaken = botColor === 1 ? mat.capturedBlack : mat.capturedWhite;
   const youTaken = playerColor === 1 ? mat.capturedBlack : mat.capturedWhite;
   const youDiff = playerColor === 1 ? mat.diff : -mat.diff;
+  useEffect(() => {
+    if (!result || spectateMode || activePuzzle || rushMode) { setBotLine(null); return; }
+    setBotLine(pickPostGameLine({
+      result,
+      playerWon: result.winner === playerColor,
+      isDraw: result.winner === 0,
+      youDiff,
+      styleLabel: gameStyle.label,
+      difficultyLabel: difficultyRef.current.label,
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result]);
   const liveOpening = (mode === "play" && !activePuzzle && !quizOpening)
     ? (ecoData ? detectEcoOpening(moveList, ecoData) : detectOpening(moveList))
     : null;
@@ -2690,7 +2722,14 @@ export default function ZlegendsBot() {
   };
 
   if (siteView === "home") {
-    return <HomePage onEnter={enterMode} />;
+    return (
+      <HomePage
+        onEnter={enterMode}
+        firstVisit={isFirstVisitRef.current}
+        rankElo={rankBotAssessedElo ?? (rankBotGames > 0 ? rankBotElo : null)}
+        rankGames={rankBotGames}
+      />
+    );
   }
 
   if (siteView === "leaderboard") {
@@ -2776,6 +2815,10 @@ export default function ZlegendsBot() {
               </div>
               {youDiff < 0 && <div className="lead">+{-youDiff}</div>}
             </div>
+          )}
+
+          {botLine && mode === "play" && !spectateMode && !activePuzzle && !rushMode && (
+            <BotBubble line={botLine} avatarSize={32} className="mt-1" onDismiss={() => setBotLine(null)} />
           )}
 
           <div className="boardWrap">
