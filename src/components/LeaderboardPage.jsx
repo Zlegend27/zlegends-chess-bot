@@ -6,8 +6,8 @@ import { fetchLeaderboard } from "../utils/leaderboard";
 import { RUSH_DURATIONS } from "../utils/rushDurations";
 
 const RANK_ACCENT = {
-  1: { text: "text-[#F5D93E]", medal: "🥇" },
-  2: { text: "text-[#C9C2E8]", medal: "🥈" },
+  1: { text: "text-yellow", medal: "🥇" },
+  2: { text: "text-liliac", medal: "🥈" },
   3: { text: "text-[#E0A968]", medal: "🥉" },
 };
 
@@ -48,7 +48,7 @@ export default function LeaderboardPage({ initialDuration = 60, onBack, onToolSe
 
       <button
         onClick={onBack}
-        className="mb-2 inline-flex items-center gap-1.5 self-start bg-transparent text-sm font-bold text-[#9D8FC4] transition-colors hover:text-[#F4EFFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3EE7F5]"
+        className="mb-2 inline-flex items-center gap-1.5 self-start bg-transparent text-sm font-bold text-dim transition-colors hover:text-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z" /></svg>
         Back
@@ -71,28 +71,28 @@ export default function LeaderboardPage({ initialDuration = 60, onBack, onToolSe
         ))}
       </div>
 
-      <div className="mt-4 w-full max-w-md overflow-hidden rounded-2xl border border-[#8B2FC966] bg-[#1D1038CC] backdrop-blur-sm">
+      <div className="mt-4 w-full max-w-md overflow-hidden rounded-2xl border border-violet/40 bg-panel/80 backdrop-blur-sm">
         {rows === null ? (
-          <div className="px-4 py-6 text-center text-sm text-[#9D8FC4]">Loading…</div>
+          <div className="px-4 py-6 text-center text-sm text-dim">Loading…</div>
         ) : rows.length === 0 ? (
           <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
-            <svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor" className="text-[#8B2FC966]" aria-hidden="true">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor" className="text-violet/40" aria-hidden="true">
               <path d="M7 4V2h10v2h4v3c0 2.21-1.79 4-4 4h-.08A6.007 6.007 0 0 1 13 15.92V18h3v2H8v-2h3v-2.08A6.007 6.007 0 0 1 7.08 9H7c-2.21 0-4-1.79-4-4V4h4zm-2 2v1c0 1.1.9 2 2 2V6H5zm12 0v3c1.1 0 2-.9 2-2V6h-2z" />
             </svg>
-            <p className="text-sm text-[#9D8FC4]">No scores yet for this duration — be the first!</p>
+            <p className="text-sm text-dim">No scores yet for this duration — be the first!</p>
           </div>
         ) : (
-          <div className="divide-y divide-[#8B2FC92E]">
+          <div className="divide-y divide-violet/18">
             {rows.map((row, i) => {
               const rank = i + 1;
               const accent = RANK_ACCENT[rank];
               return (
                 <div key={i} className="flex items-center justify-between gap-3 px-4 py-2.5">
-                  <span className={`flex items-center gap-2 text-sm ${accent ? `font-bold ${accent.text}` : "text-[#F4EFFF]"}`}>
+                  <span className={`flex items-center gap-2 text-sm ${accent ? `font-bold ${accent.text}` : "text-paper"}`}>
                     <span className="w-6 text-right tabular-nums">{accent ? accent.medal : `#${rank}`}</span>
                     {row.display_name || "Anonymous"}
                   </span>
-                  <b className={accent ? accent.text : "text-[#F4EFFF]"}>{row.solved}</b>
+                  <b className={accent ? accent.text : "text-paper"}>{row.solved}</b>
                 </div>
               );
             })}

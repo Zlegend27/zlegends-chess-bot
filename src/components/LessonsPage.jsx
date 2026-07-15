@@ -29,7 +29,7 @@ export default function LessonsPage({ onBack, onToolSelect, activeToolId }) {
   const backLink = (label, onClick) => (
     <button
       onClick={onClick}
-      className="mb-2 inline-flex items-center gap-1.5 self-start bg-transparent text-sm font-bold text-[#9D8FC4] transition-colors hover:text-[#F4EFFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3EE7F5]"
+      className="mb-2 inline-flex items-center gap-1.5 self-start bg-transparent text-sm font-bold text-dim transition-colors hover:text-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
     >
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z" /></svg>
       {label}
@@ -92,15 +92,15 @@ export default function LessonsPage({ onBack, onToolSelect, activeToolId }) {
               <button
                 key={l.id}
                 onClick={() => setLessonId(l.id)}
-                className="flex items-center gap-3 rounded-2xl border border-[#8B2FC966] bg-[#1D1038CC] px-4 py-3 text-left backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-[#3EE7F566] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3EE7F5]"
+                className="flex items-center gap-3 rounded-2xl border border-violet/40 bg-panel/80 px-4 py-3 text-left backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-cyan/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
               >
                 {l.cover && (
-                  <img src={l.cover} alt="" className="h-14 w-14 flex-none rounded-xl border border-[#8B2FC966] object-cover" />
+                  <img src={l.cover} alt="" className="h-14 w-14 flex-none rounded-xl border border-violet/40 object-cover" />
                 )}
                 <div className="min-w-0">
-                  <div className="font-bold text-[#F4EFFF]">{l.title}</div>
-                  <div className="mt-1 text-xs text-[#9D8FC4]">{l.desc}</div>
-                  <div className="mt-2 text-[11px] font-bold uppercase tracking-[0.14em] text-[#3EE7F5]">
+                  <div className="font-bold text-paper">{l.title}</div>
+                  <div className="mt-1 text-xs text-dim">{l.desc}</div>
+                  <div className="mt-2 text-[11px] font-bold uppercase tracking-[0.14em] text-cyan">
                     {ready} of {l.chapters.length} chapters ready
                   </div>
                 </div>
@@ -112,8 +112,8 @@ export default function LessonsPage({ onBack, onToolSelect, activeToolId }) {
             {lesson.chapters.map(c => (
               c.comingSoon ? (
                 <div key={c.number}
-                  className="rounded-2xl border border-[#8B2FC933] bg-[#1D103880] px-4 py-3 text-left opacity-60">
-                  <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em] text-[#9D8FC4]">
+                  className="rounded-2xl border border-violet/20 bg-panel/50 px-4 py-3 text-left opacity-60">
+                  <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em] text-dim">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5zm-3 8V7a3 3 0 0 1 6 0v3H9z" /></svg>
                     Chapter {c.number} · coming soon
                   </div>
@@ -123,11 +123,11 @@ export default function LessonsPage({ onBack, onToolSelect, activeToolId }) {
                 <button
                   key={c.number}
                   onClick={() => setChapterNumber(c.number)}
-                  className="rounded-2xl border border-[#8B2FC966] bg-[#1D1038CC] px-4 py-3 text-left backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-[#3EE7F566] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3EE7F5]"
+                  className="rounded-2xl border border-violet/40 bg-panel/80 px-4 py-3 text-left backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-cyan/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
                 >
-                  <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#F5D93E]">Chapter {c.number}</div>
-                  <div className="mt-1 font-bold text-[#F4EFFF]">{c.title}</div>
-                  <div className="mt-1 text-xs text-[#9D8FC4]">{c.beats.length} interactive steps</div>
+                  <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-yellow">Chapter {c.number}</div>
+                  <div className="mt-1 font-bold text-paper">{c.title}</div>
+                  <div className="mt-1 text-xs text-dim">{c.beats.length} interactive steps</div>
                 </button>
               )
             ))}
@@ -135,15 +135,15 @@ export default function LessonsPage({ onBack, onToolSelect, activeToolId }) {
             {lesson.repertoire?.length > 0 && (
               <button
                 onClick={() => setTrainerOpen(true)}
-                className="flex items-center gap-3 rounded-2xl border border-[#F5D93E4D] bg-gradient-to-br from-[#1D1038CC] to-[#2A1F0EE6] px-4 py-3 text-left backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-[#F5D93E99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3EE7F5]"
+                className="flex items-center gap-3 rounded-2xl border border-yellow/30 bg-gradient-to-br from-panel/80 to-[#2A1F0EE6] px-4 py-3 text-left backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-yellow/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
               >
                 {lesson.cover && (
-                  <img src={lesson.cover} alt="" className="h-14 w-14 flex-none rounded-xl border border-[#F5D93E4D] object-cover" />
+                  <img src={lesson.cover} alt="" className="h-14 w-14 flex-none rounded-xl border border-yellow/30 object-cover" />
                 )}
                 <div className="min-w-0">
-                  <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#F5D93E]">🐉 Theory Trainer</div>
-                  <div className="mt-1 font-bold text-[#F4EFFF]">Play the repertoire vs the Accelerated Dragon</div>
-                  <div className="mt-1 text-xs text-[#9D8FC4]">
+                  <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-yellow">🐉 Theory Trainer</div>
+                  <div className="mt-1 font-bold text-paper">Play the repertoire vs the Accelerated Dragon</div>
+                  <div className="mt-1 text-xs text-dim">
                     It plays White straight from the lesson's lines — leave the book and it tells you what the repertoire move was. Engine takes over once theory runs out.
                   </div>
                 </div>
@@ -151,12 +151,12 @@ export default function LessonsPage({ onBack, onToolSelect, activeToolId }) {
             )}
 
             {lesson.resources?.length > 0 && (
-              <div className="rounded-2xl border border-[#8B2FC966] bg-[#1D1038CC] px-4 py-3 backdrop-blur-sm">
-                <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#9D8FC4]">Go deeper</div>
+              <div className="rounded-2xl border border-violet/40 bg-panel/80 px-4 py-3 backdrop-blur-sm">
+                <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-dim">Go deeper</div>
                 <div className="mt-2 flex flex-col gap-1.5">
                   {lesson.resources.map(r => (
                     <a key={r.url} href={r.url} target="_blank" rel="noopener noreferrer"
-                      className="text-sm text-[#3EE7F5] hover:underline">
+                      className="text-sm text-cyan hover:underline">
                       {r.label} ↗
                     </a>
                   ))}

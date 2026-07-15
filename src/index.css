@@ -9,6 +9,35 @@
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
 
+/* Bridges src/tokens.css's palette into Tailwind's color system (CSS-first
+   v4 @theme) so Tailwind-authored surfaces (HomePage, LessonsPage,
+   ExploreNav, LeaderboardPage, GamePanel) can reference the app's actual
+   palette -- `bg-panel/80`, `text-cyan`, `border-violet/40` -- instead of
+   duplicating hex literals that happen to match. Values are copy-pasted
+   from tokens.css on purpose (an @theme block can't `var()` in a value
+   from outside its own layer reliably across all Tailwind consumers), so
+   if the palette ever changes, update both files.
+
+   Named "paper" rather than "white" deliberately: Tailwind ships a
+   built-in bare `white` (#fff) token, and shadowing it here would
+   silently recolor every existing plain `text-white`/`bg-white` class
+   anywhere else in the app that was never meant to move off true white.
+   This does NOT touch DESIGN_PRINCIPLES.md's "two component languages"
+   split -- the Tailwind pages keep their own calmer visual language,
+   this only removes duplicate color literals within that language. */
+@theme {
+  --color-void: #0E0620;
+  --color-void2: #1A0B33;
+  --color-panel: #1D1038;
+  --color-violet: #8B2FC9;
+  --color-magenta: #D94BF0;
+  --color-cyan: #3EE7F5;
+  --color-yellow: #F5D93E;
+  --color-liliac: #C9C2E8;
+  --color-paper: #F4EFFF;
+  --color-dim: #9D8FC4;
+}
+
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body {
   margin: 0;

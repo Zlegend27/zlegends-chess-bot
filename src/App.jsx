@@ -2502,7 +2502,7 @@ export default function ZlegendsBot() {
      mirroring them in a second spot was pure clutter. */
   const analysisChip = (text, tone = "dim") => (
     <span className={`inline-flex w-fit items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-bold tracking-wide ${
-      tone === "gold" ? "bg-[#F5D93E1F] text-[#F5D93E]" : tone === "cyan" ? "bg-[#3EE7F51F] text-[#3EE7F5]" : "bg-[#8B2FC926] text-[#9D8FC4]"
+      tone === "gold" ? "bg-yellow/12 text-yellow" : tone === "cyan" ? "bg-cyan/12 text-cyan" : "bg-violet/15 text-dim"
     }`}>{text}</span>
   );
   const analysisHint = (text) => <p className="m-0 text-[13px] leading-relaxed text-[#CBBDF0]">{text}</p>;
@@ -2577,18 +2577,18 @@ export default function ZlegendsBot() {
   ) : (
     <div className="flex flex-col gap-3">
       {grading && (
-        <div className="text-[12px] text-[#9D8FC4]">Grading moves… {gradeProgress}/{moveList.length}</div>
+        <div className="text-[12px] text-dim">Grading moves… {gradeProgress}/{moveList.length}</div>
       )}
       {gradeReport && !grading && (
-        <div className="rounded-xl border border-[#8B2FC93D] bg-[#150C2466] p-3">
-          <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#9D8FC4]">Game report</div>
+        <div className="rounded-xl border border-violet/24 bg-[#150C2466] p-3">
+          <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-dim">Game report</div>
           {gradeReport.cols.some(c => c.stats) && (
             <div className="mb-2.5 grid grid-cols-2 gap-2">
               {gradeReport.cols.map((col) => (
-                <div key={col.label} className="rounded-lg bg-[#1D1038CC] px-2.5 py-2 text-center">
-                  <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#9D8FC4]">{col.label}</div>
-                  <div className="mt-0.5 text-xl font-bold leading-none text-[#3EE7F5]">{col.stats ? `${col.stats.acc}%` : "—"}</div>
-                  <div className="mt-1 text-[10px] text-[#9D8FC4]">{col.stats ? `~${col.stats.perf} rated play` : "accuracy"}</div>
+                <div key={col.label} className="rounded-lg bg-panel/80 px-2.5 py-2 text-center">
+                  <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-dim">{col.label}</div>
+                  <div className="mt-0.5 text-xl font-bold leading-none text-cyan">{col.stats ? `${col.stats.acc}%` : "—"}</div>
+                  <div className="mt-1 text-[10px] text-dim">{col.stats ? `~${col.stats.perf} rated play` : "accuracy"}</div>
                 </div>
               ))}
             </div>
@@ -2601,14 +2601,14 @@ export default function ZlegendsBot() {
           <div className="grid grid-cols-2 gap-3">
             {gradeReport.cols.map((col) => (
               <div key={col.label}>
-                <div className="mb-1.5 text-xs font-bold text-[#F4EFFF]">{col.label}</div>
+                <div className="mb-1.5 text-xs font-bold text-paper">{col.label}</div>
                 <div className="flex flex-col gap-1">
                   {Object.entries(col.counts).map(([g, n]) => (
                     <div key={g} className="flex items-center justify-between text-[11px]">
                       <span className="flex items-center gap-1.5 capitalize text-[#CBBDF0]">
                         <b style={{ color: GRADE_COLOR[g], minWidth: 16 }}>{GRADE_TAG[g]}</b>{g}
                       </span>
-                      <span className={n > 0 ? "font-bold text-[#F4EFFF]" : "text-[#9D8FC4]"}>{n}</span>
+                      <span className={n > 0 ? "font-bold text-paper" : "text-dim"}>{n}</span>
                     </div>
                   ))}
                 </div>
@@ -2618,7 +2618,7 @@ export default function ZlegendsBot() {
           {practiceQueue.length > 0 && !practice && (
             <button
               onClick={startPractice}
-              className="mt-3 w-full rounded-lg border border-[#F5D93E4D] bg-[#F5D93E14] px-3 py-2 text-xs font-bold text-[#F5D93E] transition-colors hover:border-[#F5D93E99] hover:bg-[#F5D93E24] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3EE7F5]"
+              className="mt-3 w-full rounded-lg border border-yellow/30 bg-yellow/8 px-3 py-2 text-xs font-bold text-yellow transition-colors hover:border-yellow/60 hover:bg-yellow/14 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
             >
               🎯 Practice your mistakes ({practiceQueue.length})
             </button>
@@ -2635,26 +2635,26 @@ export default function ZlegendsBot() {
         <div className="flex flex-col gap-3">
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-xl bg-[#150C2480] px-3 py-2.5">
-              <div className={`text-lg font-bold leading-none ${playerAdvantageCp >= 50 ? "text-[#3EE7F5]" : playerAdvantageCp <= -50 ? "text-[#FF7B9C]" : "text-[#F4EFFF]"}`}>{evalLabel}</div>
-              <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[#9D8FC4]">Eval</div>
+              <div className={`text-lg font-bold leading-none ${playerAdvantageCp >= 50 ? "text-cyan" : playerAdvantageCp <= -50 ? "text-[#FF7B9C]" : "text-paper"}`}>{evalLabel}</div>
+              <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-dim">Eval</div>
             </div>
             <div className="rounded-xl bg-[#150C2480] px-3 py-2.5">
-              <div className="text-lg font-bold leading-none text-[#F4EFFF]">{info.depth}</div>
-              <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[#9D8FC4]">Depth</div>
+              <div className="text-lg font-bold leading-none text-paper">{info.depth}</div>
+              <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-dim">Depth</div>
             </div>
           </div>
           {info.pv.length > 0 && (
             <div>
-              <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[#9D8FC4]">Expected line</div>
+              <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-dim">Expected line</div>
               <div className="flex flex-wrap gap-1">
                 {info.pv.slice(0, 8).map((sanMove, i) => (
-                  <span key={i} className="rounded-md bg-[#8B2FC926] px-1.5 py-0.5 font-mono text-xs text-[#F4EFFF]">{sanMove}</span>
+                  <span key={i} className="rounded-md bg-violet/15 px-1.5 py-0.5 font-mono text-xs text-paper">{sanMove}</span>
                 ))}
-                {info.pv.length > 8 && <span className="px-1 py-0.5 text-xs text-[#9D8FC4]">+{info.pv.length - 8} more</span>}
+                {info.pv.length > 8 && <span className="px-1 py-0.5 text-xs text-dim">+{info.pv.length - 8} more</span>}
               </div>
             </div>
           )}
-          <div className="text-[11px] text-[#9D8FC4]">{(info.nodes / 1000).toFixed(0)}k nodes · {(info.time / 1000).toFixed(1)}s</div>
+          <div className="text-[11px] text-dim">{(info.nodes / 1000).toFixed(0)}k nodes · {(info.time / 1000).toFixed(1)}s</div>
         </div>
       )
     ) : (
@@ -2986,7 +2986,7 @@ export default function ZlegendsBot() {
                media query keys its flex `order` off it. Every plain
                button needs an explicit bg-* (no Tailwind preflight in
                this build; without one they render native gray). */
-            const stepBtn = "flex h-9 w-9 items-center justify-center bg-transparent text-[#CBBDF0] transition-colors hover:text-[#F4EFFF] disabled:opacity-30 disabled:hover:text-[#CBBDF0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3EE7F5]";
+            const stepBtn = "flex h-9 w-9 items-center justify-center bg-transparent text-[#CBBDF0] transition-colors hover:text-paper disabled:opacity-30 disabled:hover:text-[#CBBDF0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan";
             const chev = (d) => <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={d} /></svg>;
             /* Jump between the moves that decided the game instead of
                stepping through every quiet ply -- grades[i] belongs to
@@ -3007,14 +3007,14 @@ export default function ZlegendsBot() {
             );
             return (
               <div className="reviewCtrls mt-1 flex items-center justify-center gap-2">
-                <div className="flex items-center overflow-hidden rounded-xl border border-[#8B2FC966] bg-[#1D1038CC] backdrop-blur-sm">
+                <div className="flex items-center overflow-hidden rounded-xl border border-violet/40 bg-panel/80 backdrop-blur-sm">
                   <button className={stepBtn} onClick={() => setReviewIndex(0)} disabled={reviewIndex === 0} aria-label="First move">
                     {chev("M6 6h2v12H6zm3.5 6 8.5 6V6z")}
                   </button>
                   <button className={stepBtn} onClick={() => setReviewIndex(i => Math.max(0, i - 1))} disabled={reviewIndex === 0} aria-label="Previous move">
                     {chev("M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z")}
                   </button>
-                  <span className="min-w-[52px] px-1 text-center font-mono text-[11px] tabular-nums text-[#9D8FC4]">
+                  <span className="min-w-[52px] px-1 text-center font-mono text-[11px] tabular-nums text-dim">
                     {reviewIndex}/{moveList.length}
                   </span>
                   <button className={stepBtn} onClick={() => setReviewIndex(i => Math.min(moveList.length, i + 1))} disabled={reviewIndex === moveList.length} aria-label="Next move">
@@ -3025,7 +3025,7 @@ export default function ZlegendsBot() {
                   </button>
                   {moveGrades && (
                     <>
-                      <span className="h-5 w-px bg-[#8B2FC966]" aria-hidden="true" />
+                      <span className="h-5 w-px bg-violet/40" aria-hidden="true" />
                       <button className={stepBtn.replace("w-9 ", "px-1 ") + " -space-x-1 text-[#F05348] hover:text-[#FF7B6E] disabled:hover:text-[#F05348]"}
                         onClick={() => setReviewIndex(prevMistake)} disabled={prevMistake == null}
                         aria-label="Previous mistake" title="Previous mistake">
@@ -3041,10 +3041,10 @@ export default function ZlegendsBot() {
                 </div>
                 <button
                   onClick={toggleAnalyze}
-                  className={`flex h-9 items-center gap-1.5 rounded-xl border px-3.5 text-xs font-bold tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3EE7F5] ${
+                  className={`flex h-9 items-center gap-1.5 rounded-xl border px-3.5 text-xs font-bold tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan ${
                     analyzing
-                      ? "border-[#3EE7F580] bg-[#3EE7F51F] text-[#3EE7F5]"
-                      : "border-[#8B2FC966] bg-[#1D1038CC] text-[#CBBDF0] hover:border-[#3EE7F566] hover:text-[#F4EFFF]"
+                      ? "border-cyan/50 bg-cyan/12 text-cyan"
+                      : "border-violet/40 bg-panel/80 text-[#CBBDF0] hover:border-cyan/40 hover:text-paper"
                   }`}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -3061,12 +3061,12 @@ export default function ZlegendsBot() {
                or still trying. Kept under the stepper where the coaching
                line normally lives -- which stays hidden during practice,
                since it literally prints the answer. */
-            const btn = "rounded-lg border border-[#8B2FC966] bg-transparent px-2.5 py-1 text-[11px] font-bold text-[#CBBDF0] transition-colors hover:border-[#3EE7F566] hover:text-[#F4EFFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3EE7F5]";
+            const btn = "rounded-lg border border-violet/40 bg-transparent px-2.5 py-1 text-[11px] font-bold text-[#CBBDF0] transition-colors hover:border-cyan/40 hover:text-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan";
             const atDrill = reviewIndex === practice.queue[practice.idx];
             const ply = practice.queue[practice.idx];
             const sideName = ply % 2 === 0 ? "White" : "Black";
             return (
-              <div className="reviewCtrls mt-1.5 flex flex-wrap items-center justify-center gap-2 rounded-xl border border-[#F5D93E4D] bg-[#1D1038CC] px-3 py-2 text-[12px] text-[#F4EFFF] backdrop-blur-sm" style={{ maxWidth: 420 }}>
+              <div className="reviewCtrls mt-1.5 flex flex-wrap items-center justify-center gap-2 rounded-xl border border-yellow/30 bg-panel/80 px-3 py-2 text-[12px] text-paper backdrop-blur-sm" style={{ maxWidth: 420 }}>
                 {practice.done ? (
                   <>
                     <span>🎉 That's all {practice.queue.length} — nice work!</span>
@@ -3080,14 +3080,14 @@ export default function ZlegendsBot() {
                   </>
                 ) : !atDrill ? (
                   <>
-                    <span className="text-[#9D8FC4]">Practice paused</span>
+                    <span className="text-dim">Practice paused</span>
                     <button className={btn} onClick={() => setReviewIndex(ply)}>Resume</button>
                     <button className={btn} onClick={exitPractice}>Exit</button>
                   </>
                 ) : (
                   <>
                     <span>
-                      <b className="text-[#F5D93E]">{practice.idx + 1}/{practice.queue.length}</b> · Find the better move for {sideName}
+                      <b className="text-yellow">{practice.idx + 1}/{practice.queue.length}</b> · Find the better move for {sideName}
                       {practice.feedback === "wrong" && <b className="text-[#F05348]"> — not quite, try again</b>}
                     </span>
                     {!practice.revealed && <button className={btn} onClick={practiceReveal}>Show answer</button>}

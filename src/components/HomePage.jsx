@@ -38,9 +38,9 @@ function renderIcon(id) {
   if (id === "blind") return (
     <svg width="38" height="38" viewBox="0 0 24 24" aria-hidden="true">
       <circle cx="12" cy="12" r="9" fill="#F5D93E26" stroke="#F5D93E" strokeWidth="1.4" />
-      <path d="M2.3 8.3c-.6-.15-1-.75-.85-1.35" stroke="#D94BF0" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-      <path d="M21.7 8.3c.6-.15 1-.75.85-1.35" stroke="#D94BF0" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-      <rect x="3" y="9.5" width="18" height="5" rx="2.5" fill="#D94BF0" />
+      <path d="M2.3 8.3c-.6-.15-1-.75-.85-1.35" stroke="var(--magenta)" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+      <path d="M21.7 8.3c.6-.15 1-.75.85-1.35" stroke="var(--magenta)" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+      <rect x="3" y="9.5" width="18" height="5" rx="2.5" fill="var(--magenta)" />
     </svg>
   );
   return null;
@@ -65,9 +65,9 @@ const MODES = [
 const RANK_FEATURE = { id: "rank", label: "Rank Bot", desc: "An adaptive bot that estimates your rating as you play.", icon: ICONS.star };
 
 const ACCENT = {
-  play: { text: "text-[#F5D93E]", bg: "bg-[#F5D93E1F] group-hover:bg-[#F5D93E33]", border: "border-[#F5D93E4D] group-hover:border-[#F5D93E99]" },
-  gold: { text: "text-[#F5D93E]", bg: "bg-[#F5D93E1A] group-hover:bg-[#F5D93E2E]", border: "border-[#F5D93E33] group-hover:border-[#F5D93E80]" },
-  cyan: { text: "text-[#3EE7F5]", bg: "bg-[#3EE7F51A] group-hover:bg-[#3EE7F52E]", border: "border-[#3EE7F533] group-hover:border-[#3EE7F580]" },
+  play: { text: "text-yellow", bg: "bg-yellow/12 group-hover:bg-yellow/20", border: "border-yellow/30 group-hover:border-yellow/60" },
+  gold: { text: "text-yellow", bg: "bg-yellow/10 group-hover:bg-yellow/18", border: "border-yellow/20 group-hover:border-yellow/50" },
+  cyan: { text: "text-cyan", bg: "bg-cyan/10 group-hover:bg-cyan/18", border: "border-cyan/20 group-hover:border-cyan/50" },
 };
 const accentFor = (m) => (m.featured ? ACCENT.play : ACCENT.cyan);
 
@@ -120,7 +120,7 @@ export default function HomePage({ onEnter, firstVisit, rankElo, rankGames }) {
           description) rather than the horizontal list-style cards this
           used to be, per the "should look like a home screen" direction. */}
       <div className="mt-11 w-full max-w-4xl">
-        <h2 className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-[#9D8FC4]">Choose a mode</h2>
+        <h2 className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-dim">Choose a mode</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {MODES.map((m) => {
             const a = accentFor(m);
@@ -128,14 +128,14 @@ export default function HomePage({ onEnter, firstVisit, rankElo, rankGames }) {
               <button
                 key={m.id}
                 onClick={() => (m.comingSoon ? setComingSoon(m.comingSoon) : onEnter(m.id))}
-                className={`group flex aspect-square flex-col items-center justify-center gap-3 rounded-3xl border ${a.border} bg-[#1D1038CC] p-4 text-center backdrop-blur-sm transition hover:-translate-y-0.5 hover:bg-[#1D1038E6] hover:shadow-[0_8px_24px_#3EE7F522]`}
+                className={`group flex aspect-square flex-col items-center justify-center gap-3 rounded-3xl border ${a.border} bg-panel/80 p-4 text-center backdrop-blur-sm transition hover:-translate-y-0.5 hover:bg-panel/90 hover:shadow-[0_8px_24px_#3EE7F522]`}
               >
                 <span className="flex h-14 shrink-0 items-center justify-center">
                   {m.custom ? renderIcon(m.id) : (
                     <svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor" className={a.text} aria-hidden="true"><path d={m.icon} /></svg>
                   )}
                 </span>
-                <span className="text-sm font-bold leading-tight text-[#F4EFFF]">{m.label}</span>
+                <span className="text-sm font-bold leading-tight text-paper">{m.label}</span>
               </button>
             );
           })}
@@ -145,18 +145,18 @@ export default function HomePage({ onEnter, firstVisit, rankElo, rankGames }) {
       {/* Features -- spotlights one implemented mode at a time rather than
           competing for space as another grid tile; Rank Bot for now. */}
       <div className="mt-10 w-full max-w-4xl">
-        <h2 className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-[#9D8FC4]">Features</h2>
+        <h2 className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-dim">Features</h2>
         <button
           onClick={() => onEnter(RANK_FEATURE.id)}
-          className="group flex w-full flex-col items-center gap-4 rounded-3xl border border-[#F5D93E4D] bg-gradient-to-br from-[#1D1038CC] to-[#2A1F0EE6] p-6 text-center backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-[#F5D93E99] sm:flex-row sm:text-left"
+          className="group flex w-full flex-col items-center gap-4 rounded-3xl border border-yellow/30 bg-gradient-to-br from-panel/80 to-[#2A1F0EE6] p-6 text-center backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-yellow/60 sm:flex-row sm:text-left"
         >
           <span className="flex h-16 shrink-0 items-center justify-center">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor" className="text-[#F5D93E]" aria-hidden="true"><path d={RANK_FEATURE.icon} /></svg>
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor" className="text-yellow" aria-hidden="true"><path d={RANK_FEATURE.icon} /></svg>
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-[10px] font-bold uppercase tracking-[0.2em] text-[#F5D93E]">New Feature</span>
-            <span className="mt-1 block text-lg font-bold text-[#F4EFFF]">{RANK_FEATURE.label}</span>
-            <span className="mt-1 block text-sm leading-relaxed text-[#9D8FC4]">{RANK_FEATURE.desc}</span>
+            <span className="block text-[10px] font-bold uppercase tracking-[0.2em] text-yellow">New Feature</span>
+            <span className="mt-1 block text-lg font-bold text-paper">{RANK_FEATURE.label}</span>
+            <span className="mt-1 block text-sm leading-relaxed text-dim">{RANK_FEATURE.desc}</span>
           </span>
         </button>
       </div>
@@ -169,7 +169,7 @@ export default function HomePage({ onEnter, firstVisit, rankElo, rankGames }) {
       <div className="mt-8 flex items-center gap-3">
         <button
           onClick={() => onEnter("leaderboard")}
-          className="inline-flex items-center gap-2 rounded-xl border border-[#8B2FC94D] bg-[#1D1038CC] px-5 py-2 text-sm font-bold text-[#CBBDF0] backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-[#8B2FC999] hover:text-[#F4EFFF]"
+          className="inline-flex items-center gap-2 rounded-xl border border-violet/30 bg-panel/80 px-5 py-2 text-sm font-bold text-[#CBBDF0] backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-violet/60 hover:text-paper"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={ICONS.trophy} /></svg>
           Leaderboard
@@ -178,7 +178,7 @@ export default function HomePage({ onEnter, firstVisit, rankElo, rankGames }) {
           onClick={() => onEnter("settings")}
           aria-label="Settings"
           title="Settings"
-          className="flex size-9 items-center justify-center rounded-xl border border-[#8B2FC94D] bg-[#1D1038CC] text-[#CBBDF0] backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-[#8B2FC999] hover:text-[#F4EFFF]"
+          className="flex size-9 items-center justify-center rounded-xl border border-violet/30 bg-panel/80 text-[#CBBDF0] backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-violet/60 hover:text-paper"
         >
           <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={ICONS.cog} /></svg>
         </button>
@@ -194,23 +194,23 @@ export default function HomePage({ onEnter, firstVisit, rankElo, rankGames }) {
       <div className="mt-3 flex flex-wrap justify-center gap-4 text-xs">
         <button
           onClick={() => setComingSoon("Donations are coming soon — thanks for wanting to support the project!")}
-          className="bg-transparent font-bold text-[#9D8FC4] underline decoration-dotted underline-offset-4 transition-colors hover:text-[#F5D93E]"
+          className="bg-transparent font-bold text-dim underline decoration-dotted underline-offset-4 transition-colors hover:text-yellow"
         >
           Donate
         </button>
         <button
           onClick={() => setComingSoon("A contact page is coming soon.")}
-          className="bg-transparent font-bold text-[#9D8FC4] underline decoration-dotted underline-offset-4 transition-colors hover:text-[#3EE7F5]"
+          className="bg-transparent font-bold text-dim underline decoration-dotted underline-offset-4 transition-colors hover:text-cyan"
         >
           Contact
         </button>
       </div>
       {comingSoon && (
-        <p className="mt-2 mb-1 max-w-xs text-center text-xs text-[#9D8FC4]">{comingSoon}</p>
+        <p className="mt-2 mb-1 max-w-xs text-center text-xs text-dim">{comingSoon}</p>
       )}
 
-      <footer className="mt-2 pb-6 text-center text-xs text-[#9D8FC4]">
-        Built by <a href="https://www.youtube.com/@Zlegend27" target="_blank" rel="noopener noreferrer" className="text-[#3EE7F5] hover:underline">Zlegend27</a> — all rights reserved.
+      <footer className="mt-2 pb-6 text-center text-xs text-dim">
+        Built by <a href="https://www.youtube.com/@Zlegend27" target="_blank" rel="noopener noreferrer" className="text-cyan hover:underline">Zlegend27</a> — all rights reserved.
       </footer>
     </div>
   );

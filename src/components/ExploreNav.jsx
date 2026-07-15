@@ -63,7 +63,7 @@ export function TopNav({ onSelect, active }) {
   return (
     <nav
       aria-label="Main features"
-      className="relative mb-4 border-b border-[#8B2FC999] bg-[#1D1038CC] shadow-[0_1px_0_#8B2FC944] backdrop-blur-sm"
+      className="relative mb-4 border-b border-violet/60 bg-panel/80 shadow-[0_1px_0_#8B2FC944] backdrop-blur-sm"
       style={{
         width: "calc(100% + 28px + env(safe-area-inset-left) + env(safe-area-inset-right))",
         marginLeft: "calc(-14px - env(safe-area-inset-left))",
@@ -80,8 +80,8 @@ export function TopNav({ onSelect, active }) {
               key={t.id}
               onClick={() => handleSelect(t.id)}
               aria-label={t.label}
-              className={`flex flex-1 flex-col items-center justify-center gap-0.5 rounded-lg border-0 bg-transparent py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3EE7F5] ${
-                isActive ? "text-[#3EE7F5]" : "text-[#9D8FC4] hover:text-[#F4EFFF]"
+              className={`flex flex-1 flex-col items-center justify-center gap-0.5 rounded-lg border-0 bg-transparent py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan ${
+                isActive ? "text-cyan" : "text-dim hover:text-paper"
               }`}
             >
               {toolIcon(t, {
@@ -95,7 +95,7 @@ export function TopNav({ onSelect, active }) {
       </div>
       {loginSoon && (
         <div className="pointer-events-none absolute inset-x-0 top-full z-50 flex justify-center pt-2" aria-live="polite">
-          <span className="rounded-lg border border-[#8B2FC966] bg-[#1D1038F0] px-4 py-1.5 text-xs font-semibold text-[#CBBDF0] shadow-lg backdrop-blur-sm">
+          <span className="rounded-lg border border-violet/40 bg-panel/94 px-4 py-1.5 text-xs font-semibold text-[#CBBDF0] shadow-lg backdrop-blur-sm">
             Accounts are coming soon — everything works without one for now.
           </span>
         </div>
