@@ -610,6 +610,12 @@ export default function ZlegendsBot() {
   const [practice, setPractice] = useState(null);
   const [grading, setGrading] = useState(false);
   const [gradeProgress, setGradeProgress] = useState(0);
+  /* Bumped whenever the game grading was analyzing gets replaced out from
+     under it (new game, undo, a fresh pasted PGN) -- gradeMoves checks
+     this after every await and abandons silently if it's changed, so a
+     slow in-flight run from a previous game can't land its grades on
+     whatever's on the board now. */
+  const gradeRunIdRef = useRef(0);
   const [pastedGame, setPastedGame] = useState(false);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
@@ -1061,10 +1067,32 @@ export default function ZlegendsBot() {
 
   const GRADE_MOVE_TIME_MS = 500;
 
+  /* One Stockfish search per grading position was slow: a 60-ply game
+     meant 61 sequential ~500ms searches, and 10-16 of the leading ones
+     are almost always still inside a recognized opening -- theoryPlies
+     already tags them "book" regardless of what the engine says, so
+     searching each individually was pure waste. This scores those
+     positions off ONE real search (at the first out-of-book position)
+     instead: each step back through the book range just flips the sign
+     of the position after it (negamax's own convention -- whoever's
+     turn it is next sees the position from the opposite side), which is
+     exactly what a flat, "theory says this is fine" evaluation should
+     look like, and costs nothing extra. */
+  function scoreBookRange(bookBoundary, scores, scoreOk) {
+    // If the one real search this range depends on itself failed, there's
+    // nothing honest to backfill -- propagate "unscored" instead of a
+    // fabricated 0, same as any other failed position.
+    for (let k = bookBoundary - 1; k >= 0; k--) {
+      scores[k] = scoreOk[bookBoundary] ? -scores[k + 1] : 0;
+      scoreOk[k] = scoreOk[bookBoundary];
+    }
+  }
+
   const gradeMoves = async () => {
     if (grading) return;
     const list = moveListRef.current;
     if (!list.length) return;
+    const myRunId = ++gradeRunIdRef.current;
     setGrading(true);
     setGradeProgress(0);
     /* FENs are cheap to build (just replaying moves, no search) -- do
@@ -1077,11 +1105,31 @@ export default function ZlegendsBot() {
       if (mv) fenEng.make(mv);
       fens.push(fenEng.fen());
     }
+    /* Plies still inside known opening theory get tagged "book" instead
+       of an engine grade -- shallow probes "grading" memorized theory
+       was pure noise. Falls back to 0 (no book tags) if the ECO data
+       chunk hasn't streamed in yet. */
+    const theoryPlies = ecoData ? theoryPlyCount(list, ecoData) : 0;
+    const bookBoundary = Math.min(theoryPlies, list.length);
     const scores = new Array(list.length + 1);
     const secondScores = new Array(list.length + 1);
+    const scoreOk = new Array(list.length + 1).fill(true);
     const bestSans = new Array(list.length);
-    for (let k = 0; k <= list.length; k++) {
+    for (let k = bookBoundary; k <= list.length; k++) {
       const res = await stockfishAnalyze(fens[k], { moveTimeMs: GRADE_MOVE_TIME_MS, multiPv: 2 }).catch(() => null);
+      /* The board this run was grading may not even be the current game
+         anymore (new game, undo, a fresh pasted PGN all bump this) --
+         bail out now rather than keep burning searches, and definitely
+         don't let a stale run's eventual setMoveGrades land on top of
+         whatever's on screen at that point. */
+      if (gradeRunIdRef.current !== myRunId) { setGrading(false); return; }
+      /* A rejected search (worker error, dropped connection) is not the
+         same as "the engine found nothing" -- defaulting that to a score
+         of 0 used to fabricate a fake blunder/brilliancy on whichever
+         plies touched it. Only mark a position unscored when the search
+         itself failed; a resolved-but-empty `lines` (e.g. checkmate, no
+         legal moves) is a genuine result and 0 is the correct score. */
+      if (res === null) scoreOk[k] = false;
       const lines = res?.lines || [];
       scores[k] = lines[0] ? lines[0].score : 0;
       secondScores[k] = lines[1] ? lines[1].score : null;
@@ -1095,25 +1143,45 @@ export default function ZlegendsBot() {
       }
       setGradeProgress(k + 1);
     }
+    scoreBookRange(bookBoundary, scores, scoreOk);
     const tempEng = createEngine();
-    /* Plies still inside known opening theory get tagged "book" instead
-       of an engine grade -- shallow probes "grading" memorized theory
-       was pure noise. Falls back to 0 (no book tags) if the ECO data
-       chunk hasn't streamed in yet. */
-    const theoryPlies = ecoData ? theoryPlyCount(list, ecoData) : 0;
     const grades = [];
     const wpDrops = [];
     for (let i = 0; i < list.length; i++) {
+      const legal = tempEng.legalMoves();
+      const move = legal.find(m => tempEng.sanOf(m) === list[i]);
+      if (!move) { grades.push(null); wpDrops.push(0); continue; }
+      /* Ply touches a position that failed to score on either side --
+         nothing honest to grade it against, so it stays ungraded (not a
+         silent "blunder") and gets excluded from accuracy in sideStats
+         below. The move still gets played for real so every later ply's
+         legal-move lookup and the final checkmate check stay correct. */
+      if (!scoreOk[i] || !scoreOk[i + 1]) {
+        tempEng.make(move);
+        grades.push(null);
+        wpDrops.push(0);
+        continue;
+      }
       const wpDrop = Math.max(0, winPctOf(scores[i]) - winPctOf(-scores[i + 1]));
       wpDrops.push(wpDrop);
       let tag = classifyLoss(wpDrop);
-      const legal = tempEng.legalMoves();
-      const move = legal.find(m => tempEng.sanOf(m) === list[i]);
-      if (!move) { grades.push(null); continue; }
       tempEng.make(move); // advances for real -- this ply's move stays applied for the rest of the loop
       if (wpDrop < 6) {
         const toSq120 = mTo(move);
-        const attacker = tempEng.legalMoves().find(m => mTo(m) === toSq120);
+        /* "Brilliant" needs an actual sacrifice, not just any hanging-
+           but-safe move: the piece left on the board has to be worth
+           losing (knight or better -- a hanging pawn isn't a sacrifice),
+           and the mover can't already be cruising to a win before this
+           move (winPctOf(scores[i]) is that side's win% BEFORE it played
+           -- a "sacrifice" at 95% win probability isn't brilliant, it's
+           mopping up). Both checks are cheap and run only in the same
+           narrow window (wpDrop < 6, i.e. the engine already approves of
+           the move) the old single hanging-piece probe used. */
+        const movedValue = PTS[Math.abs(tempEng.pieceAt(M120TO64[toSq120]))] || 0;
+        const alreadyWinning = winPctOf(scores[i]) >= 90;
+        const attacker = (!alreadyWinning && movedValue >= 3)
+          ? tempEng.legalMoves().find(m => mTo(m) === toSq120)
+          : null;
         if (attacker) {
           tempEng.make(attacker); // probe only
           const recapture = tempEng.legalMoves().some(m => mTo(m) === toSq120);
@@ -1150,7 +1218,7 @@ export default function ZlegendsBot() {
       grades[grades.length - 1] = "best";
     }
     setMoveGrades(grades);
-    setGradeDetail({ scores, bestSans });
+    setGradeDetail({ scores, bestSans, scoreOk });
     setGrading(false);
   };
 
@@ -1650,6 +1718,7 @@ export default function ZlegendsBot() {
   };
 
   const newGame = (color) => {
+    gradeRunIdRef.current += 1;
     setNewGameConfirm(false);
     maybeSaveAbandonedGame();
     maybeCountAbandonedRankGame();
@@ -2029,6 +2098,7 @@ export default function ZlegendsBot() {
 
   const undo = () => {
     if (mode === "replay" || thinking || result || eng.plyCount() === 0) return;
+    gradeRunIdRef.current += 1;
     let n;
     if (quizOpening) n = 1; // quiz: the player supplies every ply, so always step back exactly one
     else if (eng.getSide() === playerColor && eng.plyCount() >= 2) n = 2; else n = 1;
@@ -2338,6 +2408,7 @@ export default function ZlegendsBot() {
     if (!applied.length) { setPasteError("Couldn't match those moves to a legal game."); return; }
     if (applied.length < tokens.length) { setPasteError(`Only matched ${applied.length} of ${tokens.length} moves — loaded as far as it could.`); }
     else setPasteError(null);
+    gradeRunIdRef.current += 1;
     maybeSaveAbandonedGame();
     eng.reset();
     replayIntoEngine(eng, sans);
@@ -2554,8 +2625,10 @@ export default function ZlegendsBot() {
     const sideStats = (parity) => {
       if (!gradeDetail) return null;
       const s = gradeDetail.scores;
+      const ok = gradeDetail.scoreOk;
       const accs = [], perfs = [];
       for (let i = parity; i + 1 < s.length; i += 2) {
+        if (ok && (!ok[i] || !ok[i + 1])) continue; // a failed search, not a real eval -- would skew the average
         if (Math.abs(s[i]) > MATE - 2000 || Math.abs(s[i + 1]) > MATE - 2000) continue;
         accs.push(moveAccuracy(winPctOf(s[i]), winPctOf(-s[i + 1])));
         perfs.push(rankBotLossToPerf(Math.max(0, s[i] + s[i + 1])));
@@ -2602,7 +2675,15 @@ export default function ZlegendsBot() {
   ) : (
     <div className="flex flex-col gap-3">
       {grading && (
-        <div className="text-[12px] text-dim">Grading moves… {gradeProgress}/{moveList.length}</div>
+        <div className="flex flex-col gap-1.5">
+          <div className="text-[12px] text-dim">Grading moves… {gradeProgress}/{moveList.length}</div>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-violet/20">
+            <div
+              className="h-full rounded-full bg-cyan transition-[width] duration-200 ease-out"
+              style={{ width: `${Math.min(100, (gradeProgress / moveList.length) * 100)}%` }}
+            />
+          </div>
+        </div>
       )}
       {gradeReport && !grading && (
         <div className="rounded-xl border border-violet/24 bg-[#150C2466] p-3">
