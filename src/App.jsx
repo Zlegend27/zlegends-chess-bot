@@ -347,6 +347,34 @@ function materialState(eng) {
   return { capturedWhite: taken(1), capturedBlack: taken(-1), diff: wPts - bPts };
 }
 
+/* A plain <img src="/bot-happy.webp"> never retries once it fails --
+   browsers just leave the broken-image icon (or nothing but the alt
+   text) sitting there forever, even though the very next request for
+   the same URL might succeed (a dropped connection during dev-server
+   HMR, a flaky mobile network, whatever). Retries twice with a cache-
+   busting query param before giving up and falling back to the inline
+   PixelAvatar, which can't ever fail to load since it's not a network
+   request. Defined at module scope, not inside ZlegendsBot, so it isn't
+   redefined (and remounted) on every render. */
+function MoodImg({ src, alt }) {
+  const [attempt, setAttempt] = useState(0);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setAttempt(0); setFailed(false); }, [src]);
+  if (failed) return <PixelAvatar rows={ZPIX} pal={ZPAL} size={44} />;
+  const onError = () => {
+    if (attempt < 2) setAttempt(a => a + 1);
+    else setFailed(true);
+  };
+  return (
+    <img
+      src={attempt === 0 ? src : `${src}?retry=${attempt}`}
+      alt={alt}
+      className="reactionImg"
+      onError={onError}
+    />
+  );
+}
+
 export default function ZlegendsBot() {
   const initialHash = useRef(getSharedHash()).current;
   const initialShared = useRef(initialHash ? decodeGame(initialHash) : null).current;
@@ -2796,8 +2824,8 @@ export default function ZlegendsBot() {
           ) : (
             <div className={"card botCard" + (mode === "play" && !result && !thinking && eng.getSide() === botColor ? " turnGlow" : "")}>
               <div className={"avatarBox" + (botMood !== "neutral" ? " reactionBox " + botMood : "")}>
-                {botMood === "angry" && <img src="/bot-angry.webp" alt="Zlegend2700 is furious" className="reactionImg" />}
-                {botMood === "happy" && <img src="/bot-happy.webp" alt="Zlegend2700 is thrilled" className="reactionImg" />}
+                {botMood === "angry" && <MoodImg src="/bot-angry.webp" alt="Zlegend2700 is furious" />}
+                {botMood === "happy" && <MoodImg src="/bot-happy.webp" alt="Zlegend2700 is thrilled" />}
                 {botMood === "neutral" && <PixelAvatar rows={ZPIX} pal={ZPAL} size={44} />}
               </div>
               <div className="cardMeta">
