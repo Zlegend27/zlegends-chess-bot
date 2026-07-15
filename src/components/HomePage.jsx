@@ -81,13 +81,6 @@ const accentFor = (m) => (m.featured ? ACCENT.play : ACCENT.cyan);
  *  CSS never targets descendants by type/class the way e.g. .promoBox
  *  does, so nesting new markup inside it can't be fought by anything. */
 export default function HomePage({ onEnter, firstVisit, rankElo, rankGames }) {
-  /* Donate/Contact have no real destination yet ("later will flesh out a
-     contact page and set up donations") -- onEnter only knows the modes
-     App.jsx's enterMode handles, and silently falls through to the Play
-     screen for anything else, which would be a confusing bait-and-switch
-     for a button that says Donate. A local toast instead of routing
-     through onEnter keeps them honest about not being wired up yet. */
-  const [comingSoon, setComingSoon] = useState(null);
   /* ZLEGEND2700's welcome beat -- picked once per HomePage mount (not on
      every render) so it doesn't reroll mid-typewriter, and dismissible
      without needing to persist that choice anywhere: it's flavor, not a
@@ -127,7 +120,7 @@ export default function HomePage({ onEnter, firstVisit, rankElo, rankGames }) {
             return (
               <button
                 key={m.id}
-                onClick={() => (m.comingSoon ? setComingSoon(m.comingSoon) : onEnter(m.id))}
+                onClick={() => onEnter(m.id)}
                 className={`group flex aspect-square flex-col items-center justify-center gap-3 rounded-3xl border ${a.border} bg-panel/80 p-4 text-center backdrop-blur-sm transition hover:-translate-y-0.5 hover:bg-panel/90 hover:shadow-[0_8px_24px_#3EE7F522]`}
               >
                 <span className="flex h-14 shrink-0 items-center justify-center">
@@ -186,30 +179,7 @@ export default function HomePage({ onEnter, firstVisit, rankElo, rankGames }) {
 
       <SocialBanner />
 
-      {/* Demoted from button-weight CTAs to plain text links -- neither
-         goes anywhere real yet (still just a "coming soon" toast), and a
-         gold/cyan bordered button next to Leaderboard read as an equally
-         real destination. Footer-level text is honest about that without
-         hiding them. */}
-      <div className="mt-3 flex flex-wrap justify-center gap-4 text-xs">
-        <button
-          onClick={() => setComingSoon("Donations are coming soon — thanks for wanting to support the project!")}
-          className="bg-transparent font-bold text-dim underline decoration-dotted underline-offset-4 transition-colors hover:text-yellow"
-        >
-          Donate
-        </button>
-        <button
-          onClick={() => setComingSoon("A contact page is coming soon.")}
-          className="bg-transparent font-bold text-dim underline decoration-dotted underline-offset-4 transition-colors hover:text-cyan"
-        >
-          Contact
-        </button>
-      </div>
-      {comingSoon && (
-        <p className="mt-2 mb-1 max-w-xs text-center text-xs text-dim">{comingSoon}</p>
-      )}
-
-      <footer className="mt-2 pb-6 text-center text-xs text-dim">
+      <footer className="mt-3 pb-6 text-center text-xs text-dim">
         Built by <a href="https://www.youtube.com/@Zlegend27" target="_blank" rel="noopener noreferrer" className="text-cyan hover:underline">Zlegend27</a> — all rights reserved.
       </footer>
     </div>
