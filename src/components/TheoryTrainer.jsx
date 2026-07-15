@@ -193,7 +193,12 @@ export default function TheoryTrainer({ lesson, pieceSetId, onExit }) {
             </>
           ) : inBook ? (
             <>
-              <p className="lessonPrompt">📖 In book</p>
+              <p className="lessonPrompt">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style={{ verticalAlign: "-2px", marginRight: 5 }}>
+                  <path d="M12 21.5c-1.6-1.2-3.6-2-6-2-1.4 0-2.9.3-4 1V4.5C3.1 4 4.6 3.5 6 3.5c2.4 0 4.4.9 6 2v16zm0-16c1.6-1.1 3.6-2 6-2 1.4 0 2.9.5 4 1v16c-1.1-.7-2.6-1-4-1-2.4 0-4.4.8-6 2v-16z" />
+                </svg>
+                In book
+              </p>
               <p className="lessonText">
                 Following: {inBookLines.map(r => r.name).join(" · ")}
               </p>

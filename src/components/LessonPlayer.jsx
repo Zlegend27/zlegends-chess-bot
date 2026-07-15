@@ -452,7 +452,12 @@ export default function LessonPlayer({ chapter, orientation = "white", pieceSetI
                     disabled={beat.type === "branch" && branchViewing != null}>Next →</button>
                 )}
               </div>
-              <button className="btn ghost lessonAnalyzeBtn" onClick={startAnalyze}>🔍 Analyze this position</button>
+              <button className="btn ghost lessonAnalyzeBtn" onClick={startAnalyze}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style={{ verticalAlign: "-2px", marginRight: 5 }}>
+                  <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+                </svg>
+                Analyze this position
+              </button>
             </>
           )}
         </div>

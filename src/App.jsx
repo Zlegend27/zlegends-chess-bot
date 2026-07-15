@@ -347,6 +347,31 @@ function materialState(eng) {
   return { capturedWhite: taken(1), capturedBlack: taken(-1), diff: wPts - bPts };
 }
 
+/* Small inline-SVG icons for label prefixes that used to be raw emoji
+   (⚡/📅) -- same fill="currentColor" convention as HomePage's ICONS,
+   just local to App.jsx since these are only used here. */
+function BoltIcon({ size = 12 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M7 2v11h3v9l7-12h-4l4-8z" />
+    </svg>
+  );
+}
+function CalendarIcon({ size = 12 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z" />
+    </svg>
+  );
+}
+function TargetIcon({ size = 12 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z" />
+    </svg>
+  );
+}
+
 /* A plain <img src="/bot-happy.webp"> never retries once it fails --
    browsers just leave the broken-image icon (or nothing but the alt
    text) sitting there forever, even though the very next request for
@@ -2549,7 +2574,7 @@ export default function ZlegendsBot() {
   const analysisContent = activePuzzle ? (
     rushMode ? (
       <div className="flex flex-col gap-2.5">
-        {analysisChip(`⚡ ${pz.RATING_BANDS[rushBandIdx]?.label || ""}`, "gold")}
+        {analysisChip(<><BoltIcon size={11} />{pz.RATING_BANDS[rushBandIdx]?.label || ""}</>, "gold")}
         {analysisHint(puzzleFeedback || `Find the best move for ${eng.getSide() === 1 ? "White" : "Black"}.`)}
       </div>
     ) : (
@@ -3306,19 +3331,25 @@ export default function ZlegendsBot() {
               <div className="rows" style={{ maxHeight: "none" }}>
                 <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E" }}
                   onClick={() => { setPuzzlesOpen(false); setPuzzleBand(null); startPuzzle(dailyPuzzle(pz.PUZZLES)); }}>
-                  <div style={{ fontWeight: 700, color: "var(--cyan)" }}>📅 Daily Puzzle</div>
+                  <div style={{ fontWeight: 700, color: "var(--cyan)", display: "flex", alignItems: "center", gap: 6 }}>
+                    <CalendarIcon /> Daily Puzzle
+                  </div>
                   <div style={{ fontSize: 11, opacity: 0.75 }}>
                     {dailySolvedDate === todayKey() ? "Solved today ✓" : "One puzzle, same for everyone today"}
                   </div>
                 </div>
                 <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E" }}
                   onClick={() => { setPuzzlesOpen(false); setRankedPuzzlesOpen(true); }}>
-                  <div style={{ fontWeight: 700, color: "var(--liliac)" }}>🎯 Ranked Puzzles</div>
+                  <div style={{ fontWeight: 700, color: "var(--liliac)", display: "flex", alignItems: "center", gap: 6 }}>
+                    <TargetIcon /> Ranked Puzzles
+                  </div>
                   <div style={{ fontSize: 11, opacity: 0.75 }}>Pick a rating band, Beginner to Expert</div>
                 </div>
                 <div style={{ cursor: "pointer", padding: "8px 2px" }}
                   onClick={() => { setPuzzlesOpen(false); setRushOpen(true); }}>
-                  <div style={{ fontWeight: 700, color: "var(--yellow)" }}>⚡ Puzzle Rush</div>
+                  <div style={{ fontWeight: 700, color: "var(--yellow)", display: "flex", alignItems: "center", gap: 6 }}>
+                    <BoltIcon /> Puzzle Rush
+                  </div>
                   <div style={{ fontSize: 11, opacity: 0.75 }}>Race the clock, difficulty ramps as you solve</div>
                 </div>
               </div>
