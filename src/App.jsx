@@ -28,7 +28,7 @@ import { syncRankBotToSupabase, fetchRankBotFromSupabase, logRankBotMove } from 
 import { ENGINE_VERSION } from "./utils/version";
 import { OPENINGS } from "./utils/openings";
 import { loadEcoOpenings, detectEcoOpening, theoryPlyCount } from "./utils/ecoOpenings";
-import { stockfishBestMove, STOCKFISH_MIN_ELO, warmUpStockfish } from "./engine/stockfishEngine";
+import { stockfishBestMove, stockfishAnalyze, STOCKFISH_MIN_ELO, warmUpStockfish } from "./engine/stockfishEngine";
 import "./tokens.css";
 import "./App.css";
 
@@ -232,8 +232,8 @@ const PTS = { 1: 1, 2: 3, 3: 3, 4: 5, 5: 9 };
    judgment); "miss" = the opponent just blundered and this move let the
    punishment slip -- chess.com's vocabulary, and the distinction players
    actually learn from: a miss is a found-nothing, not a played-badly. */
-const GRADE_TAG = { brilliant: "!!", best: "!", book: "≡", inaccuracy: "?!", miss: "✗", mistake: "?", blunder: "??" };
-const GRADE_COLOR = { brilliant: "#3EE7F5", best: "#6FCF97", book: "#9D8FC4", inaccuracy: "#F5D93E", miss: "#FF8A5C", mistake: "#F0A548", blunder: "#F05348" };
+const GRADE_TAG = { brilliant: "!!", great: "★", best: "!", book: "≡", inaccuracy: "?!", miss: "✗", mistake: "?", blunder: "??" };
+const GRADE_COLOR = { brilliant: "#3EE7F5", great: "#4EA8DE", best: "#6FCF97", book: "#9D8FC4", inaccuracy: "#F5D93E", miss: "#FF8A5C", mistake: "#F0A548", blunder: "#F05348" };
 const START_COUNT = { 1: 8, 2: 2, 3: 2, 4: 2, 5: 1 };
 
 /* Lichess's published move-accuracy curve: convert the eval to a win
@@ -968,29 +968,31 @@ export default function ZlegendsBot() {
     }
   };
 
-  /* Move-quality grading: only needs N+1 searches for an N-ply game, not
-     2N -- the position after move i is the same position as before move
-     i+1, so each prefix's best-play score is computed once and reused
-     for both the "before" side of one ply and the "after" side of the
-     previous one. loss = bestScoreBefore - (-bestScoreAfter), i.e. how
-     much worse the actual move was than the best move available, both
-     converted to the mover's own perspective (negamax flip). Homemade
-     engine only (fast + free) since this is a retrospective accuracy
-     hint, not tournament-grade analysis -- Stockfish's official Elo
-     limiting has no bearing on grading a move that already happened.
-     "Best" and "brilliant" aren't as rigorous as chess.com/lichess's own
-     classifiers (which use much deeper multi-line analysis) -- "best" is
-     just "matched the engine's own top pick", and "brilliant" is a
-     lightweight sacrifice heuristic (the move leaves the piece truly
-     hanging -- attacked with no legal recapture -- yet the engine still
-     rates it at essentially no lost value). Good enough to be a useful
-     signal, not good enough to claim tournament-grade accuracy. */
-  function classifyLoss(loss) {
-    if (loss >= 150) return "blunder";
-    if (loss >= 60) return "mistake";
-    if (loss >= 20) return "inaccuracy";
+  /* Move-quality grading, powered by the real Stockfish worker (already
+     vendored for bot moves) instead of the homemade engine's fixed-time
+     search -- a grade is only as trustworthy as the engine judging it,
+     and 250ms of the homemade engine was never in the same league as
+     Stockfish. Full strength (no UCI_Elo limiting -- that's for playing
+     weak on purpose, irrelevant to judging a move that already
+     happened), MultiPV 2 so the runner-up line's score is available too
+     (that's what "great" needs -- see below).
+
+     Thresholds are win%-drop, not raw centipawns (winPctOf/moveAccuracy
+     above, same Lichess curve): a 100cp drop matters enormously in an
+     equal position and barely at all when already up a rook, and a flat
+     centipawn cutoff can't tell those apart -- it was flagging routine
+     moves in decided positions as "mistakes" for no real reason. The
+     cutoffs below (6/12/24 win%) are picked to match the old cp cutoffs
+     (20/60/150) at dead-equal positions, where the two scales roughly
+     line up, while decaying correctly once the game is already decided. */
+  function classifyLoss(wpDrop) {
+    if (wpDrop >= 24) return "blunder";
+    if (wpDrop >= 12) return "mistake";
+    if (wpDrop >= 6) return "inaccuracy";
     return null;
   }
+
+  const GRADE_MOVE_TIME_MS = 500;
 
   const gradeMoves = async () => {
     if (grading) return;
@@ -998,12 +1000,32 @@ export default function ZlegendsBot() {
     if (!list.length) return;
     setGrading(true);
     setGradeProgress(0);
+    /* FENs are cheap to build (just replaying moves, no search) -- do
+       that up front so every grading search below is a single Stockfish
+       call against a known position instead of re-deriving it. */
+    const fenEng = createEngine();
+    const fens = [fenEng.fen()];
+    for (const san of list) {
+      const mv = fenEng.legalMoves().find(m => fenEng.sanOf(m) === san);
+      if (mv) fenEng.make(mv);
+      fens.push(fenEng.fen());
+    }
     const scores = new Array(list.length + 1);
+    const secondScores = new Array(list.length + 1);
     const bestSans = new Array(list.length);
     for (let k = 0; k <= list.length; k++) {
-      const res = await runSearch(list.slice(0, k), 250, 0, { personality: BALANCED, useBook: false });
-      scores[k] = res ? res.score : 0;
-      if (k < list.length && res) bestSans[k] = res.san;
+      const res = await stockfishAnalyze(fens[k], { moveTimeMs: GRADE_MOVE_TIME_MS, multiPv: 2 }).catch(() => null);
+      const lines = res?.lines || [];
+      scores[k] = lines[0] ? lines[0].score : 0;
+      secondScores[k] = lines[1] ? lines[1].score : null;
+      if (k < list.length && res?.uci) {
+        try {
+          const probe = createEngine();
+          probe.loadFen(fens[k]);
+          const mv = probe.moveFromUci(res.uci);
+          if (mv) bestSans[k] = probe.sanOf(mv);
+        } catch { /* unknown uci -- leave bestSans[k] unset */ }
+      }
       setGradeProgress(k + 1);
     }
     const tempEng = createEngine();
@@ -1013,16 +1035,16 @@ export default function ZlegendsBot() {
        chunk hasn't streamed in yet. */
     const theoryPlies = ecoData ? theoryPlyCount(list, ecoData) : 0;
     const grades = [];
-    const losses = [];
+    const wpDrops = [];
     for (let i = 0; i < list.length; i++) {
-      const loss = Math.max(0, scores[i] + scores[i + 1]);
-      losses.push(loss);
-      let tag = classifyLoss(loss);
+      const wpDrop = Math.max(0, winPctOf(scores[i]) - winPctOf(-scores[i + 1]));
+      wpDrops.push(wpDrop);
+      let tag = classifyLoss(wpDrop);
       const legal = tempEng.legalMoves();
       const move = legal.find(m => tempEng.sanOf(m) === list[i]);
       if (!move) { grades.push(null); continue; }
       tempEng.make(move); // advances for real -- this ply's move stays applied for the rest of the loop
-      if (loss < 20) {
+      if (wpDrop < 6) {
         const toSq120 = mTo(move);
         const attacker = tempEng.legalMoves().find(m => mTo(m) === toSq120);
         if (attacker) {
@@ -1031,12 +1053,20 @@ export default function ZlegendsBot() {
           tempEng.unmake(); // undo the probe, not the real move
           if (!recapture) tag = "brilliant";
         }
-        if (tag !== "brilliant" && bestSans[i] === list[i]) tag = "best";
+        if (tag !== "brilliant" && bestSans[i] === list[i]) {
+          /* "Great" vs. plain "best": was there actually a runner-up move
+             worth considering, or was the top choice just clearly best
+             with nothing else close? A big win% gap to the 2nd-best line
+             means finding this exact move mattered -- chess.com's own
+             definition of "great" (the only good move here). */
+          const wpGap = secondScores[i] != null ? winPctOf(scores[i]) - winPctOf(secondScores[i]) : 0;
+          tag = wpGap >= 10 ? "great" : "best";
+        }
       }
       if (i < theoryPlies) tag = "book";
       /* A bad move right after the opponent's own blunder is a "miss" --
          the advantage they handed over slipped away unpunished. */
-      else if ((tag === "mistake" || tag === "blunder") && i > 0 && losses[i - 1] >= 150) tag = "miss";
+      else if ((tag === "mistake" || tag === "blunder") && i > 0 && wpDrops[i - 1] >= 24) tag = "miss";
       grades.push(tag);
     }
     /* The search has no move to return at a finished game's final
@@ -2428,7 +2458,7 @@ export default function ZlegendsBot() {
     const whiteIsYou = ownGame && playerColor === 1;
     const blackIsYou = ownGame && playerColor === -1;
     const tally = (parity) => {
-      const counts = { brilliant: 0, best: 0, book: 0, inaccuracy: 0, miss: 0, mistake: 0, blunder: 0 };
+      const counts = { brilliant: 0, great: 0, best: 0, book: 0, inaccuracy: 0, miss: 0, mistake: 0, blunder: 0 };
       moveGrades.forEach((g, i) => { if (g && i % 2 === parity) counts[g] += 1; });
       return counts;
     };

@@ -230,23 +230,31 @@
 .mrow{ display:grid; grid-template-columns:34px 1fr 1fr; padding:4px 2px; border-bottom:1px solid #8B2FC92E; }
 .mrow .num{ color:var(--dim); }
 .mrow:last-child .cur{ color:var(--yellow); font-weight:700; text-shadow:0 0 6px #F5D93E55; }
-.moveGrade{ margin-left:3px; font-weight:700; }
+/* Sized up from a bare inline glyph to a small pill -- at plain
+   font-weight:700 with no background these were nearly unreadable next
+   to a 13px mono move list, especially the punctuation-only tags (?!,
+   ??) which read as noise rather than a symbol at that size. */
+.moveGrade{ margin-left:4px; font-size:14px; font-weight:800; padding:0 3px; border-radius:var(--r-2xs); }
 .moveGrade.brilliant{ color:var(--cyan); text-shadow:0 0 6px #3EE7F588; }
+.moveGrade.great{ color:#4EA8DE; text-shadow:0 0 6px #4EA8DE77; }
 .moveGrade.best{ color:#6FCF97; }
 .moveGrade.book{ color:var(--dim); }
 .moveGrade.inaccuracy{ color:var(--yellow); }
 .moveGrade.miss{ color:#FF8A5C; }
 .moveGrade.mistake{ color:#F0A548; }
 .moveGrade.blunder{ color:#F05348; }
-.boardGrade{ position:absolute; top:-4px; right:-4px; font-size:11px; font-weight:700;
-  padding:1px 3px; border-radius:var(--r-sm); background:#150C24DD; z-index:4; line-height:1.2; }
-.boardGrade.brilliant{ color:var(--cyan); box-shadow:0 0 6px #3EE7F588; }
-.boardGrade.best{ color:#6FCF97; }
+.boardGrade{ position:absolute; top:-7px; right:-7px; font-size:16px; font-weight:800;
+  min-width:20px; height:20px; display:flex; align-items:center; justify-content:center;
+  padding:0 3px; border-radius:var(--r-pill); background:#150C24EE; border:1.5px solid currentColor;
+  z-index:4; line-height:1; }
+.boardGrade.brilliant{ color:var(--cyan); box-shadow:0 0 8px #3EE7F599; }
+.boardGrade.great{ color:#4EA8DE; box-shadow:0 0 8px #4EA8DE99; }
+.boardGrade.best{ color:#6FCF97; box-shadow:0 0 6px #6FCF9788; }
 .boardGrade.book{ color:var(--dim); }
-.boardGrade.inaccuracy{ color:var(--yellow); }
-.boardGrade.miss{ color:#FF8A5C; }
-.boardGrade.mistake{ color:#F0A548; }
-.boardGrade.blunder{ color:#F05348; }
+.boardGrade.inaccuracy{ color:var(--yellow); box-shadow:0 0 6px #F5D93E88; }
+.boardGrade.miss{ color:#FF8A5C; box-shadow:0 0 6px #FF8A5C88; }
+.boardGrade.mistake{ color:#F0A548; box-shadow:0 0 6px #F0A54888; }
+.boardGrade.blunder{ color:#F05348; box-shadow:0 0 8px #F0534899; }
 .empty{ padding:10px 2px; color:var(--dim); font-size:12px; font-style:italic; }
 .pv{ margin-top:8px; font-family:var(--font-mono); font-size:12px; color:#B9AEE0; line-height:1.5; word-break:break-word; }
 .audioRow{ display:flex; align-items:center; gap:8px; }
