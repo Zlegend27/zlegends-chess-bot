@@ -81,7 +81,11 @@ export default function LessonsPage({ onBack, onToolSelect, activeToolId }) {
 
       <div className="hdr">
         <h1 style={{ fontSize: 34, display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
-          <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          {/* fill is an explicit color, not currentColor: .hdr h1 sets
+              color:transparent (a background-clip:text gradient-title
+              trick) -- currentColor would inherit that and render the
+              icon fully invisible. */}
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="var(--cyan)" aria-hidden="true">
             <path d="M12 3 1 9l11 6 9-4.91V17h2V9L12 3zm0 13.5L4.24 12.3 3 13l9 5 9-5-1.24-.7L12 16.5zM5 14.18v3.82c0 1.1 3.13 3 7 3s7-1.9 7-3v-3.82l-7 3.82-7-3.82z" />
           </svg>
           Lessons

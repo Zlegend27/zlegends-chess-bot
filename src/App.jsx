@@ -1151,6 +1151,20 @@ export default function ZlegendsBot() {
       const legal = tempEng.legalMoves();
       const move = legal.find(m => tempEng.sanOf(m) === list[i]);
       if (!move) { grades.push(null); wpDrops.push(0); continue; }
+      /* Book comes first, before the scoreOk gate below: it's derived from
+         theoryPlyCount, not an engine score, so a ply still inside known
+         theory should never go ungraded just because scoreBookRange
+         propagated a failed boundary search's scoreOk=false backward onto
+         it (every ply in the book range shares that one flag) -- without
+         this ordering, a single dropped request at the first out-of-book
+         position used to silently blank the "book" tag off the entire
+         opening instead of leaving it tagged. */
+      if (i < theoryPlies) {
+        tempEng.make(move);
+        grades.push("book");
+        wpDrops.push(0);
+        continue;
+      }
       /* Ply touches a position that failed to score on either side --
          nothing honest to grade it against, so it stays ungraded (not a
          silent "blunder") and gets excluded from accuracy in sideStats
@@ -1198,10 +1212,11 @@ export default function ZlegendsBot() {
           tag = wpGap >= 10 ? "great" : "best";
         }
       }
-      if (i < theoryPlies) tag = "book";
       /* A bad move right after the opponent's own blunder is a "miss" --
-         the advantage they handed over slipped away unpunished. */
-      else if ((tag === "mistake" || tag === "blunder") && i > 0 && wpDrops[i - 1] >= 24) tag = "miss";
+         the advantage they handed over slipped away unpunished. Book plies
+         never reach here (continued above), so wpDrops[i-1] is always a
+         real value or the harmless 0 a book ply pushes. */
+      if ((tag === "mistake" || tag === "blunder") && i > 0 && wpDrops[i - 1] >= 24) tag = "miss";
       grades.push(tag);
     }
     /* The search has no move to return at a finished game's final
