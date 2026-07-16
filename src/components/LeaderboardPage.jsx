@@ -26,7 +26,7 @@ const RANK_ACCENT = {
  *  ExploreNav.jsx) instead of the raw inline `style={{...}}` this page
  *  started with -- .rows/.btn/.pv are the older hand-CSS pattern used
  *  elsewhere for modals, which this page isn't. */
-export default function LeaderboardPage({ initialDuration = 60, onBack, onToolSelect, activeToolId }) {
+export default function LeaderboardPage({ initialDuration = 60, onBack, onToolSelect, activeToolId, profile }) {
   const [duration, setDuration] = useState(initialDuration);
   const [rows, setRows] = useState(null);
 
@@ -44,7 +44,7 @@ export default function LeaderboardPage({ initialDuration = 60, onBack, onToolSe
   return (
     <div className="root">
       <StarField />
-      <TopNav onSelect={onToolSelect} active={activeToolId} />
+      <TopNav onSelect={onToolSelect} active={activeToolId} profile={profile} />
 
       <button
         onClick={onBack}

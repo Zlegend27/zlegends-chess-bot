@@ -12,7 +12,7 @@ import { warmUpStockfish } from "../engine/stockfishEngine";
  *  the player/trainer takes over the board. Same page-not-modal,
  *  own-page-with-TopNav pattern as LeaderboardPage.jsx -- local state
  *  only, since nothing here touches the main Play board/engine. */
-export default function LessonsPage({ onBack, onToolSelect, activeToolId }) {
+export default function LessonsPage({ onBack, onToolSelect, activeToolId, profile }) {
   const [lessonId, setLessonId] = useState(null);
   const [chapterNumber, setChapterNumber] = useState(null);
   const [trainerOpen, setTrainerOpen] = useState(false);
@@ -40,7 +40,7 @@ export default function LessonsPage({ onBack, onToolSelect, activeToolId }) {
     return (
       <div className="root">
         <StarField />
-        <TopNav onSelect={onToolSelect} active={activeToolId} />
+        <TopNav onSelect={onToolSelect} active={activeToolId} profile={profile} />
         {backLink(lesson.title, () => setTrainerOpen(false))}
         <div className="hdr" style={{ marginBottom: 12 }}>
           <h1 style={{ fontSize: 26 }}>Theory Trainer</h1>
@@ -55,7 +55,7 @@ export default function LessonsPage({ onBack, onToolSelect, activeToolId }) {
     return (
       <div className="root">
         <StarField />
-        <TopNav onSelect={onToolSelect} active={activeToolId} />
+        <TopNav onSelect={onToolSelect} active={activeToolId} profile={profile} />
         {backLink(lesson.title, () => setChapterNumber(null))}
         <div className="hdr" style={{ marginBottom: 12 }}>
           <h1 style={{ fontSize: 26 }}>Chapter {chapter.number}</h1>
@@ -75,7 +75,7 @@ export default function LessonsPage({ onBack, onToolSelect, activeToolId }) {
   return (
     <div className="root">
       <StarField />
-      <TopNav onSelect={onToolSelect} active={activeToolId} />
+      <TopNav onSelect={onToolSelect} active={activeToolId} profile={profile} />
 
       {backLink("Back", lesson ? () => setLessonId(null) : onBack)}
 

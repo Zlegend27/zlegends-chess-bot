@@ -14,11 +14,7 @@ import PixelAvatar, { SPAL, SPIX } from "./PixelAvatar";
  *
  *  Openings/Puzzles/Spectate/Blind Chess used to live here too, but are
  *  reachable from the home page's mode grid now instead -- this nav is
- *  just Home (back to that grid), Music, and Settings. Login isn't
- *  listed here on purpose: there's no auth behind it yet (App.jsx's
- *  enterMode still has a no-op "login" case ready for when there is),
- *  and a visible nav item that only shows a "coming soon" toast reads
- *  as a broken button rather than an honest placeholder.
+ *  Home (back to that grid), Login/Account, Music, and Settings.
  *
  *  "home" uses the SPIX pixel-art ship sprite (see PixelAvatar.jsx)
  *  instead of a plain path -- same pixel-grid convention as the
@@ -26,6 +22,7 @@ import PixelAvatar, { SPAL, SPIX } from "./PixelAvatar";
  *  rather than a smooth vector approximation. */
 const TOOLS = [
   { id: "home", label: "Home" },
+  { id: "login", label: "Login", icon: "M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5z" },
   { id: "music", label: "Music", icon: "M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z" },
   { id: "settings", label: "Settings", icon: "M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.5.5 0 0 0-.59.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32c.14.24.42.32.66.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.24.1.51 0 .59-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" },
 ];
@@ -44,7 +41,13 @@ function toolIcon(t, { size, className } = {}) {
     : <Icon d={t.icon} size={size ?? 18} className={className} />;
 }
 
-export function TopNav({ onSelect, active }) {
+/** `profile` (see utils/auth.js's discordProfile) swaps the generic
+ *  person icon for the signed-in player's actual Discord avatar and
+ *  relabels the nav item "Account" -- the one visual difference between
+ *  a guest and a signed-in visitor anywhere in the nav. Undefined/null
+ *  profile (signed out, or auth not configured on this deploy) falls
+ *  back to the plain "Login" icon+label exactly as before. */
+export function TopNav({ onSelect, active, profile }) {
   return (
     <nav
       aria-label="Main features"
@@ -60,20 +63,30 @@ export function TopNav({ onSelect, active }) {
       <div className="mx-auto flex max-w-4xl items-center justify-around px-1 py-2">
         {TOOLS.map((t) => {
           const isActive = active === t.id;
+          const isAccount = t.id === "login";
+          const label = isAccount && profile ? "Account" : t.label;
           return (
             <button
               key={t.id}
               onClick={() => onSelect(t.id)}
-              aria-label={t.label}
+              aria-label={isAccount && profile ? `Account: ${profile.name}` : label}
               className={`flex flex-1 flex-col items-center justify-center gap-0.5 rounded-lg border-0 bg-transparent py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan ${
                 isActive ? "text-cyan" : "text-dim hover:text-paper"
               }`}
             >
-              {toolIcon(t, {
-                size: t.id === "home" ? 26 : 18,
-                className: isActive ? "scale-110 transition-transform" : "transition-transform",
-              })}
-              <span className="text-[10px] font-semibold tracking-wide">{t.label}</span>
+              {isAccount && profile?.avatarUrl ? (
+                <img
+                  src={profile.avatarUrl}
+                  alt=""
+                  className={`h-[18px] w-[18px] rounded-full object-cover ring-1 ring-violet/60 ${isActive ? "scale-110 transition-transform" : "transition-transform"}`}
+                />
+              ) : (
+                toolIcon(t, {
+                  size: t.id === "home" ? 26 : 18,
+                  className: isActive ? "scale-110 transition-transform" : "transition-transform",
+                })
+              )}
+              <span className="text-[10px] font-semibold tracking-wide">{label}</span>
             </button>
           );
         })}

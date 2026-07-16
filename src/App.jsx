@@ -15,6 +15,8 @@ import SocialBanner from "./components/SocialBanner";
 import GamePanel from "./components/GamePanel";
 import BotBubble from "./components/BotBubble";
 import { pickPostGameLine } from "./utils/botLines";
+import { signInWithDiscord, signOut, watchAuthState, discordProfile } from "./utils/auth";
+import { migrateAnonymousDataIfNeeded } from "./utils/accountMigration";
 import { loadSetting, saveSetting } from "./utils/storage";
 import { buildPgn, parsePgnMoves, replayForeignPgn } from "./utils/pgn";
 import { encodeGame, decodeGame, getSharedHash, replayIntoEngine } from "./utils/share";
@@ -654,11 +656,30 @@ export default function ZlegendsBot() {
      opening one from a page that isn't "play" needs to flip siteView
      first or the modal has nowhere to mount. Harmless no-op when
      already on "play". */
+  /* Discord sign-in (see utils/auth.js). watchAuthState fires once
+     immediately with whatever session already exists (page reload after
+     a previous sign-in), then again on every future sign-in/out --
+     session is the single source of truth `profile` and the account
+     modal below are derived from. */
+  const [session, setSession] = useState(null);
+  useEffect(() => watchAuthState(setSession), []);
+  const profile = discordProfile(session);
+  const [accountOpen, setAccountOpen] = useState(false);
+  /* Runs once per account per browser -- folds this browser's anonymous
+     client_id data (Rank Bot rating, game history, Rush scores) onto the
+     account the first time it's ever seen here, so a returning player
+     who just signed in doesn't look like they're starting from zero. */
+  useEffect(() => {
+    if (session?.user?.id) migrateAnonymousDataIfNeeded(session.user.id);
+  }, [session?.user?.id]);
   const onToolSelect = (id) => {
     if (id === "music") { setSiteView("play"); setMusicOpen(true); }
     else if (id === "settings") { setSiteView("play"); openSettings(); }
     else if (id === "home") setSiteView("home");
-    else if (id === "login") {} // placeholder -- no auth implemented yet
+    else if (id === "login") {
+      if (profile) { setSiteView("play"); setAccountOpen(true); }
+      else signInWithDiscord();
+    }
   };
   const [displayName, setDisplayNameState] = useState(() => getDisplayName());
   const displayNameRef = useRef(displayName);
@@ -2888,6 +2909,7 @@ export default function ZlegendsBot() {
         onBack={() => setSiteView(leaderboardReturnRef.current)}
         onToolSelect={onToolSelect}
         activeToolId={activeToolId}
+        profile={profile}
       />
     );
   }
@@ -2898,6 +2920,7 @@ export default function ZlegendsBot() {
         onBack={() => setSiteView("home")}
         onToolSelect={onToolSelect}
         activeToolId={activeToolId}
+        profile={profile}
       />
     );
   }
@@ -2906,7 +2929,7 @@ export default function ZlegendsBot() {
     <div className={"root" + (hideEvalBar ? " noEval" : "") + (boardColorId === "standard" ? " theme-standard" : "")} style={{ "--boardLight": getBoardColor(boardColorId).light, "--boardDark": getBoardColor(boardColorId).dark }}>
       <StarField />
       {rushMilestone > 0 && <Confetti key={rushMilestone} />}
-      <TopNav onSelect={onToolSelect} active={activeToolId} />
+      <TopNav onSelect={onToolSelect} active={activeToolId} profile={profile} />
 
       <div className="layout">
         <div className="boardCol">
@@ -3625,6 +3648,24 @@ export default function ZlegendsBot() {
                 </div>
               </div>
             </div>
+      </Modal>
+
+      <Modal open={accountOpen} onClose={() => setAccountOpen(false)} closeLabel="Close Account">
+            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              Account
+            </div>
+            {profile && (
+              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 2px 16px" }}>
+                {profile.avatarUrl && (
+                  <img src={profile.avatarUrl} alt="" style={{ width: 48, height: 48, borderRadius: "50%", flex: "none" }} />
+                )}
+                <div style={{ fontWeight: 700, fontSize: 15 }}>{profile.name}</div>
+              </div>
+            )}
+            <button className="btn ghost" style={{ width: "100%" }}
+              onClick={() => { signOut(); setAccountOpen(false); }}>
+              Sign out
+            </button>
       </Modal>
 
       <Modal open={pieceDesignsOpen} onClose={() => { setPieceDesignsOpen(false); setSettingsOpen(true); }} closeLabel="Close Piece Designs">
