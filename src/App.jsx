@@ -27,6 +27,7 @@ import { getDisplayName, setDisplayName } from "./utils/playerIdentity";
 import { submitRushScore } from "./utils/leaderboard";
 import { RUSH_DURATIONS } from "./utils/rushDurations";
 import LeaderboardPage from "./components/LeaderboardPage";
+import PuzzlesHomePage from "./components/PuzzlesHomePage";
 import LessonsPage from "./components/LessonsPage";
 import { syncRankBotToSupabase, fetchRankBotFromSupabase, logRankBotMove } from "./utils/rankBot";
 import { ENGINE_VERSION } from "./utils/version";
@@ -797,7 +798,6 @@ export default function ZlegendsBot() {
   const [quizOpening, setQuizOpening] = useState(null);
   const [quizFeedback, setQuizFeedback] = useState(null);
   const [quizDoneToast, setQuizDoneToast] = useState(null);
-  const [puzzlesOpen, setPuzzlesOpen] = useState(false);
   const [rankedPuzzlesOpen, setRankedPuzzlesOpen] = useState(false);
   const [blindOpen, setBlindOpen] = useState(false);
   const [puzzlesData, setPuzzlesData] = useState(null);
@@ -820,10 +820,20 @@ export default function ZlegendsBot() {
   const [rushMistakes, setRushMistakes] = useState(0);
   const [rushSolved, setRushSolved] = useState(0);
   const [rushResult, setRushResult] = useState(null);
+  /* The heartbreak-screen Modal's own visibility, independent of whether
+     the run itself is over -- closing it (X, backdrop, Escape) used to
+     call exitRush() and boot the player back to the Puzzles menu, losing
+     the final position. Now it just clears this flag; rushResult/rushMode
+     stay put so the board keeps showing where the run ended, and the
+     puzzleCtrls row below grows a Results button to bring it back. */
+  const [rushSummaryOpen, setRushSummaryOpen] = useState(true);
+  /* Which of the (up to 3) missed puzzles the heartbreak screen's stepper
+     is currently showing -- resets with each new run. */
+  const [missedStepIdx, setMissedStepIdx] = useState(0);
   const [rushBandIdx, setRushBandIdx] = useState(0);
   /* Puzzles missed during the current run (max 3, since 3 misses ends the
      run) -- kept as full puzzle objects so the results screen can offer
-     Retry/Analyze straight from the summary. */
+     retrying one straight from the summary. */
   const [rushMissed, setRushMissed] = useState([]);
   const rushMissedRef = useRef([]);
   /* Lifetime rush-solve counter, independent of any single run -- for
@@ -836,6 +846,12 @@ export default function ZlegendsBot() {
   const rushMistakesRef = useRef(0);
   const rushBandIdxRef = useRef(0);
   const rushStreakRef = useRef(0);
+  /* Every puzzle id served so far this run (across every band it's
+     touched, not scoped per band -- a band drop after a miss can re-enter
+     a band already partly seen). nextRushPuzzle/startRush both draw
+     through pickUnseenPuzzle so the same puzzle can't come up twice in
+     one run. */
+  const rushSeenRef = useRef(new Set());
   const difficultyRef = useRef(DIFFICULTIES[difficultyIdx]);
   difficultyRef.current = DIFFICULTIES[difficultyIdx];
   const gameStyleRef = useRef(gameStyle);
@@ -907,7 +923,7 @@ export default function ZlegendsBot() {
      opening/shared replay -- anywhere the board is showing a fixed,
      already-decided position rather than a live game the player is
      mid-move in. */
-  const canAnalyze = reviewing || mode === "replay" || (spectateMode && spectatePaused);
+  const canAnalyze = reviewing || mode === "replay" || (spectateMode && spectatePaused) || (rushMode && !!rushResult);
   const reviewFirstRun = useRef(true);
   useEffect(() => {
     if (!reviewing) {
@@ -1928,52 +1944,77 @@ export default function ZlegendsBot() {
 
   const rushPool = () => puzzlesInBand(pz.RATING_BANDS[rushBandIdxRef.current]);
 
+  /* Draws a random puzzle this run hasn't served yet. Bands are only 60
+     puzzles each, so a long/lucky run can plausibly exhaust one -- falls
+     back to allowing repeats from the full pool rather than stalling on
+     an empty array in that edge case. */
+  const pickUnseenPuzzle = (pool) => {
+    const fresh = pool.filter(p => !rushSeenRef.current.has(p.id));
+    const from = fresh.length ? fresh : pool;
+    const puzzle = from[(Math.random() * from.length) | 0];
+    rushSeenRef.current.add(puzzle.id);
+    return puzzle;
+  };
+
   const startRush = (seconds) => {
     rushSolvedRef.current = 0;
     rushMistakesRef.current = 0;
     rushBandIdxRef.current = 0;
     rushStreakRef.current = 0;
     rushMissedRef.current = [];
+    rushSeenRef.current = new Set();
     setRushSolved(0);
     setRushMistakes(0);
     setRushBandIdx(0);
     setRushMissed([]);
     setRushResult(null);
+    setRushSummaryOpen(true);
+    setMissedStepIdx(0);
     setRushDuration(seconds);
     setRushTimeLeft(seconds);
     setRushMode(true);
     setRushOpen(false);
-    setPuzzlesOpen(false);
     const pool = puzzlesInBand(pz.RATING_BANDS[0]);
-    startPuzzle(pool[(Math.random() * pool.length) | 0]);
+    startPuzzle(pickUnseenPuzzle(pool));
   };
 
   const nextRushPuzzle = () => {
     const pool = rushPool();
-    startPuzzle(pool[(Math.random() * pool.length) | 0]);
+    startPuzzle(pickUnseenPuzzle(pool));
   };
 
   const finishRush = (reason) => {
     setRushResult({ reason, solved: rushSolvedRef.current });
+    setRushSummaryOpen(true);
     /* 0-solve runs (opened a duration once, bailed or timed out cold)
        aren't scores -- a third of logged runs were these, pure noise in
-       the leaderboard data. */
-    if (rushSolvedRef.current > 0) submitRushScore({ duration: rushDuration, solved: rushSolvedRef.current, displayName });
+       the leaderboard data. No Timer runs are excluded outright: unlimited
+       time makes "most solved" meaningless as a comparison, and
+       duration_seconds is NOT NULL in the rush_scores table anyway. */
+    if (rushSolvedRef.current > 0 && rushDuration != null) submitRushScore({ duration: rushDuration, solved: rushSolvedRef.current, displayName });
     if (reason === "time") { try { audio.sfxTimeUp(); } catch { /* audio unavailable */ } }
   };
 
   const retryRush = () => startRush(rushDuration);
 
-  /* Deliberately does NOT call exitPuzzle()/newGame(1) -- that would
-     reset the board into a fresh Play vs Bot game, "portaling" the
+  /* Actually leaving Puzzle Rush (the "Puzzles" board-control button once
+     a run has ended, or Escape/backdrop before a run's first result ever
+     lands). Deliberately does NOT call exitPuzzle()/newGame(1) -- that
+     would reset the board into a fresh Play vs Bot game, "portaling" the
      player out of Puzzles entirely right after a rush ends. Clearing the
-     rush flags and reopening the Puzzles menu keeps them on a puzzle
-     board and lets them immediately pick Daily/Ranked/Rush again. */
+     rush flags and sending them back to the Sweetheart puzzles page (not
+     the board) lets them immediately pick Daily/Ranked/Rush again. */
   const exitRush = () => {
     setRushMode(false);
     setRushResult(null);
-    setPuzzlesOpen(true);
+    setSiteView("puzzlesHome");
   };
+
+  /* Closing the heartbreak-screen Modal (X/backdrop/Escape) -- unlike
+     exitRush above, this never touches rushMode/rushResult, so the final
+     position stays on the board and the Results control can bring the
+     summary back. */
+  const hideRushSummary = () => setRushSummaryOpen(false);
 
   const resetRushCounter = () => {
     setRushLifetime(0);
@@ -1981,23 +2022,15 @@ export default function ZlegendsBot() {
     saveSetting("rushLifetimeSolved", 0);
   };
 
-  /* Opens a puzzle missed during the last rush outside of rush mode --
-     Retry just replays it with unlimited tries via the normal Puzzle
-     controls; Analyze additionally draws the solution's first move as a
-     hint arrow (no engine call needed, the puzzle data already has it). */
-  const reviewMissedPuzzle = (puzzle, reveal) => {
+  /* Retries a puzzle missed during the last rush, with unlimited tries via
+     the normal Puzzle controls -- Analyze is deliberately not offered
+     here; it's the same on-board Analyze toggle everywhere else once
+     you're actually looking at a position, not a second control bolted
+     onto this one row. */
+  const reviewMissedPuzzle = (puzzle) => {
     setRushMode(false);
     setRushResult(null);
     startPuzzle(puzzle);
-    if (reveal) {
-      /* bestArrow gets wiped by the canAnalyze cleanup effect since a
-         plain puzzle isn't an "analyzable" mode -- hintMove isn't touched
-         by that effect and already renders a from/to square highlight
-         (see isHintFrom/isHintTo), so it survives here. */
-      const legal = eng.legalMoves();
-      const mv = legal.find(x => eng.sanOf(x) === puzzle.moves[0]);
-      if (mv) setHintMove({ from: mFrom(mv), to: mTo(mv) });
-    }
   };
 
   /* Confetti + fanfare every 50 lifetime rush solves. Driven off the
@@ -2023,10 +2056,9 @@ export default function ZlegendsBot() {
       else if (settingsOpen) setSettingsOpen(false);
       else if (nameEditOpen) setNameEditOpen(false);
       else if (shareLinkFallback) setShareLinkFallback(null);
-      else if (rushMode && rushResult) exitRush();
-      else if (rushOpen) { setRushOpen(false); setPuzzlesOpen(true); }
-      else if (rankedPuzzlesOpen) { setRankedPuzzlesOpen(false); setPuzzlesOpen(true); }
-      else if (puzzlesOpen) setPuzzlesOpen(false);
+      else if (rushMode && rushResult && rushSummaryOpen) hideRushSummary();
+      else if (rushOpen) { setRushOpen(false); setSiteView("puzzlesHome"); }
+      else if (rankedPuzzlesOpen) { setRankedPuzzlesOpen(false); setSiteView("puzzlesHome"); }
       else if (openingsOpen) setOpeningsOpen(false);
       else if (musicOpen) setMusicOpen(false);
       else if (spectateOpen) setSpectateOpen(false);
@@ -2035,7 +2067,7 @@ export default function ZlegendsBot() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pieceDesignsOpen, boardColorsOpen, settingsOpen, nameEditOpen, shareLinkFallback, rushMode, rushResult, rushOpen, rankedPuzzlesOpen, puzzlesOpen, openingsOpen, musicOpen, spectateOpen, pasteOpen]);
+  }, [pieceDesignsOpen, boardColorsOpen, settingsOpen, nameEditOpen, shareLinkFallback, rushMode, rushResult, rushSummaryOpen, rushOpen, rankedPuzzlesOpen, openingsOpen, musicOpen, spectateOpen, pasteOpen]);
 
   /* Modal accessibility, applied generically rather than per-modal: this
      app has ~15 separate .promoOv/.promoBox blocks (one per open-state
@@ -2104,12 +2136,12 @@ export default function ZlegendsBot() {
      hasn't already ended from 3 mistakes, pausing entirely once rushResult
      is set so a mistake-triggered end and a time-triggered end can't race. */
   useEffect(() => {
-    if (!rushMode || rushResult) return;
+    if (!rushMode || rushResult || rushDuration == null) return;
     if (rushTimeLeft <= 0) { finishRush("time"); return; }
     const t = setTimeout(() => setRushTimeLeft(s => s - 1), 1000);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rushMode, rushResult, rushTimeLeft]);
+  }, [rushMode, rushResult, rushTimeLeft, rushDuration]);
 
   const puzzleMove = useCallback((m) => {
     const idx = moveListRef.current.length;
@@ -2744,7 +2776,32 @@ export default function ZlegendsBot() {
     };
   })() : null;
   const analysisContent = activePuzzle ? (
-    rushMode ? (
+    rushMode && rushResult ? (
+      /* The run is over but the final puzzle's position is still on the
+         board (see rushSummaryOpen/canAnalyze) -- the "find the best
+         move" prompt no longer applies, so this swaps to the same
+         Analyze toggle every other analyzable mode gets instead. */
+      <div className="flex flex-col gap-2.5">
+        {analysisChip("Rush over", "gold")}
+        {analysisHint("Take a look at the final position, or bring the results back up.")}
+        <button
+          onClick={toggleAnalyze}
+          className="flex h-9 w-fit items-center gap-1.5 rounded-xl border px-3.5 text-xs font-bold tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
+          style={analyzing
+            ? { borderColor: "#F06BAE80", background: "#F06BAE1F", color: "var(--sh-rose)" }
+            : { borderColor: "#F06BAE3D", background: "#1D0A22CC", color: "var(--sh-dim)" }}
+        >
+          {analyzing ? (
+            <img src="/sweetheart-sprite.webp" alt="" className={"shAnalyzeSpinner" + (analysisBusy ? " busy" : "")} />
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 2 9.5 9.5 2 12l7.5 2.5L12 22l2.5-7.5L22 12l-7.5-2.5L12 2z" />
+            </svg>
+          )}
+          {analyzing ? (analysisBusy ? "Analyzing…" : "Analyzing") : "Analyze"}
+        </button>
+      </div>
+    ) : rushMode ? (
       <div className="flex flex-col gap-2.5">
         {analysisChip(<><BoltIcon size={11} />{pz.RATING_BANDS[rushBandIdx]?.label || ""}</>, "gold")}
         {analysisHint(puzzleFeedback || `Find the best move for ${eng.getSide() === 1 ? "White" : "Black"}.`)}
@@ -2942,9 +2999,9 @@ export default function ZlegendsBot() {
     if (modeId === "leaderboard") { leaderboardReturnRef.current = "home"; setSiteView("leaderboard"); return; }
     if (modeId === "lessons") { setSiteView("lessons"); return; }
     if (modeId === "settings") { setSiteView("play"); openSettings(); return; }
+    if (modeId === "puzzles") { setSiteView("puzzlesHome"); ensurePuzzlesLoaded(); return; }
     setSiteView("play");
-    if (modeId === "puzzles") { setPuzzlesOpen(true); ensurePuzzlesLoaded(); }
-    else if (modeId === "openings") setOpeningsOpen(true);
+    if (modeId === "openings") setOpeningsOpen(true);
     else if (modeId === "rush") { setRushOpen(true); ensurePuzzlesLoaded(); }
     else if (modeId === "spectate") setSpectateOpen(true);
     else if (modeId === "blind") setBlindOpen(true);
@@ -2961,6 +3018,22 @@ export default function ZlegendsBot() {
         firstVisit={isFirstVisitRef.current}
         rankElo={rankBotAssessedElo ?? (rankBotGames > 0 ? rankBotElo : null)}
         rankGames={rankBotGames}
+      />
+    );
+  }
+
+  if (siteView === "puzzlesHome") {
+    return (
+      <PuzzlesHomePage
+        onBack={() => setSiteView("home")}
+        onDaily={() => { setPuzzleBand(null); startPuzzle(dailyPuzzle(pz.PUZZLES)); setSiteView("play"); }}
+        onRanked={() => { setSiteView("play"); setRankedPuzzlesOpen(true); }}
+        onRush={() => { setSiteView("play"); setRushOpen(true); }}
+        puzzlesReady={!!puzzlesData}
+        dailySolved={dailySolvedDate === todayKey()}
+        onToolSelect={onToolSelect}
+        activeToolId={activeToolId}
+        profile={profile}
       />
     );
   }
@@ -2998,7 +3071,11 @@ export default function ZlegendsBot() {
         <div className="boardCol">
           {rushMode ? (
             <div className="card rushHud">
-              <div className={"rushClock" + (rushTimeLeft <= 10 ? " low" : "")}>{formatClock(rushTimeLeft)}</div>
+              {rushDuration == null ? (
+                <div className="rushClock rushClockInfinite" aria-label="No timer">&#8734;</div>
+              ) : (
+                <div className={"rushClock" + (rushTimeLeft <= 10 ? " low" : "")}>{formatClock(rushTimeLeft)}</div>
+              )}
               <div className="rushHudBody">
                 <div className="rushHudTop">
                   <span className="rushHudBand">{pz.RATING_BANDS[rushBandIdx]?.label || ""}</span>
@@ -3411,6 +3488,19 @@ export default function ZlegendsBot() {
             </div>
           )}
 
+          {/* Once a run has ended, End Rush no longer applies -- Results
+             brings the heartbreak screen back if it's been dismissed
+             (never shown alongside it, no redundant control), Puzzles
+             actually leaves. */}
+          {activePuzzle && rushMode && rushResult && (
+            <div className="ctrls puzzleCtrls">
+              {!rushSummaryOpen && (
+                <button className="btn ghost" onClick={() => setRushSummaryOpen(true)}>Results</button>
+              )}
+              <button className="btn ghost" onClick={exitRush}>Puzzles</button>
+            </div>
+          )}
+
         </div>
       </div>
 
@@ -3502,44 +3592,14 @@ export default function ZlegendsBot() {
             </div>
       </Modal>
 
-      <Modal open={puzzlesOpen} onClose={() => setPuzzlesOpen(false)} closeLabel="Close Puzzles">
-            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <PixelAvatar rows={PPIX} pal={PPAL} size={18} />
-              Puzzles
-            </div>
-            {!puzzlesData ? (
-              <div className="pv" style={{ padding: "8px 2px" }}>Loading puzzles…</div>
-            ) : (
-              <div className="rows" style={{ maxHeight: "none" }}>
-                <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E" }}
-                  onClick={() => { setPuzzlesOpen(false); setPuzzleBand(null); startPuzzle(dailyPuzzle(pz.PUZZLES)); }}>
-                  <div style={{ fontWeight: 700, color: "var(--cyan)", display: "flex", alignItems: "center", gap: 6 }}>
-                    <CalendarIcon /> Daily Puzzle
-                  </div>
-                  <div style={{ fontSize: 11, opacity: 0.75 }}>
-                    {dailySolvedDate === todayKey() ? "Solved today ✓" : "One puzzle, same for everyone today"}
-                  </div>
-                </div>
-                <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E" }}
-                  onClick={() => { setPuzzlesOpen(false); setRankedPuzzlesOpen(true); }}>
-                  <div style={{ fontWeight: 700, color: "var(--liliac)", display: "flex", alignItems: "center", gap: 6 }}>
-                    <TargetIcon /> Ranked Puzzles
-                  </div>
-                  <div style={{ fontSize: 11, opacity: 0.75 }}>Pick a rating band, Beginner to Expert</div>
-                </div>
-                <div style={{ cursor: "pointer", padding: "8px 2px" }}
-                  onClick={() => { setPuzzlesOpen(false); setRushOpen(true); }}>
-                  <div style={{ fontWeight: 700, color: "var(--yellow)", display: "flex", alignItems: "center", gap: 6 }}>
-                    <BoltIcon /> Puzzle Rush
-                  </div>
-                  <div style={{ fontSize: 11, opacity: 0.75 }}>Race the clock, difficulty ramps as you solve</div>
-                </div>
-              </div>
-            )}
-      </Modal>
-
-      <Modal open={rankedPuzzlesOpen} onClose={() => { setRankedPuzzlesOpen(false); setPuzzlesOpen(true); }} closeLabel="Close Ranked Puzzles">
-            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      {/* Ranked Puzzles / Puzzle Rush: Sweetheart's rose palette (shModal/
+         shModalRow), not the game's usual violet/cyan -- same art-directed
+         exception as the heartbreak screen below. The top-level Puzzles
+         hub itself is PuzzlesHomePage.jsx now (a real page, not a modal);
+         these two stay modals since they're a quick pick reached from
+         inside a live board, same shape "back" leads to that page. */}
+      <Modal open={rankedPuzzlesOpen} onClose={() => { setRankedPuzzlesOpen(false); setSiteView("puzzlesHome"); }} closeLabel="Close Ranked Puzzles" className="shModal">
+            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--sh-text)" }}>
               <PixelAvatar rows={PPIX} pal={PPAL} size={18} />
               Ranked Puzzles — Pick a Rating
             </div>
@@ -3547,74 +3607,103 @@ export default function ZlegendsBot() {
               {pz.RATING_BANDS.map(band => {
                 const pool = puzzlesInBand(band);
                 return (
-                  <div key={band.id} style={{ cursor: pool.length ? "pointer" : "default", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E", opacity: pool.length ? 1 : 0.4 }}
+                  <div key={band.id} className="shModalRow" style={{ cursor: pool.length ? "pointer" : "default", padding: "10px 8px", borderBottom: "1px solid #F06BAE33", borderRadius: "var(--r-sm)", opacity: pool.length ? 1 : 0.4, color: "var(--sh-text)" }}
                     onClick={() => {
                       if (!pool.length) return;
                       setPuzzleBand(band);
                       setRankedPuzzlesOpen(false);
                       startPuzzle(pool[(Math.random() * pool.length) | 0]);
                     }}>
-                    <div style={{ fontWeight: 700 }}>{band.label} <span style={{ opacity: 0.6, fontWeight: "normal" }}>({band.min}–{band.max === 9999 ? "2000+" : band.max})</span></div>
-                    <div style={{ fontSize: 11, opacity: 0.75 }}>{pool.length} puzzle{pool.length === 1 ? "" : "s"}</div>
+                    <div style={{ fontWeight: 700 }}>{band.label} <span style={{ color: "var(--sh-dim)", fontWeight: "normal" }}>({band.min}–{band.max === 9999 ? "2000+" : band.max})</span></div>
+                    <div style={{ fontSize: 11, color: "var(--sh-dim)" }}>{pool.length} puzzle{pool.length === 1 ? "" : "s"}</div>
                   </div>
                 );
               })}
             </div>
       </Modal>
 
-      <Modal open={rushOpen} onClose={() => { setRushOpen(false); setPuzzlesOpen(true); }} closeLabel="Close Puzzle Rush">
-            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <Modal open={rushOpen} onClose={() => { setRushOpen(false); setSiteView("puzzlesHome"); }} closeLabel="Close Puzzle Rush" className="shModal">
+            {/* Her battle-pose art completes the arc the three Sweetheart
+               screens tell: unimpressed on the home page, weapon out here
+               ("let's go"), aftermath on the heartbreak screen. Positioned
+               below the modalCloseX's own corner (top:6-42px), not beside
+               the title -- confirmed via getBoundingClientRect that an
+               inline flex placement there put the two in the same 18x36px
+               box despite looking clear in a screenshot. The description
+               paragraph gets matching right padding so the text wraps
+               clear of it instead of running underneath. */}
+            <img src="/sweetheart-full.png" alt="" className="shDurationArt" />
+            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--sh-text)" }}>
               <PixelAvatar rows={PPIX} pal={PPAL} size={18} />
               Puzzle Rush
             </div>
-            <div className="pv" style={{ fontSize: 12, opacity: 0.85 }}>
+            <div className="pv" style={{ fontSize: 12, color: "var(--sh-dim)", paddingRight: 72 }}>
               Solve as many puzzles as you can before time runs out. Three wrong answers ends the rush early.
             </div>
-            <div className="rows" style={{ maxHeight: "none" }}>
+            <div className="durationGrid">
               {RUSH_DURATIONS.map(d => (
-                <div key={d.seconds} style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E" }}
-                  onClick={() => startRush(d.seconds)}>
-                  <div style={{ fontWeight: 700 }}>{d.label}</div>
+                <div key={d.label} className="durationChip" onClick={() => startRush(d.seconds)}>
+                  {d.label}
+                  {d.seconds == null && <span className="newBadge">New</span>}
                 </div>
               ))}
             </div>
-            <div className="rushCounterRow">
-              <span>Lifetime solved: <b>{rushLifetime}</b></span>
+            <div className="rushCounterRow" style={{ color: "var(--sh-dim)" }}>
+              <span>Lifetime solved: <b style={{ color: "var(--sh-text)" }}>{rushLifetime}</b></span>
               <button className="btn ghost" style={{ padding: "4px 10px", fontSize: 10, minHeight: 30 }} onClick={resetRushCounter}>Reset</button>
             </div>
-            <button className="leaderboardBtn" onClick={() => openLeaderboard(rushDuration)}>🏆 View Leaderboard</button>
+            <div style={{ display: "flex", justifyContent: "center" }}>
+              <button className="rushEndTrophy" onClick={() => openLeaderboard(rushDuration ?? 60)} aria-label="View leaderboard" title="View leaderboard">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18 3h-2V1H8v2H6C4.9 3 4 3.9 4 5v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.95V17H9v2h6v-2h-3v-3.11c1.63-.32 2.98-1.45 3.61-2.95C18.08 10.63 20 8.55 20 6V5c0-1.1-.9-2-2-2zM6 6V5h2v3.82C6.84 8.4 6 7.3 6 6zm12 0c0 1.3-.84 2.4-2 2.82V5h2v1z" /></svg>
+              </button>
+            </div>
       </Modal>
 
       {/* Guarded outside Modal, not just via its `open` prop -- rushResult
          is null except right when this is meant to show, and JSX children
          are evaluated eagerly by the caller (React.createElement) before
          Modal's own early-return ever runs, so rushResult.reason below
-         would throw on every other render without this. */}
-      {rushMode && rushResult && (
-        <Modal open onClose={exitRush} closeLabel="Exit Puzzle Rush">
-          <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <PixelAvatar rows={PPIX} pal={PPAL} size={18} />
-            {rushResult.reason === "time" ? "Time's up!" : "3 misses — rush over!"}
-          </div>
-          <div className="pv" style={{ fontSize: 15 }}>
-            You solved <b>{rushResult.solved}</b> puzzle{rushResult.solved === 1 ? "" : "s"}.
-          </div>
-          {rushMissed.length > 0 && (
-            <div className="rushMissedList">
-              <div className="rushMissedHead">Missed puzzles</div>
-              {rushMissed.map((p, i) => (
-                <div className="rushMissedRow" key={p.id + "-" + i}>
-                  <span className="rushMissedRating">Rated {p.rating}</span>
-                  <span className="rushMissedActions">
-                    <button className="btn ghost" onClick={() => reviewMissedPuzzle(p, false)}>Retry</button>
-                    <button className="btn ghost" onClick={() => reviewMissedPuzzle(p, true)}>Analyze</button>
-                  </span>
-                </div>
-              ))}
+         would throw on every other render without this. rushSummaryOpen
+         is the new bit: closing this (X/backdrop/Escape) calls
+         hideRushSummary, not exitRush -- rushMode/rushResult live on so
+         the final position stays on the board and puzzleCtrls' Results
+         button can bring this back up. */}
+      {rushMode && rushResult && rushSummaryOpen && (
+        <Modal open onClose={hideRushSummary} closeLabel="Close results" className="rushEndBox" minWidth={300} maxWidth={440} style={{ padding: 0 }}>
+          <div className="rushEndInner">
+            <div>
+              <p className="rushEndEyebrow">Puzzle Rush &middot; {RUSH_DURATIONS.find(d => d.seconds === rushDuration)?.label}</p>
+              <p className="rushEndSub">{rushResult.reason === "time" ? "Time's up." : "Three misses."} Your heart, and your streak, in pieces.</p>
             </div>
-          )}
-          <button className="btn gold" onClick={retryRush}>Try Again</button>
-          <button className="leaderboardBtn" onClick={() => openLeaderboard(rushDuration)}>🏆 View Leaderboard</button>
+            <div className="rushEndStat">
+              <span className="rushEndStatNum">{rushResult.solved}</span>
+              <span className="rushEndStatLbl">puzzle{rushResult.solved === 1 ? "" : "s"} solved<br />lifetime: {rushLifetime}</span>
+            </div>
+            {rushMissed.length > 0 && (
+              <div className="rushEndMissed">
+                <p className="rushEndMissedHead">Missed puzzles &middot; {rushMissed.length}</p>
+                <div className="rushEndStepperRow">
+                  <button className="rushEndStepperBtn" disabled={missedStepIdx === 0}
+                    onClick={() => setMissedStepIdx(i => Math.max(0, i - 1))} aria-label="Previous missed puzzle">&#8249;</button>
+                  <button className="rushEndRatingBtn" onClick={() => reviewMissedPuzzle(rushMissed[missedStepIdx])}>
+                    <span className="rushEndRatingNum">Rated {rushMissed[missedStepIdx].rating}</span>
+                    <span className="rushEndRatingLbl">Tap to retry this one</span>
+                  </button>
+                  <button className="rushEndStepperBtn" disabled={missedStepIdx === rushMissed.length - 1}
+                    onClick={() => setMissedStepIdx(i => Math.min(rushMissed.length - 1, i + 1))} aria-label="Next missed puzzle">&#8250;</button>
+                </div>
+                <p className="rushEndStepperCount">{missedStepIdx + 1} / {rushMissed.length} &middot; analysis is on the board, not here</p>
+              </div>
+            )}
+            <div className="rushEndActions">
+              <button className="rushEndRestart" onClick={retryRush} aria-label="Try again" title="Try again">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" /></svg>
+              </button>
+              <button className="rushEndTrophy" onClick={() => openLeaderboard(rushDuration ?? 60)} aria-label="View leaderboard" title="View leaderboard">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M18 3h-2V1H8v2H6C4.9 3 4 3.9 4 5v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.95V17H9v2h6v-2h-3v-3.11c1.63-.32 2.98-1.45 3.61-2.95C18.08 10.63 20 8.55 20 6V5c0-1.1-.9-2-2-2zM6 6V5h2v3.82C6.84 8.4 6 7.3 6 6zm12 0c0 1.3-.84 2.4-2 2.82V5h2v1z" /></svg>
+              </button>
+            </div>
+          </div>
         </Modal>
       )}
 

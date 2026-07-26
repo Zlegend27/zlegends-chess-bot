@@ -65,7 +65,11 @@ export default function LeaderboardPage({ initialDuration = 60, onBack, onToolSe
       </div>
 
       <div className="mt-5 flex gap-2">
-        {RUSH_DURATIONS.map(d => (
+        {/* No Timer isn't a leaderboard category (unlimited time makes
+           "most solved" meaningless as a comparison, and those runs are
+           never submitted) -- filtered out here rather than duplicating
+           RUSH_DURATIONS without it. */}
+        {RUSH_DURATIONS.filter(d => d.seconds != null).map(d => (
           <button key={d.seconds} className={"btn" + (duration === d.seconds ? "" : " ghost")}
             onClick={() => setDuration(d.seconds)}>{d.label}</button>
         ))}
