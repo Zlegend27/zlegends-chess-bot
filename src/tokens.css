@@ -15,6 +15,19 @@
   --liliac:#C9C2E8; --sqdark:#4A2A7A; --white:#F4EFFF; --dim:#9D8FC4;
   --boardLight:#C9C2E8; --boardDark:#4A2A7A;
 
+  /* Sweetheart's own palette -- a second, deliberate exception to "reuse
+     tokens before creating new ones" alongside the board colors above.
+     Used only inside the Puzzles flow (the puzzles home page, the puzzle
+     picker/Rush-duration modals, and the Rush end-of-run screen): that
+     whole corner of the app is explicitly her brand, not in-game chrome,
+     and was art-directed against her own logo/character art rather than
+     the violet/cyan palette above. Nothing outside src/components/
+     PuzzlesHomePage.jsx or the Sweetheart-flagged blocks in App.jsx
+     should reach for these. */
+  --sh-void:#170912; --sh-panel:#2E1224; --sh-panel2:#3B1030;
+  --sh-rose:#F06BAE; --sh-red:#C23B4E; --sh-gold:#F5D95E; --sh-teal:#7FD8C4;
+  --sh-text:#FBEAF0; --sh-dim:#C9A0BE;
+
   /* Type -- three stacks, no more. --font-display for titles/buttons/
      card names/clocks, --font-body for descriptions/UI copy,
      --font-mono for move lists/PGN/timestamps/eval numbers. */

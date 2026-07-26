@@ -106,6 +106,7 @@
   background:#120A26; border:1px solid #ffffff18; border-radius:var(--r-xs); padding:8px 10px;
   flex:none; min-width:64px; text-align:center; }
 .rushClock.low{ color:#FF4C5B; text-shadow:0 0 12px #FF4C5B88; animation:rushClockPulse 1s ease-in-out infinite; }
+.rushClock.rushClockInfinite{ font-size:26px; color:var(--liliac); text-shadow:none; }
 @keyframes rushClockPulse{ 0%,100%{ opacity:1; } 50%{ opacity:.5; } }
 /* Blind Chess's lazy-load Suspense fallback -- an indeterminate bar
    sliding back and forth, since there's no real progress percentage to
@@ -131,12 +132,77 @@
   text-transform:uppercase; letter-spacing:.03em; color:var(--cyan); text-shadow:0 0 8px #3EE7F555; }
 .rushCounterRow{ display:flex; align-items:center; justify-content:space-between; gap:10px;
   font-size:11px; color:var(--dim); }
-.rushMissedList{ display:flex; flex-direction:column; gap:6px; border-top:1px solid #8B2FC93D;
-  padding-top:10px; }
-.rushMissedHead{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.16em; color:var(--cyan); }
-.rushMissedRow{ display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12px; }
-.rushMissedActions{ display:flex; gap:6px; }
-.rushMissedActions .btn{ padding:5px 9px; font-size:10px; }
+
+/* Rush end-of-run ("heartbreak screen") -- deliberately off the game's
+   usual violet/cyan .promoBox skin and onto Sweetheart's own palette
+   (see the tokens.css comment by --sh-*), the one art-directed exception
+   in the whole modal system. Still a real .promoBox/.promoOv underneath
+   (see the Modal component) so it keeps the shared focus-trap/scroll-lock/
+   Escape handling for free -- only the skin is bespoke, not the shape. */
+.promoBox.rushEndBox{ background:var(--sh-void); border-color:#F06BAE59; border-radius:var(--r-md);
+  box-shadow:0 0 46px #00000066,0 0 90px #0009 inset; overflow:hidden; position:relative; }
+/* Mostly dark, not mostly red: mixed straight from --sh-void, with the
+   only real red in the box held to a soft bloom in the top-right corner
+   and a few hairline cracks fanning out of it into the dark field. */
+.promoBox.rushEndBox::before{ content:""; position:absolute; inset:0; pointer-events:none;
+  background:
+    repeating-conic-gradient(from 20deg at 84% 10%, #ffffff14 0deg 1.6deg, transparent 1.6deg 13deg),
+    repeating-conic-gradient(from 55deg at 60% 28%, #ffffff08 0deg 1deg, transparent 1deg 12deg),
+    repeating-conic-gradient(from 5deg at 30% 70%, #ffffff06 0deg 1deg, transparent 1deg 14deg),
+    radial-gradient(50% 44% at 88% 4%, #8f1a24 0%, #4a0d13 55%, transparent 82%),
+    linear-gradient(150deg, var(--sh-void) 0%, #1c0a16 55%, var(--sh-void) 100%); }
+.promoBox.rushEndBox::after{ content:""; position:absolute; inset:0; pointer-events:none;
+  background:linear-gradient(175deg, #17091240 0%, #170912B3 42%, var(--sh-void) 74%); }
+.rushEndInner{ position:relative; z-index:1; padding:20px 20px 22px; display:flex; flex-direction:column; gap:16px; width:100%; }
+.rushEndEyebrow{ font-family:var(--font-mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--sh-rose); margin:0; }
+.rushEndSub{ font-size:15px; color:var(--sh-text); margin:4px 0 0; font-weight:700; }
+.rushEndStat{ display:flex; align-items:baseline; gap:10px; background:#0000002E; border:1px solid #F06BAE33;
+  border-radius:var(--r-sm); padding:12px 14px; }
+.rushEndStatNum{ font-family:var(--font-mono); font-size:30px; font-weight:700; color:var(--sh-gold); line-height:1; }
+.rushEndStatLbl{ font-size:12px; color:var(--sh-dim); }
+.rushEndMissed{ background:#0000002E; border:1px solid #F06BAE33; border-radius:var(--r-sm); padding:12px; }
+.rushEndMissedHead{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--sh-dim); margin:0 0 10px; }
+.rushEndStepperRow{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.rushEndStepperBtn{ width:44px; height:44px; flex:none; border-radius:var(--r-sm); border:1px solid #F06BAE4D;
+  background:#0000002E; color:var(--sh-text); cursor:pointer; font-size:22px; display:flex; align-items:center; justify-content:center; }
+.rushEndStepperBtn:hover:not(:disabled){ border-color:var(--sh-rose); color:var(--sh-rose); }
+.rushEndStepperBtn:disabled{ opacity:.35; cursor:default; }
+.rushEndRatingBtn{ flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; padding:8px 10px;
+  border-radius:var(--r-sm); border:1px solid var(--sh-rose); background:#F06BAE1F; cursor:pointer; }
+.rushEndRatingBtn:hover{ background:#F06BAE33; }
+.rushEndRatingNum{ font-family:var(--font-mono); font-weight:700; font-size:18px; color:var(--sh-rose); }
+.rushEndRatingLbl{ font-size:10px; color:var(--sh-dim); text-transform:uppercase; letter-spacing:.08em; }
+.rushEndStepperCount{ text-align:center; font-family:var(--font-mono); font-size:11px; color:var(--sh-dim); margin:8px 0 0; }
+.rushEndActions{ display:flex; align-items:center; justify-content:center; gap:16px; margin-top:2px; }
+.rushEndRestart{ width:64px; height:64px; border-radius:50%; background:linear-gradient(180deg,#FF9AC9,var(--sh-rose));
+  color:#3A0A26; border:none; box-shadow:0 3px 0 #00000066,0 0 18px #F06BAE88; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; flex:none; }
+.rushEndRestart:hover{ filter:brightness(1.08); }
+.rushEndRestart:active{ transform:translateY(2px); }
+.rushEndTrophy{ width:44px; height:44px; border-radius:50%; background:#0000002E; border:1px solid #F06BAE4D;
+  color:var(--sh-dim); cursor:pointer; display:flex; align-items:center; justify-content:center; flex:none; }
+.rushEndTrophy:hover{ border-color:var(--sh-gold); color:var(--sh-gold); }
+
+/* Puzzles / Ranked Puzzles / Puzzle Rush picker modals -- same Sweetheart
+   reskin as the heartbreak screen above, on the same shared Modal/
+   .promoBox shape (just background/border/row colors, not a new overlay). */
+.promoBox.shModal{ background:var(--sh-panel); border-color:#F06BAE59; }
+.shModalRow:hover{ background:#F06BAE1A; }
+.durationGrid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:4px 0 12px; }
+.durationChip{ position:relative; padding:14px 8px; text-align:center; border-radius:var(--r-sm);
+  border:1px solid #F06BAE4D; background:#0000002E; font-weight:700; font-size:12px; color:var(--sh-text); cursor:pointer; }
+.durationChip:hover{ border-color:var(--sh-rose); color:var(--sh-rose); background:#F06BAE1A; }
+.durationChip .newBadge{ position:absolute; top:-7px; right:-6px; font-size:8px; font-weight:700; background:var(--sh-gold);
+  color:#3A2A00; padding:2px 5px; border-radius:var(--r-pill); letter-spacing:.04em; }
+.shDurationArt{ position:absolute; top:46px; right:6px; width:84px; pointer-events:none;
+  filter:drop-shadow(0 6px 12px #00000066); }
+/* Her pixel sprite standing in for a spinner on the rush-end Analyze
+   button -- static while idle-but-toggled-on (matches "Analyzing" text
+   with no work happening yet), pulses only during analysisBusy's actual
+   search. See the prefers-reduced-motion block below for the opt-out. */
+.shAnalyzeSpinner{ width:16px; height:16px; image-rendering:pixelated; }
+.shAnalyzeSpinner.busy{ animation:shSpritePulse .7s ease-in-out infinite; }
+@keyframes shSpritePulse{ 0%,100%{ transform:scale(1); opacity:1; } 50%{ transform:scale(1.18); opacity:.7; } }
 
 /* Confetti -- see Confetti.jsx. Fixed overlay so it plays above modals
    too (rush results, milestone can land mid-modal). */
@@ -499,5 +565,6 @@ select:hover{ border-color:var(--cyan); }
 @media (prefers-reduced-motion: reduce){
   .star, .eyebrow .live, .bang, .sq.botLast::before, .loadingBarFill{ animation:none; }
   .promoOv, .promoBox{ animation:none; }
+  .shAnalyzeSpinner.busy{ animation:none; }
   .evalbar .pfill{ transition:none; }
 }

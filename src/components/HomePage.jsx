@@ -35,6 +35,9 @@ function renderIcon(id) {
       <path d="M12 5.5C13.5 4 16 3 20 3v14c-4 0-6.5 1-8 2.5V5.5z" fill="#F5D93E" />
     </svg>
   );
+  if (id === "puzzles") return (
+    <img src="/sweetheart-sprite.webp" alt="" width={40} height={40} style={{ imageRendering: "pixelated" }} />
+  );
   if (id === "blind") return (
     <svg width="38" height="38" viewBox="0 0 24 24" aria-hidden="true">
       <circle cx="12" cy="12" r="9" fill="#F5D93E26" stroke="#F5D93E" strokeWidth="1.4" />
@@ -52,7 +55,7 @@ function renderIcon(id) {
    below instead of competing for space as a 6th icon. */
 const MODES = [
   { id: "play", label: "Play vs Bot", desc: "Challenge ZLEGEND2700 at any Elo. Can you beat it?", custom: true, featured: true },
-  { id: "puzzles", label: "Puzzles", desc: "Solve rated tactics from Beginner to Expert.", icon: ICONS.puzzle },
+  { id: "puzzles", label: "Puzzles", desc: "Solve rated tactics with Sweetheart.", custom: true },
   { id: "openings", label: "Openings Library", desc: "Study Italian, Sicilian, Ruy Lopez and more.", custom: true },
   { id: "spectate", label: "Spectate Bots", desc: "Watch two bots battle. No clicking required.", icon: ICONS.eye },
   { id: "blind", label: "Blind Chess", desc: "Play a full game by voice only. No board.", custom: true },
@@ -68,8 +71,12 @@ const ACCENT = {
   play: { text: "text-yellow", bg: "bg-yellow/12 group-hover:bg-yellow/20", border: "border-yellow/30 group-hover:border-yellow/60" },
   gold: { text: "text-yellow", bg: "bg-yellow/10 group-hover:bg-yellow/18", border: "border-yellow/20 group-hover:border-yellow/50" },
   cyan: { text: "text-cyan", bg: "bg-cyan/10 group-hover:bg-cyan/18", border: "border-cyan/20 group-hover:border-cyan/50" },
+  /* Puzzles only -- Sweetheart's own rose, not the app's usual cyan. See
+     the --sh-* tokens.css comment; magenta is close enough to her rose
+     for a small home-tile border/icon tint without a whole new color. */
+  pink: { text: "text-magenta", bg: "bg-magenta/12 group-hover:bg-magenta/20", border: "border-magenta/30 group-hover:border-magenta/60" },
 };
-const accentFor = (m) => (m.featured ? ACCENT.play : ACCENT.cyan);
+const accentFor = (m) => (m.id === "puzzles" ? ACCENT.pink : m.featured ? ACCENT.play : ACCENT.cyan);
 
 /** The site's front door -- our real branding/hero (same .hdr markup the
  *  Play screen used to open with), then a mode picker grid, then the
