@@ -125,6 +125,17 @@ const RANK_BOT_THROW_CP = 300;
 const RANK_BOT_THROWS_TO_SUSPECT = 2;
 const RANK_BOT_SUSPECT_WEIGHT = 0.25;
 const RANK_BOT_MAX_GAME_DROP = 250;
+/* Soft counterpart to MAX_GAME_DROP, for climbing instead of falling.
+   Climbing isn't adversarial the way sandbagging is -- it just means the
+   dial started too low -- so this doesn't wall it off, it tapers the step
+   linearly to zero as the game's climb approaches this many points (see
+   the taper in adjustRankBotDial). Deliberately looser than the drop cap:
+   telemetry showed one calibration-window game climb 1115 points in a
+   single sitting (600 -> 1751, gradual, not a bug -- just an accurate
+   dial finally catching up to a player who started at the floor), which
+   is the kind of fast recognition worth mostly preserving, just not
+   letting run fully unbounded. */
+const RANK_BOT_MAX_GAME_CLIMB = 600;
 /* Game outcome feedback (v3): move quality is the primary signal, but
    the result is real evidence too -- the bot plays AT the player's
    estimated level, so beating it says the estimate is too low. Losing
@@ -1390,6 +1401,15 @@ export default function ZlegendsBot() {
       if (loss < 20 && prevLoss >= RANK_BOT_THROW_CP) perf = Math.min(perf, 2400);
       let step = (perf - eloBefore) * RANK_BOT_EWMA_K * mult;
       if (windowSuspect) step *= RANK_BOT_SUSPECT_WEIGHT;
+      /* Soft per-game ceiling: taper (not clamp) an upward step as this
+         game's own climb approaches RANK_BOT_MAX_GAME_CLIMB, so a player
+         who's clearly stronger than the dial still gets recognized fast
+         early in the game -- it just runs out of room rather than
+         stopping dead, unlike the hard drop floor below. */
+      if (step > 0) {
+        const climbedSoFar = Math.max(0, eloBefore - rankBotGameStartEloRef.current);
+        step *= Math.max(0, 1 - climbedSoFar / RANK_BOT_MAX_GAME_CLIMB);
+      }
       /* Per-game floor: however this game goes, the dial can't be dragged
          down more than RANK_BOT_MAX_GAME_DROP from where it started. */
       const gameFloor = Math.max(RANK_BOT_MIN_ELO, rankBotGameStartEloRef.current - RANK_BOT_MAX_GAME_DROP);
@@ -1752,6 +1772,49 @@ export default function ZlegendsBot() {
       gameUid: isRankBot ? rankBotGameUidRef.current : null, rankEloAtGame: isRankBot ? rankBotEloRef.current : null,
     });
   };
+  const maybeSaveAbandonedGameRef = useRef(maybeSaveAbandonedGame);
+  maybeSaveAbandonedGameRef.current = maybeSaveAbandonedGame;
+  const maybeCountAbandonedRankGameRef = useRef(maybeCountAbandonedRankGame);
+  maybeCountAbandonedRankGameRef.current = maybeCountAbandonedRankGame;
+  /* Every board-wiping in-app action (New, switch difficulty, open a
+     puzzle/quiz/spectate, paste a PGN) already runs both functions above --
+     but closing the tab or reloading mid-game hits none of them, so that
+     session's abandoned-game row and Rank Bot assessment checkpoint never
+     land. Confirmed from Supabase: 7 tracked Rank Bot sessions had 8+
+     dial-adjusted moves (well past RANK_BOT_MIN_TRACKED_MOVES) but no
+     matching games row at all -- the live per-move dial nudges persisted
+     fine (logRankBotMove fires synchronously during play), only the
+     game-end bookkeeping was missing. pagehide catches mobile Safari's
+     backgrounding/swipe-away (which never fires beforeunload); both are
+     wired for desktop reload/close. Same best-effort, fire-and-forget
+     convention as the rest of this file -- an unload mid-request can still
+     drop the network call, but that's no worse than today's coverage.
+
+     Verified live (both events dispatched manually against a real Rank
+     Bot game): both pagehide AND beforeunload can fire for the same
+     close in some browsers, which would otherwise save the same
+     abandoned game twice. finalizedRef is a one-shot latch for that --
+     reset on pageshow (not "on next game start") so a bfcache-restored
+     tab that gets played further and closed again still finalizes that
+     second session too. */
+  const abandonFinalizedRef = useRef(false);
+  useEffect(() => {
+    const finalize = () => {
+      if (abandonFinalizedRef.current) return;
+      abandonFinalizedRef.current = true;
+      maybeSaveAbandonedGameRef.current();
+      maybeCountAbandonedRankGameRef.current();
+    };
+    const onShow = () => { abandonFinalizedRef.current = false; };
+    window.addEventListener("pagehide", finalize);
+    window.addEventListener("beforeunload", finalize);
+    window.addEventListener("pageshow", onShow);
+    return () => {
+      window.removeEventListener("pagehide", finalize);
+      window.removeEventListener("pageshow", onShow);
+      window.removeEventListener("beforeunload", finalize);
+    };
+  }, []);
 
   const newGame = (color) => {
     gradeRunIdRef.current += 1;
