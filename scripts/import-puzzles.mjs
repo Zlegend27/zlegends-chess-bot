@@ -23,14 +23,15 @@ if (!srcPath) {
   process.exit(1);
 }
 
-// Curated rating bands + how many puzzles to keep per band. Chosen for a
-// bundled JSON that's still small (a few hundred KB), not a database dump.
+// Curated rating bands + how many puzzles to keep per band. Bumped from 60
+// to 200 (2026-07-26, at the maintainer's request) since the bundled JSON
+// was still under 400KB at that size -- still not a database dump.
 const BANDS = [
-  { id: "beginner", label: "Beginner", min: 0, max: 1000, target: 60 },
-  { id: "easy", label: "Easy", min: 1000, max: 1300, target: 60 },
-  { id: "medium", label: "Medium", min: 1300, max: 1700, target: 60 },
-  { id: "hard", label: "Hard", min: 1700, max: 2100, target: 60 },
-  { id: "expert", label: "Expert", min: 2100, max: 9999, target: 60 },
+  { id: "beginner", label: "Beginner", min: 0, max: 1000, target: 200 },
+  { id: "easy", label: "Easy", min: 1000, max: 1300, target: 200 },
+  { id: "medium", label: "Medium", min: 1300, max: 1700, target: 200 },
+  { id: "hard", label: "Hard", min: 1700, max: 2100, target: 200 },
+  { id: "expert", label: "Expert", min: 2100, max: 9999, target: 200 },
 ];
 const MIN_NB_PLAYS = 200; // quality filter -- skip rarely-attempted puzzles
 const MIN_POPULARITY = 60; // Lichess's own -100..100 thumbs-up score
