@@ -713,12 +713,31 @@ export default function ZlegendsBot() {
   useEffect(() => {
     if (session?.user?.id) migrateAnonymousDataIfNeeded(session.user.id);
   }, [session?.user?.id]);
+  /* Music/Settings/Account only ever render inside the "play" branch (see
+     the comment below), so opening one from another page has to flip
+     siteView to "play" first -- this remembers wherever that "first" was
+     so closing the modal (closeMusic/closeSettings/closeAccount below)
+     can put the player back on the Puzzles/Leaderboard/Lessons page they
+     actually came from instead of stranding them on the board. Always
+     captured fresh on open (even when already "play", storing "play"
+     itself) rather than guarded like leaderboardReturnRef -- there's no
+     "self" case to protect here, and a guard would go stale the next
+     time the player opens one of these mid-game from the real board. */
+  const modalReturnViewRef = useRef("play");
+  const gotoPlayForModal = () => {
+    modalReturnViewRef.current = siteView;
+    setSiteView("play");
+  };
+  const closeMusic = () => { setMusicOpen(false); setSiteView(modalReturnViewRef.current); };
+  const closeSettings = () => { setSettingsOpen(false); setSiteView(modalReturnViewRef.current); };
+  const closeAccount = () => { setAccountOpen(false); setSiteView(modalReturnViewRef.current); };
+
   const onToolSelect = (id) => {
-    if (id === "music") { setSiteView("play"); setMusicOpen(true); }
-    else if (id === "settings") { setSiteView("play"); openSettings(); }
-    else if (id === "home") setSiteView("home");
+    if (id === "music") { gotoPlayForModal(); setMusicOpen(true); }
+    else if (id === "settings") { gotoPlayForModal(); openSettings(); }
+    else if (id === "home") { leaveActivity(); setSiteView("home"); }
     else if (id === "login") {
-      if (profile) { setSiteView("play"); setAccountOpen(true); }
+      if (profile) { gotoPlayForModal(); setAccountOpen(true); }
       else signInWithDiscord();
     }
   };
@@ -885,6 +904,11 @@ export default function ZlegendsBot() {
      retrying one straight from the summary. */
   const [rushMissed, setRushMissed] = useState([]);
   const rushMissedRef = useRef([]);
+  /* puzzleMove's own follow-up timers (auto-reply move, advance to the
+     next rush puzzle, end the rush) -- tracked so leaveActivity() can
+     cancel a pending one when the player exits mid-delay, instead of it
+     firing 400-700ms later against whatever's on the board by then. */
+  const puzzleTimeoutRef = useRef(null);
   /* Lifetime rush-solve counter, independent of any single run -- for
      players doing many rushes in one sitting. Persisted so it survives a
      reload; user-resettable from the Rush start menu. */
@@ -1881,6 +1905,65 @@ export default function ZlegendsBot() {
     };
   }, []);
 
+  /* Tears down whichever non-"real game" activity currently owns the
+     board or a stray modal (puzzle/rush, spectate, opening replay/quiz,
+     Blind Chess, the Ranked/Openings pickers) -- called from every "go do
+     something else" entry point (enterMode, the nav bar's Home button) so
+     leaving one activity can never leak its controls, a running clock, or
+     its board position into whatever's opened next (the reported bug: a
+     puzzle's Retry/Next/Exit row and position surviving a trip through
+     Home into Play vs Bot). Left untouched: a genuine in-progress Play vs
+     Bot game -- same as today, navigating away from a real game and back
+     just resumes it, since none of hadBoardActivity's checks fire for it. */
+  const leaveActivity = () => {
+    if (puzzleTimeoutRef.current) { clearTimeout(puzzleTimeoutRef.current); puzzleTimeoutRef.current = null; }
+
+    const hadBoardActivity = !!activePuzzle || spectateModeRef.current || mode === "replay";
+
+    setActivePuzzle(null);
+    setPuzzleBand(null);
+    setPuzzleFeedback(null);
+    setPuzzleSolved(false);
+    setMissedAttempt(null);
+
+    setRushMode(false);
+    setRushResult(null);
+    setRushOpen(false);
+    setRushSummaryOpen(true);
+    setMissedStepIdx(0);
+    setRestartCountdown(null);
+
+    spectateModeRef.current = false;
+    spectatePausedRef.current = false;
+    setSpectateMode(false);
+    setSpectatePaused(false);
+    setSpectateOpen(false);
+
+    setQuizOpening(null);
+    setQuizFeedback(null);
+    setActiveOpening(null);
+    setOpeningsOpen(false);
+    setRankedPuzzlesOpen(false);
+    setBlindOpen(false);
+
+    if (mode === "replay") {
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+      setMode("play");
+      setReplayPlaying(false);
+    }
+
+    if (hadBoardActivity) {
+      eng.reset();
+      moveListRef.current = [];
+      setPlayerColor(1);
+      setSelected(-1); setTargets([]); setLastMove(null); setHintMove(null);
+      setMoveList([]); setInfo(null); setResult(null); setPromo(null); setEvalCp(0); setReviewIndex(null);
+      setMoveGrades(null); setGradeDetail(null); setPractice(null); setGrading(false); setGradeProgress(0);
+      setPastedGame(false);
+      rerender();
+    }
+  };
+
   const newGame = (color) => {
     gradeRunIdRef.current += 1;
     setNewGameConfirm(false);
@@ -2101,8 +2184,7 @@ export default function ZlegendsBot() {
      rush flags and sending them back to the Sweetheart puzzles page (not
      the board) lets them immediately pick Daily/Ranked/Rush again. */
   const exitRush = () => {
-    setRushMode(false);
-    setRushResult(null);
+    leaveActivity();
     setSiteView("puzzlesHome");
   };
 
@@ -2172,21 +2254,24 @@ export default function ZlegendsBot() {
       if (e.key !== "Escape") return;
       if (pieceDesignsOpen) { setPieceDesignsOpen(false); setSettingsOpen(true); }
       else if (boardColorsOpen) { setBoardColorsOpen(false); setSettingsOpen(true); }
-      else if (settingsOpen) setSettingsOpen(false);
+      else if (settingsOpen) closeSettings();
+      else if (accountOpen) closeAccount();
       else if (nameEditOpen) setNameEditOpen(false);
       else if (shareLinkFallback) setShareLinkFallback(null);
+      else if (newGameConfirm) setNewGameConfirm(false);
       else if (rushMode && rushResult && rushSummaryOpen) hideRushSummary();
       else if (rushOpen) { setRushOpen(false); setSiteView("puzzlesHome"); }
       else if (rankedPuzzlesOpen) { setRankedPuzzlesOpen(false); setSiteView("puzzlesHome"); }
       else if (openingsOpen) setOpeningsOpen(false);
-      else if (musicOpen) setMusicOpen(false);
+      else if (blindOpen) setBlindOpen(false);
+      else if (musicOpen) closeMusic();
       else if (spectateOpen) setSpectateOpen(false);
       else if (pasteOpen) setPasteOpen(false);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pieceDesignsOpen, boardColorsOpen, settingsOpen, nameEditOpen, shareLinkFallback, rushMode, rushResult, rushSummaryOpen, rushOpen, rankedPuzzlesOpen, openingsOpen, musicOpen, spectateOpen, pasteOpen]);
+  }, [pieceDesignsOpen, boardColorsOpen, settingsOpen, accountOpen, nameEditOpen, shareLinkFallback, newGameConfirm, rushMode, rushResult, rushSummaryOpen, rushOpen, rankedPuzzlesOpen, openingsOpen, blindOpen, musicOpen, spectateOpen, pasteOpen]);
 
   /* Modal accessibility, applied generically rather than per-modal: this
      app has ~15 separate .promoOv/.promoBox blocks (one per open-state
@@ -2253,14 +2338,20 @@ export default function ZlegendsBot() {
 
   /* Puzzle Rush countdown -- ticks once a second while a rush is live and
      hasn't already ended from 3 mistakes, pausing entirely once rushResult
-     is set so a mistake-triggered end and a time-triggered end can't race. */
+     is set so a mistake-triggered end and a time-triggered end can't race.
+     leaveActivity() clears rushMode on every real "navigate away" path
+     (nav bar Home, enterMode, exitRush, ...), which already stops this --
+     the siteView check is a second line of defense so a future navigation
+     path that forgets to call it can't leave the clock (and eventually
+     finishRush, with its leaderboard submit) running against a board the
+     player isn't even looking at. */
   useEffect(() => {
-    if (!rushMode || rushResult || rushDuration == null) return;
+    if (!rushMode || rushResult || rushDuration == null || siteView !== "play") return;
     if (rushTimeLeft <= 0) { finishRush("time"); return; }
     const t = setTimeout(() => setRushTimeLeft(s => s - 1), 1000);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rushMode, rushResult, rushTimeLeft, rushDuration]);
+  }, [rushMode, rushResult, rushTimeLeft, rushDuration, siteView]);
 
   const puzzleMove = useCallback((m) => {
     const idx = moveListRef.current.length;
@@ -2279,10 +2370,10 @@ export default function ZlegendsBot() {
         setRushBandIdx(rushBandIdxRef.current);
         if (rushMistakesRef.current >= 3) {
           setPuzzleFeedback("Wrong — that's 3 misses!");
-          setTimeout(() => finishRush("mistakes"), 400);
+          puzzleTimeoutRef.current = setTimeout(() => finishRush("mistakes"), 400);
         } else {
           setPuzzleFeedback("Not quite — next puzzle!");
-          setTimeout(() => nextRushPuzzle(), 700);
+          puzzleTimeoutRef.current = setTimeout(() => nextRushPuzzle(), 700);
         }
         return;
       }
@@ -2323,13 +2414,13 @@ export default function ZlegendsBot() {
           saveSetting("rushLifetimeSolved", next);
           return next;
         });
-        setTimeout(() => nextRushPuzzle(), 500);
+        puzzleTimeoutRef.current = setTimeout(() => nextRushPuzzle(), 500);
       }
       rerender();
       return;
     }
     const replySan = activePuzzle.moves[newMoveList.length];
-    setTimeout(() => {
+    puzzleTimeoutRef.current = setTimeout(() => {
       const legal = eng.legalMoves();
       const replyMove = legal.find(mv => eng.sanOf(mv) === replySan);
       if (replyMove) {
@@ -3124,9 +3215,15 @@ export default function ZlegendsBot() {
      Rush row inside the Puzzles modal, the Rank Bot difficulty option),
      this just triggers the same state changes those already do. */
   const enterMode = (modeId) => {
+    /* Leaderboard is the one exception -- reachable mid-rush from the
+       heartbreak screen's own trophy button, and leaderboardReturnRef
+       relies on rushMode/rushResult still being set so Back can drop the
+       player straight back into their results. Every other destination
+       here is a real "I'm done with whatever I was doing" move. */
     if (modeId === "leaderboard") { leaderboardReturnRef.current = "home"; setSiteView("leaderboard"); return; }
+    leaveActivity();
     if (modeId === "lessons") { setSiteView("lessons"); return; }
-    if (modeId === "settings") { setSiteView("play"); openSettings(); return; }
+    if (modeId === "settings") { gotoPlayForModal(); openSettings(); return; }
     if (modeId === "puzzles") { setSiteView("puzzlesHome"); ensurePuzzlesLoaded(); return; }
     setSiteView("play");
     if (modeId === "openings") setOpeningsOpen(true);
@@ -3154,9 +3251,9 @@ export default function ZlegendsBot() {
     return (
       <PuzzlesHomePage
         onBack={() => setSiteView("home")}
-        onDaily={() => { setPuzzleBand(null); startPuzzle(dailyPuzzle(pz.PUZZLES)); setSiteView("play"); }}
-        onRanked={() => { setSiteView("play"); setRankedPuzzlesOpen(true); }}
-        onRush={() => { setSiteView("play"); setRushOpen(true); }}
+        onDaily={() => { leaveActivity(); startPuzzle(dailyPuzzle(pz.PUZZLES)); setSiteView("play"); }}
+        onRanked={() => { leaveActivity(); setSiteView("play"); setRankedPuzzlesOpen(true); }}
+        onRush={() => { leaveActivity(); setSiteView("play"); setRushOpen(true); }}
         puzzlesReady={!!puzzlesData}
         dailySolved={dailySolvedDate === todayKey()}
         onToolSelect={onToolSelect}
@@ -3300,7 +3397,7 @@ export default function ZlegendsBot() {
                 })()}
                 {promo && (
                   <div className="promoOv">
-                    <div className="promoBox">
+                    <div className="promoBox pieceBox">
                       {[WQ, WR, WB, WN].map(pp => (
                         <button key={pp} onClick={() => {
                           const m = promo.moves.find(x => mPromo(x) === pp);
@@ -3315,7 +3412,7 @@ export default function ZlegendsBot() {
                 )}
                 {colorPick && (
                   <div className="promoOv">
-                    <div className="promoBox">
+                    <div className="promoBox pieceBox">
                       <button onClick={() => { setColorPick(false); newGame(1); }} title="Play as White">
                         <img className="pc w" style={{ width: 44, height: 44 }} src={pieceImgSrc(1, true)} alt="" draggable="false" />
                       </button>
@@ -3546,6 +3643,7 @@ export default function ZlegendsBot() {
               onPastePgn={() => { setPasteOpen(true); setPasteError(null); }}
               pgnToast={pgnToast}
               analysisContent={analysisContent} analysisLabel={analysisLabel}
+              sideToMove={eng.getSide() === 1 ? "White" : "Black"}
             />
           </div>
 
@@ -3606,7 +3704,7 @@ export default function ZlegendsBot() {
             <div className="ctrls puzzleCtrls">
               <button className="btn ghost" onClick={() => startPuzzle(activePuzzle)}>Retry</button>
               <button className="btn gold" onClick={nextPuzzle}>Next Puzzle</button>
-              <button className="btn ghost" onClick={() => { exitPuzzle(); setSiteView("home"); }}>Exit</button>
+              <button className="btn ghost" onClick={() => { exitPuzzle(); setSiteView("puzzlesHome"); }}>Exit</button>
             </div>
           )}
 
@@ -3663,7 +3761,7 @@ export default function ZlegendsBot() {
         </Suspense>
       )}
 
-      <Modal open={musicOpen} onClose={() => setMusicOpen(false)} closeLabel="Close Juice Box"
+      <Modal open={musicOpen} onClose={closeMusic} closeLabel="Close Juice Box"
         className="jbBox" style={{ width: 300, minWidth: undefined, maxWidth: undefined }}>
             <img src="/VIRTUOSO_MOLE.webp" alt="Juice Box" className="jbMole" />
             <select value={musicSource} onChange={e => setMusicSource(e.target.value)}>
@@ -3725,11 +3823,12 @@ export default function ZlegendsBot() {
             </div>
             <div className="rows" style={{ maxHeight: "none" }}>
               {OPENINGS.map(op => (
-                <div key={op.id} style={{ cursor: "pointer", padding: "6px 2px", borderBottom: "1px solid #8B2FC92E" }}
+                <button key={op.id} type="button" className="openingRow"
+                  style={{ display: "block", width: "100%", textAlign: "left", background: "transparent", border: "none", borderBottom: "1px solid #8B2FC92E", font: "inherit", color: "inherit", cursor: "pointer", padding: "6px 2px" }}
                   onClick={() => startOpening(op)}>
                   <div style={{ fontWeight: 700 }}>{op.name} <span style={{ opacity: 0.6, fontWeight: "normal" }}>({op.eco})</span></div>
                   <div style={{ fontSize: 11, opacity: 0.75 }}>{op.summary}</div>
-                </div>
+                </button>
               ))}
             </div>
       </Modal>
@@ -3749,16 +3848,16 @@ export default function ZlegendsBot() {
               {pz.RATING_BANDS.map(band => {
                 const pool = puzzlesInBand(band);
                 return (
-                  <div key={band.id} className="shModalRow" style={{ cursor: pool.length ? "pointer" : "default", padding: "10px 8px", borderBottom: "1px solid #F06BAE33", borderRadius: "var(--r-sm)", opacity: pool.length ? 1 : 0.4, color: "var(--sh-text)" }}
+                  <button key={band.id} type="button" className="shModalRow" disabled={!pool.length}
+                    style={{ display: "block", width: "100%", textAlign: "left", background: "transparent", font: "inherit", cursor: pool.length ? "pointer" : "default", padding: "10px 8px", border: "none", borderBottom: "1px solid #F06BAE33", borderRadius: "var(--r-sm)", opacity: pool.length ? 1 : 0.4, color: "var(--sh-text)" }}
                     onClick={() => {
-                      if (!pool.length) return;
                       setPuzzleBand(band);
                       setRankedPuzzlesOpen(false);
                       startPuzzle(pool[(Math.random() * pool.length) | 0]);
                     }}>
                     <div style={{ fontWeight: 700 }}>{band.label} <span style={{ color: "var(--sh-dim)", fontWeight: "normal" }}>({band.min}–{band.max === 9999 ? "2000+" : band.max})</span></div>
                     <div style={{ fontSize: 11, color: "var(--sh-dim)" }}>{pool.length} puzzle{pool.length === 1 ? "" : "s"}</div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -3779,10 +3878,10 @@ export default function ZlegendsBot() {
           </div>
           <div className="durationGrid">
             {RUSH_DURATIONS.map(d => (
-              <div key={d.label} className="durationChip" onClick={() => startRush(d.seconds)}>
+              <button key={d.label} type="button" className="durationChip" onClick={() => startRush(d.seconds)}>
                 {d.label}
                 {d.seconds == null && <span className="newBadge">New</span>}
-              </div>
+              </button>
             ))}
           </div>
           <div className="rushCounterRow" style={{ color: "var(--sh-dim)" }}>
@@ -3897,7 +3996,7 @@ export default function ZlegendsBot() {
             }}>Copy</button>
       </Modal>
 
-      <Modal open={settingsOpen} onClose={() => setSettingsOpen(false)} closeLabel="Close Settings">
+      <Modal open={settingsOpen} onClose={closeSettings} closeLabel="Close Settings">
             <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span aria-hidden="true">⚙</span>
               Settings
@@ -3954,7 +4053,7 @@ export default function ZlegendsBot() {
             </div>
       </Modal>
 
-      <Modal open={accountOpen} onClose={() => setAccountOpen(false)} closeLabel="Close Account">
+      <Modal open={accountOpen} onClose={closeAccount} closeLabel="Close Account">
             <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               Account
             </div>
@@ -3967,7 +4066,7 @@ export default function ZlegendsBot() {
               </div>
             )}
             <button className="btn ghost" style={{ width: "100%" }}
-              onClick={() => { signOut(); setAccountOpen(false); }}>
+              onClick={() => { signOut(); closeAccount(); }}>
               Sign out
             </button>
       </Modal>

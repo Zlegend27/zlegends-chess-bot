@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 export default function GamePanel({
   pairs, moveGrades, curMoveIdx, reviewing, onReviewIndex, gradeTag,
   hasMoves, onCopyPgn, onPastePgn, pgnToast,
-  analysisContent, analysisLabel = "Analysis",
+  analysisContent, analysisLabel = "Analysis", sideToMove = "White",
 }) {
   const [tab, setTab] = useState("moves");
 
@@ -47,7 +47,7 @@ export default function GamePanel({
         {tab === "moves" ? (
           <div>
             {pairs.length === 0 ? (
-              <p className="text-sm italic text-dim">No moves yet — white to play.</p>
+              <p className="text-sm italic text-dim">No moves yet — {sideToMove} to play.</p>
             ) : (
               <div className="grid max-h-56 md:max-h-72 grid-cols-[auto_1fr_1fr] gap-x-3 gap-y-1 overflow-y-auto font-mono text-sm">
                 {pairs.map(([w, b], i) => {

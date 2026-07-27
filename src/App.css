@@ -257,9 +257,17 @@
    .promoBox shape (just background/border/row colors, not a new overlay). */
 .promoBox.shModal{ background:var(--sh-panel); border-color:#F06BAE59; }
 .shModalRow:hover{ background:#F06BAE1A; }
+.shModalRow:focus-visible{ outline:2px solid var(--sh-rose); outline-offset:-2px; }
+.openingRow:hover{ background:#8B2FC91A; }
+.openingRow:focus-visible{ outline:2px solid var(--cyan); outline-offset:-2px; }
 .durationGrid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:4px 0 12px; }
-.durationChip{ position:relative; padding:14px 8px; text-align:center; border-radius:var(--r-sm);
-  border:1px solid #F06BAE4D; background:var(--sh-plate); font-weight:700; font-size:12px; color:var(--sh-text); cursor:pointer; }
+/* A <button>, not a <div> -- was a div+onClick, which meant Tab couldn't
+   reach it and Enter/Space couldn't activate it. width:100% + font
+   inherit + a visible focus ring make up for what the div got for free. */
+.durationChip{ position:relative; width:100%; padding:14px 8px; text-align:center; border-radius:var(--r-sm);
+  border:1px solid #F06BAE4D; background:var(--sh-plate); font-family:inherit; font-weight:700; font-size:12px;
+  color:var(--sh-text); cursor:pointer; }
+.durationChip:focus-visible{ outline:2px solid var(--sh-rose); outline-offset:2px; }
 .durationChip:hover{ border-color:var(--sh-rose); color:var(--sh-rose); background:#3B1226F2; }
 .durationChip .newBadge{ position:absolute; top:-7px; right:-6px; font-size:8px; font-weight:700; background:var(--sh-gold);
   color:#3A2A00; padding:2px 5px; border-radius:var(--r-pill); letter-spacing:.04em; }
@@ -470,16 +478,28 @@ select:hover{ border-color:var(--cyan); }
   background:#8B2FC966; border-radius:var(--r-2xs); }
 .rows::-webkit-scrollbar-track, .jbTrackList::-webkit-scrollbar-track, .blindLog::-webkit-scrollbar-track{
   background:transparent; }
+/* padding + box-sizing so a modal never sits edge-to-edge on a narrow
+   phone -- the Modal component's own overlay overrides position/inset
+   via inline style (position:fixed, full viewport), but inherits this
+   padding and border-box from the class, which is what actually keeps
+   .promoBox off the screen edges. Measured at 375px: a rushThemeBox
+   modal (max-width 400) rendered edge-to-edge with 0 gutter before this. */
 .promoOv{ position:absolute; inset:0; background:#0E0620CC; display:flex; align-items:center;
-  justify-content:center; z-index:10; border-radius:var(--r-2xs); animation:ovFade .15s ease-out; }
+  justify-content:center; z-index:10; border-radius:var(--r-2xs); animation:ovFade .15s ease-out;
+  padding:16px; box-sizing:border-box; }
 @keyframes ovFade{ from{ opacity:0; } to{ opacity:1; } }
 .promoBox{ background:var(--panel); border:1px solid var(--cyan); border-radius:var(--r-md); padding:10px;
   display:flex; gap:6px; box-shadow:0 0 30px #3EE7F566; position:relative;
   animation:boxPop .18s cubic-bezier(.34,1.4,.64,1); }
 @keyframes boxPop{ from{ opacity:0; transform:scale(.94) translateY(6px); } to{ opacity:1; transform:none; } }
-.promoBox button{ font-size:32px; padding:4px 10px; background:transparent; border:none; cursor:pointer;
+/* Scoped to .pieceBox (the promotion and play-as-color pickers, the only
+   two .promoBox instances that are just a bare row of piece-image
+   buttons) -- a plain `.promoBox button` rule silently restyled every
+   OTHER button dropped into any modal (it flattened the heartbreak-screen
+   action buttons to a 6px rectangle once, fixed in commit a44dc25). */
+.promoBox.pieceBox button{ font-size:32px; padding:4px 10px; background:transparent; border:none; cursor:pointer;
   border-radius:var(--r-sm); transition:background .15s ease; }
-.promoBox button:hover{ background:#3EE7F522; }
+.promoBox.pieceBox button:hover{ background:#3EE7F522; }
 
 /* Every "View Leaderboard" trigger in the app uses this -- small and
    plain rather than the loud uppercase-italic .btn treatment (or the
