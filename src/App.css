@@ -133,73 +133,124 @@
 .rushCounterRow{ display:flex; align-items:center; justify-content:space-between; gap:10px;
   font-size:11px; color:var(--dim); }
 
-/* Rush end-of-run ("heartbreak screen") -- deliberately off the game's
-   usual violet/cyan .promoBox skin and onto Sweetheart's own palette
-   (see the tokens.css comment by --sh-*), the one art-directed exception
-   in the whole modal system. Still a real .promoBox/.promoOv underneath
+/* Rush end-of-run ("heartbreak screen") + the Rush duration picker --
+   deliberately off the game's usual violet/cyan .promoBox skin and onto
+   Sweetheart's own palette (see the tokens.css comment by --sh-*), the
+   one art-directed exception in the whole modal system. Both share the
+   exact same background treatment (.rushThemeBox: shattered-glass field +
+   corner heart + her sprite) so the whole Rush flow reads as one place,
+   not two different skins. Still a real .promoBox/.promoOv underneath
    (see the Modal component) so it keeps the shared focus-trap/scroll-lock/
    Escape handling for free -- only the skin is bespoke, not the shape. */
-.promoBox.rushEndBox{ background:var(--sh-void); border-color:#F06BAE59; border-radius:var(--r-md);
+.promoBox.rushThemeBox{ background:var(--sh-void); border-color:#F06BAE59; border-radius:var(--r-md);
   box-shadow:0 0 46px #00000066,0 0 90px #0009 inset; overflow:hidden; position:relative; }
-/* Mostly dark, not mostly red: mixed straight from --sh-void, with the
-   only real red in the box held to a soft bloom in the top-right corner
-   and a few hairline cracks fanning out of it into the dark field. */
-.promoBox.rushEndBox::before{ content:""; position:absolute; inset:0; pointer-events:none;
-  background:
-    repeating-conic-gradient(from 20deg at 84% 10%, #ffffff14 0deg 1.6deg, transparent 1.6deg 13deg),
-    repeating-conic-gradient(from 55deg at 60% 28%, #ffffff08 0deg 1deg, transparent 1deg 12deg),
-    repeating-conic-gradient(from 5deg at 30% 70%, #ffffff06 0deg 1deg, transparent 1deg 14deg),
-    radial-gradient(50% 44% at 88% 4%, #8f1a24 0%, #4a0d13 55%, transparent 82%),
-    linear-gradient(150deg, var(--sh-void) 0%, #1c0a16 55%, var(--sh-void) 100%); }
-.promoBox.rushEndBox::after{ content:""; position:absolute; inset:0; pointer-events:none;
+.promoBox.rushThemeBox::before{ content:""; position:absolute; inset:0; pointer-events:none;
+  background:linear-gradient(150deg, var(--sh-void) 0%, #1c0a16 55%, var(--sh-void) 100%); }
+.promoBox.rushThemeBox::after{ content:""; position:absolute; inset:0; pointer-events:none;
   background:linear-gradient(175deg, #17091240 0%, #170912B3 42%, var(--sh-void) 74%); }
-.rushEndInner{ position:relative; z-index:1; padding:20px 20px 22px; display:flex; flex-direction:column; gap:16px; width:100%; }
-/* Positioned relative to rushEndInner's own border-box (== promoBox's
-   content-box, since promoBox's padding is zeroed out via the Modal call)
-   -- top:44px clears the modalCloseX's 6-42px footprint the same way
-   .shDurationArt does on the duration picker. */
-.rushEndHeart{ position:absolute; top:44px; right:-6px; width:92px; height:92px; pointer-events:none;
-  filter:drop-shadow(0 4px 10px #00000080); }
-.rushEndHeartCrack{ fill:none; stroke:#FFD9DE; stroke-width:.55; stroke-linejoin:round; stroke-linecap:round; opacity:.92; }
-.rushEndHead{ padding-right:78px; }
-.rushEndSprite{ width:18px; height:18px; vertical-align:-4px; margin-right:2px; image-rendering:pixelated; }
+.rushThemeInner{ position:relative; z-index:1; padding:20px 20px 22px; display:flex; flex-direction:column; gap:16px; width:100%; }
+/* The full shatter field -- geometry generated once and checked in as
+   src/utils/rushShatter.js (see the header there). Rays out of the corner
+   impact point plus connector chords between neighbouring rays, which is
+   what makes it read as broken glass cells rather than a starburst. Kept
+   deliberately dim: every readable surface in the popup sits on its own
+   opaque plate below, so the web never runs through text or a button. */
+.rushThemeShatter{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none;
+  /* Fades the web out as it travels away from the impact corner. Cracks
+     really do concentrate at the impact, and it keeps the far half of the
+     panel -- where every readable thing lives -- quiet instead of webbed
+     edge to edge. */
+  -webkit-mask-image:radial-gradient(115% 115% at 100% 0%, #000 0%, #000 24%, #00000059 58%, transparent 88%);
+  mask-image:radial-gradient(115% 115% at 100% 0%, #000 0%, #000 24%, #00000059 58%, transparent 88%); }
+.rushThemeShatter .crack{ fill:none; stroke:#FFD9DE; stroke-width:.7; stroke-linecap:round; stroke-linejoin:round; opacity:.13; }
+.rushThemeShatter .crack.main{ stroke-width:1; opacity:.2; }
+/* Anchored into the top-right corner itself, so its right lobe sits
+   directly under the close button (which is lifted above it below) --
+   that corner is the shatter field's impact point, and the heart is what
+   the panel broke around. The red gradient is clipped to an actual heart
+   silhouette (150x150 path, scaled from a standard 24x24 heart glyph)
+   rather than a free-form blob, and runs darkest right at that corner,
+   lightening as it spreads out and away. Its own fracture web (same
+   generator, own impact point up in the right lobe) sits on top of the
+   gradient and is clipped along with it -- bright and dense here, unlike
+   the dim field behind the panel, since this IS the broken heart. */
+.rushThemeHeart{ position:absolute; top:-8px; right:-4px; width:150px; height:150px; pointer-events:none;
+  clip-path:path("M75 133.44l-9.06-8.25C33.75 96 12.5 76.75 12.5 53.13 12.5 33.88 27.63 18.75 46.88 18.75c10.87 0 21.31 5.06 28.12 13.06C81.81 23.81 92.25 18.75 103.13 18.75c19.25 0 34.37 15.13 34.37 34.38 0 23.62-21.25 42.87-53.44 72.12L75 133.44z");
+  background:radial-gradient(170% 170% at 88% 20%, #1F0408 0%, #5E0D19 24%, #A82539 56%, #FF8FA5 100%);
+  filter:drop-shadow(0 4px 12px #000000A6);
+  transform:scale(.85); transform-origin:100% 0; }
+.rushThemeHeart svg{ position:absolute; inset:0; width:100%; height:100%; }
+.rushThemeHeart .crack{ fill:none; stroke:#FFC9D3; stroke-width:1.4; stroke-linecap:round; stroke-linejoin:round; opacity:.75; }
+.rushThemeHeart .crack.main{ stroke:#FFF1F4; stroke-width:2; opacity:.95; }
+/* The clip-path is authored in absolute px, so a narrow panel has to
+   scale the whole element rather than just shrink its box. */
+@media (max-width:480px){ .rushThemeHeart{ transform:scale(.72); } }
+.promoBox.rushThemeBox .modalCloseX{ z-index:4; color:#FFF0F3; }
+/* Her sprite, top-left -- balances the heart in the opposite corner on
+   both screens that use this background. */
+.rushThemeSprite{ position:absolute; top:14px; left:14px; width:32px; height:32px; z-index:2;
+  image-rendering:pixelated; filter:drop-shadow(0 2px 6px #00000090); pointer-events:none; }
+/* Everything the player actually has to read or press gets its own opaque
+   plate (--sh-plate) so the crack web behind the panel passes strictly
+   BEHIND it -- the shatter is scenery, and a hairline running through a
+   button label or the stat number is just noise. The head has no plate of
+   its own (a box around the title would fight the art), so it leans on a
+   dark text-shadow to hold the same separation. */
+.rushEndHead{ padding:6px 110px 6px 38px;
+  /* Soft elliptical wash rather than a plate with edges -- a hard-edged
+     box around the title would fight the art, but the cracks still have
+     to fade out behind the words instead of running through them. */
+  background:radial-gradient(140% 170% at 10% 50%, #170912FA 34%, #17091200 80%);
+  text-shadow:0 1px 3px var(--sh-void), 0 0 12px var(--sh-void); }
 .rushEndEyebrow{ font-family:var(--font-mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--sh-rose); margin:0; }
 .rushEndSub{ font-size:15px; color:var(--sh-text); margin:4px 0 0; font-weight:700; }
-.rushEndStat{ display:flex; align-items:baseline; gap:10px; background:#0000002E; border:1px solid #F06BAE33;
+.rushEndStat{ display:flex; align-items:baseline; gap:10px; background:var(--sh-plateSolid); border:1px solid #F06BAE59;
   border-radius:var(--r-sm); padding:12px 14px; }
 .rushEndStatNum{ font-family:var(--font-mono); font-size:30px; font-weight:700; color:var(--sh-gold); line-height:1; }
 .rushEndStatLbl{ font-size:12px; color:var(--sh-dim); }
-.rushEndMissed{ background:#0000002E; border:1px solid #F06BAE33; border-radius:var(--r-sm); padding:12px; }
-.rushEndMissedHead{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--sh-dim); margin:0 0 10px; }
+.rushEndMissed{ background:var(--sh-plateSolid); border:1px solid #F06BAE59; border-radius:var(--r-sm); padding:12px; touch-action:pan-y; }
+.rushEndMissedHead{ display:flex; align-items:center; justify-content:space-between; font-size:11px; font-weight:700;
+  text-transform:uppercase; letter-spacing:.1em; color:var(--sh-dim); margin:0 0 10px; }
+/* Three X's instead of a "3" -- a miss always ends the run at exactly
+   three, so the count itself never carries information; which of the
+   three you're currently looking at does, so the current one lights up
+   brighter than the other two instead of a separate "1/3" caption. */
+.rushEndMissedXs{ display:flex; gap:5px; }
+.rushEndMissedX{ color:#FF4C5B55; font-weight:900; font-size:13px; }
+.rushEndMissedX.current{ color:#FF4C5B; text-shadow:0 0 8px #FF4C5B88; }
 .rushEndStepperRow{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
-.rushEndStepperBtn{ width:44px; height:44px; flex:none; border-radius:var(--r-sm); border:1px solid #F06BAE80;
-  background:#0000002E; color:var(--sh-text); cursor:pointer; font-size:22px; display:flex; align-items:center; justify-content:center; }
-.rushEndStepperBtn:hover:not(:disabled){ border-color:var(--sh-rose); color:var(--sh-rose); }
+.promoBox .rushEndStepperBtn{ width:44px; height:44px; flex:none; border-radius:var(--r-sm); border:1px solid #F06BAE80;
+  background:#3B1A2C; color:var(--sh-text); cursor:pointer; font-size:22px; display:flex; align-items:center; justify-content:center; }
+.promoBox .rushEndStepperBtn:hover:not(:disabled){ border-color:var(--sh-rose); color:var(--sh-rose); }
 .rushEndStepperBtn:disabled{ opacity:.35; cursor:default; }
-.rushEndRatingBtn{ flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; padding:8px 10px;
-  border-radius:var(--r-sm); border:1px solid var(--sh-rose); background:#F06BAE1F; cursor:pointer; }
-.rushEndRatingBtn:hover{ background:#F06BAE33; }
+.promoBox .rushEndRatingBtn{ flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; padding:8px 10px;
+  border-radius:var(--r-sm); border:1px solid var(--sh-rose); background:#4A1430; cursor:pointer; }
+.promoBox .rushEndRatingBtn:hover{ background:#5C1A3CF2; }
+/* The picker's lifetime-solved row is loose text + a ghost button, so it
+   needs the same plate the boxed sections get. */
+.rushThemeBox .rushCounterRow{ background:var(--sh-plate); border:1px solid #F06BAE26;
+  border-radius:var(--r-sm); padding:9px 11px; }
 .rushEndRatingNum{ font-family:var(--font-mono); font-weight:700; font-size:18px; color:var(--sh-rose); }
 /* Was --sh-dim (a muted mauve) at 10px -- too low-contrast for a button's
    own caption to actually read as part of the button. --sh-text (the
    brightest color in the palette) at the same size instead. */
 .rushEndRatingLbl{ font-size:10px; color:var(--sh-text); text-transform:uppercase; letter-spacing:.08em; opacity:.85; }
-.rushEndStepperCount{ text-align:center; font-family:var(--font-mono); font-size:11px; color:var(--sh-dim); margin:8px 0 0; }
 .rushEndActions{ display:flex; align-items:center; justify-content:center; gap:16px; margin-top:2px; }
-.rushEndRestart{ width:64px; height:64px; border-radius:50%; background:linear-gradient(180deg,#FF9AC9,var(--sh-rose));
-  color:#3A0A26; border:none; box-shadow:0 3px 0 #00000066,0 0 18px #F06BAE88; cursor:pointer;
+/* Restart and trophy are a matched pair -- dark filled circles (not the
+   bright pink-gradient fill from the last pass, which read wrong against
+   the darker shattered background) with crisp white icons, same size.
+   These (and the stepper/rating buttons above) are scoped under .promoBox
+   because the generic `.promoBox button` reset is a class+type selector
+   and outranks a bare class -- unscoped, they silently lost their radius
+   and fill and rendered as plain 6px rectangles. */
+.promoBox .rushEndRestart, .promoBox .rushEndTrophy{ width:60px; height:60px; border-radius:50%;
+  background:radial-gradient(circle at 35% 30%, #7A1D2E, #3A0A14); color:#fff;
+  border:1px solid var(--sh-rose); box-shadow:0 3px 0 #00000066,0 0 18px #F06BAE55; cursor:pointer;
   display:flex; align-items:center; justify-content:center; flex:none; }
-.rushEndRestart:hover:not(:disabled){ filter:brightness(1.08); }
-.rushEndRestart:active:not(:disabled){ transform:translateY(2px); }
+.promoBox .rushEndRestart:hover:not(:disabled), .promoBox .rushEndTrophy:hover{ border-color:var(--sh-gold); filter:brightness(1.15); }
+.rushEndRestart:active:not(:disabled), .rushEndTrophy:active{ transform:translateY(2px); }
 .rushEndRestart:disabled{ cursor:default; opacity:.85; }
 .rushEndRestartCount{ font-family:var(--font-mono); font-weight:700; font-size:26px; line-height:1; }
-/* Was --sh-dim by default (only brightening on hover) -- a button that
-   looks identical to muted secondary text doesn't read as clickable
-   until you're already hovering it. Bright by default now, gold on hover
-   same as before. */
-.rushEndTrophy{ width:44px; height:44px; border-radius:50%; background:#0000002E; border:1px solid #F06BAE80;
-  color:var(--sh-text); cursor:pointer; display:flex; align-items:center; justify-content:center; flex:none; }
-.rushEndTrophy:hover{ border-color:var(--sh-gold); color:var(--sh-gold); }
 
 /* Puzzles / Ranked Puzzles / Puzzle Rush picker modals -- same Sweetheart
    reskin as the heartbreak screen above, on the same shared Modal/
@@ -208,12 +259,10 @@
 .shModalRow:hover{ background:#F06BAE1A; }
 .durationGrid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:4px 0 12px; }
 .durationChip{ position:relative; padding:14px 8px; text-align:center; border-radius:var(--r-sm);
-  border:1px solid #F06BAE4D; background:#0000002E; font-weight:700; font-size:12px; color:var(--sh-text); cursor:pointer; }
-.durationChip:hover{ border-color:var(--sh-rose); color:var(--sh-rose); background:#F06BAE1A; }
+  border:1px solid #F06BAE4D; background:var(--sh-plate); font-weight:700; font-size:12px; color:var(--sh-text); cursor:pointer; }
+.durationChip:hover{ border-color:var(--sh-rose); color:var(--sh-rose); background:#3B1226F2; }
 .durationChip .newBadge{ position:absolute; top:-7px; right:-6px; font-size:8px; font-weight:700; background:var(--sh-gold);
   color:#3A2A00; padding:2px 5px; border-radius:var(--r-pill); letter-spacing:.04em; }
-.shDurationArt{ position:absolute; top:46px; right:6px; width:84px; pointer-events:none;
-  filter:drop-shadow(0 6px 12px #00000066); }
 /* Her pixel sprite standing in for a spinner on the rush-end Analyze
    button -- static while idle-but-toggled-on (matches "Analyzing" text
    with no work happening yet), pulses only during analysisBusy's actual

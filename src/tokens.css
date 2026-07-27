@@ -27,6 +27,16 @@
   --sh-void:#170912; --sh-panel:#2E1224; --sh-panel2:#3B1030;
   --sh-rose:#F06BAE; --sh-red:#C23B4E; --sh-gold:#F5D95E; --sh-teal:#7FD8C4;
   --sh-text:#FBEAF0; --sh-dim:#C9A0BE;
+  /* Near-opaque plate the Rush popups sit their readable content on, so
+     the shattered-glass background passes behind text and buttons rather
+     than through them. Not fully opaque -- a little of the fracture still
+     ghosts through, which is the point. */
+  --sh-plate:#1A0812F2;
+  /* Fully opaque version for the two big outlined sections on the
+     end-of-run screen (score + missed puzzles) -- those carry the actual
+     result, so no amount of fracture ghosting through them is worth it.
+     Lifted a step off --sh-void so the boxes read as raised panels. */
+  --sh-plateSolid:#2A1220;
 
   /* Type -- three stacks, no more. --font-display for titles/buttons/
      card names/clocks, --font-body for descriptions/UI copy,
