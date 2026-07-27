@@ -830,6 +830,9 @@ export default function ZlegendsBot() {
   /* Which of the (up to 3) missed puzzles the heartbreak screen's stepper
      is currently showing -- resets with each new run. */
   const [missedStepIdx, setMissedStepIdx] = useState(0);
+  /* Try again gets a 2-second "get ready" beat instead of dropping straight
+     into the next puzzle -- null while idle, else 2/1 counting down. */
+  const [restartCountdown, setRestartCountdown] = useState(null);
   const [rushBandIdx, setRushBandIdx] = useState(0);
   /* Puzzles missed during the current run (max 3, since 3 misses ends the
      run) -- kept as full puzzle objects so the results screen can offer
@@ -1970,6 +1973,7 @@ export default function ZlegendsBot() {
     setRushResult(null);
     setRushSummaryOpen(true);
     setMissedStepIdx(0);
+    setRestartCountdown(null);
     setRushDuration(seconds);
     setRushTimeLeft(seconds);
     setRushMode(true);
@@ -1996,6 +2000,20 @@ export default function ZlegendsBot() {
   };
 
   const retryRush = () => startRush(rushDuration);
+
+  /* Try again's 2-second "get ready" beat -- startRush() itself resets
+     restartCountdown back to null, so this doesn't need to. */
+  const beginRestartCountdown = () => {
+    if (restartCountdown != null) return;
+    setRestartCountdown(2);
+  };
+  useEffect(() => {
+    if (restartCountdown == null) return;
+    if (restartCountdown === 0) { retryRush(); return; }
+    const t = setTimeout(() => setRestartCountdown(c => c - 1), 1000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restartCountdown]);
 
   /* Actually leaving Puzzle Rush (the "Puzzles" board-control button once
      a run has ended, or Escape/backdrop before a run's first result ever
@@ -3671,8 +3689,26 @@ export default function ZlegendsBot() {
       {rushMode && rushResult && rushSummaryOpen && (
         <Modal open onClose={hideRushSummary} closeLabel="Close results" className="rushEndBox" minWidth={300} maxWidth={440} style={{ padding: 0 }}>
           <div className="rushEndInner">
-            <div>
-              <p className="rushEndEyebrow">Puzzle Rush &middot; {RUSH_DURATIONS.find(d => d.seconds === rushDuration)?.label}</p>
+            {/* An actual heart silhouette (not just a red glow -- a
+               gradient blob doesn't read as "a heart" to anyone looking
+               at it fresh) cracked down the middle, held to the top-right
+               corner clear of the close button (checked via
+               getBoundingClientRect, same as the duration-picker art). */}
+            <svg className="rushEndHeart" viewBox="0 0 24 24" aria-hidden="true">
+              <defs>
+                <linearGradient id="rushEndHeartGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#FF5C74" />
+                  <stop offset="100%" stopColor="#7A0F18" />
+                </linearGradient>
+              </defs>
+              <path fill="url(#rushEndHeartGrad)" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+              <path className="rushEndHeartCrack" d="M12.5 3.6 10 9l2.4 1.6-3 5L11 12l-2.2-1.7z" />
+            </svg>
+            <div className="rushEndHead">
+              <p className="rushEndEyebrow">
+                <img src="/sweetheart-sprite.webp" alt="" className="rushEndSprite" />
+                Puzzle Rush &middot; {RUSH_DURATIONS.find(d => d.seconds === rushDuration)?.label}
+              </p>
               <p className="rushEndSub">{rushResult.reason === "time" ? "Time's up." : "Three misses."} Your heart, and your streak, in pieces.</p>
             </div>
             <div className="rushEndStat">
@@ -3696,8 +3732,13 @@ export default function ZlegendsBot() {
               </div>
             )}
             <div className="rushEndActions">
-              <button className="rushEndRestart" onClick={retryRush} aria-label="Try again" title="Try again">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" /></svg>
+              <button className="rushEndRestart" onClick={beginRestartCountdown} disabled={restartCountdown != null}
+                aria-label={restartCountdown != null ? `Starting in ${restartCountdown}` : "Try again"} title="Try again">
+                {restartCountdown != null ? (
+                  <span className="rushEndRestartCount">{restartCountdown}</span>
+                ) : (
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" /></svg>
+                )}
               </button>
               <button className="rushEndTrophy" onClick={() => openLeaderboard(rushDuration ?? 60)} aria-label="View leaderboard" title="View leaderboard">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M18 3h-2V1H8v2H6C4.9 3 4 3.9 4 5v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.95V17H9v2h6v-2h-3v-3.11c1.63-.32 2.98-1.45 3.61-2.95C18.08 10.63 20 8.55 20 6V5c0-1.1-.9-2-2-2zM6 6V5h2v3.82C6.84 8.4 6 7.3 6 6zm12 0c0 1.3-.84 2.4-2 2.82V5h2v1z" /></svg>

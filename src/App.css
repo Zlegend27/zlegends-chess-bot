@@ -154,6 +154,15 @@
 .promoBox.rushEndBox::after{ content:""; position:absolute; inset:0; pointer-events:none;
   background:linear-gradient(175deg, #17091240 0%, #170912B3 42%, var(--sh-void) 74%); }
 .rushEndInner{ position:relative; z-index:1; padding:20px 20px 22px; display:flex; flex-direction:column; gap:16px; width:100%; }
+/* Positioned relative to rushEndInner's own border-box (== promoBox's
+   content-box, since promoBox's padding is zeroed out via the Modal call)
+   -- top:44px clears the modalCloseX's 6-42px footprint the same way
+   .shDurationArt does on the duration picker. */
+.rushEndHeart{ position:absolute; top:44px; right:-6px; width:92px; height:92px; pointer-events:none;
+  filter:drop-shadow(0 4px 10px #00000080); }
+.rushEndHeartCrack{ fill:none; stroke:#FFD9DE; stroke-width:.55; stroke-linejoin:round; stroke-linecap:round; opacity:.92; }
+.rushEndHead{ padding-right:78px; }
+.rushEndSprite{ width:18px; height:18px; vertical-align:-4px; margin-right:2px; image-rendering:pixelated; }
 .rushEndEyebrow{ font-family:var(--font-mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--sh-rose); margin:0; }
 .rushEndSub{ font-size:15px; color:var(--sh-text); margin:4px 0 0; font-weight:700; }
 .rushEndStat{ display:flex; align-items:baseline; gap:10px; background:#0000002E; border:1px solid #F06BAE33;
@@ -163,7 +172,7 @@
 .rushEndMissed{ background:#0000002E; border:1px solid #F06BAE33; border-radius:var(--r-sm); padding:12px; }
 .rushEndMissedHead{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--sh-dim); margin:0 0 10px; }
 .rushEndStepperRow{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
-.rushEndStepperBtn{ width:44px; height:44px; flex:none; border-radius:var(--r-sm); border:1px solid #F06BAE4D;
+.rushEndStepperBtn{ width:44px; height:44px; flex:none; border-radius:var(--r-sm); border:1px solid #F06BAE80;
   background:#0000002E; color:var(--sh-text); cursor:pointer; font-size:22px; display:flex; align-items:center; justify-content:center; }
 .rushEndStepperBtn:hover:not(:disabled){ border-color:var(--sh-rose); color:var(--sh-rose); }
 .rushEndStepperBtn:disabled{ opacity:.35; cursor:default; }
@@ -171,16 +180,25 @@
   border-radius:var(--r-sm); border:1px solid var(--sh-rose); background:#F06BAE1F; cursor:pointer; }
 .rushEndRatingBtn:hover{ background:#F06BAE33; }
 .rushEndRatingNum{ font-family:var(--font-mono); font-weight:700; font-size:18px; color:var(--sh-rose); }
-.rushEndRatingLbl{ font-size:10px; color:var(--sh-dim); text-transform:uppercase; letter-spacing:.08em; }
+/* Was --sh-dim (a muted mauve) at 10px -- too low-contrast for a button's
+   own caption to actually read as part of the button. --sh-text (the
+   brightest color in the palette) at the same size instead. */
+.rushEndRatingLbl{ font-size:10px; color:var(--sh-text); text-transform:uppercase; letter-spacing:.08em; opacity:.85; }
 .rushEndStepperCount{ text-align:center; font-family:var(--font-mono); font-size:11px; color:var(--sh-dim); margin:8px 0 0; }
 .rushEndActions{ display:flex; align-items:center; justify-content:center; gap:16px; margin-top:2px; }
 .rushEndRestart{ width:64px; height:64px; border-radius:50%; background:linear-gradient(180deg,#FF9AC9,var(--sh-rose));
   color:#3A0A26; border:none; box-shadow:0 3px 0 #00000066,0 0 18px #F06BAE88; cursor:pointer;
   display:flex; align-items:center; justify-content:center; flex:none; }
-.rushEndRestart:hover{ filter:brightness(1.08); }
-.rushEndRestart:active{ transform:translateY(2px); }
-.rushEndTrophy{ width:44px; height:44px; border-radius:50%; background:#0000002E; border:1px solid #F06BAE4D;
-  color:var(--sh-dim); cursor:pointer; display:flex; align-items:center; justify-content:center; flex:none; }
+.rushEndRestart:hover:not(:disabled){ filter:brightness(1.08); }
+.rushEndRestart:active:not(:disabled){ transform:translateY(2px); }
+.rushEndRestart:disabled{ cursor:default; opacity:.85; }
+.rushEndRestartCount{ font-family:var(--font-mono); font-weight:700; font-size:26px; line-height:1; }
+/* Was --sh-dim by default (only brightening on hover) -- a button that
+   looks identical to muted secondary text doesn't read as clickable
+   until you're already hovering it. Bright by default now, gold on hover
+   same as before. */
+.rushEndTrophy{ width:44px; height:44px; border-radius:50%; background:#0000002E; border:1px solid #F06BAE80;
+  color:var(--sh-text); cursor:pointer; display:flex; align-items:center; justify-content:center; flex:none; }
 .rushEndTrophy:hover{ border-color:var(--sh-gold); color:var(--sh-gold); }
 
 /* Puzzles / Ranked Puzzles / Puzzle Rush picker modals -- same Sweetheart
