@@ -40,8 +40,18 @@ export default function PuzzlesHomePage({ onBack, onDaily, onRanked, onRush, puz
 
   return (
     <div className="root">
-      <StarField />
-      <TopNav onSelect={onToolSelect} active={activeToolId} profile={profile} />
+      {/* Hearts/bows/twinkles always, matching this page's own always-hers
+          background -- StarField's shape choice is independent of the
+          light/dark background toggle, purely decorative. */}
+      <StarField sweetheart />
+      {/* Always hers regardless of the app-wide theme toggle (unrelated to
+          boardColorId -- this whole page already ignores board color and
+          stays permanently rose/dark), so the nav matches the page it's
+          drawn on. `dark` requests that fixed dark-rose nav look directly
+          -- NOT `sweetheart`, which now means the app-wide LIGHT mode
+          (see ExploreNav.jsx) and would put a light nav bar on this
+          permanently-dark page. */}
+      <TopNav onSelect={onToolSelect} active={activeToolId} profile={profile} dark />
 
       <button
         onClick={onBack}

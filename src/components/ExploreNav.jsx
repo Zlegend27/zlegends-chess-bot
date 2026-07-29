@@ -1,4 +1,5 @@
 import PixelAvatar, { SPAL, SPIX } from "./PixelAvatar";
+import { getUiTheme } from "../utils/uiTheme";
 
 /* The ONE top bar every non-home page gets now -- it replaced both the
  *  old SiteHeader wordmark bar (deleted) and the split desktop sidebar
@@ -41,17 +42,32 @@ function toolIcon(t, { size, className } = {}) {
     : <Icon d={t.icon} size={size ?? 18} className={className} />;
 }
 
+/* PuzzlesHomePage is unconditionally hers regardless of the board-color
+   toggle (dark background, rose/gold/teal accents, always -- see the
+   --sh-* comment in tokens.css), which is a DIFFERENT thing from the
+   app-wide `sweetheart` theme getUiTheme() drives elsewhere (a real light
+   mode: light background, dark ink). Passing `sweetheart` to this nav for
+   that page would now put a light-mode nav bar on a permanently-dark
+   page. `dark` requests this fixed dark-rose look directly instead of
+   going through getUiTheme at all. */
+const DARK_ROSE_NAV = {
+  navBorder: "border-sh-rose/60", panelBg: "bg-sh-panel/80", avatarRing: "ring-sh-rose/60",
+  dimText: "text-sh-dim", interactiveText: "text-sh-teal", ring: "focus-visible:ring-sh-teal",
+  hoverInk: "hover:text-sh-text",
+};
+
 /** `profile` (see utils/auth.js's discordProfile) swaps the generic
  *  person icon for the signed-in player's actual Discord avatar and
  *  relabels the nav item "Account" -- the one visual difference between
  *  a guest and a signed-in visitor anywhere in the nav. Undefined/null
  *  profile (signed out, or auth not configured on this deploy) falls
  *  back to the plain "Login" icon+label exactly as before. */
-export function TopNav({ onSelect, active, profile }) {
+export function TopNav({ onSelect, active, profile, sweetheart, dark }) {
+  const T = dark ? DARK_ROSE_NAV : getUiTheme(sweetheart);
   return (
     <nav
       aria-label="Main features"
-      className="mb-4 border-b border-violet/60 bg-panel/80 shadow-[0_1px_0_#8B2FC944] backdrop-blur-sm"
+      className={`mb-4 border-b ${T.navBorder} ${T.panelBg} ${sweetheart || dark ? "shadow-[0_1px_0_#F06BAE44]" : "shadow-[0_1px_0_#8B2FC944]"} backdrop-blur-sm`}
       style={{
         width: "calc(100% + 28px + env(safe-area-inset-left) + env(safe-area-inset-right))",
         marginLeft: "calc(-14px - env(safe-area-inset-left))",
@@ -70,15 +86,15 @@ export function TopNav({ onSelect, active, profile }) {
               key={t.id}
               onClick={() => onSelect(t.id)}
               aria-label={isAccount && profile ? `Account: ${profile.name}` : label}
-              className={`flex flex-1 flex-col items-center justify-center gap-0.5 rounded-lg border-0 bg-transparent py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan ${
-                isActive ? "text-cyan" : "text-dim hover:text-paper"
+              className={`flex flex-1 flex-col items-center justify-center gap-0.5 rounded-lg border-0 bg-transparent py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 ${T.ring} ${
+                isActive ? T.interactiveText : T.dimText + " " + T.hoverInk
               }`}
             >
               {isAccount && profile?.avatarUrl ? (
                 <img
                   src={profile.avatarUrl}
                   alt=""
-                  className={`h-[18px] w-[18px] rounded-full object-cover ring-1 ring-violet/60 ${isActive ? "scale-110 transition-transform" : "transition-transform"}`}
+                  className={`h-[18px] w-[18px] rounded-full object-cover ring-1 ${T.avatarRing} ${isActive ? "scale-110 transition-transform" : "transition-transform"}`}
                 />
               ) : (
                 toolIcon(t, {

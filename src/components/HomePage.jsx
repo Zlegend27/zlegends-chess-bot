@@ -4,6 +4,7 @@ import SocialBanner from "./SocialBanner";
 import PixelAvatar, { ZPAL, ZPIX } from "./PixelAvatar";
 import BotBubble from "./BotBubble";
 import { pickWelcomeLine } from "../utils/botLines";
+import { getUiTheme } from "../utils/uiTheme";
 
 /* Same inline-SVG-path convention already used for the Juice Box/Puzzles/
    Spectate icons elsewhere in the app (see App.jsx's icon row) -- kept
@@ -27,11 +28,11 @@ const ICONS = {
  *  playing), a two-tone open book for Openings, and a blindfolded
  *  piñata-style face for Blind Chess. Everything else keeps the plain
  *  currentColor path + accent-tint treatment. */
-function renderIcon(id) {
+function renderIcon(id, sweetheart) {
   if (id === "play") return <PixelAvatar rows={ZPIX} pal={ZPAL} size={46} />;
   if (id === "openings") return (
     <svg width="38" height="38" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 5.5C10.5 4 8 3 4 3v14c4 0 6.5 1 8 2.5V5.5z" fill="#3EE7F5" />
+      <path d="M12 5.5C10.5 4 8 3 4 3v14c4 0 6.5 1 8 2.5V5.5z" fill={sweetheart ? "#F06BAE" : "#3EE7F5"} />
       <path d="M12 5.5C13.5 4 16 3 20 3v14c-4 0-6.5 1-8 2.5V5.5z" fill="#F5D93E" />
     </svg>
   );
@@ -67,16 +68,21 @@ const MODES = [
    DIFFICULTIES), reused verbatim here rather than writing new copy. */
 const RANK_FEATURE = { id: "rank", label: "Rank Bot", desc: "An adaptive bot that estimates your rating as you play.", icon: ICONS.star };
 
-const ACCENT = {
+/* play/gold/cyan swap to Sweetheart's own gold/teal when the app-wide
+   theme is active (see getUiTheme) -- pink stays fixed to magenta
+   regardless, since the Puzzles tile is always hers no matter what board
+   color is selected (see the tokens.css --sh-* comment). */
+const getAccent = (sweetheart) => (sweetheart ? {
+  play: { text: "text-sh-lgold", bg: "bg-sh-lgold/12 group-hover:bg-sh-lgold/20", border: "border-sh-lgold/40 group-hover:border-sh-lgold/70" },
+  gold: { text: "text-sh-lgold", bg: "bg-sh-lgold/10 group-hover:bg-sh-lgold/18", border: "border-sh-lgold/30 group-hover:border-sh-lgold/60" },
+  cyan: { text: "text-sh-lteal", bg: "bg-sh-lteal/10 group-hover:bg-sh-lteal/18", border: "border-sh-lteal/30 group-hover:border-sh-lteal/60" },
+} : {
   play: { text: "text-yellow", bg: "bg-yellow/12 group-hover:bg-yellow/20", border: "border-yellow/30 group-hover:border-yellow/60" },
   gold: { text: "text-yellow", bg: "bg-yellow/10 group-hover:bg-yellow/18", border: "border-yellow/20 group-hover:border-yellow/50" },
   cyan: { text: "text-cyan", bg: "bg-cyan/10 group-hover:bg-cyan/18", border: "border-cyan/20 group-hover:border-cyan/50" },
-  /* Puzzles only -- Sweetheart's own rose, not the app's usual cyan. See
-     the --sh-* tokens.css comment; magenta is close enough to her rose
-     for a small home-tile border/icon tint without a whole new color. */
-  pink: { text: "text-magenta", bg: "bg-magenta/12 group-hover:bg-magenta/20", border: "border-magenta/30 group-hover:border-magenta/60" },
-};
-const accentFor = (m) => (m.id === "puzzles" ? ACCENT.pink : m.featured ? ACCENT.play : ACCENT.cyan);
+});
+const PINK_ACCENT = { text: "text-magenta", bg: "bg-magenta/12 group-hover:bg-magenta/20", border: "border-magenta/30 group-hover:border-magenta/60" };
+const accentFor = (m, sweetheart) => (m.id === "puzzles" ? PINK_ACCENT : m.featured ? getAccent(sweetheart).play : getAccent(sweetheart).cyan);
 
 /** The site's front door -- our real branding/hero (same .hdr markup the
  *  Play screen used to open with), then a mode picker grid, then the
@@ -87,7 +93,7 @@ const accentFor = (m) => (m.id === "puzzles" ? ACCENT.pink : m.featured ? ACCENT
  *  padding) as its outer wrapper purely for free theming -- .root's own
  *  CSS never targets descendants by type/class the way e.g. .promoBox
  *  does, so nesting new markup inside it can't be fought by anything. */
-export default function HomePage({ onEnter, firstVisit, rankElo, rankGames }) {
+export default function HomePage({ onEnter, firstVisit, rankElo, rankGames, sweetheart }) {
   /* ZLEGEND2700's welcome beat -- picked once per HomePage mount (not on
      every render) so it doesn't reroll mid-typewriter, and dismissible
      without needing to persist that choice anywhere: it's flavor, not a
@@ -98,15 +104,23 @@ export default function HomePage({ onEnter, firstVisit, rankElo, rankGames }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
+  const T = useMemo(() => getUiTheme(sweetheart), [sweetheart]);
+  const mutedLabel = T.mutedLabel;
+  /* HomePage-specific one-offs that don't repeat elsewhere -- not worth
+     a shared uiTheme.js slot for a single file's use. */
+  const featureBorder = sweetheart ? "border-sh-lgold/40" : "border-yellow/30";
+  const featureBorderHover = sweetheart ? "hover:border-sh-lgold/70" : "hover:border-yellow/60";
+  const featureGradientFrom = sweetheart ? "from-sh-lcard/90" : "from-panel/80";
+  const featureGradientTo = sweetheart ? "to-[#FFF3D9]" : "to-[#2A1F0EE6]";
   return (
     <div className="root">
-      <StarField />
+      <StarField sweetheart={sweetheart} />
       <div className="hdr">
         <h1>Zlegend's Chess Bot</h1>
         <div className="sub">can you beat it??</div>
       </div>
 
-      <p className="mt-4 max-w-sm text-center text-sm leading-relaxed text-[#CBBDF0]">
+      <p className={"mt-4 max-w-sm text-center text-sm leading-relaxed " + mutedLabel}>
         A custom chess engine that adapts, attacks, and surprises. Challenge it at any level — or train until you can.
       </p>
 
@@ -120,22 +134,22 @@ export default function HomePage({ onEnter, firstVisit, rankElo, rankGames }) {
           description) rather than the horizontal list-style cards this
           used to be, per the "should look like a home screen" direction. */}
       <div className="mt-11 w-full max-w-4xl">
-        <h2 className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-dim">Choose a mode</h2>
+        <h2 className={"mb-4 text-xs font-bold uppercase tracking-[0.2em] " + T.dimText}>Choose a mode</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {MODES.map((m) => {
-            const a = accentFor(m);
+            const a = accentFor(m, sweetheart);
             return (
               <button
                 key={m.id}
                 onClick={() => onEnter(m.id)}
-                className={`group flex aspect-square flex-col items-center justify-center gap-3 rounded-3xl border ${a.border} bg-panel/80 p-4 text-center backdrop-blur-sm transition hover:-translate-y-0.5 hover:bg-panel/90 hover:shadow-[0_8px_24px_#3EE7F522]`}
+                className={`group flex aspect-square flex-col items-center justify-center gap-3 rounded-3xl border ${a.border} ${T.panelBg} p-4 text-center backdrop-blur-sm transition hover:-translate-y-0.5 ${sweetheart ? "hover:bg-sh-lcard hover:shadow-[0_8px_24px_#1E857722]" : "hover:bg-panel/90 hover:shadow-[0_8px_24px_#3EE7F522]"}`}
               >
                 <span className="flex h-14 shrink-0 items-center justify-center">
-                  {m.custom ? renderIcon(m.id) : (
+                  {m.custom ? renderIcon(m.id, sweetheart) : (
                     <svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor" className={a.text} aria-hidden="true"><path d={m.icon} /></svg>
                   )}
                 </span>
-                <span className="text-sm font-bold leading-tight text-paper">{m.label}</span>
+                <span className={"text-sm font-bold leading-tight " + T.ink}>{m.label}</span>
               </button>
             );
           })}
@@ -145,18 +159,18 @@ export default function HomePage({ onEnter, firstVisit, rankElo, rankGames }) {
       {/* Features -- spotlights one implemented mode at a time rather than
           competing for space as another grid tile; Rank Bot for now. */}
       <div className="mt-10 w-full max-w-4xl">
-        <h2 className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-dim">Features</h2>
+        <h2 className={"mb-4 text-xs font-bold uppercase tracking-[0.2em] " + T.dimText}>Features</h2>
         <button
           onClick={() => onEnter(RANK_FEATURE.id)}
-          className="group flex w-full flex-col items-center gap-4 rounded-3xl border border-yellow/30 bg-gradient-to-br from-panel/80 to-[#2A1F0EE6] p-6 text-center backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-yellow/60 sm:flex-row sm:text-left"
+          className={`group flex w-full flex-col items-center gap-4 rounded-3xl border ${featureBorder} bg-gradient-to-br ${featureGradientFrom} ${featureGradientTo} p-6 text-center backdrop-blur-sm transition hover:-translate-y-0.5 ${featureBorderHover} sm:flex-row sm:text-left`}
         >
           <span className="flex h-16 shrink-0 items-center justify-center">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor" className="text-yellow" aria-hidden="true"><path d={RANK_FEATURE.icon} /></svg>
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor" className={T.accentText} aria-hidden="true"><path d={RANK_FEATURE.icon} /></svg>
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-[10px] font-bold uppercase tracking-[0.2em] text-yellow">New Feature</span>
-            <span className="mt-1 block text-lg font-bold text-paper">{RANK_FEATURE.label}</span>
-            <span className="mt-1 block text-sm leading-relaxed text-dim">{RANK_FEATURE.desc}</span>
+            <span className={"block text-[10px] font-bold uppercase tracking-[0.2em] " + T.accentText}>New Feature</span>
+            <span className={"mt-1 block text-lg font-bold " + T.ink}>{RANK_FEATURE.label}</span>
+            <span className={"mt-1 block text-sm leading-relaxed " + T.dimText}>{RANK_FEATURE.desc}</span>
           </span>
         </button>
       </div>
@@ -169,7 +183,7 @@ export default function HomePage({ onEnter, firstVisit, rankElo, rankGames }) {
       <div className="mt-8 flex items-center gap-3">
         <button
           onClick={() => onEnter("leaderboard")}
-          className="inline-flex items-center gap-2 rounded-xl border border-violet/30 bg-panel/80 px-5 py-2 text-sm font-bold text-[#CBBDF0] backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-violet/60 hover:text-paper"
+          className={`inline-flex items-center gap-2 rounded-xl border ${sweetheart ? "border-sh-rose/30 hover:border-sh-rose/60" : "border-violet/30 hover:border-violet/60"} ${T.panelBg} px-5 py-2 text-sm font-bold ${mutedLabel} backdrop-blur-sm transition hover:-translate-y-0.5 ${T.hoverInk}`}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={ICONS.trophy} /></svg>
           Leaderboard
@@ -178,7 +192,7 @@ export default function HomePage({ onEnter, firstVisit, rankElo, rankGames }) {
           onClick={() => onEnter("settings")}
           aria-label="Settings"
           title="Settings"
-          className="flex size-9 items-center justify-center rounded-xl border border-violet/30 bg-panel/80 text-[#CBBDF0] backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-violet/60 hover:text-paper"
+          className={`flex size-9 items-center justify-center rounded-xl border ${sweetheart ? "border-sh-rose/30 hover:border-sh-rose/60" : "border-violet/30 hover:border-violet/60"} ${T.panelBg} ${mutedLabel} backdrop-blur-sm transition hover:-translate-y-0.5 ${T.hoverInk}`}
         >
           <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={ICONS.cog} /></svg>
         </button>
@@ -186,8 +200,8 @@ export default function HomePage({ onEnter, firstVisit, rankElo, rankGames }) {
 
       <SocialBanner />
 
-      <footer className="mt-3 pb-6 text-center text-xs text-dim">
-        Built by <a href="https://www.youtube.com/@Zlegend27" target="_blank" rel="noopener noreferrer" className="text-cyan hover:underline">Zlegend27</a> — all rights reserved.
+      <footer className={"mt-3 pb-6 text-center text-xs " + T.dimText}>
+        Built by <a href="https://www.youtube.com/@Zlegend27" target="_blank" rel="noopener noreferrer" className={(sweetheart ? "text-sh-lteal" : "text-cyan") + " hover:underline"}>Zlegend27</a> — all rights reserved.
       </footer>
     </div>
   );

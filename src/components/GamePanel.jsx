@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { getUiTheme } from "../utils/uiTheme";
 
 /** Replaces the old always-both-visible Scoresheet + Bot Analysis boxes
  *  with one tabbed card. The Analysis tab's actual content (bot eval vs.
@@ -9,9 +10,10 @@ import { useEffect, useState } from "react";
 export default function GamePanel({
   pairs, moveGrades, curMoveIdx, reviewing, onReviewIndex, gradeTag,
   hasMoves, onCopyPgn, onPastePgn, pgnToast,
-  analysisContent, analysisLabel = "Analysis", sideToMove = "White",
+  analysisContent, analysisLabel = "Analysis", sideToMove = "White", sweetheart,
 }) {
   const [tab, setTab] = useState("moves");
+  const T = getUiTheme(sweetheart);
 
   /* App.jsx clears pgnToast with a hard setTimeout, which used to make
      the message vanish instantly. Mirroring it into local state that
@@ -30,15 +32,15 @@ export default function GamePanel({
   }, [toastVisible, toastText]);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-violet/40 bg-panel/80 backdrop-blur-sm">
-      <div className="flex items-center gap-1 border-b border-violet/24 p-1.5">
-        <TabButton active={tab === "moves"} onClick={() => setTab("moves")}>Moves</TabButton>
-        <TabButton active={tab === "analysis"} onClick={() => setTab("analysis")}>{analysisLabel}</TabButton>
+    <div className={`overflow-hidden rounded-2xl border ${T.cardBorder} ${T.panelBg} backdrop-blur-sm`}>
+      <div className={"flex items-center gap-1 border-b p-1.5 " + (sweetheart ? "border-sh-rose/24" : "border-violet/24")}>
+        <TabButton active={tab === "moves"} onClick={() => setTab("moves")} sweetheart={sweetheart}>Moves</TabButton>
+        <TabButton active={tab === "analysis"} onClick={() => setTab("analysis")} sweetheart={sweetheart}>{analysisLabel}</TabButton>
         <div className="ml-auto flex items-center gap-1 pr-0.5">
           {hasMoves ? (
-            <PanelBtn onClick={onCopyPgn}>Copy PGN</PanelBtn>
+            <PanelBtn onClick={onCopyPgn} sweetheart={sweetheart}>Copy PGN</PanelBtn>
           ) : (
-            <PanelBtn onClick={onPastePgn}>Paste PGN</PanelBtn>
+            <PanelBtn onClick={onPastePgn} sweetheart={sweetheart}>Paste PGN</PanelBtn>
           )}
         </div>
       </div>
@@ -47,7 +49,7 @@ export default function GamePanel({
         {tab === "moves" ? (
           <div>
             {pairs.length === 0 ? (
-              <p className="text-sm italic text-dim">No moves yet — {sideToMove} to play.</p>
+              <p className={"text-sm italic " + T.dimText}>No moves yet — {sideToMove} to play.</p>
             ) : (
               <div className="grid max-h-56 md:max-h-72 grid-cols-[auto_1fr_1fr] gap-x-3 gap-y-1 overflow-y-auto font-mono text-sm">
                 {pairs.map(([w, b], i) => {
@@ -55,16 +57,16 @@ export default function GamePanel({
                   const bGrade = moveGrades && moveGrades[i * 2 + 1];
                   return (
                     <div className="contents" key={i}>
-                      <span className="text-right tabular-nums text-dim">{i + 1}.</span>
+                      <span className={"text-right tabular-nums " + T.dimText}>{i + 1}.</span>
                       <span
-                        className={curMoveIdx === i * 2 ? "font-bold text-yellow" : "text-paper"}
+                        className={curMoveIdx === i * 2 ? "font-bold " + T.accentText : T.ink}
                         style={reviewing ? { cursor: "pointer" } : undefined}
                         onClick={reviewing ? () => onReviewIndex(i * 2 + 1) : undefined}
                       >
                         {w}{wGrade && <span className={"moveGrade " + wGrade}>{gradeTag[wGrade]}</span>}
                       </span>
                       <span
-                        className={curMoveIdx === i * 2 + 1 ? "font-bold text-yellow" : "text-paper"}
+                        className={curMoveIdx === i * 2 + 1 ? "font-bold " + T.accentText : T.ink}
                         style={reviewing && b ? { cursor: "pointer" } : undefined}
                         onClick={reviewing && b ? () => onReviewIndex(i * 2 + 2) : undefined}
                       >
@@ -76,7 +78,7 @@ export default function GamePanel({
               </div>
             )}
             {toastText && (
-              <div className={`mt-2 font-mono text-xs text-cyan transition-opacity duration-300 ${toastVisible ? "opacity-100" : "opacity-0"}`}>
+              <div className={`mt-2 font-mono text-xs ${T.interactiveText} transition-opacity duration-300 ${toastVisible ? "opacity-100" : "opacity-0"}`}>
                 {toastText}
               </div>
             )}
@@ -89,12 +91,13 @@ export default function GamePanel({
   );
 }
 
-function TabButton({ active, onClick, children }) {
+function TabButton({ active, onClick, children, sweetheart }) {
+  const T = getUiTheme(sweetheart);
   return (
     <button
       onClick={onClick}
-      className={`flex h-8 items-center rounded-lg border-0 px-3 text-xs font-bold uppercase tracking-[0.14em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan ${
-        active ? "bg-cyan/15 text-cyan" : "bg-transparent text-dim hover:text-paper"
+      className={`flex h-8 items-center rounded-lg border-0 px-3 text-xs font-bold uppercase tracking-[0.14em] transition-colors focus-visible:outline-none focus-visible:ring-2 ${T.ring} ${
+        active ? (sweetheart ? "bg-sh-lteal/15 text-sh-lteal" : "bg-cyan/15 text-cyan") : "bg-transparent " + T.dimText + " " + T.hoverInk
       }`}
     >
       {children}
@@ -102,11 +105,12 @@ function TabButton({ active, onClick, children }) {
   );
 }
 
-function PanelBtn({ onClick, children }) {
+function PanelBtn({ onClick, children, sweetheart }) {
+  const T = getUiTheme(sweetheart);
   return (
     <button
       onClick={onClick}
-      className="flex h-8 items-center rounded-lg border-0 bg-transparent px-2.5 text-[11px] font-bold tracking-wide text-dim transition-colors hover:bg-violet/15 hover:text-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
+      className={`flex h-8 items-center rounded-lg border-0 bg-transparent px-2.5 text-[11px] font-bold tracking-wide ${T.dimText} transition-colors ${sweetheart ? "hover:bg-sh-rose/15" : "hover:bg-violet/15"} ${T.hoverInk} focus-visible:outline-none focus-visible:ring-2 ${T.ring}`}
     >
       {children}
     </button>

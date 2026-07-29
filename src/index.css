@@ -36,6 +36,33 @@
   --color-liliac: #C9C2E8;
   --color-paper: #F4EFFF;
   --color-dim: #9D8FC4;
+
+  /* Same bridge, for Sweetheart's palette (src/tokens.css's --sh-*
+     block). Used by src/utils/uiTheme.js's getUiTheme() to pick a
+     "sh-*" class over the default one above when the app-wide Sweetheart
+     theme is active (see App.jsx's `sweetheart` boolean and tokens.css's
+     [data-theme="sweetheart"] override) -- picked at RENDER time via a
+     JS ternary, not live CSS variables, since Tailwind utility classes
+     are literal at build time and won't follow a runtime var() change. */
+  --color-sh-void: #170912;
+  --color-sh-panel: #2E1224;
+  --color-sh-rose: #F06BAE;
+  --color-sh-red: #C23B4E;
+  --color-sh-gold: #F5D95E;
+  --color-sh-teal: #7FD8C4;
+  --color-sh-text: #FBEAF0;
+  --color-sh-dim: #C9A0BE;
+
+  /* Light-mode counterparts (see the matching comment in tokens.css) --
+     getUiTheme() reaches for these instead of the dark-mode set above
+     when rendering the app-wide Sweetheart theme, which is a real light
+     mode now rather than a re-tinted dark one. */
+  --color-sh-lbg: #FCEFDD;
+  --color-sh-lcard: #FFF6E9;
+  --color-sh-link: #4A1030;
+  --color-sh-link-dim: #8B5468;
+  --color-sh-lgold: #B8860B;
+  --color-sh-lteal: #1E8577;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }

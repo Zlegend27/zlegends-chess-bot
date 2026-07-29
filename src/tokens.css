@@ -17,16 +17,31 @@
 
   /* Sweetheart's own palette -- a second, deliberate exception to "reuse
      tokens before creating new ones" alongside the board colors above.
-     Used only inside the Puzzles flow (the puzzles home page, the puzzle
-     picker/Rush-duration modals, and the Rush end-of-run screen): that
-     whole corner of the app is explicitly her brand, not in-game chrome,
-     and was art-directed against her own logo/character art rather than
-     the violet/cyan palette above. Nothing outside src/components/
-     PuzzlesHomePage.jsx or the Sweetheart-flagged blocks in App.jsx
-     should reach for these. */
+     Originally just the Puzzles flow's own brand corner (puzzles home,
+     the puzzle picker/Rush-duration modals, the Rush end-of-run screen),
+     art-directed against her own logo/character art rather than the
+     violet/cyan palette above. Now ALSO the source for the app-wide
+     `[data-theme="sweetheart"]` override block further down, which is
+     what lets picking her board color reskin the rest of the app --
+     PuzzlesHomePage.jsx stays hardcoded to these regardless of board
+     color (that page is unconditionally hers), everything else reads
+     them only through that override block, never directly. */
   --sh-void:#170912; --sh-panel:#2E1224; --sh-panel2:#3B1030;
   --sh-rose:#F06BAE; --sh-red:#C23B4E; --sh-gold:#F5D95E; --sh-teal:#7FD8C4;
   --sh-text:#FBEAF0; --sh-dim:#C9A0BE;
+  /* Light-mode counterparts, added when the app-wide theme below stopped
+     being "the dark palette with rose accents" and became an actual
+     light mode (soft pink/cream background, dark ink text) instead.
+     --sh-rose/--sh-red stay as the accent colors in both modes -- they're
+     saturated enough to read on white without a separate variant.
+     --sh-gold/--sh-teal above were tuned as LIGHT text for a DARK
+     background and fail contrast on a light one (a bright gold/mint on
+     near-white is close to invisible), so --sh-lgold/--sh-lteal are
+     deliberately darker versions used only in the light-mode override
+     below, not a general replacement for the originals. */
+  --sh-lbg:#FCEFDD; --sh-lbg2:#F9E4E9; --sh-lcard:#FFF6E9;
+  --sh-link:#4A1030; --sh-linkDim:#8B5468; --sh-lborder:#F0A8C4;
+  --sh-lgold:#B8860B; --sh-lteal:#1E8577;
   /* Near-opaque plate the Rush popups sit their readable content on, so
      the shattered-glass background passes behind text and buttons rather
      than through them. Not fully opaque -- a little of the fracture still
@@ -59,4 +74,28 @@
      onto a scale they don't belong to -- every OTHER radius in App.css
      is on one of these six now. */
   --r-2xs:4px; --r-xs:8px; --r-sm:6px; --r-md:12px; --r-lg:16px; --r-pill:999px;
+}
+
+/* App-wide Sweetheart theme -- toggled by App.jsx setting
+   document.documentElement.dataset.theme whenever the Sweetheart board
+   color is selected (boardColorId === "sweetheart"), so this cascades to
+   every page (Home/Leaderboard/Lessons render outside .root's subtree,
+   which is why this lives on the real document root rather than a class
+   on .root). A real light mode, not a re-tinted dark mode: the page
+   background, card surfaces, and primary/secondary text all invert to
+   light-on-dark's opposite, not just the accent colors. Re-points the
+   core palette at her tokens above rather than introducing a parallel
+   set -- every App.css rule that already uses a bare var(--x) picks this
+   up for free. Rules that hardcode hex+alpha instead of var() (most of
+   .btn, .card, the evalbar, ...) don't, and get their own explicit
+   overrides further down in App.css -- same for the Tailwind-authored
+   pages (see src/utils/uiTheme.js), which don't read CSS variables at
+   all.
+   --liliac has no direct named equivalent -- a mid-tone between --sh-link
+   and --sh-linkDim, kept close in feel to its original "dimmer than
+   primary text, brighter than the dim tier" role. */
+:root[data-theme="sweetheart"]{
+  --void:var(--sh-lbg); --void2:var(--sh-lbg2); --panel:var(--sh-lcard);
+  --violet:var(--sh-rose); --magenta:var(--sh-red); --cyan:var(--sh-lteal); --yellow:var(--sh-lgold);
+  --liliac:#B87A94; --white:var(--sh-link); --dim:var(--sh-linkDim);
 }
