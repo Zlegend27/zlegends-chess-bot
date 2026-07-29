@@ -2908,7 +2908,7 @@ export default function ZlegendsBot() {
               (isBotLast ? " botLast" : "") + (isPlayerLast ? " playerLast" : "") +
               (kingInCheck ? " chk" : "") + (isHintFrom ? " hintFrom" : "") + (isHintTo ? " hintTo" : "") +
               (isDragOver ? " dragOver" : "")}>
-            {p !== EMPTY && !isDragFrom && <img className={"pc " + (p > 0 ? "w" : "b")} src={pieceImgSrc(Math.abs(p), p > 0)} alt="" draggable="false" />}
+            {p !== EMPTY && !isDragFrom && <img className={"pc " + (p > 0 ? "w" : "b") + (pieceSetId === "sweetheart" && Math.abs(p) === 6 ? " kingBoost" : "") + (pieceSetId === "sweetheart" && p === -2 ? " knightBoost" : "")} src={pieceImgSrc(Math.abs(p), p > 0)} alt="" draggable="false" />}
             {gradeHere && lastMove && lastMove.to === sq120 && <span className={"boardGrade " + gradeHere}>{GRADE_TAG[gradeHere]}</span>}
             {isTarget && <span className={"dot" + (p !== EMPTY ? " ring" : "")} />}
             {vf === 0 && <span className="coord rk">{r + 1}</span>}
@@ -3441,7 +3441,7 @@ export default function ZlegendsBot() {
                 )}
               </div>
               {dragFrom >= 0 && dragPos && (
-                <img className={"pc dragGhost " + (eng.pieceAt(dragFrom) > 0 ? "w" : "b")}
+                <img className={"pc dragGhost " + (eng.pieceAt(dragFrom) > 0 ? "w" : "b") + (pieceSetId === "sweetheart" && Math.abs(eng.pieceAt(dragFrom)) === 6 ? " kingBoost" : "") + (pieceSetId === "sweetheart" && eng.pieceAt(dragFrom) === -2 ? " knightBoost" : "")}
                   src={pieceImgSrc(Math.abs(eng.pieceAt(dragFrom)), eng.pieceAt(dragFrom) > 0)}
                   alt="" draggable="false"
                   style={{ left: dragPos.x, top: dragPos.y, width: dragCellSize, height: dragCellSize }} />

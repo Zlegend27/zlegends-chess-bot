@@ -32,7 +32,7 @@ export default function LessonBoard({ eng, orientation, selected, targets, lastM
           onClick={() => onSquare(i64)}
           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSquare(i64); } }}
           className={"sq " + (light ? "light" : "dark") + (isSel ? " sel" : "") + (isLast ? " last" : "")}>
-          {p !== 0 && <img className={"pc " + (p > 0 ? "w" : "b")} src={pieceImgSrc(Math.abs(p), p > 0)} alt="" draggable="false" />}
+          {p !== 0 && <img className={"pc " + (p > 0 ? "w" : "b") + (pieceSetId === "sweetheart" && Math.abs(p) === 6 ? " kingBoost" : "") + (pieceSetId === "sweetheart" && p === -2 ? " knightBoost" : "")} src={pieceImgSrc(Math.abs(p), p > 0)} alt="" draggable="false" />}
           {isTarget && <span className={"dot" + (p !== 0 ? " ring" : "")} />}
           {vf === 0 && <span className="coord rk">{r + 1}</span>}
           {vr === 7 && <span className="coord fl">{FILES[f]}</span>}

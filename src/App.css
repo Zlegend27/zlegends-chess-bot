@@ -230,7 +230,7 @@
   filter:drop-shadow(0 4px 12px #000000A6);
   transform:scale(.85); transform-origin:100% 0; }
 .rushThemeHeart svg{ position:absolute; inset:0; width:100%; height:100%; }
-.rushThemeHeart .crack{ fill:none; stroke:#FFC9D3; stroke-width:1.4; stroke-linecap:round; stroke-linejoin:round; opacity:.75; }
+.rushThemeHeart .crack{ fill:none; stroke:#FFC9D3; stroke-width:1.25; stroke-linecap:round; stroke-linejoin:round; opacity:.75; }
 .rushThemeHeart .crack.main{ stroke:#FFF1F4; stroke-width:2; opacity:.95; }
 /* The clip-path is authored in absolute px, so a narrow panel has to
    scale the whole element rather than just shrink its box. */
@@ -404,8 +404,26 @@
    stretched": it wasn't the piece art distorting, the SQUARES
    themselves were being stretched by their own oversized child). */
 .pc{ width:87%; height:87%; min-width:0; min-height:0; object-fit:contain; z-index:2; pointer-events:none; }
+/* Sweetheart's king art reads noticeably sparser than her other pieces
+   at the same bounding-box size (a wide cape silhouette with a lot of
+   negative space inside its own tight crop, vs. the queen's denser
+   figure), so object-fit:contain -- which only sizes off the aspect
+   ratio, not how much of the box is actually opaque -- leaves him
+   looking smaller than the rest even though his box is proportioned
+   the same. Scaled up rather than re-cropped: a transform doesn't
+   disturb layout/grid sizing, and works on the drag-ghost copy too
+   (that one sets width/height inline in px, so a CSS width bump alone
+   wouldn't reach it). */
+.pc.kingBoost{ transform:scale(1.15); }
+/* Same story, black knight only -- white's crop is wider than tall
+   (renders near-full square width) but black's is noticeably taller
+   than wide *and* sparser inside its own box, so it reads narrow next
+   to every other piece on the row above/below it. */
+.pc.knightBoost{ transform:scale(1.25); }
 .pc.dragGhost{ position:fixed; transform:translate(-50%,-50%); z-index:60;
   filter:drop-shadow(0 6px 10px #00000088); opacity:.95; }
+.pc.dragGhost.kingBoost{ transform:translate(-50%,-50%) scale(1.15); }
+.pc.dragGhost.knightBoost{ transform:translate(-50%,-50%) scale(1.25); }
 .pc.w{ filter:drop-shadow(0 2px 2px #00000066); }
 .pc.b{ filter:drop-shadow(0 2px 2px #00000088); }
 .dot{ position:absolute; width:26%; height:26%; border-radius:50%; background:#1D9EB3; box-shadow:0 0 0 2px #1D10384D, 0 0 8px #3EE7F599; z-index:1; }
@@ -562,7 +580,7 @@ select:hover{ border-color:var(--cyan); }
 @keyframes ovFade{ from{ opacity:0; } to{ opacity:1; } }
 .promoBox{ background:var(--panel); border:1px solid var(--cyan); border-radius:var(--r-md); padding:10px;
   display:flex; gap:6px; box-shadow:0 0 30px #3EE7F566; position:relative;
-  animation:boxPop .18s cubic-bezier(.34,1.4,.64,1); }
+  animation:boxPop .18s cubic-bezier(.34,1.25,.64,1); }
 @keyframes boxPop{ from{ opacity:0; transform:scale(.94) translateY(6px); } to{ opacity:1; transform:none; } }
 /* Scoped to .pieceBox (the promotion and play-as-color pickers, the only
    two .promoBox instances that are just a bare row of piece-image
@@ -622,7 +640,7 @@ select:hover{ border-color:var(--cyan); }
   font-size:14px; color:var(--liliac); line-height:1.55; }
 .lessonCaret{ color:var(--cyan); animation:blink 1s infinite; }
 .lessonBeatCount{ font-family:var(--font-mono); font-size:11px; color:var(--dim); }
-.lessonPrompt{ font-weight:700; color:var(--white); margin:0 0 8px; line-height:1.4; }
+.lessonPrompt{ font-weight:700; color:var(--white); margin:0 0 8px; line-height:1.25; }
 .lessonText{ font-size:14px; color:var(--liliac); line-height:1.55; margin:0 0 12px; }
 .lessonHint{ font-size:12px; color:var(--dim); font-style:italic; margin:0 0 10px; }
 .lessonTriedFeedback{ font-size:14px; font-weight:700; color:var(--yellow); margin:0 0 10px; }
@@ -705,7 +723,7 @@ select:hover{ border-color:var(--cyan); }
 .blindLog{ flex:1 1 auto; min-height:180px; max-height:44vh; overflow-y:auto; display:flex;
   flex-direction:column; gap:6px; padding:8px; border:1px solid #8B2FC94D; border-radius:var(--r-xs);
   background:#150C2488; }
-.blindMsg{ font-size:13px; line-height:1.45; color:var(--liliac); }
+.blindMsg{ font-size:13px; line-height:1.255; color:var(--liliac); }
 .blindMsg.you{ color:var(--cyan); }
 .blindWho{ display:block; font-size:9px; font-weight:700; letter-spacing:.18em;
   text-transform:uppercase; color:var(--dim); }
