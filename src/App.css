@@ -418,12 +418,18 @@
 /* Same story, black knight only -- white's crop is wider than tall
    (renders near-full square width) but black's is noticeably taller
    than wide *and* sparser inside its own box, so it reads narrow next
-   to every other piece on the row above/below it. */
-.pc.knightBoost{ transform:scale(1.25); }
+   to every other piece on the row above/below it. Its opaque pixels
+   also sit much lower in the frame than every other piece (~76% down
+   vs. ~59-68% for the rest -- mane wisps trail up into mostly-empty
+   space above the actual head), so object-fit's default vertical
+   centering already read low before any scaling, and scaling around
+   the box center only makes that more obvious -- translateY nudges it
+   back up to roughly match the others. */
+.pc.knightBoost{ transform:scale(1.4) translateY(-10%); }
 .pc.dragGhost{ position:fixed; transform:translate(-50%,-50%); z-index:60;
   filter:drop-shadow(0 6px 10px #00000088); opacity:.95; }
 .pc.dragGhost.kingBoost{ transform:translate(-50%,-50%) scale(1.15); }
-.pc.dragGhost.knightBoost{ transform:translate(-50%,-50%) scale(1.25); }
+.pc.dragGhost.knightBoost{ transform:translate(-50%,-50%) scale(1.4) translateY(-10%); }
 .pc.w{ filter:drop-shadow(0 2px 2px #00000066); }
 .pc.b{ filter:drop-shadow(0 2px 2px #00000088); }
 .dot{ position:absolute; width:26%; height:26%; border-radius:50%; background:#1D9EB3; box-shadow:0 0 0 2px #1D10384D, 0 0 8px #3EE7F599; z-index:1; }
