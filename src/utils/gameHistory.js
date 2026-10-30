@@ -49,13 +49,19 @@ export async function estimateRating() {
   try {
     /* Abandoned games (saved for the analysis dataset with winner:null)
        must not reach the fold below -- a null winner scores 0.5 there,
-       so every walked-away game would silently count as a draw. */
+       so every walked-away game would silently count as a draw.
+       Explicitly ordered, too: the fold is a *sequential* Elo update, so
+       the same set of games in a different order yields a different
+       final rating. Postgres guarantees no ordering without an ORDER BY,
+       so without this the estimate could drift between loads even though
+       the player hadn't played anything. */
     const { data, error } = await supabase
       .from("games")
-      .select("winner, player_color, difficulty_label")
+      .select("winner, player_color, difficulty_label, created_at")
       .eq("client_id", getClientId())
       .neq("result_reason", "Abandoned")
-      .in("difficulty_label", Object.keys(ANCHOR_ELO));
+      .in("difficulty_label", Object.keys(ANCHOR_ELO))
+      .order("created_at", { ascending: true });
     if (error || !data) return { error: true, message: error?.message || "Couldn't load rating." };
     let rating = START_RATING;
     for (const g of data) {

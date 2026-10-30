@@ -116,7 +116,6 @@ export default function LessonPlayer({ chapter, orientation = "white", pieceSetI
       });
     }, TYPE_MS);
     return () => clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coachLine, voiceMode]);
 
   useEffect(() => () => speakerRef.current.cancel(), []);

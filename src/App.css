@@ -136,12 +136,14 @@
 :root[data-theme="sweetheart"] .promoBox .modalCloseX{ border-color:#F06BAE66; background:#FFF6E9; }
 :root[data-theme="sweetheart"] .promoBox .modalCloseX:hover{ background:#F06BAE22; }
 :root[data-theme="sweetheart"] .sq.last::after{ background:#F06BAE3D; }
-/* select's background is hardcoded dark (#1D1038) while its text is a
-   bare var(--white) -- var(--white) already flips to dark ink in light
-   mode via tokens.css, which would put dark text on a still-dark box
-   without this override (the Level/difficulty dropdown, name-edit input
-   surface). */
+/* select and .modalInput both hardcode a dark background while their text
+   is a bare var(--white) -- var(--white) already flips to dark ink in
+   light mode via tokens.css, which would put dark text on a still-dark
+   box without these overrides. Covers the Level/difficulty dropdown and
+   the Juice Box source picker (select), plus the name-edit, share-link
+   and Paste PGN fields (.modalInput). */
 :root[data-theme="sweetheart"] select{ background:#FFF6E9; border-color:#F06BAE66; }
+:root[data-theme="sweetheart"] .modalInput{ background:#FFF6E9; border-color:#F06BAE66; }
 :root[data-theme="sweetheart"] .lessonBubble{ background:#FFF6E9; border-color:#F06BAE4D; }
 :root[data-theme="sweetheart"] .botBubble{ background:#FFF6E9E6; border-color:#F06BAE66; }
 :root[data-theme="sweetheart"] .botBubbleClose:hover{ background:#F06BAE22; }
@@ -566,6 +568,18 @@ select{ font-family:inherit; font-size:12px; font-weight:700; border-radius:var(
   border:1px solid #8B2FC966; background:#1D1038; color:var(--white); cursor:pointer;
   transition:border-color .15s ease; }
 select:hover{ border-color:var(--cyan); }
+/* Free-text inputs inside modals (name edit, share-link fallback, Paste
+   PGN). A class rather than the inline styles these started as: their
+   background is a fixed dark hex while the text color is a reactive
+   var(--white), so in the Sweetheart light theme they rendered dark ink
+   on a near-black box (measured 1.27:1 -- effectively invisible). No
+   [data-theme] rule can reach an inline style, which is why these three
+   were missed when select/.lessonBubble/.botBubble got their overrides
+   near the top of this file -- hence the class. */
+.modalInput{ width:100%; box-sizing:border-box; padding:8px 10px; font-family:inherit; font-size:14px;
+  border-radius:var(--r-xs); border:1px solid #8B2FC966; background:#150C24; color:var(--white); }
+.modalInput.sm{ font-size:12px; }
+.modalInput.mono{ font-family:var(--font-mono); font-size:12px; resize:vertical; }
 /* Thin dark scrollbars for the in-panel lists -- the OS default light
    gray bar reads as a hole punched in the dark theme. */
 .rows, .jbTrackList, .blindLog{ scrollbar-width:thin; scrollbar-color:#8B2FC966 transparent; }

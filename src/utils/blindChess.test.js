@@ -8,7 +8,6 @@ import { answerQuestion, describeStanding } from "./blindDescriber";
 
 const startEngine = () => createEngine();
 const engineWithFen = (fen) => { const e = createEngine(); e.loadFen(fen); return e; };
-const sans = (r) => r.matches.map(m => m.san).sort();
 
 describe("move parsing from the start position", () => {
   it.each([

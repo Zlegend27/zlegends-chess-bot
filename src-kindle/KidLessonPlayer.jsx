@@ -95,7 +95,6 @@ export default function KidLessonPlayer({ chapter, renderPiece, boardVars, audio
       });
     }, TYPE_MS);
     return () => clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coachLine, muted]);
 
   const boardInteractive = beat?.type === "think" && !thinkTried;

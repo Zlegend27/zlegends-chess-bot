@@ -43,8 +43,18 @@ function createWorker() {
   });
 }
 
+/* Clears the memo on failure so the next call retries. Without this a
+   single transient failure (a dropped WASM fetch, a worker that errors
+   during boot) permanently poisons the engine: workerPromise would stay
+   set to a rejected promise and every later search would reject against
+   that same cached failure, leaving Stockfish dead until a page reload.
+   warmUpStockfish() swallows its own error, so that failure could happen
+   silently at startup and only surface as "the bot never moves". */
 function getWorker() {
-  if (!workerPromise) workerPromise = createWorker();
+  if (!workerPromise) {
+    workerPromise = createWorker();
+    workerPromise.catch(() => { workerPromise = null; });
+  }
   return workerPromise;
 }
 

@@ -15,7 +15,7 @@
 
 import {
   EMPTY, WP, WN, WB, WR, WQ, WK,
-  M64TO120, M120TO64, mFrom, mTo, mPromo, mFlags, fileOf, rankOf,
+  M120TO64, mFrom, mTo, mPromo, mFlags, fileOf,
 } from "../engine/chessEngine";
 
 export const PIECE_SPOKEN = { [WP]: "pawn", [WN]: "knight", [WB]: "bishop", [WR]: "rook", [WQ]: "queen", [WK]: "king" };
@@ -63,7 +63,6 @@ const CONNECTOR = new Set([
 ]);
 
 export const sqName = (i64) => "abcdefgh"[i64 % 8] + (((i64 / 8) | 0) + 1);
-const sq64 = (name) => (name.charCodeAt(0) - 97) + (name.charCodeAt(1) - 49) * 8;
 
 function normalize(text) {
   return (text || "")

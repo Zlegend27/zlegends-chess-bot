@@ -25,7 +25,6 @@ import KidLessonPlayer from "./KidLessonPlayer";
    a kid mashing buttons waiting for their opponent to move. Full color and
    animation now that we're not targeting e-ink. */
 
-const PTS = { 1: 1, 2: 3, 3: 3, 4: 5, 5: 9 };
 const START_COUNT = { 1: 8, 2: 2, 3: 2, 4: 2, 5: 1 };
 const RUSH_DURATIONS = [
   { seconds: 60, label: "1 Minute" },

@@ -391,27 +391,13 @@ function materialState(eng) {
   return { capturedWhite: taken(1), capturedBlack: taken(-1), diff: wPts - bPts };
 }
 
-/* Small inline-SVG icons for label prefixes that used to be raw emoji
-   (⚡/📅) -- same fill="currentColor" convention as HomePage's ICONS,
-   just local to App.jsx since these are only used here. */
+/* Inline-SVG icon for the label prefix that used to be a raw emoji (⚡)
+   -- same fill="currentColor" convention as HomePage's ICONS, just local
+   to App.jsx since it's only used here. */
 function BoltIcon({ size = 12 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d="M7 2v11h3v9l7-12h-4l4-8z" />
-    </svg>
-  );
-}
-function CalendarIcon({ size = 12 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z" />
-    </svg>
-  );
-}
-function TargetIcon({ size = 12 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z" />
     </svg>
   );
 }
@@ -1562,6 +1548,15 @@ export default function ZlegendsBot() {
       }
       setThinking(false);
       rerender();
+    }).catch(() => {
+      /* A rejected search (Stockfish worker failed to boot, WASM fetch
+         dropped) still has to clear `thinking` -- onSquare returns
+         "blocked" the whole time it's set, so leaving it true locks the
+         board for the rest of the session with "Zlegend2700 is
+         calculating…" on screen permanently. runSearch (the homemade
+         worker) only ever resolves; this covers the Stockfish tiers. */
+      setThinking(false);
+      rerender();
     });
   }, [eng, audio, checkGameOver, runSearch, stockfishMove]);
   const engineMoveRef = useRef(engineMove);
@@ -1603,6 +1598,12 @@ export default function ZlegendsBot() {
         setThinking(false);
         rerender();
       }
+    }).catch(() => {
+      /* Same stuck-`thinking` hazard as engineMove above -- here it also
+         stalls the bot-vs-bot loop, since the next spectateMove is only
+         scheduled from inside the resolve path. */
+      setThinking(false);
+      rerender();
     });
   }, [eng, audio, checkGameOver, runSearch, stockfishMove]);
   const spectateMoveRef = useRef(spectateMove);
@@ -2064,6 +2065,12 @@ export default function ZlegendsBot() {
   const puzzlesInBand = (band) => band ? pz.PUZZLES.filter(p => p.rating >= band.min && p.rating < band.max) : pz.PUZZLES;
 
   const startPuzzle = (puzzle) => {
+    /* Every caller derives its argument from the puzzle pool, which is
+       empty until the puzzles chunk finishes streaming in (and
+       dailyPuzzle returns null for an empty pool). The UI gates on
+       puzzlesReady, so this is belt-and-braces -- but without it a miss
+       lands as a TypeError on .fen below rather than a no-op. */
+    if (!puzzle) return;
     maybeSaveAbandonedGame();
     eng.loadFen(puzzle.fen);
     moveListRef.current = [];
@@ -2089,11 +2096,14 @@ export default function ZlegendsBot() {
 
   const rushPool = () => puzzlesInBand(pz.RATING_BANDS[rushBandIdxRef.current]);
 
-  /* Draws a random puzzle this run hasn't served yet. Bands are only 60
-     puzzles each, so a long/lucky run can plausibly exhaust one -- falls
-     back to allowing repeats from the full pool rather than stalling on
-     an empty array in that edge case. */
+  /* Draws a random puzzle this run hasn't served yet, falling back to
+     allowing repeats once a band is exhausted (200 per band, so only a
+     very long run gets there). Returns null on a genuinely empty pool
+     rather than indexing undefined -- can't happen with the shipped
+     puzzle set, but startPuzzle dereferences .fen immediately and a
+     future data change shouldn't be able to turn that into a crash. */
   const pickUnseenPuzzle = (pool) => {
+    if (!pool.length) return null;
     const fresh = pool.filter(p => !rushSeenRef.current.has(p.id));
     const from = fresh.length ? fresh : pool;
     const puzzle = from[(Math.random() * from.length) | 0];
@@ -2142,7 +2152,13 @@ export default function ZlegendsBot() {
        the leaderboard data. No Timer runs are excluded outright: unlimited
        time makes "most solved" meaningless as a comparison, and
        duration_seconds is NOT NULL in the rush_scores table anyway. */
-    if (rushSolvedRef.current > 0 && rushDuration != null) submitRushScore({ duration: rushDuration, solved: rushSolvedRef.current, displayName });
+    /* displayNameRef, not the `displayName` state directly: finishRush is
+       reached from puzzleMove, a useCallback that doesn't list
+       displayName in its deps -- so a player who renames themselves
+       mid-run would otherwise submit the name they had when that
+       callback was last memoized. Same ref the Rank Bot sync already
+       uses for the identical reason. */
+    if (rushSolvedRef.current > 0 && rushDuration != null) submitRushScore({ duration: rushDuration, solved: rushSolvedRef.current, displayName: displayNameRef.current });
     /* Personal best per duration, shown on the heartbreak screen instead
        of the lifetime total. */
     const bestKey = rushDuration == null ? "none" : String(rushDuration);
@@ -2282,7 +2298,6 @@ export default function ZlegendsBot() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pieceDesignsOpen, boardColorsOpen, settingsOpen, accountOpen, nameEditOpen, shareLinkFallback, newGameConfirm, rushMode, rushResult, rushSummaryOpen, rushOpen, rankedPuzzlesOpen, openingsOpen, blindOpen, musicOpen, spectateOpen, pasteOpen]);
 
   /* Modal accessibility, applied generically rather than per-modal: this
@@ -3987,7 +4002,7 @@ export default function ZlegendsBot() {
               type="text" value={nameDraft} maxLength={24} placeholder="Challenger"
               onChange={e => setNameDraft(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") saveDisplayName(); }}
-              style={{ width: "100%", boxSizing: "border-box", fontSize: 14, padding: "8px 10px", borderRadius: 8, background: "#150C24", color: "var(--white, #F4EFFF)", border: "1px solid #8B2FC966" }}
+              className="modalInput"
             />
             <button className="btn gold" onClick={saveDisplayName}>Save</button>
       </Modal>
@@ -4002,7 +4017,7 @@ export default function ZlegendsBot() {
             <input
               type="text" readOnly value={shareLinkFallback || ""}
               onFocus={e => e.target.select()}
-              style={{ width: "100%", boxSizing: "border-box", fontSize: 12, padding: "8px 10px", borderRadius: 8, background: "#150C24", color: "var(--white, #F4EFFF)", border: "1px solid #8B2FC966" }}
+              className="modalInput sm"
             />
             <button className="btn gold" onClick={async () => {
               try {
@@ -4179,7 +4194,7 @@ export default function ZlegendsBot() {
               onChange={e => setPasteText(e.target.value)}
               placeholder={"1. e4 e5 2. Nf3 Nc6 3. Bb5 ..."}
               rows={8}
-              style={{ width: "100%", boxSizing: "border-box", resize: "vertical", fontFamily: "ui-monospace, Consolas, monospace", fontSize: 12, padding: 8, borderRadius: 8, background: "#150C24", color: "var(--white, #F4EFFF)", border: "1px solid #8B2FC966" }}
+              className="modalInput mono"
             />
             {pasteError && <div className="pv" style={{ fontSize: 11, color: "#F05348" }}>{pasteError}</div>}
             <button className="btn gold" onClick={loadPastedPgn} disabled={!pasteText.trim()}>Analyze</button>
