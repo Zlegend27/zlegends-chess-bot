@@ -4,3 +4,7 @@ dist-kindle
 .DS_Store
 .env
 ui-screenshots/
+# Obsidian per-machine UI state (open tabs, pane sizes) -- rewritten on
+# every session, so tracking it just churns the diff. The vault's actual
+# settings (app/appearance/core-plugins) stay versioned.
+chessboard-bible/.obsidian/workspace.json
