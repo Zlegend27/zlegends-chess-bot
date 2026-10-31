@@ -36,7 +36,8 @@ export function readHandoffLanding(search) {
 /** Plain fetch, because creating a Supabase client here would make it try
  *  to use the code itself and fail without the app's verifier. */
 export async function postHandoffCode(url, anonKey, nonce, code) {
-  const res = await fetch(`${url.replace(//$/, "")}/rest/v1/rpc/auth_handoff_put`, {
+  const base = url.endsWith("/") ? url.slice(0, -1) : url;
+  const res = await fetch(`${base}/rest/v1/rpc/auth_handoff_put`, {
     method: "POST",
     headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({ handoff: nonce, auth_code: code }),
