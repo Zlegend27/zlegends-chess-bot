@@ -3,11 +3,16 @@
    of truth in App.jsx; this just translates it to and from the URL. */
 const VIEW_PATHS = {
   home: "/",
-  play: "/play",
+  playHub: "/play",
+  play: "/game",
   puzzlesHome: "/puzzles",
   leaderboard: "/leaderboard",
   review: "/review",
   lessons: "/lessons",
+  openings: "/openings",
+  watch: "/watch",
+  ranked: "/ranked",
+  rush: "/rush",
 };
 
 export const pathForView = (view) => VIEW_PATHS[view] ?? "/";
@@ -20,10 +25,11 @@ export function viewForPath(path) {
 /** Which menu item to light up. A puzzle or a reviewed game runs on the Play
  *  screen, but as far as the player knows they're still in that section. */
 export function sectionForView({ siteView, rushMode, activePuzzle, pastedGame }) {
-  if (siteView === "puzzlesHome" || siteView === "leaderboard") return "puzzles";
-  if (siteView === "lessons") return "learn";
+  if (["puzzlesHome", "leaderboard", "ranked", "rush"].includes(siteView)) return "puzzles";
+  if (siteView === "lessons" || siteView === "openings") return "learn";
   if (siteView === "review") return "review";
   if (siteView === "home") return "home";
+  if (siteView === "playHub" || siteView === "watch") return "play";
   if (rushMode || activePuzzle) return "puzzles";
   return pastedGame ? "review" : "play";
 }

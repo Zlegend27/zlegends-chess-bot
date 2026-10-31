@@ -11,6 +11,9 @@ import StarField from "./components/StarField";
 import Confetti from "./components/Confetti";
 import HomePage from "./components/HomePage";
 import { AppHeader, BottomBar } from "./components/AppNav";
+import PlayPage from "./components/PlayPage";
+import SubPage from "./components/SubPage";
+import { currentStreak, nextStreak, utcDay } from "./utils/dailyStreak";
 import { historyStep, pathForView, sectionForView, viewForPath } from "./utils/routes";
 import GamePanel from "./components/GamePanel";
 import BotBubble from "./components/BotBubble";
@@ -852,12 +855,10 @@ export default function ZlegendsBot() {
   }, []);
   const [pieceDesignsOpen, setPieceDesignsOpen] = useState(false);
   const [boardColorsOpen, setBoardColorsOpen] = useState(false);
-  const [openingsOpen, setOpeningsOpen] = useState(false);
   const [activeOpening, setActiveOpening] = useState(null);
   const [quizOpening, setQuizOpening] = useState(null);
   const [quizFeedback, setQuizFeedback] = useState(null);
   const [quizDoneToast, setQuizDoneToast] = useState(null);
-  const [rankedPuzzlesOpen, setRankedPuzzlesOpen] = useState(false);
   const [blindOpen, setBlindOpen] = useState(false);
   const [puzzlesData, setPuzzlesData] = useState(null);
   const puzzlesLoadingRef = useRef(false);
@@ -868,15 +869,15 @@ export default function ZlegendsBot() {
     import("./utils/puzzles").then(m => setPuzzlesData({ PUZZLES: m.PUZZLES, RATING_BANDS: m.RATING_BANDS }));
   };
   useEffect(() => {
-    if (siteView === "puzzlesHome") ensurePuzzlesLoaded();
+    if (["home", "puzzlesHome", "ranked", "rush"].includes(siteView)) ensurePuzzlesLoaded();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [siteView]);
   const [puzzleBand, setPuzzleBand] = useState(null);
   const [activePuzzle, setActivePuzzle] = useState(null);
   const [puzzleFeedback, setPuzzleFeedback] = useState(null);
   const [puzzleSolved, setPuzzleSolved] = useState(false);
+  const [dailyStreak, setDailyStreak] = useState(() => loadSetting("dailyStreak", null));
   const [dailySolvedDate, setDailySolvedDate] = useState(() => loadSetting("dailyPuzzleSolvedDate", null));
-  const [rushOpen, setRushOpen] = useState(false);
   const [rushMode, setRushMode] = useState(false);
   const [rushDuration, setRushDuration] = useState(60);
   const [rushTimeLeft, setRushTimeLeft] = useState(60);
@@ -946,7 +947,6 @@ export default function ZlegendsBot() {
   gameStyleRef.current = gameStyle;
   const playerColorRef = useRef(playerColor);
   playerColorRef.current = playerColor;
-  const [spectateOpen, setSpectateOpen] = useState(false);
   const [spectateMode, setSpectateMode] = useState(false);
   const [spectatePaused, setSpectatePaused] = useState(false);
   const [spectateWhiteIdx, setSpectateWhiteIdx] = useState(2);
@@ -1672,6 +1672,7 @@ export default function ZlegendsBot() {
   spectateMoveRef.current = spectateMove;
 
   const startSpectate = (whiteIdx, blackIdx, openingId) => {
+    setSiteView("play");
     maybeSaveAbandonedGame();
     setSpectateWhiteIdx(whiteIdx); setSpectateBlackIdx(blackIdx);
     spectateWhiteRef.current = DIFFICULTIES[whiteIdx];
@@ -1689,7 +1690,6 @@ export default function ZlegendsBot() {
     setMoveGrades(null); setGradeDetail(null); setPractice(null); setGrading(false); setGradeProgress(0);
     setPastedGame(false);
     setMode("play");
-    setSpectateOpen(false);
     spectatePausedRef.current = false;
     setSpectatePaused(false);
     spectateModeRef.current = true;
@@ -2015,7 +2015,6 @@ export default function ZlegendsBot() {
 
     setRushMode(false);
     setRushResult(null);
-    setRushOpen(false);
     setRushSummaryOpen(true);
     setMissedStepIdx(0);
     setRestartCountdown(null);
@@ -2024,13 +2023,10 @@ export default function ZlegendsBot() {
     spectatePausedRef.current = false;
     setSpectateMode(false);
     setSpectatePaused(false);
-    setSpectateOpen(false);
 
     setQuizOpening(null);
     setQuizFeedback(null);
     setActiveOpening(null);
-    setOpeningsOpen(false);
-    setRankedPuzzlesOpen(false);
     setBlindOpen(false);
 
     if (mode === "replay") {
@@ -2082,7 +2078,7 @@ export default function ZlegendsBot() {
   };
 
   const startOpening = (opening) => {
-    setOpeningsOpen(false);
+    setSiteView("play");
     setActiveOpening(opening);
     setPlayerColor(opening.for === "black" ? -1 : 1);
     setMode("replay");
@@ -2187,6 +2183,7 @@ export default function ZlegendsBot() {
   };
 
   const startRush = (seconds) => {
+    setSiteView("play");
     rushSolvedRef.current = 0;
     rushMistakesRef.current = 0;
     rushBandIdxRef.current = 0;
@@ -2205,7 +2202,6 @@ export default function ZlegendsBot() {
     setRushDuration(seconds);
     setRushTimeLeft(seconds);
     setRushMode(true);
-    setRushOpen(false);
     const pool = puzzlesInBand(pz.RATING_BANDS[0]);
     startPuzzle(pickUnseenPuzzle(pool));
   };
@@ -2362,16 +2358,12 @@ export default function ZlegendsBot() {
       else if (shareLinkFallback) setShareLinkFallback(null);
       else if (newGameConfirm) setNewGameConfirm(false);
       else if (rushMode && rushResult && rushSummaryOpen) hideRushSummary();
-      else if (rushOpen) { setRushOpen(false); setSiteView("puzzlesHome"); }
-      else if (rankedPuzzlesOpen) { setRankedPuzzlesOpen(false); setSiteView("puzzlesHome"); }
-      else if (openingsOpen) setOpeningsOpen(false);
       else if (blindOpen) setBlindOpen(false);
       else if (musicOpen) closeMusic();
-      else if (spectateOpen) setSpectateOpen(false);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [pieceDesignsOpen, boardColorsOpen, settingsOpen, nameEditOpen, shareLinkFallback, newGameConfirm, rushMode, rushResult, rushSummaryOpen, rushOpen, rankedPuzzlesOpen, openingsOpen, blindOpen, musicOpen, spectateOpen]);
+  }, [pieceDesignsOpen, boardColorsOpen, settingsOpen, nameEditOpen, shareLinkFallback, newGameConfirm, rushMode, rushResult, rushSummaryOpen, blindOpen, musicOpen]);
 
   /* Modal accessibility, applied generically rather than per-modal: this
      app has ~15 separate .promoOv/.promoBox blocks (one per open-state
@@ -2499,6 +2491,9 @@ export default function ZlegendsBot() {
       if (daily && activePuzzle.id === daily.id) {
         setDailySolvedDate(todayKey());
         saveSetting("dailyPuzzleSolvedDate", todayKey());
+        const streak = nextStreak(dailyStreak, utcDay());
+        setDailyStreak(streak);
+        saveSetting("dailyStreak", streak);
       }
       if (rushMode) {
         rushSolvedRef.current += 1;
@@ -3441,15 +3436,25 @@ export default function ZlegendsBot() {
     if (modeId === "lessons") { setSiteView("lessons"); return; }
     if (modeId === "review") { openReviewPage(); return; }
     if (modeId === "puzzles") { setSiteView("puzzlesHome"); ensurePuzzlesLoaded(); return; }
+    if (modeId === "openings" || modeId === "rush") { setSiteView(modeId); return; }
+    if (modeId === "spectate") { setSiteView("watch"); return; }
+    if (modeId === "blind") { setBlindOpen(true); return; }
     setSiteView("play");
-    if (modeId === "openings") setOpeningsOpen(true);
-    else if (modeId === "rush") { setRushOpen(true); ensurePuzzlesLoaded(); }
-    else if (modeId === "spectate") setSpectateOpen(true);
-    else if (modeId === "blind") setBlindOpen(true);
-    else if (modeId === "rank") {
+    if (modeId === "rank") {
       const idx = DIFFICULTIES.findIndex(d => d.id === "rank");
       if (idx >= 0) onDifficultyChange(idx);
     }
+  };
+
+  const hasLiveGame = mode === "play" && !result && !pastedGame && !activePuzzle && !quizOpening && !spectateMode && moveList.length > 0;
+  const openDaily = () => { leaveActivity(); startPuzzle(dailyPuzzle(pz.PUZZLES)); setSiteView("play"); };
+  /* A finished game may still be on the board, so Play starts a fresh one
+     instead of reopening it. */
+  const startFromHub = () => {
+    const stale = moveList.length > 0 && !hasLiveGame;
+    leaveActivity();
+    if (stale) newGame(playerColor);
+    setSiteView("play");
   };
 
   /* Settings and Juice Box open from the header on any page, so they live
@@ -3459,6 +3464,21 @@ export default function ZlegendsBot() {
   const boardVars = { "--boardLight": getBoardColor(boardColorId).light, "--boardDark": getBoardColor(boardColorId).dark };
   const appOverlays = (
     <div className="appOverlays" style={boardVars}>
+      {blindOpen && (
+        <Suspense fallback={
+          <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }}>
+            <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }} role="status" aria-label="Loading Blind Chess">
+              <div className="boxHead">Blind Chess</div>
+              <div style={{ height: 10, borderRadius: 999, overflow: "hidden", background: "#150C24" }}>
+                <div className="loadingBarFill" style={{ width: "60%", height: "100%", borderRadius: 999, background: "var(--cyan)" }} />
+              </div>
+            </div>
+          </div>
+        }>
+          <BlindMode onClose={() => setBlindOpen(false)} />
+        </Suspense>
+      )}
+
       <Modal open={musicOpen} onClose={closeMusic} closeLabel="Close Juice Box"
         className="jbBox" style={{ width: 300, minWidth: undefined, maxWidth: undefined }}>
             <img src="/VIRTUOSO_MOLE.webp" alt="Juice Box" className="jbMole" />
@@ -3628,6 +3648,15 @@ export default function ZlegendsBot() {
     return (
       <HomePage
         onEnter={enterMode}
+        onPlay={() => onSection("play")}
+        onDaily={openDaily}
+        onOpenSaved={reviewSavedGame}
+        hasLiveGame={hasLiveGame}
+        daily={puzzlesData ? dailyPuzzle(pz.PUZZLES) : null}
+        dailySolved={dailySolvedDate === todayKey()}
+        streak={currentStreak(dailyStreak, utcDay())}
+        boardColors={getBoardColor(boardColorId)}
+        pieceImgSrc={pieceImgSrc}
         firstVisit={isFirstVisitRef.current}
         rankElo={rankBotAssessedElo ?? (rankBotGames > 0 ? rankBotElo : null)}
         rankGames={rankBotGames}
@@ -3636,13 +3665,151 @@ export default function ZlegendsBot() {
     );
   }
 
+  if (siteView === "playHub") {
+    return (
+      <PlayPage
+        levels={DIFFICULTIES.map((d, idx) => ({ label: d.label, id: d.id, idx })).filter((d) => d.id !== "rank")}
+        levelIdx={difficultyIdx}
+        playLabel={`Play ${DIFFICULTIES[difficultyIdx].label}`}
+        onLevel={onDifficultyChange}
+        onPlay={startFromHub}
+        onMode={enterMode}
+        sweetheart={sweetheart}
+      />
+    );
+  }
+
+  if (siteView === "openings") {
+    return (
+      <SubPage onBack={() => setSiteView("lessons")} sweetheart={sweetheart}>
+            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <PixelAvatar rows={BPIX} pal={BPAL} size={18} />
+              Openings Library
+            </div>
+            <div className="rows" style={{ maxHeight: "none" }}>
+              {OPENINGS.map(op => (
+                <button key={op.id} type="button" className="openingRow"
+                  style={{ display: "block", width: "100%", textAlign: "left", background: "transparent", border: "none", borderBottom: "1px solid #8B2FC92E", font: "inherit", color: "inherit", cursor: "pointer", padding: "6px 2px" }}
+                  onClick={() => startOpening(op)}>
+                  <div style={{ fontWeight: 700 }}>{op.name} <span style={{ opacity: 0.6, fontWeight: "normal" }}>({op.eco})</span></div>
+                  <div style={{ fontSize: 11, opacity: 0.75 }}>{op.summary}</div>
+                </button>
+              ))}
+            </div>
+      </SubPage>
+    );
+  }
+
+  if (siteView === "watch") {
+    return (
+      <SubPage onBack={() => setSiteView("playHub")} sweetheart={sweetheart}>
+            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              Watch Bots
+            </div>
+            <div className="pv" style={{ fontSize: 12, opacity: 0.85 }}>
+              Pick a bot for each side and watch them play each other. No clicking required.
+            </div>
+            <div className="rows" style={{ maxHeight: "none", display: "flex", flexDirection: "column", gap: 10, padding: "4px 2px" }}>
+              <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
+                White
+                <select value={spectateWhiteIdx} onChange={e => setSpectateWhiteIdx(Number(e.target.value))}>
+                  {DIFFICULTIES.map((d, i) => !d.adaptive && <option key={i} value={i}>{d.label}</option>)}
+                </select>
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
+                Black
+                <select value={spectateBlackIdx} onChange={e => setSpectateBlackIdx(Number(e.target.value))}>
+                  {DIFFICULTIES.map((d, i) => !d.adaptive && <option key={i} value={i}>{d.label}</option>)}
+                </select>
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
+                Starting position
+                <select value={spectateOpeningId} onChange={e => setSpectateOpeningId(e.target.value)}>
+                  <option value="">Standard start</option>
+                  {OPENINGS.map(op => <option key={op.id} value={op.id}>{op.name}</option>)}
+                </select>
+              </label>
+            </div>
+            <button className="btn gold" style={{ fontSize: 12, padding: "8px 12px" }}
+              onClick={() => startSpectate(spectateWhiteIdx, spectateBlackIdx, spectateOpeningId)}>Start Spectating</button>
+      </SubPage>
+    );
+  }
+
+  if (siteView === "ranked") {
+    return (
+      <SubPage onBack={() => setSiteView("puzzlesHome")} boxClass="shModal" sweetheart={sweetheart}>
+            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--sh-text)" }}>
+              <PixelAvatar rows={PPIX} pal={PPAL} size={18} />
+              Ranked Puzzles — Pick a Rating
+            </div>
+            <div className="rows" style={{ maxHeight: "none" }}>
+              {pz.RATING_BANDS.map(band => {
+                const pool = puzzlesInBand(band);
+                return (
+                  <button key={band.id} type="button" className="shModalRow" disabled={!pool.length}
+                    style={{ display: "block", width: "100%", textAlign: "left", background: "transparent", font: "inherit", cursor: pool.length ? "pointer" : "default", padding: "10px 8px", border: "none", borderBottom: "1px solid #F06BAE33", borderRadius: "var(--r-sm)", opacity: pool.length ? 1 : 0.4, color: "var(--sh-text)" }}
+                    onClick={() => {
+                      setPuzzleBand(band);
+                      setSiteView("play");
+                      startPuzzle(pool[(Math.random() * pool.length) | 0]);
+                    }}>
+                    <div style={{ fontWeight: 700 }}>{band.label} <span style={{ color: "var(--sh-dim)", fontWeight: "normal" }}>({band.min}–{band.max === 9999 ? "2000+" : band.max})</span></div>
+                    <div style={{ fontSize: 11, color: "var(--sh-dim)" }}>{pool.length} puzzle{pool.length === 1 ? "" : "s"}</div>
+                  </button>
+                );
+              })}
+            </div>
+      </SubPage>
+    );
+  }
+
+  if (siteView === "rush") {
+    return (
+      <SubPage onBack={() => setSiteView("puzzlesHome")} boxClass="rushThemeBox" flush sweetheart={sweetheart}>
+            <div className="rushThemeInner">
+          {/* Same shattered-glass + corner-heart + sprite background as
+             the heartbreak screen (see RushThemeArt) -- this and that
+             screen are the two places that are explicitly her corner of
+             the app end to end, so they share one skin, not two. */}
+          <RushThemeArt />
+          <div className="rushEndHead">
+            <p className="rushEndEyebrow">Puzzle Rush</p>
+            <p className="rushEndSub" style={{ fontSize: 12, fontWeight: 400, color: "var(--sh-dim)" }}>
+              Solve as many puzzles as you can before time runs out. Three wrong answers ends the rush early.
+            </p>
+          </div>
+          <div className="durationGrid">
+            {RUSH_DURATIONS.map(d => (
+              <button key={d.label} type="button" className="durationChip" onClick={() => startRush(d.seconds)}>
+                {d.label}
+                {d.seconds == null && <span className="newBadge">New</span>}
+              </button>
+            ))}
+          </div>
+          <div className="rushCounterRow" style={{ color: "var(--sh-dim)" }}>
+            <span>Lifetime solved: <b style={{ color: "var(--sh-text)" }}>{rushLifetime}</b></span>
+            <button className="btn ghost" style={{ padding: "4px 10px", fontSize: 10, minHeight: 30 }} onClick={resetRushCounter}>Reset</button>
+          </div>
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <button className="rushEndTrophy" onClick={() => openLeaderboard(rushDuration ?? 60)} aria-label="View leaderboard" title="View leaderboard">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M18 3h-2V1H8v2H6C4.9 3 4 3.9 4 5v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.95V17H9v2h6v-2h-3v-3.11c1.63-.32 2.98-1.45 3.61-2.95C18.08 10.63 20 8.55 20 6V5c0-1.1-.9-2-2-2zM6 6V5h2v3.82C6.84 8.4 6 7.3 6 6zm12 0c0 1.3-.84 2.4-2 2.82V5h2v1z" /></svg>
+            </button>
+          </div>
+        </div>
+      </SubPage>
+    );
+  }
+
   if (siteView === "puzzlesHome") {
     return (
       <PuzzlesHomePage
         onBack={() => setSiteView("home")}
-        onDaily={() => { leaveActivity(); startPuzzle(dailyPuzzle(pz.PUZZLES)); setSiteView("play"); }}
-        onRanked={() => { leaveActivity(); setSiteView("play"); setRankedPuzzlesOpen(true); }}
-        onRush={() => { leaveActivity(); setSiteView("play"); setRushOpen(true); }}
+        onDaily={openDaily}
+        onLeaderboard={() => openLeaderboard(leaderboardDuration)}
+        onRanked={() => { leaveActivity(); setSiteView("ranked"); }}
+        onRush={() => { leaveActivity(); setSiteView("rush"); }}
+        sweetheart={sweetheart}
         puzzlesReady={!!puzzlesData}
         dailySolved={dailySolvedDate === todayKey()}
       />
@@ -3665,7 +3832,7 @@ export default function ZlegendsBot() {
         onBack={() => setSiteView(reviewReturnRef.current)}
         onReview={reviewPastedGame}
         onOpenSaved={reviewSavedGame}
-        hasLiveGame={mode === "play" && !result && !pastedGame && !activePuzzle && !quizOpening && !spectateMode && moveList.length > 0}
+        hasLiveGame={hasLiveGame}
         profile={profile}
         sweetheart={sweetheart}
       />
@@ -3675,7 +3842,7 @@ export default function ZlegendsBot() {
   if (siteView === "lessons") {
     return (
       <LessonsPage
-        onBack={() => setSiteView("home")}
+        onOpenings={() => enterMode("openings")}
         sweetheart={sweetheart}
       />
     );
@@ -4170,101 +4337,6 @@ export default function ZlegendsBot() {
         </div>
       </div>
 
-      {blindOpen && (
-        <Suspense fallback={
-          <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }}>
-            <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }} role="status" aria-label="Loading Blind Chess">
-              <div className="boxHead">Blind Chess</div>
-              <div style={{ height: 10, borderRadius: 999, overflow: "hidden", background: "#150C24" }}>
-                <div className="loadingBarFill" style={{ width: "60%", height: "100%", borderRadius: 999, background: "var(--cyan)" }} />
-              </div>
-            </div>
-          </div>
-        }>
-          <BlindMode onClose={() => setBlindOpen(false)} />
-        </Suspense>
-      )}
-
-      <Modal open={openingsOpen} onClose={() => setOpeningsOpen(false)} closeLabel="Close Openings Library"
-        style={{ maxHeight: "80vh", overflowY: "auto" }}>
-            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <PixelAvatar rows={BPIX} pal={BPAL} size={18} />
-              Openings Library
-            </div>
-            <div className="rows" style={{ maxHeight: "none" }}>
-              {OPENINGS.map(op => (
-                <button key={op.id} type="button" className="openingRow"
-                  style={{ display: "block", width: "100%", textAlign: "left", background: "transparent", border: "none", borderBottom: "1px solid #8B2FC92E", font: "inherit", color: "inherit", cursor: "pointer", padding: "6px 2px" }}
-                  onClick={() => startOpening(op)}>
-                  <div style={{ fontWeight: 700 }}>{op.name} <span style={{ opacity: 0.6, fontWeight: "normal" }}>({op.eco})</span></div>
-                  <div style={{ fontSize: 11, opacity: 0.75 }}>{op.summary}</div>
-                </button>
-              ))}
-            </div>
-      </Modal>
-
-      {/* Ranked Puzzles / Puzzle Rush: Sweetheart's rose palette (shModal/
-         shModalRow), not the game's usual violet/cyan -- same art-directed
-         exception as the heartbreak screen below. The top-level Puzzles
-         hub itself is PuzzlesHomePage.jsx now (a real page, not a modal);
-         these two stay modals since they're a quick pick reached from
-         inside a live board, same shape "back" leads to that page. */}
-      <Modal open={rankedPuzzlesOpen} onClose={() => { setRankedPuzzlesOpen(false); setSiteView("puzzlesHome"); }} closeLabel="Close Ranked Puzzles" className="shModal">
-            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--sh-text)" }}>
-              <PixelAvatar rows={PPIX} pal={PPAL} size={18} />
-              Ranked Puzzles — Pick a Rating
-            </div>
-            <div className="rows" style={{ maxHeight: "none" }}>
-              {pz.RATING_BANDS.map(band => {
-                const pool = puzzlesInBand(band);
-                return (
-                  <button key={band.id} type="button" className="shModalRow" disabled={!pool.length}
-                    style={{ display: "block", width: "100%", textAlign: "left", background: "transparent", font: "inherit", cursor: pool.length ? "pointer" : "default", padding: "10px 8px", border: "none", borderBottom: "1px solid #F06BAE33", borderRadius: "var(--r-sm)", opacity: pool.length ? 1 : 0.4, color: "var(--sh-text)" }}
-                    onClick={() => {
-                      setPuzzleBand(band);
-                      setRankedPuzzlesOpen(false);
-                      startPuzzle(pool[(Math.random() * pool.length) | 0]);
-                    }}>
-                    <div style={{ fontWeight: 700 }}>{band.label} <span style={{ color: "var(--sh-dim)", fontWeight: "normal" }}>({band.min}–{band.max === 9999 ? "2000+" : band.max})</span></div>
-                    <div style={{ fontSize: 11, color: "var(--sh-dim)" }}>{pool.length} puzzle{pool.length === 1 ? "" : "s"}</div>
-                  </button>
-                );
-              })}
-            </div>
-      </Modal>
-
-      <Modal open={rushOpen} onClose={() => { setRushOpen(false); setSiteView("puzzlesHome"); }} closeLabel="Close Puzzle Rush" className="rushThemeBox" minWidth={300} maxWidth={400} style={{ padding: 0 }}>
-        <div className="rushThemeInner">
-          {/* Same shattered-glass + corner-heart + sprite background as
-             the heartbreak screen (see RushThemeArt) -- this and that
-             screen are the two places that are explicitly her corner of
-             the app end to end, so they share one skin, not two. */}
-          <RushThemeArt />
-          <div className="rushEndHead">
-            <p className="rushEndEyebrow">Puzzle Rush</p>
-            <p className="rushEndSub" style={{ fontSize: 12, fontWeight: 400, color: "var(--sh-dim)" }}>
-              Solve as many puzzles as you can before time runs out. Three wrong answers ends the rush early.
-            </p>
-          </div>
-          <div className="durationGrid">
-            {RUSH_DURATIONS.map(d => (
-              <button key={d.label} type="button" className="durationChip" onClick={() => startRush(d.seconds)}>
-                {d.label}
-                {d.seconds == null && <span className="newBadge">New</span>}
-              </button>
-            ))}
-          </div>
-          <div className="rushCounterRow" style={{ color: "var(--sh-dim)" }}>
-            <span>Lifetime solved: <b style={{ color: "var(--sh-text)" }}>{rushLifetime}</b></span>
-            <button className="btn ghost" style={{ padding: "4px 10px", fontSize: 10, minHeight: 30 }} onClick={resetRushCounter}>Reset</button>
-          </div>
-          <div style={{ display: "flex", justifyContent: "center" }}>
-            <button className="rushEndTrophy" onClick={() => openLeaderboard(rushDuration ?? 60)} aria-label="View leaderboard" title="View leaderboard">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M18 3h-2V1H8v2H6C4.9 3 4 3.9 4 5v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.95V17H9v2h6v-2h-3v-3.11c1.63-.32 2.98-1.45 3.61-2.95C18.08 10.63 20 8.55 20 6V5c0-1.1-.9-2-2-2zM6 6V5h2v3.82C6.84 8.4 6 7.3 6 6zm12 0c0 1.3-.84 2.4-2 2.82V5h2v1z" /></svg>
-            </button>
-          </div>
-        </div>
-      </Modal>
 
       {/* Guarded outside Modal, not just via its `open` prop -- rushResult
          is null except right when this is meant to show, and JSX children
@@ -4366,44 +4438,14 @@ export default function ZlegendsBot() {
             }}>Copy</button>
       </Modal>
 
-      <Modal open={spectateOpen} onClose={() => setSpectateOpen(false)} closeLabel="Close Spectate Bots">
-            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              Spectate Bots
-            </div>
-            <div className="pv" style={{ fontSize: 12, opacity: 0.85 }}>
-              Pick a bot for each side and watch them play each other. No clicking required.
-            </div>
-            <div className="rows" style={{ maxHeight: "none", display: "flex", flexDirection: "column", gap: 10, padding: "4px 2px" }}>
-              <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
-                White
-                <select value={spectateWhiteIdx} onChange={e => setSpectateWhiteIdx(Number(e.target.value))}>
-                  {DIFFICULTIES.map((d, i) => !d.adaptive && <option key={i} value={i}>{d.label}</option>)}
-                </select>
-              </label>
-              <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
-                Black
-                <select value={spectateBlackIdx} onChange={e => setSpectateBlackIdx(Number(e.target.value))}>
-                  {DIFFICULTIES.map((d, i) => !d.adaptive && <option key={i} value={i}>{d.label}</option>)}
-                </select>
-              </label>
-              <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
-                Starting position
-                <select value={spectateOpeningId} onChange={e => setSpectateOpeningId(e.target.value)}>
-                  <option value="">Standard start</option>
-                  {OPENINGS.map(op => <option key={op.id} value={op.id}>{op.name}</option>)}
-                </select>
-              </label>
-            </div>
-            <button className="btn gold" style={{ fontSize: 12, padding: "8px 12px" }}
-              onClick={() => startSpectate(spectateWhiteIdx, spectateBlackIdx, spectateOpeningId)}>Start Spectating</button>
-      </Modal>
-
     </div>
   );
   };
 
   const onSection = (id) => {
     if (id === "home") { leaveActivity(); setSiteView("home"); }
+    else if (id === "play" && hasLiveGame) setSiteView("play");
+    else if (id === "play") { leaveActivity(); setSiteView("playHub"); }
     else enterMode(id === "learn" ? "lessons" : id);
   };
   /* Hidden during an activity so the board gets the screen. The header's
@@ -4412,7 +4454,7 @@ export default function ZlegendsBot() {
     || (mode === "play" && moveList.length > 0 && !result && !pastedGame));
   focusedRef.current = focused;
   const section = sectionForView({ siteView, rushMode, activePuzzle, pastedGame });
-  const darkNav = siteView === "puzzlesHome";
+  const darkNav = siteView === "puzzlesHome" && !sweetheart;
 
   return (
     <div className={"appShell" + (focused ? "" : " hasBottomBar")}>

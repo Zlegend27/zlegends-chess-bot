@@ -1,193 +1,101 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import StarField from "./StarField";
 import SocialBanner from "./SocialBanner";
-import PixelAvatar, { ZPAL, ZPIX } from "./PixelAvatar";
 import BotBubble from "./BotBubble";
+import MiniBoard from "./MiniBoard";
 import { pickWelcomeLine } from "../utils/botLines";
+import { fetchRecentGames, summarizeGame } from "../utils/gameHistory";
+import { utcDay } from "../utils/dailyStreak";
 import { getUiTheme } from "../utils/uiTheme";
 
-/* Same inline-SVG-path convention already used for the Juice Box/Puzzles/
-   Spectate icons elsewhere in the app (see App.jsx's icon row) -- kept
-   consistent rather than pulling in an icon library just for this page.
-   Puzzles/Spectate reuse those exact paths; Play/Openings/Blind get
-   their own custom icons below (renderIcon) instead of a plain
-   currentColor path, per direction: the bot sprite for Play, a colored
-   book for Openings, a blindfolded face for Blind. */
-const ICONS = {
-  puzzle: "M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5C13 2.12 11.88 1 10.5 1S8 2.12 8 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.49 0 2.7 1.21 2.7 2.7s-1.21 2.7-2.7 2.7H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.49 1.21-2.7 2.7-2.7s2.7 1.21 2.7 2.7V22H17c1.1 0 2-.9 2-2v-4h1.5c1.38 0 2.5-1.12 2.5-2.5S21.88 11 20.5 11z",
-  bolt: "M7 2v11h3v9l7-12h-4l4-8z",
-  eye: "M12 5c-5 0-9.27 3.11-11 7 1.73 3.89 6 7 11 7s9.27-3.11 11-7c-1.73-3.89-6-7-11-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
-  star: "M12 2l2.9 6.9L22 9.6l-5.5 4.8L18 22l-6-3.6L6 22l1.5-7.6L2 9.6l7.1-.7L12 2z",
-  search: "M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z",
-  trophy: "M7 4V2h10v2h4v3c0 2.21-1.79 4-4 4h-.08A6.007 6.007 0 0 1 13 15.92V18h3v2H8v-2h3v-2.08A6.007 6.007 0 0 1 7.08 9H7c-2.21 0-4-1.79-4-4V4h4zm-2 2v1c0 1.1.9 2 2 2V6H5zm12 0v3c1.1 0 2-.9 2-2V6h-2z",
-  cap: "M12 3 1 9l11 6 9-4.91V17h2V9L12 3zm0 13.5L4.24 12.3 3 13l9 5 9-5-1.24-.7L12 16.5zM5 14.18v3.82c0 1.1 3.13 3 7 3s7-1.9 7-3v-3.82l-7 3.82-7-3.82z",
-};
+const OUTCOME_LABEL = { win: "Won", loss: "Lost", draw: "Draw", abandoned: "Abandoned" };
 
-/** Play/Openings/Blind get bespoke icons instead of a single-fill path:
- *  Zlegend2700's own sprite for Play (it's literally who you're
- *  playing), a two-tone open book for Openings, and a blindfolded
- *  piñata-style face for Blind Chess. Everything else keeps the plain
- *  currentColor path + accent-tint treatment. */
-function renderIcon(id, sweetheart) {
-  if (id === "play") return <PixelAvatar rows={ZPIX} pal={ZPAL} size={46} />;
-  if (id === "openings") return (
-    <svg width="38" height="38" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 5.5C10.5 4 8 3 4 3v14c4 0 6.5 1 8 2.5V5.5z" fill={sweetheart ? "#F06BAE" : "#3EE7F5"} />
-      <path d="M12 5.5C13.5 4 16 3 20 3v14c-4 0-6.5 1-8 2.5V5.5z" fill="#F5D93E" />
-    </svg>
-  );
-  if (id === "puzzles") return (
-    <img src="/sweetheart-sprite.webp" alt="" width={40} height={40} style={{ imageRendering: "pixelated" }} />
-  );
-  if (id === "blind") return (
-    <svg width="38" height="38" viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="12" cy="12" r="9" fill="#F5D93E26" stroke="#F5D93E" strokeWidth="1.4" />
-      <path d="M2.3 8.3c-.6-.15-1-.75-.85-1.35" stroke="var(--magenta)" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-      <path d="M21.7 8.3c.6-.15 1-.75.85-1.35" stroke="var(--magenta)" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-      <rect x="3" y="9.5" width="18" height="5" rx="2.5" fill="var(--magenta)" />
-    </svg>
-  );
-  return null;
-}
-
-/* Puzzle Rush and Rank Bot deliberately aren't tiles here anymore --
-   Rush lives one level down inside Puzzles (same as in the app itself),
-   and Rank Bot graduated to its own spotlight in the Features section
-   below instead of competing for space as a 6th icon. */
-const MODES = [
-  { id: "play", label: "Play vs Bot", desc: "Challenge ZLEGEND2700 at any Elo. Can you beat it?", custom: true, featured: true },
-  { id: "puzzles", label: "Puzzles", desc: "Solve rated tactics with Sweetheart.", custom: true },
-  { id: "openings", label: "Openings Library", desc: "Study Italian, Sicilian, Ruy Lopez and more.", custom: true },
-  { id: "spectate", label: "Spectate Bots", desc: "Watch two bots battle. No clicking required.", icon: ICONS.eye },
-  { id: "blind", label: "Blind Chess", desc: "Play a full game by voice only. No board.", custom: true },
-  { id: "lessons", label: "Lessons", desc: "Structured lessons to level up your game.", icon: ICONS.cap },
+/* One a day, so Home gently points at something the player might not have
+   found. Each opens the same way its menu item does. */
+const SUGGESTIONS = [
+  { id: "rank", title: "Try Rank Bot", desc: "An adaptive bot that estimates your rating as you play." },
+  { id: "lessons", title: "Learn something new", desc: "Short lessons on openings and tactics." },
+  { id: "review", title: "Review a game", desc: "Paste any game, even one from Chess.com or Lichess, and see every move graded." },
+  { id: "rush", title: "Race the clock", desc: "Solve as many puzzles as you can in Puzzle Rush." },
+  { id: "openings", title: "Study an opening", desc: "Browse the Italian, Sicilian, Ruy Lopez and more." },
 ];
 
-/* The modes this page spotlights instead of tiling. Rank Bot keeps the same
-   label/desc it uses elsewhere in the app (see App.jsx's DIFFICULTIES).
-   Game Review's copy has to answer "what can I put in here?" before the
-   click, so it names the outside sites outright. */
-const FEATURES = [
-  { id: "review", eyebrow: "New Feature", label: "Game Review", desc: "Paste any game, even one from Chess.com or Lichess. See every move graded and practice your mistakes.", icon: ICONS.search },
-  { id: "rank", eyebrow: "Adaptive Bot", label: "Rank Bot", desc: "An adaptive bot that estimates your rating as you play.", icon: ICONS.star },
-];
-
-/* play/gold/cyan swap to Sweetheart's own gold/teal when the app-wide
-   theme is active (see getUiTheme) -- pink stays fixed to magenta
-   regardless, since the Puzzles tile is always hers no matter what board
-   color is selected (see the tokens.css --sh-* comment). */
-const getAccent = (sweetheart) => (sweetheart ? {
-  play: { text: "text-sh-lgold", bg: "bg-sh-lgold/12 group-hover:bg-sh-lgold/20", border: "border-sh-lgold/40 group-hover:border-sh-lgold/70" },
-  gold: { text: "text-sh-lgold", bg: "bg-sh-lgold/10 group-hover:bg-sh-lgold/18", border: "border-sh-lgold/30 group-hover:border-sh-lgold/60" },
-  cyan: { text: "text-sh-lteal", bg: "bg-sh-lteal/10 group-hover:bg-sh-lteal/18", border: "border-sh-lteal/30 group-hover:border-sh-lteal/60" },
-} : {
-  play: { text: "text-yellow", bg: "bg-yellow/12 group-hover:bg-yellow/20", border: "border-yellow/30 group-hover:border-yellow/60" },
-  gold: { text: "text-yellow", bg: "bg-yellow/10 group-hover:bg-yellow/18", border: "border-yellow/20 group-hover:border-yellow/50" },
-  cyan: { text: "text-cyan", bg: "bg-cyan/10 group-hover:bg-cyan/18", border: "border-cyan/20 group-hover:border-cyan/50" },
-});
-const PINK_ACCENT = { text: "text-magenta", bg: "bg-magenta/12 group-hover:bg-magenta/20", border: "border-magenta/30 group-hover:border-magenta/60" };
-const accentFor = (m, sweetheart) => (m.id === "puzzles" ? PINK_ACCENT : m.featured ? getAccent(sweetheart).play : getAccent(sweetheart).cyan);
-
-/** The site's front door -- the mode picker grid, then the socials
- *  section, under the app-wide header (see AppNav.jsx). Fresh Tailwind-only
- *  markup so it can't collide with any of the existing hand-written CSS (see
- *  vite.config.js's Tailwind comment for why that's safe here). Reuses
- *  the .root shell (dark gradient bg, color variables, safe-area
- *  padding) as its outer wrapper purely for free theming -- .root's own
- *  CSS never targets descendants by type/class the way e.g. .promoBox
- *  does, so nesting new markup inside it can't be fought by anything. */
-export default function HomePage({ onEnter, firstVisit, rankElo, rankGames, sweetheart }) {
-  /* ZLEGEND2700's welcome beat -- picked once per HomePage mount (not on
-     every render) so it doesn't reroll mid-typewriter, and dismissible
-     without needing to persist that choice anywhere: it's flavor, not a
-     tutorial the player is obligated to read every time. */
+/** The front door: what to do next, not a list of everything. The menu
+ *  (AppNav.jsx) covers the full tour, and repeating it here is what the old
+ *  tile grid did. Everything above the socials should fit on a phone screen. */
+export default function HomePage({
+  onEnter, onPlay, onDaily, onOpenSaved, hasLiveGame, daily, dailySolved, streak,
+  boardColors, pieceImgSrc, firstVisit, rankElo, rankGames, sweetheart,
+}) {
+  /* Picked once per mount so it doesn't reroll mid-typewriter. */
   const [dismissed, setDismissed] = useState(false);
   const welcomeLine = useMemo(
     () => pickWelcomeLine({ firstVisit, rankElo, games: rankGames }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
+  const [lastGame, setLastGame] = useState(null);
+  useEffect(() => {
+    let live = true;
+    fetchRecentGames(1).then((r) => { if (live && r.games?.[0]) setLastGame(summarizeGame(r.games[0])); });
+    return () => { live = false; };
+  }, []);
+
   const T = useMemo(() => getUiTheme(sweetheart), [sweetheart]);
-  const mutedLabel = T.mutedLabel;
-  /* HomePage-specific one-offs that don't repeat elsewhere -- not worth
-     a shared uiTheme.js slot for a single file's use. */
-  const featureBorder = sweetheart ? "border-sh-lgold/40" : "border-yellow/30";
-  const featureBorderHover = sweetheart ? "hover:border-sh-lgold/70" : "hover:border-yellow/60";
-  const featureGradientFrom = sweetheart ? "from-sh-lcard/90" : "from-panel/80";
-  const featureGradientTo = sweetheart ? "to-[#FFF3D9]" : "to-[#2A1F0EE6]";
+  const card = `flex w-full items-center gap-4 rounded-2xl border ${T.cardBorder} ${T.panelBg} p-3 text-left backdrop-blur-sm transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 ${T.ring}`;
+  const eyebrow = `text-[10px] font-bold uppercase tracking-[0.16em] ${T.dimText}`;
+  const suggestion = SUGGESTIONS[utcDay() % SUGGESTIONS.length];
+
   return (
     <div className="root">
       <StarField sweetheart={sweetheart} />
-      {!dismissed && (
-        <div className="mt-1">
-          <BotBubble line={welcomeLine} onDismiss={() => setDismissed(true)} />
-        </div>
-      )}
+      {!dismissed && <BotBubble line={welcomeLine} onDismiss={() => setDismissed(true)} />}
 
-      {/* App-icon style grid -- big square tiles (icon + label only, no
-          description) rather than the horizontal list-style cards this
-          used to be, per the "should look like a home screen" direction. */}
-      <div className="mt-5 w-full max-w-4xl">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {MODES.map((m) => {
-            const a = accentFor(m, sweetheart);
-            return (
-              <button
-                key={m.id}
-                onClick={() => onEnter(m.id)}
-                className={`group flex aspect-square flex-col items-center justify-center gap-3 rounded-3xl border ${a.border} ${T.panelBg} p-4 text-center backdrop-blur-sm transition hover:-translate-y-0.5 ${sweetheart ? "hover:bg-sh-lcard hover:shadow-[0_8px_24px_#1E857722]" : "hover:bg-panel/90 hover:shadow-[0_8px_24px_#3EE7F522]"}`}
-              >
-                <span className="flex h-14 shrink-0 items-center justify-center">
-                  {m.custom ? renderIcon(m.id, sweetheart) : (
-                    <svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor" className={a.text} aria-hidden="true"><path d={m.icon} /></svg>
-                  )}
-                </span>
-                <span className={"text-sm font-bold leading-tight " + T.ink}>{m.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      <div className="relative z-10 mt-3 flex w-full max-w-md flex-col gap-3">
+        <button type="button" className="btn gold" style={{ width: "100%" }} onClick={onPlay}>
+          {hasLiveGame ? "Resume Game" : "Play"}
+        </button>
 
-      {/* Features -- spotlights implemented modes with room for a sentence,
-          rather than competing for space as more grid tiles. */}
-      <div className="mt-10 w-full max-w-4xl">
-        <h2 className={"mb-4 text-xs font-bold uppercase tracking-[0.2em] " + T.dimText}>Features</h2>
-        <div className="flex flex-col gap-3">
-          {FEATURES.map((f) => (
-            <button
-              key={f.id}
-              onClick={() => onEnter(f.id)}
-              className={`group flex w-full flex-col items-center gap-4 rounded-3xl border ${featureBorder} bg-gradient-to-br ${featureGradientFrom} ${featureGradientTo} p-6 text-center backdrop-blur-sm transition hover:-translate-y-0.5 ${featureBorderHover} sm:flex-row sm:text-left`}
-            >
-              <span className="flex h-16 shrink-0 items-center justify-center">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor" className={T.accentText} aria-hidden="true"><path d={f.icon} /></svg>
+        <button type="button" className={card} onClick={onDaily} disabled={!daily}>
+          {daily ? (
+            <MiniBoard fen={daily.fen} colors={boardColors} pieceImgSrc={pieceImgSrc} />
+          ) : (
+            <div className={`size-[104px] shrink-0 rounded-lg ${T.panelBg}`} aria-hidden="true" />
+          )}
+          <span className="min-w-0">
+            <span className={"block " + eyebrow}>Daily Puzzle</span>
+            <span className={"mt-1 block text-base font-bold " + T.ink}>
+              {dailySolved ? "Solved today" : daily ? `Rated ${daily.rating}` : "Loading…"}
+            </span>
+            {streak > 0 && (
+              <span className={"mt-1 block text-xs " + T.dimText}>{streak} day streak</span>
+            )}
+          </span>
+        </button>
+
+        {lastGame && (
+          <button type="button" className={card} onClick={() => onOpenSaved(lastGame)}>
+            <span className="min-w-0 flex-1">
+              <span className={"block " + eyebrow}>Your last game</span>
+              <span className={"mt-1 block text-sm font-bold " + T.ink}>
+                vs {lastGame.opponent} · {OUTCOME_LABEL[lastGame.outcome]}
               </span>
-              <span className="min-w-0 flex-1">
-                <span className={"block text-[10px] font-bold uppercase tracking-[0.2em] " + T.accentText}>{f.eyebrow}</span>
-                <span className={"mt-1 block text-lg font-bold " + T.ink}>{f.label}</span>
-                <span className={"mt-1 block text-sm leading-relaxed " + T.dimText}>{f.desc}</span>
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
+            </span>
+            <span className={"shrink-0 text-xs font-bold " + T.interactiveText}>Review</span>
+          </button>
+        )}
 
-      {/* A link out to its own page rather than a mode-grid tile, since it
-          isn't a mode you "enter" the way Play/Puzzles/etc. are. */}
-      <div className="mt-8 flex items-center gap-3">
-        <button
-          onClick={() => onEnter("leaderboard")}
-          className={`inline-flex items-center gap-2 rounded-xl border ${sweetheart ? "border-sh-rose/30 hover:border-sh-rose/60" : "border-violet/30 hover:border-violet/60"} ${T.panelBg} px-5 py-2 text-sm font-bold ${mutedLabel} backdrop-blur-sm transition hover:-translate-y-0.5 ${T.hoverInk}`}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={ICONS.trophy} /></svg>
-          Leaderboard
+        <button type="button" className={card} onClick={() => onEnter(suggestion.id)}>
+          <span className="min-w-0">
+            <span className={"block text-sm font-bold " + T.ink}>{suggestion.title}</span>
+            <span className={"mt-1 block text-xs leading-relaxed " + T.dimText}>{suggestion.desc}</span>
+          </span>
         </button>
       </div>
 
       <SocialBanner />
 
-      <footer className={"mt-3 pb-6 text-center text-xs " + T.dimText}>
+      <footer className={"mt-3 text-center text-xs " + T.dimText}>
         Built by <a href="https://www.youtube.com/@Zlegend27" target="_blank" rel="noopener noreferrer" className={(sweetheart ? "text-sh-lteal" : "text-cyan") + " hover:underline"}>Zlegend27</a> — all rights reserved.
       </footer>
     </div>

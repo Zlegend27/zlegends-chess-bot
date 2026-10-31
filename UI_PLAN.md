@@ -1,6 +1,6 @@
 # UI Overhaul Plan
 
-Status: approved. Phases 0 and 1 are built. Phase 2 is next.
+Status: approved. Phases 0 to 3 are built. Phase 4 is next.
 Last updated: 2026-10-31.
 
 The goal is for the whole app to feel like one finished product: the same

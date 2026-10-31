@@ -11,7 +11,7 @@ import { getUiTheme } from "../utils/uiTheme";
  *  the player/trainer takes over the board. Same page-not-modal,
  *  own-page pattern as LeaderboardPage.jsx -- local state
  *  only, since nothing here touches the main Play board/engine. */
-export default function LessonsPage({ onBack, sweetheart }) {
+export default function LessonsPage({ onOpenings, sweetheart }) {
   const [lessonId, setLessonId] = useState(null);
   const [chapterNumber, setChapterNumber] = useState(null);
   const [trainerOpen, setTrainerOpen] = useState(false);
@@ -80,7 +80,7 @@ export default function LessonsPage({ onBack, sweetheart }) {
     <div className="root">
       <StarField sweetheart={sweetheart} />
 
-      {backLink("Back", lesson ? () => setLessonId(null) : onBack)}
+      {lesson && backLink("Back", () => setLessonId(null))}
 
       <div className="hdr">
         <h1 style={{ fontSize: 34, display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
@@ -91,12 +91,21 @@ export default function LessonsPage({ onBack, sweetheart }) {
           <svg width="30" height="30" viewBox="0 0 24 24" fill="var(--cyan)" aria-hidden="true">
             <path d="M12 3 1 9l11 6 9-4.91V17h2V9L12 3zm0 13.5L4.24 12.3 3 13l9 5 9-5-1.24-.7L12 16.5zM5 14.18v3.82c0 1.1 3.13 3 7 3s7-1.9 7-3v-3.82l-7 3.82-7-3.82z" />
           </svg>
-          Lessons
+          {lesson ? "Lessons" : "Learn"}
         </h1>
         <div className="sub">{lesson ? lesson.title : "Pick a lesson"}</div>
       </div>
 
       <div className="mt-4 flex w-full max-w-md flex-col gap-3">
+        {!lesson && (
+          <button
+            onClick={onOpenings}
+            className={`rounded-2xl border ${T.cardBorder} ${T.panelBg} px-4 py-3 text-left backdrop-blur-sm transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 ${T.ring}`}
+          >
+            <div className={"font-bold " + T.ink}>Openings Library</div>
+            <div className={"mt-1 text-xs " + T.dimText}>Study the Italian, Sicilian, Ruy Lopez and more.</div>
+          </button>
+        )}
         {!lesson ? (
           LESSONS.map(l => {
             const ready = l.chapters.filter(c => !c.comingSoon).length;

@@ -2,7 +2,7 @@ import { describe, test, expect } from "vitest";
 import { pathForView, viewForPath, sectionForView, historyStep } from "./routes";
 
 describe("page addresses", () => {
-  test.each(["home", "play", "puzzlesHome", "leaderboard", "review", "lessons"])("%s survives a refresh", (view) => {
+  test.each(["home", "playHub", "play", "puzzlesHome", "leaderboard", "review", "lessons", "openings", "watch", "ranked", "rush"])("%s survives a refresh", (view) => {
     expect(viewForPath(pathForView(view))).toBe(view);
   });
 
@@ -19,6 +19,10 @@ describe("the highlighted menu item", () => {
   test("follows the page", () => {
     expect(sectionForView({ siteView: "leaderboard" })).toBe("puzzles");
     expect(sectionForView({ siteView: "lessons" })).toBe("learn");
+    expect(sectionForView({ siteView: "playHub" })).toBe("play");
+    expect(sectionForView({ siteView: "watch" })).toBe("play");
+    expect(sectionForView({ siteView: "openings" })).toBe("learn");
+    expect(sectionForView({ siteView: "rush" })).toBe("puzzles");
   });
 
   test("stays on the section when its activity runs on the Play screen", () => {

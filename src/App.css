@@ -798,3 +798,6 @@ select:hover{ border-color:var(--cyan); }
   .shAnalyzeSpinner.busy{ animation:none; }
   .evalbar .pfill{ transition:none; }
 }
+
+/* A .promoBox used as a page rather than a popup: no pop-in, and full width. */
+.promoBox.subPageBox{ flex-direction:column; gap:12px; width:100%; box-sizing:border-box; animation:none; }

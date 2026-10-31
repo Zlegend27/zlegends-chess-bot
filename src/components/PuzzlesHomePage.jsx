@@ -9,13 +9,20 @@ import { overlayOpen } from "../utils/routes";
  *  same art-directed exception as the heartbreak screen and the Ranked/
  *  Rush picker modals in App.jsx. Same page-shell pattern as
  *  LeaderboardPage.jsx (own Escape handling). */
-export default function PuzzlesHomePage({ onBack, onDaily, onRanked, onRush, puzzlesReady, dailySolved }) {
+/* Rose in both themes, on cream in the app's light mode. */
+const PALETTES = {
+  dark: { card: "linear-gradient(165deg, #3B1030 0%, #2A0C28 46%, #1D0A22 100%)", first: "linear-gradient(160deg, #4A1740E0, #2A0C28E0)", row: "#1D0A22CC", body: "#EBD3E4", dim: "var(--sh-dim)", ink: "text-paper" },
+  light: { card: "linear-gradient(165deg, #FFF6E9 0%, #FDE2ED 100%)", first: "linear-gradient(160deg, #FFFFFFE0, #FDE2EDE0)", row: "#FFF6E9CC", body: "#4A1030", dim: "#8B5468", ink: "text-sh-link" },
+};
+
+export default function PuzzlesHomePage({ onBack, onDaily, onRanked, onRush, onLeaderboard, puzzlesReady, dailySolved, sweetheart }) {
   useEffect(() => {
     const onKeyDown = (e) => { if (e.key === "Escape" && !overlayOpen()) onBack(); };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onBack]);
 
+  const P = sweetheart ? PALETTES.light : PALETTES.dark;
   const modes = [
     {
       id: "daily", onClick: onDaily,
@@ -43,28 +50,14 @@ export default function PuzzlesHomePage({ onBack, onDaily, onRanked, onRush, puz
           background -- StarField's shape choice is independent of the
           light/dark background toggle, purely decorative. */}
       <StarField sweetheart />
-      {/* Always hers regardless of the app-wide theme toggle (unrelated to
-          boardColorId -- this whole page already ignores board color and
-          stays permanently rose/dark), so the nav matches the page it's
-          drawn on. `dark` requests that fixed dark-rose nav look directly
-          -- NOT `sweetheart`, which now means the app-wide LIGHT mode
-          (see AppNav.jsx) and would put a light nav bar on this
-          permanently-dark page. */}
 
-      <button
-        onClick={onBack}
-        className="mb-2 inline-flex items-center gap-1.5 self-start border-0 bg-transparent text-sm font-bold text-dim transition-colors hover:text-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z" /></svg>
-        Back
-      </button>
 
       <div className="w-full max-w-2xl">
         <div
           className="relative overflow-hidden rounded-3xl border p-7"
           style={{
             borderColor: "#F06BAE66",
-            background: "linear-gradient(165deg, #3B1030 0%, #2A0C28 46%, #1D0A22 100%)",
+            background: P.card,
           }}
         >
           <div
@@ -89,7 +82,7 @@ export default function PuzzlesHomePage({ onBack, onDaily, onRanked, onRush, puz
             >
               <img src="/sweetheart-angry.gif" alt="Sweetheart, unimpressed" className="w-[150px] drop-shadow-[0_8px_16px_rgba(0,0,0,0.35)]" />
             </div>
-            <p className="min-w-[240px] flex-1 text-sm leading-relaxed" style={{ color: "#EBD3E4" }}>
+            <p className="min-w-[240px] flex-1 text-sm leading-relaxed" style={{ color: P.body }}>
               She's not mad. Okay, she's a little mad. Sharpen your tactics before she loses her patience —
               daily puzzles, ranked bands, or race the clock in Rush.
             </p>
@@ -114,18 +107,27 @@ export default function PuzzlesHomePage({ onBack, onDaily, onRanked, onRush, puz
                   className="flex flex-col gap-2.5 rounded-2xl border p-3.5 text-left transition disabled:cursor-default disabled:opacity-50"
                   style={{
                     borderColor: i === 0 ? "#F06BAE" : "#F06BAE3D",
-                    background: i === 0 ? "linear-gradient(160deg, #4A1740E0, #2A0C28E0)" : "#1D0A22CC",
+                    background: i === 0 ? P.first : P.row,
                   }}
                 >
                   <span className="flex size-8 items-center justify-center rounded-md" style={{ background: "#F06BAE26", color: "#F7C5E3" }}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">{m.icon}</svg>
                   </span>
-                  <span className="text-sm font-bold text-paper">{m.name}</span>
-                  <span className="text-[11px] leading-relaxed" style={{ color: "var(--sh-dim)" }}>{m.desc}</span>
+                  <span className={"text-sm font-bold " + P.ink}>{m.name}</span>
+                  <span className="text-[11px] leading-relaxed" style={{ color: P.dim }}>{m.desc}</span>
                 </button>
               ))}
             </div>
           </div>
+
+          <button
+            type="button"
+            onClick={onLeaderboard}
+            className={`relative mt-4 h-11 w-full rounded-2xl border text-sm font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sh-teal ${P.ink}`}
+            style={{ borderColor: "#F06BAE3D", background: P.row }}
+          >
+            Leaderboard
+          </button>
 
           <div className="relative mt-6 flex gap-2" aria-hidden="true">
             <i className="block size-[11px] rotate-45 rounded-sm" style={{ background: "#E2536B" }} />
@@ -135,7 +137,7 @@ export default function PuzzlesHomePage({ onBack, onDaily, onRanked, onRush, puz
           </div>
 
           {!puzzlesReady && (
-            <p className="relative mt-4 text-center text-xs" style={{ color: "var(--sh-dim)" }}>Loading puzzles…</p>
+            <p className="relative mt-4 text-center text-xs" style={{ color: P.dim }}>Loading puzzles…</p>
           )}
         </div>
       </div>
