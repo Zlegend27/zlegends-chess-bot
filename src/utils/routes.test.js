@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { pathForView, viewForPath, sectionForView } from "./routes";
+import { pathForView, viewForPath, sectionForView, historyStep } from "./routes";
 
 describe("page addresses", () => {
   test.each(["home", "play", "puzzlesHome", "leaderboard", "review", "lessons"])("%s survives a refresh", (view) => {
@@ -26,5 +26,19 @@ describe("the highlighted menu item", () => {
     expect(sectionForView({ siteView: "play", rushMode: true })).toBe("puzzles");
     expect(sectionForView({ siteView: "play", activePuzzle: {} })).toBe("puzzles");
     expect(sectionForView({ siteView: "play", pastedGame: true })).toBe("review");
+  });
+});
+
+describe("back swipes", () => {
+  test("leaving Home adds the one back step", () => {
+    expect(historyStep("puzzlesHome", false)).toBe("push");
+  });
+
+  test("moving between sections doesn't add another", () => {
+    expect(historyStep("lessons", true)).toBe("replace");
+  });
+
+  test("returning Home uses that step up", () => {
+    expect(historyStep("home", true)).toBe("back");
   });
 });

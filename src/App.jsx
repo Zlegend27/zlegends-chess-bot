@@ -11,7 +11,7 @@ import StarField from "./components/StarField";
 import Confetti from "./components/Confetti";
 import HomePage from "./components/HomePage";
 import { AppHeader, BottomBar } from "./components/AppNav";
-import { pathForView, sectionForView, viewForPath } from "./utils/routes";
+import { historyStep, pathForView, sectionForView, viewForPath } from "./utils/routes";
 import GamePanel from "./components/GamePanel";
 import BotBubble from "./components/BotBubble";
 import { pickPostGameLine } from "./utils/botLines";
@@ -711,21 +711,36 @@ export default function ZlegendsBot() {
   const closeSettings = () => setSettingsOpen(false);
 
   /* Keeps the address bar in step with siteView, and lets the back gesture
-     drive siteView. The first run only tidies the address, so landing here
-     doesn't add a back step that goes nowhere. */
+     drive siteView. See historyStep for why back only ever goes one step.
+     Landing straight on a page puts Home underneath it, so that one step
+     exists from the start. */
   const firstRouteRef = useRef(true);
   useEffect(() => {
-    const path = pathForView(siteView);
-    const first = firstRouteRef.current;
-    firstRouteRef.current = false;
-    if (window.location.pathname === path) return;
-    const url = path + window.location.search + window.location.hash;
-    if (first) history.replaceState(null, "", url);
-    else history.pushState(null, "", url);
+    const url = pathForView(siteView) + window.location.search + window.location.hash;
+    const onSubPage = !!history.state?.subPage;
+    if (firstRouteRef.current) {
+      firstRouteRef.current = false;
+      if (siteView === "home" || onSubPage) return;
+      history.replaceState(null, "", "/");
+      history.pushState({ subPage: true }, "", url);
+      return;
+    }
+    if (window.location.pathname === pathForView(siteView)) return;
+    const step = historyStep(siteView, onSubPage);
+    if (step === "back") history.back();
+    else if (step === "push") history.pushState({ subPage: true }, "", url);
+    else history.replaceState(siteView === "home" ? null : { subPage: true }, "", url);
   }, [siteView]);
+  const focusedRef = useRef(false);
   const leaveActivityRef = useRef(null);
   useEffect(() => {
     const onPopState = () => {
+      /* A stray edge swipe shouldn't pull anyone out of a game, so undo it.
+         Leaving is still one tap away on the logo. */
+      if (focusedRef.current) {
+        history.pushState({ subPage: true }, "", pathForView("play"));
+        return;
+      }
       const view = viewForPath(window.location.pathname);
       setMusicOpen(false);
       setSettingsOpen(false);
@@ -2019,7 +2034,7 @@ export default function ZlegendsBot() {
     setBlindOpen(false);
 
     if (mode === "replay") {
-      history.replaceState(null, "", window.location.pathname + window.location.search);
+      history.replaceState(history.state, "", window.location.pathname + window.location.search);
       setMode("play");
       setReplayPlaying(false);
     }
@@ -2043,7 +2058,7 @@ export default function ZlegendsBot() {
     maybeSaveAbandonedGame();
     maybeCountAbandonedRankGame();
     if (mode === "replay") {
-      history.replaceState(null, "", window.location.pathname + window.location.search);
+      history.replaceState(history.state, "", window.location.pathname + window.location.search);
       setMode("play");
       setReplayPlaying(false);
     }
@@ -3443,7 +3458,7 @@ export default function ZlegendsBot() {
      the player steps over to the Leaderboard and back. */
   const boardVars = { "--boardLight": getBoardColor(boardColorId).light, "--boardDark": getBoardColor(boardColorId).dark };
   const appOverlays = (
-    <div style={boardVars}>
+    <div className="appOverlays" style={boardVars}>
       <Modal open={musicOpen} onClose={closeMusic} closeLabel="Close Juice Box"
         className="jbBox" style={{ width: 300, minWidth: undefined, maxWidth: undefined }}>
             <img src="/VIRTUOSO_MOLE.webp" alt="Juice Box" className="jbMole" />
@@ -4395,6 +4410,7 @@ export default function ZlegendsBot() {
      logo is still there as the way out. */
   const focused = siteView === "play" && (rushMode || !!activePuzzle || spectateMode
     || (mode === "play" && moveList.length > 0 && !result && !pastedGame));
+  focusedRef.current = focused;
   const section = sectionForView({ siteView, rushMode, activePuzzle, pastedGame });
   const darkNav = siteView === "puzzlesHome";
 

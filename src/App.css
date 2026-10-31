@@ -18,6 +18,9 @@
    phone the page also has to clear the fixed bottom bar. */
 .appShell{ --headerH:calc(57px + env(safe-area-inset-top)); background:var(--void); min-height:100dvh; }
 .appHeader{ padding-top:env(safe-area-inset-top); }
+/* Popups that open from the header sit outside .root, so they need the
+   text color and font it would otherwise have passed down. */
+.appOverlays{ color:var(--white); font-family:var(--font-body); }
 @media (max-width:767px){
   .appShell.hasBottomBar .root{ padding-bottom:calc(84px + env(safe-area-inset-bottom)); }
 }

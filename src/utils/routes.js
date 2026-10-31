@@ -31,3 +31,12 @@ export function sectionForView({ siteView, rushMode, activePuzzle, pastedGame })
 /** Escape closes a popup or the profile menu first. Pages check this before
  *  treating it as Back. */
 export const overlayOpen = () => !!document.querySelector(".promoOv, [role='menu']");
+
+/** How the browser history should follow a move to `view`. Sections are tabs,
+ *  so history never holds more than Home plus the current page: one back
+ *  swipe at most, and always to Home. `onSubPage` says we're on that second
+ *  entry. */
+export function historyStep(view, onSubPage) {
+  if (view === "home") return onSubPage ? "back" : "replace";
+  return onSubPage ? "replace" : "push";
+}
