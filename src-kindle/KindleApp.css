@@ -45,6 +45,43 @@ body {
   display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;
 }
 .kShopItem .kSwatch { width: 44px; height: 44px; border-radius: 10px; border: 3px solid #0000001a; }
+/* Trophy shelf reuses the shop's card grid -- same object, different
+   content, so it needs no layout of its own. Unbeaten opponents stay
+   visible but faded: an empty shelf slot is the thing that makes the
+   filled ones mean something. */
+.kTrophyItem { font-size: 13px; }
+.kTrophyItem.kTrophyEmpty { opacity: 0.5; }
+.kTrophyWins { font-size: 15px; font-weight: bold; color: #8A5A00; }
+.kTrophyNote { font-size: 12px; color: #9A8A74; }
+.kTrophyTop {
+  display: flex; gap: 10px; width: min(92vw, 430px); margin-top: 4px;
+}
+.kTrophyTop > div {
+  flex: 1; background: #FFFDF7; border-radius: 14px; padding: 10px 6px; text-align: center;
+  box-shadow: 0 3px 8px #00000014; display: flex; flex-direction: column; gap: 2px;
+}
+.kTrophyTop b { font-size: 22px; color: #E8622C; line-height: 1; }
+.kTrophyTop span { font-size: 11px; color: #8A6A4B; }
+/* Daily streak, beside the coins. Only rendered once it's alive, so it
+   never sits there showing a demoralising zero. */
+.kStreakBadge {
+  background: #FFE0D0; color: #C2410C; font-weight: bold; font-size: 14px;
+  padding: 5px 10px; border-radius: 999px; box-shadow: 0 2px 0 #F0B49A;
+}
+.kTrophyBtn { background: #FFE9C4; color: #8A5A00; box-shadow: 0 3px 0 #E8C46A; }
+.kTrophyBtn:active { box-shadow: 0 1px 0 #E8C46A; }
+/* Post-win "ready for the next one?" prompt. */
+.kStepUp {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center;
+  width: min(94vw, 430px); margin-top: 10px; padding: 10px 12px; border-radius: 14px;
+  background: #EAF7EE; border: 2px solid #A9DFBF; font-size: 14px; color: #1E4620;
+}
+.kStepUp span { flex: 1; min-width: 160px; }
+.kStepUp button {
+  font-family: inherit; font-size: 14px; font-weight: bold; padding: 8px 14px; border: none;
+  border-radius: 12px; background: #6FCF97; color: #1E4620; box-shadow: 0 3px 0 #4F9E6E; cursor: pointer;
+}
+.kStepUp button:active { transform: translateY(2px); box-shadow: none; }
 .kShopItem button {
   font-family: inherit; font-size: 13px; padding: 6px 10px; border: none; border-radius: 10px;
   background: #6FCF97; color: #1E4620; box-shadow: 0 2px 0 #4F9E6E; cursor: pointer;

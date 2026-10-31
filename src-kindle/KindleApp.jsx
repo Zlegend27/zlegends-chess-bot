@@ -10,7 +10,7 @@ import { KID_PUZZLE_BANDS, kidPuzzlesInBand, kidDailyPuzzle } from "./kidPuzzles
 import {
   loadShopState, addCoins, spendCoins, buyHat, buyBoard, equipHat, equipBoard, HATS, BOARDS,
   buyTune, equipTune, buyAnimal, buyPiece, equipPiece, PIECES, setMusicVolume, markDailyPuzzleSolved,
-  markLessonComplete, recordRushResult,
+  markLessonComplete, recordRushResult, recordWin,
 } from "./kidShop";
 import { cburnettPieceSvgUrl } from "../src/utils/cburnettPieceSvg";
 import { woodPieceSvgUrl } from "../src/utils/woodPieceSvg";
@@ -35,10 +35,22 @@ const formatKidClock = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, 
 /* Same ramp idea as the main app's Puzzle Rush: climb a band every few
    solves in a row, drop back one on a miss. */
 const RUSH_STEP_UP_EVERY = 3;
-const todayKey = () => {
+/* Built from a Date rather than string-formatted inline, so "yesterday"
+   is a real date subtraction and rolls over months and years correctly
+   -- the daily streak depends on comparing against it. */
+const dayKeyFrom = (d) => `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`;
+const todayKey = () => dayKeyFrom(new Date());
+const yesterdayKey = () => {
   const d = new Date();
-  return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`;
+  d.setUTCDate(d.getUTCDate() - 1);
+  return dayKeyFrom(d);
 };
+/* Medal tiers for the trophy shelf. The first win against an opponent
+   is the one that actually matters to a kid, so bronze lands there
+   rather than making her grind for the first bit of recognition. */
+const medalFor = (wins) => (wins >= 15 ? "🥇" : wins >= 5 ? "🥈" : wins >= 1 ? "🥉" : null);
+/* Wins against the current opponent before suggesting the next one up. */
+const WINS_BEFORE_NUDGE = 3;
 /* Coin rewards scale with difficulty instead of a flat amount, so beating
    a tougher bot or solving a harder puzzle actually feels like it earned
    more. Puzzle bands cap at 15 (the top, "hard" 1200+ band); bots go up
@@ -224,6 +236,23 @@ export default function KindleApp() {
   const equippedHat = shop.equippedHat;
   const boardTheme = BOARDS.find(b => b.id === shop.equippedBoard) || BOARDS[0];
   const boardVars = { "--kBoardLight": boardTheme.light, "--kBoardDark": boardTheme.dark };
+  const [trophyOpen, setTrophyOpen] = useState(false);
+
+  /* A stored streak of 5 means nothing if the last solve was a fortnight
+     ago -- it's only alive if the last solve was today or yesterday.
+     Derived at render rather than expired on load, so nothing has to run
+     on a timer and a tab left open overnight still tells the truth. */
+  const liveDailyStreak =
+    (shop.dailyPuzzleSolvedDate === todayKey() || shop.dailyPuzzleSolvedDate === yesterdayKey())
+      ? (shop.dailyStreak || 0) : 0;
+  const dailyDoneToday = shop.dailyPuzzleSolvedDate === todayKey();
+  const totalWins = Object.values(shop.winsByAnimal || {}).reduce((a, b) => a + b, 0);
+  const winsVsCurrent = shop.winsByAnimal?.[DIFFICULTIES[difficultyIdx].id] || 0;
+  /* Next opponent she can actually choose -- skips unlockables she
+     hasn't bought, so the nudge never points at something she'd have to
+     pay for to accept. -1 when she's already at the top. */
+  const nextOpponentIdx = DIFFICULTIES.findIndex((d, i) =>
+    i > difficultyIdx && (!d.unlockable || shop.ownedAnimals.includes(d.id)));
   useEffect(() => { audio.setTune(shop.equippedTune); }, [audio, shop.equippedTune]);
   useEffect(() => { audio.setVolume(shop.musicVolume / 100); }, [audio, shop.musicVolume]);
 
@@ -278,7 +307,10 @@ export default function KindleApp() {
     if (!over) return;
     if (over.winner === playerColorRef.current) {
       audio.sfxWin();
-      setShop(s => addCoins(s, botCoinReward(difficultyIdx)));
+      /* Coins AND a trophy-shelf tally in one update -- two separate
+         setShop calls would each start from the same `s` and the second
+         would discard the first's change. */
+      setShop(s => recordWin(addCoins(s, botCoinReward(difficultyIdx)), DIFFICULTIES[difficultyIdx].id));
       setWinBurst(n => n + 1);
     }
     else if (over.winner === 0) { /* draw: no stinger, keep it neutral */ }
@@ -564,7 +596,7 @@ export default function KindleApp() {
             const reward = puzzleCoinReward(activePuzzle.rating);
             setShop(s => {
               const next = addCoins(s, reward);
-              return isDailyPuzzle ? markDailyPuzzleSolved(next, todayKey()) : next;
+              return isDailyPuzzle ? markDailyPuzzleSolved(next, todayKey(), yesterdayKey()) : next;
             });
           }
           rerender();
@@ -704,7 +736,8 @@ export default function KindleApp() {
             <div className="kStatus">Pick a puzzle level!</div>
             <div className="kCtrls">
               <button onClick={startDailyPuzzle}>
-                📅 Daily Puzzle{shop.dailyPuzzleSolvedDate === todayKey() ? " ✓" : ""}
+                📅 Daily Puzzle{dailyDoneToday ? " ✓" : ""}
+                {liveDailyStreak > 0 && ` · 🔥 ${liveDailyStreak}`}
               </button>
             </div>
             <div className="kCtrls">
@@ -903,6 +936,10 @@ export default function KindleApp() {
         </div>
         <div className="kHdrRight">
           <span className="kCoinBadge">🪙 {shop.coins}</span>
+          {liveDailyStreak > 0 && (
+            <span className="kStreakBadge" title={`${liveDailyStreak}-day daily puzzle streak`}>🔥 {liveDailyStreak}</span>
+          )}
+          <button className="kIconBtn kTrophyBtn" onClick={() => setTrophyOpen(true)} title="Trophies">🏆</button>
           <button className="kIconBtn kLessonBtn" onClick={() => setView("lessonsHub")} title="Lessons">🎓</button>
           <button className="kIconBtn kShopBtn" onClick={() => setShopOpen(true)} title="Shop">🛍️</button>
           <button className="kIconBtn kMusicBtn" onClick={() => setMusicOn(audio.toggle())} title={musicOn ? "Pause music" : "Play music"}>
@@ -914,6 +951,20 @@ export default function KindleApp() {
         </div>
       </div>
       <div className="kStatus">{status}</div>
+
+      {/* Shown only in the moment after a win, rather than as a standing
+          banner -- that's when "want a harder one?" is a reward instead
+          of nagging, and it disappears by itself on the next move. */}
+      {result && result.winner === playerColor && winsVsCurrent >= WINS_BEFORE_NUDGE && nextOpponentIdx >= 0 && (
+        <div className="kStepUp">
+          <AnimalIcon kind={DIFFICULTIES[nextOpponentIdx].label} size={36} />
+          <span>
+            That&apos;s <b>{winsVsCurrent} wins</b> against {opponentName}! Ready for{" "}
+            <b>{DIFFICULTIES[nextOpponentIdx].label}</b> {starLabel(DIFFICULTIES[nextOpponentIdx].stars)}?
+          </span>
+          <button onClick={() => { setDifficultyIdx(nextOpponentIdx); newGame(playerColor); }}>Let&apos;s try!</button>
+        </div>
+      )}
 
       <div className="kCaptureRow">
         <span className="kCaptureLabel">{opponentName}'s captures:</span>
@@ -967,6 +1018,39 @@ export default function KindleApp() {
         <button className="kBtnPurple" onClick={() => setView("puzzle")} disabled={thinking}>🧩 Puzzles</button>
         <button className="kBtnPurple" onClick={() => setView("lessons")}>❓ How to Play</button>
       </div>
+
+      {trophyOpen && (
+        <div className="kShopOv" onClick={e => { if (e.target === e.currentTarget) setTrophyOpen(false); }}>
+          <button className="kCloseX" onClick={() => setTrophyOpen(false)} aria-label="Close Trophies">✕</button>
+          <h2 className="kLessonTitle" style={{ textAlign: "center" }}>Your Trophies</h2>
+          <div className="kTrophyTop">
+            <div><b>{totalWins}</b><span>win{totalWins === 1 ? "" : "s"}</span></div>
+            <div><b>🔥 {liveDailyStreak}</b><span>day streak</span></div>
+            <div><b>{shop.dailyBestStreak || 0}</b><span>best streak</span></div>
+          </div>
+          <div className="kShopGrid">
+            {DIFFICULTIES.map(d => {
+              const locked = d.unlockable && !shop.ownedAnimals.includes(d.id);
+              const wins = shop.winsByAnimal?.[d.id] || 0;
+              const medal = medalFor(wins);
+              return (
+                <div className={"kShopItem kTrophyItem" + (wins ? "" : " kTrophyEmpty")} key={d.id}>
+                  <AnimalIcon kind={d.label} size={44} mood={wins > 0 ? "happy" : undefined} />
+                  <div>{d.label} {starLabel(d.stars)}</div>
+                  {locked
+                    ? <span className="kTrophyNote">🔒 Not unlocked</span>
+                    : wins > 0
+                      ? <span className="kTrophyWins">{medal} {wins} win{wins === 1 ? "" : "s"}</span>
+                      : <span className="kTrophyNote">Not beaten yet!</span>}
+                </div>
+              );
+            })}
+          </div>
+          <div className="kMoves" style={{ width: "min(92vw, 430px)", textAlign: "center", fontSize: 14 }}>
+            🥉 1 win &nbsp;·&nbsp; 🥈 5 wins &nbsp;·&nbsp; 🥇 15 wins
+          </div>
+        </div>
+      )}
 
       {newGameConfirm && (
         <div className="kShopOv" onClick={e => { if (e.target === e.currentTarget) setNewGameConfirm(false); }}>

@@ -39,6 +39,16 @@ function defaultState() {
     equippedHat: "none", equippedBoard: "classic", equippedTune: "classic", equippedPiece: "classic",
     musicVolume: 60, dailyPuzzleSolvedDate: null,
     completedLessons: [], bestRushStreak: {},
+    /* Wins per opponent id, for the trophy shelf. Coins get spent and
+       vanish; this is the one number that only ever goes up, which is
+       the point -- a kid needs somewhere to see that she's getting
+       better, not just richer. */
+    winsByAnimal: {},
+    /* Consecutive days the daily puzzle has been solved. dailyStreak is
+       the stored count; whether it's still ALIVE depends on the date
+       (see liveDailyStreak in KindleApp) -- a stored 5 means nothing if
+       the last solve was a fortnight ago. */
+    dailyStreak: 0, dailyBestStreak: 0,
   };
 }
 
@@ -141,8 +151,29 @@ export function setMusicVolume(state, volume) {
   return next;
 }
 
-export function markDailyPuzzleSolved(state, dateKey) {
-  const next = { ...state, dailyPuzzleSolvedDate: dateKey };
+/** Records today's daily-puzzle solve and advances the streak.
+ *  `prevDayKey` is yesterday's key -- passed in rather than computed
+ *  here so the date logic lives in exactly one place (KindleApp's
+ *  dayKeyFrom), and so this stays a pure function of its arguments.
+ *  Re-solving on a day already credited is a no-op, so the streak can't
+ *  be farmed by replaying the same puzzle. */
+export function markDailyPuzzleSolved(state, dateKey, prevDayKey) {
+  if (state.dailyPuzzleSolvedDate === dateKey) return state;
+  const streak = state.dailyPuzzleSolvedDate === prevDayKey ? (state.dailyStreak || 0) + 1 : 1;
+  const next = {
+    ...state,
+    dailyPuzzleSolvedDate: dateKey,
+    dailyStreak: streak,
+    dailyBestStreak: Math.max(state.dailyBestStreak || 0, streak),
+  };
+  save(next);
+  return next;
+}
+
+/** One more win against a given opponent. Never resets. */
+export function recordWin(state, animalId) {
+  const winsByAnimal = { ...state.winsByAnimal, [animalId]: (state.winsByAnimal?.[animalId] || 0) + 1 };
+  const next = { ...state, winsByAnimal };
   save(next);
   return next;
 }
