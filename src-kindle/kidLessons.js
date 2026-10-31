@@ -365,4 +365,213 @@ export const KID_LESSON_CHAPTERS = [
       },
     ],
   },
+
+  /* ---- Opening repertoire chapters -------------------------------
+     The five chapters above teach ideas that apply to any position.
+     These two are different: they teach ONE named opening each, one as
+     White and one as Black, so there's a plan to reach for on move 1
+     instead of improvising every game.
+
+     They're a deliberate pair rather than two unrelated openings. The
+     Vienna is 1.e4 e5 2.Nc3, and the Black chapter answers 1.e4 with
+     1...e5 -- so both live in the same pawn structure and every pattern
+     learned on one side shows up on the other. (A Scandinavian or
+     Caro-Kann would have meant learning two unrelated worlds, and the
+     Scandinavian specifically contradicts "Opening Habits", which
+     teaches not to bring the queen out early.)
+
+     Every SAN line below is checked by scripts/verifyKidLessons.mjs --
+     run it after any edit here. Opening lines are far easier to typo
+     than concept lessons, and a wrong `acceptable` move is invisible
+     until a kid is stuck on it. */
+  {
+    id: "vienna",
+    title: "The Vienna",
+    subtitle: "Your opening as White -- with a sneaky trap",
+    teacher: "Owl",
+    beats: [
+      {
+        type: "narration",
+        demoMoves: [],
+        text: "Time to pick your very own opening! When you're White, you get to decide how the whole game starts. I'm going to teach you mine: the Vienna. It's got a secret weapon.",
+      },
+      {
+        type: "narration",
+        demoMoves: ["e4", "e5"],
+        text: "It starts the normal way -- you take the middle with e4, they copy you with e5. So far, so ordinary. Now comes the choice that makes it the Vienna.",
+      },
+      {
+        type: "think",
+        demoMoves: ["e4", "e5"],
+        prompt: "Bring out a knight -- but NOT the one next to your king. Use the other one!",
+        acceptable: ["Nc3"],
+        hint: "It's the knight sitting on b1, over on the queen's side.",
+        nudge: "This knight here -- send it to the square the arrow points at. Then I'll show you why that one and not the other.",
+        answer: "Nc3! That's the Vienna. Here's the secret: it guards your e4 pawn, AND it leaves your f-pawn free. The other knight would have stood right in the f-pawn's way -- and that pawn is about to do something exciting.",
+      },
+      {
+        type: "narration",
+        demoMoves: ["e4", "e5", "Nc3", "Nf6"],
+        text: "Say they develop a knight to f6, attacking your e4 pawn. Most players would defend it quietly. You're not going to do that. You're going to attack.",
+      },
+      {
+        type: "think",
+        demoMoves: ["e4", "e5", "Nc3", "Nf6"],
+        prompt: "Charge the free f-pawn two squares forward!",
+        acceptable: ["f4"],
+        hint: "Remember why we chose Nc3 -- the f-pawn has a clear road.",
+        nudge: "That's the pawn -- push it to the square the arrow shows. This is the whole point of the Vienna!",
+        answer: "f4! This is the Vienna Gambit. You're offering them a pawn to blow the centre wide open. Scary for them, fun for you.",
+      },
+      {
+        type: "narration",
+        demoMoves: ["e4", "e5", "Nc3", "Nf6", "f4", "exf4"],
+        text: "If they grab it, don't panic -- that's exactly what you wanted. Their knight on f6 is now standing on a square you can attack, and you have a pawn ready to do it.",
+      },
+      {
+        type: "think",
+        demoMoves: ["e4", "e5", "Nc3", "Nf6", "f4", "exf4"],
+        prompt: "Push your e-pawn forward and kick their knight!",
+        acceptable: ["e5"],
+        hint: "Which of your pawns can attack the knight sitting on f6?",
+        nudge: "Push this pawn to the arrow's square -- the knight won't have anywhere good to go.",
+        answer: "e5! The knight has to run all the way home, and look at the middle of the board -- it's all yours. You gave up one pawn and got the whole centre.",
+      },
+      {
+        type: "narration",
+        demoMoves: ["e4", "e5", "Nc3", "Nf6", "f4", "Nxe4"],
+        text: "Now my favourite part. Sometimes they get greedy and snatch your e4 pawn with the knight instead. That looks clever... but it's a mistake, and there's a punishment.",
+      },
+      {
+        type: "think",
+        demoMoves: ["e4", "e5", "Nc3", "Nf6", "f4", "Nxe4"],
+        prompt: "Owl's Trap! Bring your queen out to the edge -- there's a square where she attacks two things at once.",
+        acceptable: ["Qh5"],
+        hint: "Follow the long diagonal from your queen towards their king -- which square causes the most trouble?",
+        nudge: "Your queen goes right here. Watch what she's attacking once she lands.",
+        answer: "Qh5! Yes -- normally I'd tell you off for an early queen move, but this one WORKS. She's hitting the pawn on e5 and staring at f7, their weakest square. They're in real trouble.",
+      },
+      {
+        type: "narration",
+        demoMoves: ["e4", "e5", "Nc3", "Nf6", "f4", "Nxe4", "Qh5", "g6"],
+        text: "Usually they block with g6 to shoo your queen away. But now their king and that greedy knight are lined up... and your queen can take a pawn WITH CHECK.",
+      },
+      {
+        type: "think",
+        demoMoves: ["e4", "e5", "Nc3", "Nf6", "f4", "Nxe4", "Qh5", "g6"],
+        prompt: "Snap up the e5 pawn with your queen -- it's check, and it's a fork!",
+        acceptable: ["Qxe5+"],
+        hint: "Your queen can capture a pawn and give check at the same time.",
+        nudge: "Queen takes that pawn. Look at what else she's attacking after the check!",
+        answer: "Qxe5+! It's check, so they MUST deal with their king -- and the moment they do, you take that greedy knight for free. That's a fork, and that's Owl's Trap. Remember it!",
+      },
+      {
+        type: "quiz",
+        demoMoves: ["e4", "e5", "Nc3", "Nc6"],
+        prompt: "Last thing: what if they DON'T play Nf6, and go Nc6 instead?",
+        options: [
+          { label: "Bring the bishop to c4", correct: true, move: "Bc4",
+            note: "Nice. Bc4 points straight at f7, you can still play f4 later, and you're following all the golden rules. The Vienna is flexible -- Nc3 first always works." },
+          { label: "Give up and start a different opening", correct: false,
+            note: "Never! The Vienna's first move is always Nc3. Whatever they do, you just keep developing -- bishop out, castle, and push f4 when it's ready." },
+          { label: "Rush Qh5 again", correct: false,
+            note: "Careful -- Qh5 only worked because they'd blundered. Without that mistake your queen just gets chased around, exactly like Opening Habits warned." },
+        ],
+      },
+      {
+        type: "narration",
+        demoMoves: ["e4", "e5", "Nc3"],
+        text: "That's the Vienna! Two moves to remember -- e4, then Nc3 -- then f4 when the moment comes, and Owl's Trap if they get greedy. Go play it in a real game!",
+      },
+    ],
+  },
+
+  {
+    id: "two-knights",
+    title: "Two Knights",
+    subtitle: "Your opening as Black -- and the trap you MUST know",
+    teacher: "Owl",
+    beats: [
+      {
+        type: "narration",
+        demoMoves: [],
+        text: "Now the other half. When you're Black you don't get to pick first -- you have to answer. Let's give you a plan for the most common opening move in chess.",
+      },
+      {
+        type: "think",
+        demoMoves: ["e4"],
+        prompt: "They played e4 and grabbed the middle. Take your fair share -- copy them!",
+        acceptable: ["e5"],
+        hint: "Which of your pawns can march two squares and stand right opposite theirs?",
+        nudge: "This pawn, two squares forward. Same idea as theirs -- claim the centre.",
+        answer: "e5! You've stopped them owning the middle by themselves. And here's a bonus: this is the same structure as the Vienna you just learned -- you already know these positions from the other side.",
+      },
+      {
+        type: "narration",
+        demoMoves: ["e4", "e5", "Nf3"],
+        text: "They bring a knight out and attack your e5 pawn. You need to defend it -- but lazily defending isn't enough. Defend AND develop with the same move.",
+      },
+      {
+        type: "think",
+        demoMoves: ["e4", "e5", "Nf3"],
+        prompt: "Develop a knight so it guards your e5 pawn.",
+        acceptable: ["Nc6"],
+        hint: "One of your knights can jump out and cover e5 at the same time.",
+        nudge: "That knight, to the arrow's square -- it defends the pawn and gets into the game at once.",
+        answer: "Nc6! Perfect -- pawn defended, piece developed, one move. That's the golden rule working for you.",
+      },
+      {
+        type: "narration",
+        demoMoves: ["e4", "e5", "Nf3", "Nc6", "Bc4"],
+        text: "Watch out -- their bishop just swung to c4, aiming straight at f7. That's the square only your king defends. Don't panic, but do pay attention.",
+      },
+      {
+        type: "think",
+        demoMoves: ["e4", "e5", "Nf3", "Nc6", "Bc4"],
+        prompt: "Develop your other knight and counter-attack their e4 pawn!",
+        acceptable: ["Nf6"],
+        hint: "Your knight on g8 can jump out and hit their centre pawn.",
+        nudge: "This knight goes here -- defending is good, but attacking back is better.",
+        answer: "Nf6! Now you've got both knights out and you're attacking THEM. This opening has a name: the Two Knights. It's yours now.",
+      },
+      {
+        type: "narration",
+        demoMoves: ["e4", "e5", "Nf3", "Nc6", "Bc4", "Nf6", "Ng5"],
+        text: "Now the important bit. Some players jump Ng5 here, piling onto f7. This is the single most common trap you'll ever face as Black -- so let's make sure it never gets you.",
+      },
+      {
+        type: "think",
+        demoMoves: ["e4", "e5", "Nf3", "Nc6", "Bc4", "Nf6", "Ng5"],
+        prompt: "Fight back in the centre -- push your d-pawn two squares!",
+        acceptable: ["d5"],
+        hint: "A pawn push that blocks the bishop's diagonal AND hits their e4 pawn.",
+        nudge: "This pawn, two forward. It gets in the bishop's way and attacks at the same time.",
+        answer: "d5! Good -- you've blocked the bishop that was aiming at f7 and attacked in the middle. They'll capture with exd5. And THEN comes the moment that decides the game.",
+      },
+      {
+        type: "narration",
+        demoMoves: ["e4", "e5", "Nf3", "Nc6", "Bc4", "Nf6", "Ng5", "d5", "exd5", "Nxd5", "Nxf7"],
+        text: "DANGER! This is what happens if you take back with the knight. Their knight crashes into f7 and forks your queen and your rook at once. This is the Fried Liver -- and it has eaten a LOT of kids. Never take with that knight.",
+      },
+      {
+        type: "think",
+        demoMoves: ["e4", "e5", "Nf3", "Nc6", "Bc4", "Nf6", "Ng5", "d5", "exd5"],
+        prompt: "So DON'T recapture. Attack their bishop with your knight instead!",
+        acceptable: ["Na5"],
+        hint: "Your knight on c6 can jump sideways and attack the bishop on c4.",
+        nudge: "This knight, out to the edge. It looks strange -- but it chases off the bishop that was aiming at f7.",
+        answer: "Na5! This is the move that saves you. You chase away the dangerous bishop and the whole Fried Liver attack falls apart. Odd-looking, completely correct -- remember this one above everything else.",
+      },
+      {
+        type: "narration",
+        demoMoves: ["e4", "e5", "Nf3", "Nc6", "Bc4", "Nf6", "Ng5", "d5", "exd5", "Na5", "Bb5+", "c6", "dxc6", "bxc6"],
+        text: "A few moves later you've got your pawn back, two bishops, and a strong centre. You went from 'about to be forked' to completely fine -- just by knowing one move.",
+      },
+      {
+        type: "narration",
+        demoMoves: [],
+        text: "So: e5, Nc6, Nf6 -- and if the knight jumps to g5, play d5 and then Na5. That's your Black opening sorted. Now you've got a plan with both colours!",
+      },
+    ],
+  },
 ];

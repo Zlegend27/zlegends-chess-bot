@@ -17,6 +17,12 @@ import { AnimalIcon } from "./AnimalIcon";
 
 const TYPE_MS = 18;
 const FILES = "abcdefgh";
+/* Wrong tries before the board starts helping. Two is deliberate: one
+   miss is worth sitting with (that's the thinking), but a kid who's
+   missed twice is usually stuck rather than close, and guessing a third
+   time teaches nothing. At that point an arrow appears pointing at the
+   move, and Owl explains the idea once they play it. */
+const HINT_AFTER_WRONG = 2;
 
 export default function KidLessonPlayer({ chapter, renderPiece, boardVars, audio, onExit, onComplete }) {
   const engRef = useRef(null);
@@ -31,7 +37,13 @@ export default function KidLessonPlayer({ chapter, renderPiece, boardVars, audio
   const [targets, setTargets] = useState([]);
   const [lastMove, setLastMove] = useState(null);
 
-  const [thinkTried, setThinkTried] = useState(null); // { san, matched } | null
+  /* A "think" beat used to end on the very first attempt, right or
+     wrong -- one guess and Owl just played the answer for you. Now a
+     wrong move resets the board and lets the kid try again, so these
+     track the attempt history instead of a single shot. */
+  const [thinkDone, setThinkDone] = useState(null);   // { san } once solved/revealed
+  const [thinkWrong, setThinkWrong] = useState(0);    // wrong attempts this beat
+  const [lastWrong, setLastWrong] = useState(null);   // SAN of the most recent miss
   const [quizPicked, setQuizPicked] = useState(null); // option index | null
   const [quizSolved, setQuizSolved] = useState(false);
 
@@ -71,16 +83,35 @@ export default function KidLessonPlayer({ chapter, renderPiece, boardVars, audio
   };
 
   useEffect(() => {
-    setThinkTried(null);
+    setThinkDone(null);
+    setThinkWrong(0);
+    setLastWrong(null);
     setQuizPicked(null);
     setQuizSolved(false);
     if (beat) setupPosition();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [beatIdx]);
 
+  /* Only after HINT_AFTER_WRONG misses, and never once it's solved. */
+  const showHint = beat?.type === "think" && !thinkDone && thinkWrong >= HINT_AFTER_WRONG;
+
+  /* The from/to squares of the move the arrow points at -- resolved
+     against the live position (which a wrong attempt always resets back
+     to the beat's own position, so this stays valid across retries). */
+  const hintSquares = (() => {
+    if (!showHint || !beat?.acceptable?.length) return null;
+    const mv = eng.legalMoves().find(m => eng.sanOf(m) === beat.acceptable[0]);
+    return mv ? { from: M120TO64[mFrom(mv)], to: M120TO64[mTo(mv)] } : null;
+  })();
+
   const coachLine = !beat ? ""
     : beat.type === "narration" ? beat.text
-    : beat.type === "think" ? (thinkTried ? beat.answer : beat.prompt)
+    : beat.type === "think" ? (
+        thinkDone ? beat.answer
+        : showHint ? (beat.nudge || "Here -- follow the arrow and play that move. Then I'll tell you why it works!")
+        : thinkWrong > 0 ? (beat.retry || "Not quite! Have another go -- you can try as many times as you like.")
+        : beat.prompt
+      )
     : beat.type === "quiz" ? (quizPicked != null ? beat.options[quizPicked].note : beat.prompt)
     : "";
 
@@ -97,7 +128,16 @@ export default function KidLessonPlayer({ chapter, renderPiece, boardVars, audio
     return () => clearInterval(t);
   }, [coachLine, muted]);
 
-  const boardInteractive = beat?.type === "think" && !thinkTried;
+  const boardInteractive = beat?.type === "think" && !thinkDone;
+
+  /* Escape hatch once the arrow is up -- plays the move for them and
+     jumps straight to Owl's explanation, so a kid who still can't find
+     it (or can't be bothered) is never stuck on a beat. */
+  const revealAnswer = () => {
+    const san = beat.acceptable[0];
+    setThinkDone({ san });
+    setupPosition([san]);
+  };
 
   const onSquare = (i64) => {
     if (!boardInteractive) return;
@@ -109,18 +149,23 @@ export default function KidLessonPlayer({ chapter, renderPiece, boardVars, audio
       if (candidates.length > 0) {
         const san = eng.sanOf(candidates[0]);
         const matched = beat.acceptable.includes(san);
-        setThinkTried({ san, matched });
         setSelected(-1); setTargets([]);
-        if (!matched) {
+        if (matched) {
+          /* Play it for real so the board matches what Owl is about to
+             explain. */
+          setThinkDone({ san });
+          setupPosition([san]);
+        } else {
+          /* Reset to the beat's own position rather than playing the
+             answer -- the kid gets to try again, and the board still
+             shows the puzzle instead of spoiling it. */
           audio?.sfxWrong();
           setBoardShake(true);
           setTimeout(() => setBoardShake(false), 400);
+          setLastWrong(san);
+          setThinkWrong(n => n + 1);
+          setupPosition();
         }
-        /* Always land on a position that visually matches the answer
-           text -- a correct guess gets played for real; a wrong one is
-           replaced by the actual idea, so the board never contradicts
-           what Owl just said. */
-        setupPosition([matched ? san : beat.acceptable[0]]);
         return;
       }
     }
@@ -163,12 +208,15 @@ export default function KidLessonPlayer({ chapter, renderPiece, boardVars, audio
         const isSel = selected === i64;
         const isTarget = targets.includes(i64);
         const isLast = lastMove && (lastMove.from === sq120 || lastMove.to === sq120);
+        const isHintFrom = hintSquares && hintSquares.from === i64;
+        const isHintTo = hintSquares && hintSquares.to === i64;
         const squareName = FILES[f] + (r + 1);
         cells.push(
           <div key={i64} role="gridcell" tabIndex={0} aria-label={squareName}
             onClick={() => onSquare(i64)}
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSquare(i64); } }}
-            className={"kSq " + (light ? "kLight" : "kDark") + (isSel ? " kSel" : "") + (isLast ? " kLast" : "")}>
+            className={"kSq " + (light ? "kLight" : "kDark") + (isSel ? " kSel" : "") + (isLast ? " kLast" : "")
+              + (isHintFrom ? " kHintFrom" : "") + (isHintTo ? " kHintTo" : "")}>
             {p !== EMPTY && renderPiece(p)}
             {isTarget && <span className="kDot" />}
             {vf === 0 && <span className="kCoord kRk">{r + 1}</span>}
@@ -179,6 +227,37 @@ export default function KidLessonPlayer({ chapter, renderPiece, boardVars, audio
       rows.push(<div key={vr} role="row" className="kRow">{cells}</div>);
     }
     return rows;
+  };
+
+  /* The nudge arrow. Drawn in board coordinates (viewBox 0 0 8 8) over
+     the squares, so it scales with the board at any size. The lesson
+     board is always white-side-up, so the mapping needs no flip.
+     Deliberately a straight line even for knight moves -- the main app
+     bends those, but for a kid "this piece goes to that square" reads
+     more clearly as one straight arrow than an L-shaped path. */
+  const hintArrow = () => {
+    if (!hintSquares) return null;
+    const pt = (i64) => ({ x: (i64 % 8) + 0.5, y: (7 - ((i64 / 8) | 0)) + 0.5 });
+    const a = pt(hintSquares.from), b = pt(hintSquares.to);
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len, uy = dy / len;
+    const HEAD = 0.46, START_OFF = 0.3;
+    const start = { x: a.x + ux * START_OFF, y: a.y + uy * START_OFF };
+    const tipBase = { x: b.x - ux * HEAD, y: b.y - uy * HEAD };
+    const px = -uy, py = ux;
+    const head = [
+      `${b.x},${b.y}`,
+      `${tipBase.x + px * 0.26},${tipBase.y + py * 0.26}`,
+      `${tipBase.x - px * 0.26},${tipBase.y - py * 0.26}`,
+    ].join(" ");
+    return (
+      <svg className="kHintArrow" viewBox="0 0 8 8" aria-hidden="true">
+        <line x1={start.x} y1={start.y} x2={tipBase.x} y2={tipBase.y}
+          strokeWidth="0.19" strokeLinecap="round" />
+        <polygon points={head} />
+      </svg>
+    );
   };
 
   if (!beat) return null;
@@ -193,7 +272,10 @@ export default function KidLessonPlayer({ chapter, renderPiece, boardVars, audio
       <h2 className="kLessonTitle" style={{ marginTop: 4 }}>{chapter.title}</h2>
 
       <div className="kBoardWrap">
-        <div className={"kBoard" + (boardShake ? " kWrongShake" : "")} style={boardVars} role="grid" aria-label="Chess board">{buildBoardRows()}</div>
+        <div className={"kBoard" + (boardShake ? " kWrongShake" : "")} style={boardVars} role="grid" aria-label="Chess board">
+          {buildBoardRows()}
+          {hintArrow()}
+        </div>
       </div>
 
       <div className="kCoachPanel">
@@ -213,12 +295,16 @@ export default function KidLessonPlayer({ chapter, renderPiece, boardVars, audio
         </div>
 
         {beat.type === "think" && (
-          thinkTried ? (
-            <p className={"kThinkFeedback" + (thinkTried.matched ? " good" : "")}>
-              {thinkTried.matched ? `${thinkTried.san} -- that's it!` : `${thinkTried.san} -- not quite, but here's the idea above!`}
-            </p>
+          thinkDone ? (
+            <p className="kThinkFeedback good">{thinkDone.san} -- that's it! ⭐</p>
           ) : (
-            <p className="kThinkHint">{beat.hint || "Try a move on the board!"}</p>
+            <>
+              {lastWrong && <p className="kThinkFeedback">{lastWrong} -- not this time. Try again!</p>}
+              <p className="kThinkHint">{beat.hint || "Try a move on the board!"}</p>
+              {showHint && (
+                <button className="kThinkReveal" onClick={revealAnswer}>Just show me ▶</button>
+              )}
+            </>
           )
         )}
 

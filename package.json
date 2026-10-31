@@ -10,7 +10,8 @@
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives",
     "preview": "vite preview",
     "preview:kindle": "vite preview --config vite.config.kindle.js --port 5174",
-    "test": "vitest run"
+    "test": "vitest run",
+    "verify:lessons": "node scripts/verifyKidLessons.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.0",
