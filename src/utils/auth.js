@@ -1,4 +1,5 @@
 import { getSupabase } from "./supabase";
+import { beginHandoff, isIosHomeScreenApp, watchHandoff } from "./authHandoff";
 
 /* Discord OAuth via Supabase Auth -- chosen over email/password because
    this app's whole audience already lives on Discord (it's linked in
@@ -19,7 +20,9 @@ export async function signInWithDiscord() {
   if (!supabase) return;
   await supabase.auth.signInWithOAuth({
     provider: "discord",
-    options: { redirectTo: window.location.origin },
+    options: {
+      redirectTo: isIosHomeScreenApp() ? beginHandoff(window.location.origin) : window.location.origin,
+    },
   });
 }
 
@@ -42,7 +45,8 @@ export function watchAuthState(onChange) {
     if (!supabase || cancelled) return;
     supabase.auth.getSession().then(({ data }) => { if (!cancelled) onChange(data?.session ?? null); });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => onChange(session));
-    unsub = () => sub.subscription.unsubscribe();
+    const stopHandoff = isIosHomeScreenApp() ? watchHandoff(supabase) : () => {};
+    unsub = () => { sub.subscription.unsubscribe(); stopHandoff(); };
   });
   return () => { cancelled = true; unsub(); };
 }

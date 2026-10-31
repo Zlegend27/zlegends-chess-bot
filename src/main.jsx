@@ -2,6 +2,8 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { registerSW } from "virtual:pwa-register";
 import App from "./App.jsx";
+import HandoffLanding from "./components/HandoffLanding.jsx";
+import { readHandoffLanding } from "./utils/authHandoff";
 import "./index.css";
 
 /* With registerType "autoUpdate" this reloads the page as soon as a new
@@ -31,10 +33,12 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+const handoff = readHandoffLanding(window.location.search);
+
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <App />
+      {handoff ? <HandoffLanding {...handoff} /> : <App />}
     </ErrorBoundary>
   </React.StrictMode>,
 );
