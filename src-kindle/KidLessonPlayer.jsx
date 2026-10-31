@@ -17,12 +17,17 @@ import { AnimalIcon } from "./AnimalIcon";
 
 const TYPE_MS = 18;
 const FILES = "abcdefgh";
-/* Wrong tries before the board starts helping. Two is deliberate: one
-   miss is worth sitting with (that's the thinking), but a kid who's
-   missed twice is usually stuck rather than close, and guessing a third
-   time teaches nothing. At that point an arrow appears pointing at the
-   move, and Owl explains the idea once they play it. */
-const HINT_AFTER_WRONG = 2;
+/* Help arrives in two stages, so the board gives away as little as it
+   can for as long as it can.
+   Stage 1 (3 misses): the piece that should move glows. That answers
+   "which one?" and leaves "where to?" -- usually the whole lesson -- for
+   her to find.
+   Stage 2 (6 misses): an arrow adds the destination. By then she isn't
+   close, and more guessing teaches nothing. */
+const GLOW_AFTER_WRONG = 3;
+const ARROW_AFTER_WRONG = 6;
+/* How long the wrong square stays lit red / Owl stays sad. */
+const WRONG_FLASH_MS = 800;
 
 export default function KidLessonPlayer({ chapter, renderPiece, boardVars, audio, onExit, onComplete }) {
   const engRef = useRef(null);
@@ -44,6 +49,8 @@ export default function KidLessonPlayer({ chapter, renderPiece, boardVars, audio
   const [thinkDone, setThinkDone] = useState(null);   // { san } once solved/revealed
   const [thinkWrong, setThinkWrong] = useState(0);    // wrong attempts this beat
   const [lastWrong, setLastWrong] = useState(null);   // SAN of the most recent miss
+  const [wrongSquare, setWrongSquare] = useState(-1); // square to flash red
+  const wrongTimerRef = useRef(null);
   const [quizPicked, setQuizPicked] = useState(null); // option index | null
   const [quizSolved, setQuizSolved] = useState(false);
 
@@ -82,24 +89,31 @@ export default function KidLessonPlayer({ chapter, renderPiece, boardVars, audio
     rerender();
   };
 
+  useEffect(() => () => clearTimeout(wrongTimerRef.current), []);
+
   useEffect(() => {
     setThinkDone(null);
     setThinkWrong(0);
     setLastWrong(null);
+    setWrongSquare(-1);
+    clearTimeout(wrongTimerRef.current);
     setQuizPicked(null);
     setQuizSolved(false);
     if (beat) setupPosition();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [beatIdx]);
 
-  /* Only after HINT_AFTER_WRONG misses, and never once it's solved. */
-  const showHint = beat?.type === "think" && !thinkDone && thinkWrong >= HINT_AFTER_WRONG;
+  /* Two escalating tiers, never once it's solved (see the constants). */
+  const stillThinking = beat?.type === "think" && !thinkDone;
+  const showGlow = stillThinking && thinkWrong >= GLOW_AFTER_WRONG;
+  const showArrow = stillThinking && thinkWrong >= ARROW_AFTER_WRONG;
 
-  /* The from/to squares of the move the arrow points at -- resolved
-     against the live position (which a wrong attempt always resets back
-     to the beat's own position, so this stays valid across retries). */
+  /* The from/to squares of the move being hinted -- resolved against the
+     live position (a wrong attempt always resets back to the beat's own
+     position, so this stays valid across retries). `from` drives the
+     glow at stage 1; `to` and the arrow only appear at stage 2. */
   const hintSquares = (() => {
-    if (!showHint || !beat?.acceptable?.length) return null;
+    if (!showGlow || !beat?.acceptable?.length) return null;
     const mv = eng.legalMoves().find(m => eng.sanOf(m) === beat.acceptable[0]);
     return mv ? { from: M120TO64[mFrom(mv)], to: M120TO64[mTo(mv)] } : null;
   })();
@@ -108,7 +122,8 @@ export default function KidLessonPlayer({ chapter, renderPiece, boardVars, audio
     : beat.type === "narration" ? beat.text
     : beat.type === "think" ? (
         thinkDone ? beat.answer
-        : showHint ? (beat.nudge || "Here -- follow the arrow and play that move. Then I'll tell you why it works!")
+        : showArrow ? (beat.nudgeArrow || "Follow the arrow -- that's exactly where it goes. Play it and I'll explain why it works!")
+        : showGlow ? (beat.nudge || "See the piece that's glowing? That's the one to move. Now -- where should it go?")
         : thinkWrong > 0 ? (beat.retry || "Not quite! Have another go -- you can try as many times as you like.")
         : beat.prompt
       )
@@ -158,10 +173,16 @@ export default function KidLessonPlayer({ chapter, renderPiece, boardVars, audio
         } else {
           /* Reset to the beat's own position rather than playing the
              answer -- the kid gets to try again, and the board still
-             shows the puzzle instead of spoiling it. */
+             shows the puzzle instead of spoiling it.
+             Four signals fire together so a miss is unmissable even if
+             the sound is muted: the buzz, the board shake, the square
+             she dropped on flashing red, and Owl pulling a sad face. */
           audio?.sfxWrong();
           setBoardShake(true);
           setTimeout(() => setBoardShake(false), 400);
+          setWrongSquare(i64);
+          clearTimeout(wrongTimerRef.current);
+          wrongTimerRef.current = setTimeout(() => setWrongSquare(-1), WRONG_FLASH_MS);
           setLastWrong(san);
           setThinkWrong(n => n + 1);
           setupPosition();
@@ -209,14 +230,16 @@ export default function KidLessonPlayer({ chapter, renderPiece, boardVars, audio
         const isTarget = targets.includes(i64);
         const isLast = lastMove && (lastMove.from === sq120 || lastMove.to === sq120);
         const isHintFrom = hintSquares && hintSquares.from === i64;
-        const isHintTo = hintSquares && hintSquares.to === i64;
+        const isHintTo = showArrow && hintSquares && hintSquares.to === i64;
+        const isWrongSq = wrongSquare === i64;
         const squareName = FILES[f] + (r + 1);
         cells.push(
           <div key={i64} role="gridcell" tabIndex={0} aria-label={squareName}
             onClick={() => onSquare(i64)}
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSquare(i64); } }}
             className={"kSq " + (light ? "kLight" : "kDark") + (isSel ? " kSel" : "") + (isLast ? " kLast" : "")
-              + (isHintFrom ? " kHintFrom" : "") + (isHintTo ? " kHintTo" : "")}>
+              + (isHintFrom ? " kHintFrom" : "") + (isHintTo ? " kHintTo" : "") + (isWrongSq ? " kWrongSq" : "")}>
+            {isWrongSq && <span className="kWrongX" aria-hidden="true">✕</span>}
             {p !== EMPTY && renderPiece(p)}
             {isTarget && <span className="kDot" />}
             {vf === 0 && <span className="kCoord kRk">{r + 1}</span>}
@@ -236,7 +259,7 @@ export default function KidLessonPlayer({ chapter, renderPiece, boardVars, audio
      bends those, but for a kid "this piece goes to that square" reads
      more clearly as one straight arrow than an L-shaped path. */
   const hintArrow = () => {
-    if (!hintSquares) return null;
+    if (!showArrow || !hintSquares) return null;
     const pt = (i64) => ({ x: (i64 % 8) + 0.5, y: (7 - ((i64 / 8) | 0)) + 0.5 });
     const a = pt(hintSquares.from), b = pt(hintSquares.to);
     const dx = b.x - a.x, dy = b.y - a.y;
@@ -280,7 +303,10 @@ export default function KidLessonPlayer({ chapter, renderPiece, boardVars, audio
 
       <div className="kCoachPanel">
         <div className="kCoachHead">
-          <AnimalIcon kind={chapter.teacher} size={44} />
+          {/* Owl reacts: sad for the moment after a miss, happy once
+              it's solved. Same mood prop the Play screen uses. */}
+          <AnimalIcon kind={chapter.teacher} size={44}
+            mood={wrongSquare >= 0 ? "sad" : thinkDone ? "happy" : undefined} />
           <div className="kCoachMeta">
             <div className="kCoachName">{chapter.teacher}</div>
             <div className="kCoachStep">Step {beatIdx + 1} of {chapter.beats.length}</div>
@@ -299,9 +325,14 @@ export default function KidLessonPlayer({ chapter, renderPiece, boardVars, audio
             <p className="kThinkFeedback good">{thinkDone.san} -- that's it! ⭐</p>
           ) : (
             <>
-              {lastWrong && <p className="kThinkFeedback">{lastWrong} -- not this time. Try again!</p>}
+              {lastWrong && (
+                <p className="kThinkFeedback">
+                  <span className="kThinkX">✕</span> {lastWrong} isn&apos;t it -- try again!
+                  {thinkWrong > 1 && <span className="kTryCount"> ({thinkWrong} tries)</span>}
+                </p>
+              )}
               <p className="kThinkHint">{beat.hint || "Try a move on the board!"}</p>
-              {showHint && (
+              {showArrow && (
                 <button className="kThinkReveal" onClick={revealAnswer}>Just show me ▶</button>
               )}
             </>

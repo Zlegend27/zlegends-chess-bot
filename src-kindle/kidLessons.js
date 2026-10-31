@@ -406,7 +406,8 @@ export const KID_LESSON_CHAPTERS = [
         prompt: "Bring out a knight -- but NOT the one next to your king. Use the other one!",
         acceptable: ["Nc3"],
         hint: "It's the knight sitting on b1, over on the queen's side.",
-        nudge: "This knight here -- send it to the square the arrow points at. Then I'll show you why that one and not the other.",
+        nudge: "The glowing piece is the one you want -- your spare knight on b1. Now: which square brings it out without getting in anybody's way?",
+        nudgeArrow: "Follow the arrow -- b1 to c3. Play it and I'll show you why that knight and not the other one.",
         answer: "Nc3! That's the Vienna. Here's the secret: it guards your e4 pawn, AND it leaves your f-pawn free. The other knight would have stood right in the f-pawn's way -- and that pawn is about to do something exciting.",
       },
       {
@@ -420,7 +421,8 @@ export const KID_LESSON_CHAPTERS = [
         prompt: "Charge the free f-pawn two squares forward!",
         acceptable: ["f4"],
         hint: "Remember why we chose Nc3 -- the f-pawn has a clear road.",
-        nudge: "That's the pawn -- push it to the square the arrow shows. This is the whole point of the Vienna!",
+        nudge: "The glowing pawn is the one -- the f-pawn we deliberately kept free. How far can it charge?",
+        nudgeArrow: "Follow the arrow -- push it two squares to f4. This is the whole point of the Vienna!",
         answer: "f4! This is the Vienna Gambit. You're offering them a pawn to blow the centre wide open. Scary for them, fun for you.",
       },
       {
@@ -434,7 +436,8 @@ export const KID_LESSON_CHAPTERS = [
         prompt: "Push your e-pawn forward and kick their knight!",
         acceptable: ["e5"],
         hint: "Which of your pawns can attack the knight sitting on f6?",
-        nudge: "Push this pawn to the arrow's square -- the knight won't have anywhere good to go.",
+        nudge: "That's your e-pawn glowing. Push it forward at their knight -- how far does it need to go to attack f6?",
+        nudgeArrow: "Follow the arrow -- e4 to e5. The knight on f6 won't have anywhere good to go.",
         answer: "e5! The knight has to run all the way home, and look at the middle of the board -- it's all yours. You gave up one pawn and got the whole centre.",
       },
       {
@@ -448,7 +451,8 @@ export const KID_LESSON_CHAPTERS = [
         prompt: "Owl's Trap! Bring your queen out to the edge -- there's a square where she attacks two things at once.",
         acceptable: ["Qh5"],
         hint: "Follow the long diagonal from your queen towards their king -- which square causes the most trouble?",
-        nudge: "Your queen goes right here. Watch what she's attacking once she lands.",
+        nudge: "It's your queen glowing. Slide her out along the diagonal -- which square lets her hit two things at once?",
+        nudgeArrow: "Follow the arrow -- all the way out to h5. Watch what she's attacking the moment she lands.",
         answer: "Qh5! Yes -- normally I'd tell you off for an early queen move, but this one WORKS. She's hitting the pawn on e5 and staring at f7, their weakest square. They're in real trouble.",
       },
       {
@@ -462,7 +466,8 @@ export const KID_LESSON_CHAPTERS = [
         prompt: "Snap up the e5 pawn with your queen -- it's check, and it's a fork!",
         acceptable: ["Qxe5+"],
         hint: "Your queen can capture a pawn and give check at the same time.",
-        nudge: "Queen takes that pawn. Look at what else she's attacking after the check!",
+        nudge: "Your queen's glowing again. There's a pawn she can grab that gives check at the same time -- can you spot it?",
+        nudgeArrow: "Follow the arrow -- take the pawn on e5. It's check, and look what else she's attacking.",
         answer: "Qxe5+! It's check, so they MUST deal with their king -- and the moment they do, you take that greedy knight for free. That's a fork, and that's Owl's Trap. Remember it!",
       },
       {
@@ -503,7 +508,8 @@ export const KID_LESSON_CHAPTERS = [
         prompt: "They played e4 and grabbed the middle. Take your fair share -- copy them!",
         acceptable: ["e5"],
         hint: "Which of your pawns can march two squares and stand right opposite theirs?",
-        nudge: "This pawn, two squares forward. Same idea as theirs -- claim the centre.",
+        nudge: "The glowing pawn is the one to move. How far can a pawn travel on its very first move?",
+        nudgeArrow: "Follow the arrow -- two squares, e7 to e5, right opposite theirs.",
         answer: "e5! You've stopped them owning the middle by themselves. And here's a bonus: this is the same structure as the Vienna you just learned -- you already know these positions from the other side.",
       },
       {
@@ -517,7 +523,8 @@ export const KID_LESSON_CHAPTERS = [
         prompt: "Develop a knight so it guards your e5 pawn.",
         acceptable: ["Nc6"],
         hint: "One of your knights can jump out and cover e5 at the same time.",
-        nudge: "That knight, to the arrow's square -- it defends the pawn and gets into the game at once.",
+        nudge: "The glowing knight is the one. Which square brings it out AND guards your e5 pawn at the same time?",
+        nudgeArrow: "Follow the arrow -- b8 to c6. Defends the pawn and develops, all in one move.",
         answer: "Nc6! Perfect -- pawn defended, piece developed, one move. That's the golden rule working for you.",
       },
       {
@@ -531,7 +538,8 @@ export const KID_LESSON_CHAPTERS = [
         prompt: "Develop your other knight and counter-attack their e4 pawn!",
         acceptable: ["Nf6"],
         hint: "Your knight on g8 can jump out and hit their centre pawn.",
-        nudge: "This knight goes here -- defending is good, but attacking back is better.",
+        nudge: "Your other knight is glowing. Where can it jump so it attacks their e4 pawn right back?",
+        nudgeArrow: "Follow the arrow -- g8 to f6. Now you're the one doing the attacking.",
         answer: "Nf6! Now you've got both knights out and you're attacking THEM. This opening has a name: the Two Knights. It's yours now.",
       },
       {
@@ -545,7 +553,8 @@ export const KID_LESSON_CHAPTERS = [
         prompt: "Fight back in the centre -- push your d-pawn two squares!",
         acceptable: ["d5"],
         hint: "A pawn push that blocks the bishop's diagonal AND hits their e4 pawn.",
-        nudge: "This pawn, two forward. It gets in the bishop's way and attacks at the same time.",
+        nudge: "The glowing pawn is your d-pawn. Push it far enough to get in that bishop's way.",
+        nudgeArrow: "Follow the arrow -- two squares to d5. It blocks the bishop and hits the centre at once.",
         answer: "d5! Good -- you've blocked the bishop that was aiming at f7 and attacked in the middle. They'll capture with exd5. And THEN comes the moment that decides the game.",
       },
       {
@@ -559,7 +568,8 @@ export const KID_LESSON_CHAPTERS = [
         prompt: "So DON'T recapture. Attack their bishop with your knight instead!",
         acceptable: ["Na5"],
         hint: "Your knight on c6 can jump sideways and attack the bishop on c4.",
-        nudge: "This knight, out to the edge. It looks strange -- but it chases off the bishop that was aiming at f7.",
+        nudge: "It's your knight on c6 that's glowing. Don't recapture -- send it after that dangerous bishop instead.",
+        nudgeArrow: "Follow the arrow -- c6 out to a5. It looks odd, but it chases off the bishop aiming at f7.",
         answer: "Na5! This is the move that saves you. You chase away the dangerous bishop and the whole Fried Liver attack falls apart. Odd-looking, completely correct -- remember this one above everything else.",
       },
       {

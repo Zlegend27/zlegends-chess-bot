@@ -107,10 +107,9 @@ body {
 .kSq.kLast.kDark { background: #E0D27A; }
 .kSq.kDragOver { box-shadow: inset 0 0 0 4px #6FCF97; }
 .kSq.kHint { box-shadow: inset 0 0 0 4px #FFD166; }
-/* Lesson nudge: after two wrong tries the piece to move pulses and an
-   arrow points at where it goes (see kHintArrow). The pulse is on the
-   FROM square specifically -- "pick this one up" is the step a stuck kid
-   is missing; the arrow answers "and put it there". */
+/* Lesson nudges, in two stages. Stage 1 (3 misses) glows the piece that
+   should move -- "pick this one up" without giving away where it goes.
+   Stage 2 (6 misses) adds kHintTo and the kHintArrow overlay. */
 .kSq.kHintFrom { animation: kHintPulse 1.1s ease-in-out infinite; z-index: 2; }
 .kSq.kHintTo { box-shadow: inset 0 0 0 4px #4F9E6E88; }
 @keyframes kHintPulse {
@@ -123,6 +122,26 @@ body {
 }
 .kHintArrow line { stroke: #2E8B57; stroke-opacity: 0.85; }
 .kHintArrow polygon { fill: #2E8B57; fill-opacity: 0.85; }
+/* A miss has to be unmissable, including with the sound off -- the
+   square she actually dropped on goes red and wears a big ✕, alongside
+   the board shake and Owl's sad face. Fades on its own (WRONG_FLASH_MS)
+   so it never lingers over the retry. */
+.kSq.kWrongSq { animation: kWrongSquare 0.8s ease-out; z-index: 3; }
+@keyframes kWrongSquare {
+  0%, 60% { box-shadow: inset 0 0 0 5px #FF4C5B; background: #FFB3B9; }
+  100% { box-shadow: inset 0 0 0 0 #FF4C5B00; }
+}
+.kWrongX {
+  position: absolute; font-size: 30px; font-weight: bold; color: #D7263D;
+  pointer-events: none; animation: kWrongXPop 0.8s ease-out forwards;
+  text-shadow: 0 1px 0 #FFFFFFAA;
+}
+@keyframes kWrongXPop {
+  0% { transform: scale(0.4); opacity: 0; }
+  25% { transform: scale(1.25); opacity: 1; }
+  70% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1); opacity: 0; }
+}
 .kPc { font-size: 32px; display: inline-block; line-height: 1; }
 .kPc.kPcW { border-radius: 50%; background: #FFF2C2; box-shadow: 0 0 0 3px #F2A65A, 0 2px 3px #00000030; padding: 3px; color: #7A4A17; }
 .kPc.kPcB { border-radius: 50%; background: #CDB6E8; box-shadow: 0 0 0 3px #7C5CBF, 0 2px 3px #00000030; padding: 5px; color: #3B2C5C; }
@@ -270,8 +289,14 @@ body {
 .kCoachCaret { color: #E8622C; animation: kBlink 1s infinite; }
 @keyframes kBlink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
 .kThinkHint { font-size: 15px; font-style: italic; color: #7A5B3C; margin: 0; }
-.kThinkFeedback { font-size: 16px; font-weight: bold; color: #E8622C; margin: 0; }
+.kThinkFeedback { font-size: 17px; font-weight: bold; color: #D7263D; margin: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .kThinkFeedback.good { color: #4F9E6E; }
+.kThinkX {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; flex: none; border-radius: 50%;
+  background: #FFD9DC; color: #D7263D; font-size: 15px;
+}
+.kTryCount { font-weight: normal; font-size: 14px; color: #8A6A4B; }
 /* Only appears once the arrow is up (see HINT_AFTER_WRONG) -- a quiet
    way out, styled well below the real controls so it never looks like
    the thing you're supposed to press first. */
