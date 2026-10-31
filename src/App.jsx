@@ -31,10 +31,10 @@ import { saveGame, estimateRating } from "./utils/gameHistory";
 import { getDisplayName, setDisplayName } from "./utils/playerIdentity";
 import { submitRushScore } from "./utils/leaderboard";
 import { RUSH_DURATIONS } from "./utils/rushDurations";
-import LeaderboardPage from "./components/LeaderboardPage";
-import PuzzlesHomePage from "./components/PuzzlesHomePage";
-import LessonsPage from "./components/LessonsPage";
-import GameReviewPage from "./components/GameReviewPage";
+const LeaderboardPage = lazy(() => import("./components/LeaderboardPage"));
+const PuzzlesHomePage = lazy(() => import("./components/PuzzlesHomePage"));
+const LessonsPage = lazy(() => import("./components/LessonsPage"));
+const GameReviewPage = lazy(() => import("./components/GameReviewPage"));
 import { syncRankBotToSupabase, fetchRankBotFromSupabase, logRankBotMove } from "./utils/rankBot";
 import { ENGINE_VERSION } from "./utils/version";
 import { OPENINGS } from "./utils/openings";
@@ -869,7 +869,12 @@ export default function ZlegendsBot() {
     import("./utils/puzzles").then(m => setPuzzlesData({ PUZZLES: m.PUZZLES, RATING_BANDS: m.RATING_BANDS }));
   };
   useEffect(() => {
-    if (["home", "puzzlesHome", "ranked", "rush"].includes(siteView)) ensurePuzzlesLoaded();
+    if (["puzzlesHome", "ranked", "rush"].includes(siteView)) ensurePuzzlesLoaded();
+    /* Home only needs the puzzle pool for its Daily card, so it's fetched
+       after the first paint rather than in front of it. */
+    if (siteView !== "home") return undefined;
+    const timer = setTimeout(ensurePuzzlesLoaded, 1500);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [siteView]);
   const [puzzleBand, setPuzzleBand] = useState(null);
@@ -4470,7 +4475,7 @@ export default function ZlegendsBot() {
         onSettings={openSettings}
         onMusic={() => setMusicOpen(true)}
       />
-      {renderPage()}
+      <Suspense fallback={null}>{renderPage()}</Suspense>
       {!focused && <BottomBar section={section} onSection={onSection} sweetheart={sweetheart} dark={darkNav} />}
       {appOverlays}
     </div>

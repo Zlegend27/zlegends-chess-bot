@@ -1,4 +1,6 @@
 import { getSupabase } from "./supabase";
+import { storedSession } from "./restApi";
+import { loadSetting } from "./storage";
 import { beginHandoff, isIosHomeScreenApp, watchHandoff } from "./authHandoff";
 
 /* Discord OAuth via Supabase Auth -- chosen over email/password because
@@ -38,7 +40,16 @@ export async function signOut() {
  *  again on every future change. Returns an unsubscribe function, safe
  *  to call even if Supabase never finished loading (e.g. unmounted
  *  before the dynamic import resolved). */
+/* The sign-in library is about 55KB, so it only loads when there's a
+   session to restore, a sign-in in progress, or a sign-in returning to this
+   page. Everyone else is signed out and skips it. */
+function mayHaveSession() {
+  if (storedSession() || loadSetting("pendingSignIn", null)) return true;
+  return /access_token=|[?&]code=/.test(window.location.hash + window.location.search);
+}
+
 export function watchAuthState(onChange) {
+  if (!mayHaveSession()) { onChange(null); return () => {}; }
   let unsub = () => {};
   let cancelled = false;
   getSupabase().then((supabase) => {

@@ -1,5 +1,6 @@
 import { getSupabase } from "./supabase";
 import { getClientId } from "./clientId";
+import { isConfigured, restGet, storedUserId } from "./restApi";
 import { currentUserId } from "./auth";
 import { buildPgn } from "./pgn";
 
@@ -47,8 +48,7 @@ const K_FACTOR = 32;
  *  calibrated tiers, or { error: true } if Supabase isn't configured or
  *  the fetch fails. { games: 0 } means no qualifying games yet. */
 export async function estimateRating() {
-  const supabase = await getSupabase();
-  if (!supabase) return { error: true, message: "Rating isn't set up on this deployment yet." };
+  if (!isConfigured()) return { error: true, message: "Rating isn't set up on this deployment yet." };
   try {
     /* Abandoned games (saved for the analysis dataset with winner:null)
        must not reach the fold below -- a null winner scores 0.5 there,
@@ -58,14 +58,14 @@ export async function estimateRating() {
        final rating. Postgres guarantees no ordering without an ORDER BY,
        so without this the estimate could drift between loads even though
        the player hadn't played anything. */
-    const { data, error } = await supabase
-      .from("games")
-      .select("winner, player_color, difficulty_label, created_at")
-      .eq("client_id", getClientId())
-      .neq("result_reason", "Abandoned")
-      .in("difficulty_label", Object.keys(ANCHOR_ELO))
-      .order("created_at", { ascending: true });
-    if (error || !data) return { error: true, message: error?.message || "Couldn't load rating." };
+    const params = new URLSearchParams({
+      select: "winner,player_color,difficulty_label,created_at",
+      client_id: `eq.${getClientId()}`,
+      result_reason: "neq.Abandoned",
+      difficulty_label: `in.(${Object.keys(ANCHOR_ELO).map((l) => `"${l}"`).join(",")})`,
+      order: "created_at.asc",
+    });
+    const data = await restGet("games", params.toString());
     let rating = START_RATING;
     for (const g of data) {
       const opponentElo = ANCHOR_ELO[g.difficulty_label];
@@ -97,18 +97,14 @@ export function ownGamesFilter(userId, clientId) {
  *  { error } -- an unconfigured or unreachable backend should read as
  *  "couldn't load", not as "you haven't played any games". */
 export async function fetchRecentGames(limit = 15) {
-  const supabase = await getSupabase();
-  if (!supabase) return { error: "Game history isn't set up on this deployment yet." };
+  if (!isConfigured()) return { error: "Game history isn't set up on this deployment yet." };
   try {
-    const userId = await currentUserId();
-    const rows = supabase
-      .from("games")
-      .select("id, created_at, difficulty_label, player_color, winner, result_text, result_reason, pgn");
-    const { data, error } = await (userId ? rows.or(ownGamesFilter(userId, getClientId())) : rows.eq("client_id", getClientId()))
-      .not("pgn", "is", null)
-      .order("created_at", { ascending: false })
-      .limit(limit);
-    if (error || !data) { console.warn("[recent games]", error); return { error: GAMES_UNREACHABLE }; }
+    const userId = storedUserId();
+    const who = userId ? `or=(${ownGamesFilter(userId, getClientId())})` : `client_id=eq.${getClientId()}`;
+    const data = await restGet(
+      "games",
+      `select=id,created_at,difficulty_label,player_color,winner,result_text,result_reason,pgn&pgn=not.is.null&order=created_at.desc&limit=${limit}&${who}`
+    );
     return { games: data };
   } catch (e) {
     /* Raw fetch failures read as "TypeError: Failed to fetch" -- true, but

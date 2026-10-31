@@ -1,5 +1,6 @@
 import { getSupabase } from "./supabase";
 import { getClientId } from "./clientId";
+import { isConfigured, restGet } from "./restApi";
 
 /** Best-effort, mirrors gameHistory.js's saveGame -- never throws, never
  *  blocks gameplay. Upserts on client_id so each browser has exactly one
@@ -26,15 +27,11 @@ export async function syncRankBotToSupabase({ rankElo, rankGames, displayName })
  *  localStorage (new device/browser), not to override an in-progress
  *  session's local state. */
 export async function fetchRankBotFromSupabase() {
-  const supabase = await getSupabase();
-  if (!supabase) return null;
+  if (!isConfigured()) return null;
   try {
-    const { data, error } = await supabase
-      .from("players")
-      .select("rank_elo, rank_games")
-      .eq("client_id", getClientId())
-      .maybeSingle();
-    if (error || !data || data.rank_elo == null) return null;
+    const rows = await restGet("players", `select=rank_elo,rank_games&client_id=eq.${getClientId()}&limit=1`);
+    const data = rows[0];
+    if (!data || data.rank_elo == null) return null;
     return { rankElo: data.rank_elo, rankGames: data.rank_games || 0 };
   } catch {
     return null;
