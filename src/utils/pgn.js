@@ -1,3 +1,7 @@
+/* Includes the typographic forms: checkGameOver's display text ("1–0", "½–½")
+   went straight into saved PGNs for a long time, so stored games have them. */
+const RESULT_TOKEN = /^(1[-–—]0|0[-–—]1|1\/2[-–—]1\/2|1\/2|½[-–—]½|\*)$/;
+
 /* Strips PGN headers/comments/variations/NAGs/results down to a flat list
    of SAN move tokens. The engine has no PGN grammar of its own -- pasted
    games get matched against legalMoves() one ply at a time (see
@@ -26,7 +30,7 @@ export function parsePgnMoves(text) {
        several games: carrying on would splice the second game onto the
        first, and if its moves happen to be legal there, nothing would
        ever flag the result as wrong. */
-    if (/^(1-0|0-1|1\/2-1\/2|1\/2|½-½|\*)$/.test(raw)) {
+    if (RESULT_TOKEN.test(raw)) {
       if (moves.length) break;
       continue;
     }
@@ -134,6 +138,10 @@ export function replayForeignPgn(eng, sanTokens) {
   return { applied, sans };
 }
 
+/* checkGameOver's result text is for display. PGN requires plain ASCII, and
+   other sites may reject anything else. */
+const standardResult = (text) => text.replace(/[–—]/g, "-").replace("½-½", "1/2-1/2");
+
 export function buildPgn(moveList, resultText) {
   const parts = [];
   for (let i = 0; i < moveList.length; i += 2) {
@@ -143,5 +151,5 @@ export function buildPgn(moveList, resultText) {
     parts.push(black ? `${num}. ${white} ${black}` : `${num}. ${white}`);
   }
   const movesText = parts.join(" ");
-  return resultText ? `${movesText} ${resultText}`.trim() : movesText;
+  return resultText ? `${movesText} ${standardResult(resultText)}`.trim() : movesText;
 }

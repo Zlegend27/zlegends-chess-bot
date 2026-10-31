@@ -1,7 +1,7 @@
 import { describe, test, expect } from "vitest";
 import { createEngine } from "../engine/chessEngine";
 import {
-  parsePgnMoves, replayForeignPgn, parsePgnHeaders, countPgnGames,
+  parsePgnMoves, replayForeignPgn, buildPgn, parsePgnHeaders, countPgnGames,
   describePasteProblem, reviewInfoFromHeaders, exporterSide,
 } from "./pgn";
 
@@ -100,6 +100,26 @@ describe("games exported from other sites load in full", () => {
 
   test("move numbers with no dots", () => {
     expect(applied("1 e4 e5 2 Nf3 Nc6 *")).toBe(4);
+  });
+});
+
+/* checkGameOver's display text uses typographic dashes and a ½ sign, and
+   every game saved before buildPgn normalised them has them in its PGN. */
+describe("result markers", () => {
+  test.each(["1–0", "0–1", "½–½", "1—0", "½-½"])("%s from a saved game ends the game, not a move", (mark) => {
+    expect(parsePgnMoves(`1. e4 e5 2. Nf3 ${mark}`)).toEqual(["e4", "e5", "Nf3"]);
+  });
+
+  test.each([["1–0", "1-0"], ["0–1", "0-1"], ["½–½", "1/2-1/2"], ["*", "*"], ["1-0", "1-0"]])(
+    "buildPgn writes %s as the standard %s", (display, standard) => {
+      expect(buildPgn(["e4", "e5"], display)).toBe(`1. e4 e5 ${standard}`);
+    });
+
+  test("our own export round-trips with no leftover tokens", () => {
+    const moves = ["e4", "e5", "Bc4", "Nc6", "Qh5", "Nf6", "Qxf7#"];
+    const tokens = parsePgnMoves(buildPgn(moves, "1–0"));
+    expect(tokens).toEqual(moves);
+    expect(replayForeignPgn(createEngine(), tokens).applied.length).toBe(moves.length);
   });
 });
 
