@@ -312,6 +312,17 @@
 .shModalRow:focus-visible{ outline:2px solid var(--sh-rose); outline-offset:-2px; }
 .openingRow:hover{ background:#8B2FC91A; }
 .openingRow:focus-visible{ outline:2px solid var(--cyan); outline-offset:-2px; }
+/* Recent-games rows: the opening-row look with the outcome on the right.
+   Colours are the grade palette already used for the move report, so a
+   win/loss reads the same way it does everywhere else in the app. */
+.recentRow{ display:flex; justify-content:space-between; align-items:center; gap:10px; width:100%; text-align:left;
+  background:transparent; border:none; border-bottom:1px solid #8B2FC92E; font:inherit; color:inherit; cursor:pointer; padding:8px 2px; }
+.recentMeta{ font-size:11px; opacity:.7; }
+.recentOutcome{ font-size:12px; font-weight:700; white-space:nowrap; }
+.recentOutcome.win{ color:#6FCF97; }
+.recentOutcome.loss{ color:#F05348; }
+.recentOutcome.draw{ color:var(--dim); }
+.recentOutcome.abandoned{ color:var(--dim); font-style:italic; }
 .durationGrid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:4px 0 12px; }
 /* A <button>, not a <div> -- was a div+onClick, which meant Tab couldn't
    reach it and Enter/Space couldn't activate it. width:100% + font

@@ -24,7 +24,7 @@ import { buildPgn, parsePgnMoves, replayForeignPgn } from "./utils/pgn";
 import { encodeGame, decodeGame, getSharedHash, replayIntoEngine } from "./utils/share";
 import { PIECE_SETS, getPieceSet } from "./utils/pieceSets";
 import { BOARD_COLORS, getBoardColor } from "./utils/boardColors";
-import { saveGame, estimateRating } from "./utils/gameHistory";
+import { saveGame, estimateRating, fetchRecentGames, summarizeGame } from "./utils/gameHistory";
 import { getDisplayName, setDisplayName } from "./utils/playerIdentity";
 import { submitRushScore } from "./utils/leaderboard";
 import { RUSH_DURATIONS } from "./utils/rushDurations";
@@ -35,7 +35,7 @@ import { syncRankBotToSupabase, fetchRankBotFromSupabase, logRankBotMove } from 
 import { ENGINE_VERSION } from "./utils/version";
 import { OPENINGS } from "./utils/openings";
 import { loadEcoOpenings, detectEcoOpening, theoryPlyCount } from "./utils/ecoOpenings";
-import { stockfishBestMove, stockfishAnalyze, STOCKFISH_MIN_ELO, warmUpStockfish } from "./engine/stockfishEngine";
+import { stockfishBestMove, stockfishAnalyze, STOCKFISH_MIN_ELO, warmUpStockfish, isStockfishWarm } from "./engine/stockfishEngine";
 import "./tokens.css";
 import "./App.css";
 
@@ -480,8 +480,13 @@ export default function ZlegendsBot() {
      as the ECO book above; the existing "Zlegend2700 is calculating…"
      thinking state already covers the rare case someone moves faster than
      a small single-threaded WASM build can finish loading. */
+  /* Tracked in state so the status line can switch from "warming up" to
+     "calculating" once the engine is ready -- the worker boots outside
+     React, so nothing else would re-render the moment it finishes. */
+  const [engineWarm, setEngineWarm] = useState(() => isStockfishWarm());
   useEffect(() => {
-    if (siteView === "play") warmUpStockfish();
+    if (siteView !== "play") return;
+    warmUpStockfish().then(() => setEngineWarm(isStockfishWarm()));
   }, [siteView]);
   const pieceImgSrc = (type, isWhite) => getPieceSet(pieceSetId).svgUrl(type, isWhite);
   const audioRef = useRef(null);
@@ -672,6 +677,37 @@ export default function ZlegendsBot() {
   const musicOpenRef = useRef(false);
   musicOpenRef.current = musicOpen;
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /* Recent games lists the saved PGNs from this browser's history. `null`
+     while loading, so an empty array can mean "you haven't played yet"
+     without also meaning "still fetching". */
+  const [recentOpen, setRecentOpen] = useState(false);
+  const [recentGames, setRecentGames] = useState(null);
+  const [recentError, setRecentError] = useState(null);
+  const loadRecentGames = () => {
+    setRecentGames(null);
+    setRecentError(null);
+    fetchRecentGames().then((r) => {
+      if (r.error) setRecentError(r.error);
+      else setRecentGames(r.games.map(summarizeGame));
+    });
+  };
+  const openRecentGames = () => {
+    setSettingsOpen(false);
+    setRecentOpen(true);
+    loadRecentGames();
+  };
+  /* A saved game is replayed through the same loader as a pasted PGN, but
+     without auto-grading: the player opened it to look at it, not to wait
+     on an analysis pass. Any problem is reported in the toast, since the
+     list has no field of its own to show it in. */
+  const openSavedGame = (game) => {
+    const r = loadPgnText(game.pgn, { analyze: false });
+    setRecentOpen(false);
+    if (!r.ok) setPgnToast(r.error);
+    else if (r.partial) setPgnToast(r.partial);
+    else return;
+    setTimeout(() => setPgnToast(null), 5000);
+  };
   const [ratingInfo, setRatingInfo] = useState(null);
   /* Fetched up-front (not just when Settings opens) now that the estimate
      also shows next to the "You" card -- but deferred a few seconds past
@@ -2282,6 +2318,7 @@ export default function ZlegendsBot() {
       if (e.key !== "Escape") return;
       if (pieceDesignsOpen) { setPieceDesignsOpen(false); setSettingsOpen(true); }
       else if (boardColorsOpen) { setBoardColorsOpen(false); setSettingsOpen(true); }
+      else if (recentOpen) setRecentOpen(false);
       else if (settingsOpen) closeSettings();
       else if (accountOpen) closeAccount();
       else if (nameEditOpen) setNameEditOpen(false);
@@ -2298,7 +2335,7 @@ export default function ZlegendsBot() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [pieceDesignsOpen, boardColorsOpen, settingsOpen, accountOpen, nameEditOpen, shareLinkFallback, newGameConfirm, rushMode, rushResult, rushSummaryOpen, rushOpen, rankedPuzzlesOpen, openingsOpen, blindOpen, musicOpen, spectateOpen, pasteOpen]);
+  }, [pieceDesignsOpen, boardColorsOpen, settingsOpen, accountOpen, nameEditOpen, shareLinkFallback, newGameConfirm, rushMode, rushResult, rushSummaryOpen, rushOpen, rankedPuzzlesOpen, openingsOpen, blindOpen, musicOpen, spectateOpen, pasteOpen, recentOpen]);
 
   /* Modal accessibility, applied generically rather than per-modal: this
      app has ~15 separate .promoOv/.promoBox blocks (one per open-state
@@ -2782,25 +2819,19 @@ export default function ZlegendsBot() {
      step-through/Analyze/Grade Moves machinery as a just-finished game,
      via the pastedGame flag folded into reviewing's own definition)
      rather than building a separate viewer for it. */
-  const loadPastedPgn = () => {
-    const tokens = parsePgnMoves(pasteText);
-    if (!tokens.length) { setPasteError("Couldn't find any moves in that text."); return; }
+  /* Shared by Paste PGN and the recent-games list. Parses, validates and
+     loads a PGN into review mode. Returns { ok: false, error } when nothing
+     could be loaded, or { ok: true, partial } where partial is a warning
+     when only some of the moves matched. Each caller shows the result in
+     its own place: the paste dialog keeps itself open on error, while the
+     recent-games list has no field to put a message in, so it uses the
+     toast. */
+  const loadPgnText = (text, { analyze = true } = {}) => {
+    const tokens = parsePgnMoves(text);
+    if (!tokens.length) return { ok: false, error: "Couldn't find any moves in that text." };
     const tempEng = createEngine();
     const { applied, sans } = replayForeignPgn(tempEng, tokens);
-    if (!applied.length) { setPasteError("Couldn't match those moves to a legal game."); return; }
-    /* A partial match has to be reported through the toast, not
-       pasteError: the two failure cases above return early and leave
-       the dialog open so their message is visible, but this path
-       carries on and closes it a few lines down -- so the warning was
-       being written to state and hidden in the same function. Pasting a
-       PGN with one bad move silently loaded half a game with nothing
-       on screen to say so (confirmed: a 27-ply game with a mistyped
-       move 8 loaded 15 plies and reported nothing). */
-    setPasteError(null);
-    if (applied.length < tokens.length) {
-      setPgnToast(`Loaded ${applied.length} of ${tokens.length} moves — the rest didn't match a legal game.`);
-      setTimeout(() => setPgnToast(null), 5000);
-    }
+    if (!applied.length) return { ok: false, error: "Couldn't match those moves to a legal game." };
     gradeRunIdRef.current += 1;
     maybeSaveAbandonedGame();
     eng.reset();
@@ -2818,11 +2849,27 @@ export default function ZlegendsBot() {
     setPastedGame(true);
     setMode("play");
     setReviewIndex(sans.length);
+    if (analyze) { setAnalyzing(true); gradeMoves(); }
+    rerender();
+    const partial = applied.length < tokens.length
+      ? `Loaded ${applied.length} of ${tokens.length} moves — the rest didn't match a legal game.`
+      : null;
+    return { ok: true, partial };
+  };
+
+  /* The paste dialog's Analyze button. Errors stay in the dialog where the
+     player is looking; a partial match closes the dialog and reports through
+     the panel toast, which stays visible afterwards. */
+  const loadPastedPgn = () => {
+    const r = loadPgnText(pasteText);
+    if (!r.ok) { setPasteError(r.error); return; }
+    setPasteError(null);
     setPasteOpen(false);
     setPasteText("");
-    setAnalyzing(true);
-    gradeMoves();
-    rerender();
+    if (r.partial) {
+      setPgnToast(r.partial);
+      setTimeout(() => setPgnToast(null), 5000);
+    }
   };
 
 
@@ -3199,6 +3246,10 @@ export default function ZlegendsBot() {
   );
 
   const inChk = eng.inCheckNow() && !result;
+  /* Only the Stockfish tiers (and Rank Bot, which runs on Stockfish) wait
+     on the WASM boot. Casual and Master use the homemade worker, which has
+     no such delay, so they shouldn't be told the engine is warming up. */
+  const usesStockfish = !!(difficultyRef.current.stockfishElo || difficultyRef.current.adaptive);
   const replayLabel = activeOpening ? activeOpening.name : "Shared game";
   const status = spectateMode
     ? (result ? `${result.reason} · ${result.text}`
@@ -3210,7 +3261,7 @@ export default function ZlegendsBot() {
     ? `Quiz: ${quizOpening.name} — move ${moveList.length + 1} of ${quizOpening.moves.length}`
     : result
     ? `${result.reason} · ${result.text}`
-    : thinking ? "Zlegend2700 is calculating…"
+    : thinking ? (!engineWarm && usesStockfish ? "Warming up the engine… first move only" : "Zlegend2700 is calculating…")
     : eng.getSide() === playerColor ? "Your move, challenger" : "Bot to move";
 
   const arrowPoint = (sq120) => {
@@ -3398,8 +3449,16 @@ export default function ZlegendsBot() {
                 <div className="cardName bot">{spectateMode ? `${DIFFICULTIES[botColor === 1 ? spectateWhiteIdx : spectateBlackIdx].label} (${botColor === 1 ? "White" : "Black"})` : "Zlegend2700"}</div>
                 <div className="trayEmpty">{gameStyle.label} today</div>
                 {!spectateMode && difficultyRef.current.id === "rank" && (
-                  <div className="trayEmpty openingTag">
-                    ~{rankBotElo} Elo{rankBotAssessedElo == null ? " · Calibrating" : ""}
+                  /* The checkpointed level, not the live dial. rankBotElo
+                     moves after every move and was being printed straight
+                     here, so the bot's own card could read a different
+                     number from the player card a second later. The
+                     checkpoint only changes every few games, and is the
+                     same number the player card shows. */
+                  <div className="trayEmpty openingTag" title="Rank Bot adapts to how you play">
+                    {rankBotAssessedElo == null
+                      ? "Still learning your level"
+                      : `Playing around ~${rankBotAssessedElo} Elo`}
                   </div>
                 )}
                 {liveOpening && (
@@ -4099,6 +4158,11 @@ export default function ZlegendsBot() {
                   <span className="toggleThumb" />
                 </button>
               </div>
+              <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E" }}
+                onClick={openRecentGames}>
+                <div style={{ fontWeight: 700 }}>Recent Games</div>
+                <div style={{ fontSize: 11, opacity: 0.75 }}>Step back through your last few games</div>
+              </div>
               <div style={{ padding: "8px 2px" }}>
                 <div style={{ fontWeight: 700 }}>Your Rating</div>
                 <div style={{ fontSize: 11, opacity: 0.75 }}>
@@ -4205,6 +4269,37 @@ export default function ZlegendsBot() {
             </div>
             <button className="btn gold" style={{ fontSize: 12, padding: "8px 12px" }}
               onClick={() => startSpectate(spectateWhiteIdx, spectateBlackIdx, spectateOpeningId)}>Start Spectating</button>
+      </Modal>
+
+      <Modal open={recentOpen} onClose={() => setRecentOpen(false)} closeLabel="Close Recent Games" maxWidth={420}>
+            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              Recent Games
+            </div>
+            <div className="pv" style={{ fontSize: 12, opacity: 0.85 }}>
+              Tap a game to step back through it.
+            </div>
+            <div className="rows" style={{ maxHeight: "60vh", overflowY: "auto" }}>
+              {recentError ? (
+                <div className="pv" style={{ fontSize: 12 }}>
+                  <div style={{ color: "#F05348", marginBottom: 8 }}>{recentError}</div>
+                  <button type="button" className="btn ghost" onClick={loadRecentGames}>Try again</button>
+                </div>
+              ) : recentGames === null ? (
+                <div className="pv" style={{ fontSize: 12, opacity: 0.75 }}>Loading…</div>
+              ) : recentGames.length === 0 ? (
+                <div className="pv" style={{ fontSize: 12, opacity: 0.75 }}>No saved games yet — play one and it'll show up here.</div>
+              ) : recentGames.map((g) => (
+                <button key={g.id} type="button" className="openingRow recentRow" onClick={() => openSavedGame(g)}>
+                  <span>
+                    <b>vs {g.opponent}</b>
+                    <span className="recentMeta"> · {g.date}</span>
+                  </span>
+                  <span className={"recentOutcome " + g.outcome}>
+                    {{ win: "Won", loss: "Lost", draw: "Draw", abandoned: "Unfinished" }[g.outcome]}
+                  </span>
+                </button>
+              ))}
+            </div>
       </Modal>
 
       <Modal open={pasteOpen} onClose={() => setPasteOpen(false)} closeLabel="Close Paste PGN" maxWidth={420}>

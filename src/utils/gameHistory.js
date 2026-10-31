@@ -77,3 +77,52 @@ export async function estimateRating() {
     return { error: true, message: e?.message || "Couldn't load rating." };
   }
 }
+
+const GAMES_UNREACHABLE = "Couldn't reach your game history right now. Check your connection and try again.";
+
+/** Most recent saved games for this browser, newest first. Each row
+ *  carries the PGN so tapping one can load it straight into review mode
+ *  through the same path as a pasted game. Returns { games } or
+ *  { error } -- an unconfigured or unreachable backend should read as
+ *  "couldn't load", not as "you haven't played any games". */
+export async function fetchRecentGames(limit = 15) {
+  const supabase = await getSupabase();
+  if (!supabase) return { error: "Game history isn't set up on this deployment yet." };
+  try {
+    const { data, error } = await supabase
+      .from("games")
+      .select("id, created_at, difficulty_label, player_color, winner, result_text, result_reason, pgn")
+      .eq("client_id", getClientId())
+      .not("pgn", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error || !data) { console.warn("[recent games]", error); return { error: GAMES_UNREACHABLE }; }
+    return { games: data };
+  } catch (e) {
+    /* Raw fetch failures read as "TypeError: Failed to fetch" -- true, but
+       not something to show a player. The detail stays in the console. */
+    console.warn("[recent games]", e);
+    return { error: GAMES_UNREACHABLE };
+  }
+}
+
+/** Turns one saved row into what the list shows. Pure, so it can be
+ *  tested without a backend. Outcome is from the player's side: an
+ *  abandoned game is reported as such rather than as a loss, since
+ *  walking away isn't losing. */
+export function summarizeGame(row) {
+  const abandoned = row.result_reason === "Abandoned";
+  let outcome;
+  if (abandoned) outcome = "abandoned";
+  else if (row.winner == null || row.winner === 0) outcome = "draw";
+  else outcome = row.winner === row.player_color ? "win" : "loss";
+  const when = new Date(row.created_at);
+  return {
+    id: row.id,
+    opponent: row.difficulty_label || "Unknown",
+    outcome,
+    reason: row.result_reason || "",
+    date: when.toLocaleDateString(undefined, { day: "numeric", month: "short" }),
+    pgn: row.pgn,
+  };
+}

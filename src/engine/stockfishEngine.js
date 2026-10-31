@@ -50,20 +50,30 @@ function createWorker() {
    that same cached failure, leaving Stockfish dead until a page reload.
    warmUpStockfish() swallows its own error, so that failure could happen
    silently at startup and only surface as "the bot never moves". */
+/* Flips true once the WASM worker has finished booting. Exposed so the UI
+   can say "warming up" instead of "calculating" during the first move,
+   which otherwise looks identical to a slow search. */
+let warm = false;
+
 function getWorker() {
   if (!workerPromise) {
-    workerPromise = createWorker();
+    workerPromise = createWorker().then((worker) => { warm = true; return worker; });
     workerPromise.catch(() => { workerPromise = null; });
   }
   return workerPromise;
 }
 
+export function isStockfishWarm() {
+  return warm;
+}
+
 /** Kicks off worker creation + WASM load ahead of the first search, so
  *  the first bot move doesn't absorb the whole engine boot (noticeable
  *  in blind mode, where the player is waiting on a spoken reply with no
- *  board activity to watch). Safe to call repeatedly. */
+ *  board activity to watch). Safe to call repeatedly. Resolves true once
+ *  the engine is ready, false if it failed to boot. */
 export function warmUpStockfish() {
-  getWorker().catch(() => { /* surfaces on first real search instead */ });
+  return getWorker().then(() => true, () => false);
 }
 
 function parseInfoLine(line) {
