@@ -11,6 +11,7 @@ import StarField from "./components/StarField";
 import Confetti from "./components/Confetti";
 import HomePage from "./components/HomePage";
 import { AppHeader, BottomBar } from "./components/AppNav";
+import Modal from "./components/Modal";
 import PlayPage from "./components/PlayPage";
 import SubPage from "./components/SubPage";
 import { currentStreak, nextStreak, utcDay } from "./utils/dailyStreak";
@@ -33,8 +34,8 @@ import { PTS, materialState } from "./utils/material";
 import { winPctOf, moveAccuracy } from "./utils/accuracy";
 import { buildPgn, parsePgnMoves, replayForeignPgn, parsePgnHeaders, countPgnGames, describePasteProblem, reviewInfoFromHeaders, exporterSide } from "./utils/pgn";
 import { encodeGame, decodeGame, getSharedHash, replayIntoEngine } from "./utils/share";
-import { PIECE_SETS, getPieceSet } from "./utils/pieceSets";
-import { BOARD_COLORS, getBoardColor } from "./utils/boardColors";
+import { getPieceSet } from "./utils/pieceSets";
+import { getBoardColor } from "./utils/boardColors";
 import { saveGame, estimateRating } from "./utils/gameHistory";
 import { getDisplayName, setDisplayName } from "./utils/playerIdentity";
 import { submitRushScore } from "./utils/leaderboard";
@@ -43,6 +44,7 @@ const LeaderboardPage = lazy(() => import("./components/LeaderboardPage"));
 const PuzzlesHomePage = lazy(() => import("./components/PuzzlesHomePage"));
 const LessonsPage = lazy(() => import("./components/LessonsPage"));
 const GameReviewPage = lazy(() => import("./components/GameReviewPage"));
+const AppPopups = lazy(() => import("./components/AppPopups"));
 import { syncRankBotToSupabase, fetchRankBotFromSupabase, logRankBotMove } from "./utils/rankBot";
 import { ENGINE_VERSION } from "./utils/version";
 import { OPENINGS } from "./utils/openings";
@@ -106,35 +108,6 @@ function EvalGraph({ scores, grades, current, onSeek }) {
     </svg>
   );
 }
-/* Shared chrome for every dismissable promoOv/promoBox modal in this
-   file (Music, Puzzles, Settings, Rush, ...) -- backdrop-click and the
-   close-X both call the same onClose, matching what every one of these
-   blocks already did individually before this existed. Deliberately
-   NOT used for the piece-promotion/color-pick pickers (mid-move
-   required choices with no close X or backdrop-dismiss) or the Blind
-   Chess loading skeleton (a status display, not a real dialog) -- both
-   keep their own bespoke .promoOv/.promoBox markup since they're a
-   genuinely different shape, not an oversight.
-
-   role="dialog"/aria-modal/aria-label, the Tab focus trap, and the body
-   scroll-lock are all still handled generically by the DOM-querying
-   effect in ZlegendsBot (keyed off whichever .promoBox is actually
-   mounted) rather than duplicated here -- this component only owns the
-   JSX shape, not that behavior, so this stays a plain function rather
-   than needing access to any of that state. */
-function Modal({ open, onClose, closeLabel, zIndex = 50, minWidth = 260, maxWidth = 360, className, style, children }) {
-  if (!open) return null;
-  return (
-    <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className={"promoBox" + (className ? " " + className : "")} style={{ flexDirection: "column", gap: 12, minWidth, maxWidth, padding: "20px 24px", ...style }}>
-        <button className="modalCloseX" onClick={onClose} aria-label={closeLabel} title="Close">✕</button>
-        {children}
-      </div>
-    </div>
-  );
-}
-
 /* Shared background for the two Rush screens that are explicitly her
    corner of the app end to end (the heartbreak screen and the duration
    picker, see .rushThemeBox in App.css) -- a full shattered-glass field
@@ -3258,167 +3231,11 @@ export default function ZlegendsBot() {
         </Suspense>
       )}
 
-      <Modal open={musicOpen} onClose={closeMusic} closeLabel="Close Juice Box"
-        className="jbBox" style={{ width: 300, minWidth: undefined, maxWidth: undefined }}>
-            <img src="/VIRTUOSO_MOLE.webp" alt="Juice Box" className="jbMole" />
-            <select value={musicSource} onChange={e => setMusicSource(e.target.value)}>
-              <option value="chiptune">Chiptune</option>
-              {MP3_PLAYLISTS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
-            </select>
-            <div className="trackRow">
-              <span className="trackName" title={jbTrackLabel}>{"♪ " + jbTrackLabel}</span>
-              {!isMp3Source && trackName === "Neon Gambit" && <span className="trackTag">default</span>}
-              {isMp3Source && mp3Buffering && !jbDisabled && <span className="trackTag">buffering</span>}
-            </div>
-            {isMp3Source && (
-              <div className="mp3Progress">
-                <span className="mp3Time">{fmtTime(mp3CurrentTime)}</span>
-                <input
-                  type="range" min="0" max={mp3Duration || 0}
-                  value={Math.min(mp3CurrentTime, mp3Duration || 0)}
-                  onChange={e => seekMp3(Number(e.target.value))}
-                  disabled={jbDisabled || !mp3Duration}
-                />
-                <span className="mp3Time">{fmtTime(mp3Duration)}</span>
-              </div>
-            )}
-            <div className="audioRow">
-              {isMp3Source && (
-                <button className={"playBtn sm" + (mp3Shuffle ? " active" : "")} onClick={toggleShuffle} disabled={jbDisabled} title={mp3Shuffle ? "Shuffle on" : "Shuffle off"}>
-                  {"\u{1F500}"}
-                </button>
-              )}
-              <button className="playBtn sm" onClick={prevTrack} disabled={jbDisabled} title="Previous track">{"◀◀"}</button>
-              <button className="playBtn" onClick={toggleMusic} disabled={jbDisabled} title={jbPlaying ? "Pause music" : "Play music"}>
-                {jbPlaying ? "❚❚" : "▶"}
-              </button>
-              <button className="playBtn sm" onClick={nextTrack} disabled={jbDisabled} title="Next track">{"▶▶"}</button>
-              <input type="range" min="0" max="100" value={volume} onChange={e => onVolume(Number(e.target.value))} />
-              <span className="volPct">{volume}%</span>
-            </div>
-            {isMp3Source && mp3Tracks.length > 1 && (
-              <div className="jbTrackList">
-                {mp3Tracks.map((t, i) => (
-                  <button
-                    key={t.url}
-                    className={"jbTrackRow" + (i === mp3Idx ? " cur" : "")}
-                    onClick={() => pickMp3Track(i)}
-                    title={t.name}
-                  >
-                    {t.name}
-                  </button>
-                ))}
-              </div>
-            )}
-      </Modal>
-
-      <Modal open={settingsOpen} onClose={closeSettings} closeLabel="Close Settings">
-            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span aria-hidden="true">⚙</span>
-              Settings
-            </div>
-            <div className="rows" style={{ maxHeight: "none" }}>
-              <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E", display: "flex", alignItems: "center", gap: 10 }}
-                onClick={() => { setSettingsOpen(false); setPieceDesignsOpen(true); }}>
-                <img src={pieceImgSrc(1, true)} alt="" style={{ width: 30, height: 30, objectFit: "contain", flex: "none", background: "#DDD6EA", borderRadius: 6, padding: 3, boxSizing: "border-box" }} />
-                <div>
-                  <div style={{ fontWeight: 700 }}>Piece Designs</div>
-                  <div style={{ fontSize: 11, opacity: 0.75 }}>Currently: {getPieceSet(pieceSetId).label}</div>
-                </div>
-              </div>
-              <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E", display: "flex", alignItems: "center", gap: 10 }}
-                onClick={() => { setSettingsOpen(false); setBoardColorsOpen(true); }}>
-                <span style={{
-                  display: "grid", gridTemplateColumns: "1fr 1fr", width: 30, height: 30, flex: "none",
-                  borderRadius: 6, overflow: "hidden", border: "1px solid #ffffff22",
-                }} aria-hidden="true">
-                  <span style={{ background: getBoardColor(boardColorId).light }} />
-                  <span style={{ background: getBoardColor(boardColorId).dark }} />
-                  <span style={{ background: getBoardColor(boardColorId).dark }} />
-                  <span style={{ background: getBoardColor(boardColorId).light }} />
-                </span>
-                <div>
-                  <div style={{ fontWeight: 700 }}>Board Color</div>
-                  <div style={{ fontSize: 11, opacity: 0.75 }}>Currently: {getBoardColor(boardColorId).label}</div>
-                </div>
-              </div>
-              <div style={{ padding: "8px 2px", borderBottom: "1px solid #8B2FC92E", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                <div>
-                  <div style={{ fontWeight: 700 }}>Eval Bar</div>
-                  <div style={{ fontSize: 11, opacity: 0.75 }}>
-                    {hideEvalBar ? "Hidden — bigger board on mobile" : "Shown next to the board"}
-                  </div>
-                </div>
-                <button
-                  type="button" role="switch" aria-checked={!hideEvalBar} aria-label="Toggle eval bar"
-                  className={"toggleSwitch" + (!hideEvalBar ? " on" : "")}
-                  onClick={toggleEvalBar}
-                >
-                  <span className="toggleThumb" />
-                </button>
-              </div>
-              <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E" }}
-                onClick={() => { setSettingsOpen(false); openReviewPage(); }}>
-                <div style={{ fontWeight: 700 }}>Game Review</div>
-                <div style={{ fontSize: 11, opacity: 0.75 }}>Paste a game, or reopen one of yours</div>
-              </div>
-              <div style={{ padding: "8px 2px" }}>
-                <div style={{ fontWeight: 700 }}>Your Rating</div>
-                <div style={{ fontSize: 11, opacity: 0.75 }}>
-                  {!ratingInfo ? "Loading…"
-                    : ratingInfo.error ? ratingInfo.message
-                    : ratingInfo.games === 0 ? "Play the 1000/1500/2000 Elo bots to get an estimate"
-                    : `~${ratingInfo.rating} (from ${ratingInfo.games} game${ratingInfo.games === 1 ? "" : "s"} vs the calibrated bots)`}
-                </div>
-              </div>
-            </div>
-      </Modal>
-
-      <Modal open={pieceDesignsOpen} onClose={() => { setPieceDesignsOpen(false); setSettingsOpen(true); }} closeLabel="Close Piece Designs">
-            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              Piece Designs
-            </div>
-            <div className="rows" style={{ maxHeight: "none", display: "flex", flexDirection: "column", gap: 10 }}>
-              {PIECE_SETS.map(set => (
-                <div key={set.id}
-                  style={{
-                    cursor: "pointer", padding: "10px 8px", borderRadius: 8,
-                    border: set.id === pieceSetId ? "1px solid #F5D93E" : "1px solid #8B2FC92E",
-                    display: "flex", alignItems: "center", gap: 12,
-                  }}
-                  onClick={() => choosePieceSet(set.id)}>
-                  <div style={{ display: "flex", gap: 4, background: "#DDD6EA", borderRadius: 6, padding: 4 }}>
-                    <img src={set.svgUrl(6, true)} alt="" style={{ width: 36, height: 36, objectFit: "contain" }} />
-                    <img src={set.svgUrl(5, false)} alt="" style={{ width: 36, height: 36, objectFit: "contain" }} />
-                  </div>
-                  <div style={{ fontWeight: 700 }}>{set.label}{set.id === pieceSetId ? " (selected)" : ""}</div>
-                </div>
-              ))}
-            </div>
-      </Modal>
-
-      <Modal open={boardColorsOpen} onClose={() => { setBoardColorsOpen(false); setSettingsOpen(true); }} closeLabel="Close Board Color">
-            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              Board Color
-            </div>
-            <div className="rows" style={{ maxHeight: "none", display: "flex", flexDirection: "column", gap: 10 }}>
-              {BOARD_COLORS.map(bc => (
-                <div key={bc.id}
-                  style={{
-                    cursor: "pointer", padding: "10px 8px", borderRadius: 8,
-                    border: bc.id === boardColorId ? "1px solid #F5D93E" : "1px solid #8B2FC92E",
-                    display: "flex", alignItems: "center", gap: 12,
-                  }}
-                  onClick={() => chooseBoardColor(bc.id)}>
-                  <div style={{ display: "grid", gridTemplateColumns: "16px 16px", gridTemplateRows: "16px 16px", borderRadius: 6, overflow: "hidden" }}>
-                    <div style={{ background: bc.light }} /><div style={{ background: bc.dark }} />
-                    <div style={{ background: bc.dark }} /><div style={{ background: bc.light }} />
-                  </div>
-                  <div style={{ fontWeight: 700 }}>{bc.label}{bc.id === boardColorId ? " (selected)" : ""}</div>
-                </div>
-              ))}
-            </div>
-      </Modal>
+      {(musicOpen || settingsOpen || pieceDesignsOpen || boardColorsOpen) && (
+        <Suspense fallback={null}>
+          <AppPopups boardColorId={boardColorId} boardColorsOpen={boardColorsOpen} chooseBoardColor={chooseBoardColor} choosePieceSet={choosePieceSet} closeMusic={closeMusic} closeSettings={closeSettings} fmtTime={fmtTime} hideEvalBar={hideEvalBar} isMp3Source={isMp3Source} jbDisabled={jbDisabled} jbPlaying={jbPlaying} jbTrackLabel={jbTrackLabel} mp3Buffering={mp3Buffering} mp3CurrentTime={mp3CurrentTime} mp3Duration={mp3Duration} mp3Idx={mp3Idx} mp3Shuffle={mp3Shuffle} mp3Tracks={mp3Tracks} musicOpen={musicOpen} musicSource={musicSource} nextTrack={nextTrack} onVolume={onVolume} openReviewPage={openReviewPage} pickMp3Track={pickMp3Track} pieceDesignsOpen={pieceDesignsOpen} pieceImgSrc={pieceImgSrc} pieceSetId={pieceSetId} prevTrack={prevTrack} ratingInfo={ratingInfo} seekMp3={seekMp3} setBoardColorsOpen={setBoardColorsOpen} setMusicSource={setMusicSource} setPieceDesignsOpen={setPieceDesignsOpen} setSettingsOpen={setSettingsOpen} settingsOpen={settingsOpen} toggleEvalBar={toggleEvalBar} toggleMusic={toggleMusic} toggleShuffle={toggleShuffle} trackName={trackName} volume={volume} />
+        </Suspense>
+      )}
     </div>
   );
 
