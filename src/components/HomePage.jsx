@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import StarField from "./StarField";
 import SocialBanner from "./SocialBanner";
 import BotBubble from "./BotBubble";
+import YouTubeTv from "./YouTubeTv";
 import MiniBoard from "./MiniBoard";
 import { pickWelcomeLine } from "../utils/botLines";
 import { fetchRecentGames, summarizeGame } from "../utils/gameHistory";
@@ -91,6 +92,10 @@ export default function HomePage({
             <span className={"mt-1 block text-xs leading-relaxed " + T.dimText}>{suggestion.desc}</span>
           </span>
         </button>
+      </div>
+
+      <div className="relative z-10 mt-6">
+        <YouTubeTv sweetheart={sweetheart} />
       </div>
 
       <SocialBanner />
