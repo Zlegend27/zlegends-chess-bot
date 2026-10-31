@@ -23,6 +23,14 @@ import { claimAnonymousData } from "./utils/accountMigration";
 import { loadSetting, saveSetting } from "./utils/storage";
 import { PANEL_RAYS, PANEL_CHORDS, HEART_RAYS, HEART_CHORDS } from "./utils/rushShatter";
 import { getUiTheme } from "./utils/uiTheme";
+import { DIFFICULTIES } from "./utils/difficulties";
+import { RANK_BOT_MIN_ELO, RANK_BOT_MAX_ELO, RANK_BOT_DEFAULT_ELO, RANK_BOT_CALIBRATION_GAMES, RANK_BOT_CALIBRATION_MULT, RANK_BOT_PROBE_MS, RANK_BOT_OPENING_PLIES, RANK_BOT_MIN_TRACKED_MOVES, rankBotLossToPerf, RANK_BOT_EWMA_K, RANK_BOT_THROW_CP, RANK_BOT_THROWS_TO_SUSPECT, RANK_BOT_SUSPECT_WEIGHT, RANK_BOT_MAX_GAME_DROP, RANK_BOT_MAX_GAME_CLIMB, RANK_BOT_RESULT_STEP, RANK_BOT_SWING_CP, RANK_BOT_SANITY_MS, RANK_BOT_DOMINANT_CAP, RANK_BOT_ASSESSMENT_EVERY, rankBotBlunderChance } from "./utils/rankBotMath";
+import { BALANCED, randomStyle, pickPersonality } from "./utils/personalities";
+import { detectOpening } from "./utils/openingDetect";
+import { todayKey, dailyPuzzle } from "./utils/dailyPuzzle";
+import { pickTrackIndex } from "./utils/trackIndex";
+import { PTS, materialState } from "./utils/material";
+import { winPctOf, moveAccuracy } from "./utils/accuracy";
 import { buildPgn, parsePgnMoves, replayForeignPgn, parsePgnHeaders, countPgnGames, describePasteProblem, reviewInfoFromHeaders, exporterSide } from "./utils/pgn";
 import { encodeGame, decodeGame, getSharedHash, replayIntoEngine } from "./utils/share";
 import { PIECE_SETS, getPieceSet } from "./utils/pieceSets";
@@ -47,227 +55,15 @@ import "./App.css";
    stack, none of which the main board ever needs. */
 const BlindMode = lazy(() => import("./components/BlindMode"));
 
-/* Casual and Master keep this app's own homemade engine (they're the top
-   two tiers and were never in question). The three tiers below them are
-   backed by a real Stockfish build instead of guessed search-time
-   budgets, so "1000/1500/2000" are meant to actually mean something
-   against chess.com's own rating scale -- see stockfishEngine.js for why.
-   Stockfish's UCI_Elo has a hard floor of 1320, so the "1000" tier adds
-   an extra blunder chance on top of that floor to push it down further. */
-const DIFFICULTIES = [
-  { label: "1000 Elo", stockfishElo: STOCKFISH_MIN_ELO, blunderChance: 0.3, moveTimeMs: 500 },
-  { label: "1500 Elo", stockfishElo: 1500, moveTimeMs: 700 },
-  { label: "2000 Elo", stockfishElo: 2000, moveTimeMs: 1000 },
-  { label: "Rank Bot", id: "rank", adaptive: true, moveTimeMs: 900 },
-  /* styleBook: Casual's opening picks lean into the bot's daily
-     personality (see STYLE_BOOK_BIAS in openingBook.js). Master stays on
-     the neutral popularity-weighted book, and the Stockfish tiers don't
-     use a book at all. */
-  { label: "Casual", ms: 600, book: true, styleBook: true },
-  { label: "Master", ms: 12000, book: true },
-];
-
-/* Rank Bot: rather than one fixed Elo, the target Stockfish strength is a
-   dial that moves after every move the player makes based on how strong
-   (or weak) the move actually was -- see adjustRankBotDial and the v3
-   estimator notes at rankBotLossToPerf below. Game results feed in too
-   (RANK_BOT_RESULT_STEP), and sandbagging -- deliberately hanging pieces
-   to make the bot easy -- is detected and damped. The opening is excluded
-   entirely (both from measurement and from the bot's own strength limit
-   -- it plays theory at full strength, then drops to the dial). Below
-   Stockfish's 1320 floor, blunderChance stands in for "weaker than
-   Stockfish can go", same as the "1000 Elo" tier. */
-const RANK_BOT_MIN_ELO = 600;
-/* Full engine strength -- the dial can climb all the way to "actually
-   unbeatable" for players who earn it (v2 capped at 2200, which strong
-   players simply plateaued against). */
-const RANK_BOT_MAX_ELO = 3190;
-const RANK_BOT_DEFAULT_ELO = 1400;
-const RANK_BOT_CALIBRATION_GAMES = 3;
-const RANK_BOT_CALIBRATION_MULT = 1.5;
-const RANK_BOT_PROBE_MS = 250;
-/* Plies (both sides) treated as opening theory: the bot plays them at
-   full strength and the dial ignores them. */
-const RANK_BOT_OPENING_PLIES = 8;
-/* Minimum tracked (post-opening) player moves for an abandoned game to
-   still count toward the assessment -- players who bail mid-game and hit
-   New would otherwise never complete 3 "games". */
-const RANK_BOT_MIN_TRACKED_MOVES = 8;
-/* v3 estimator. v2's threshold steps had no equilibrium -- a player's
-   loss distribution doesn't change as the dial moves, so whichever
-   direction their mix netted, the dial ran to that clamp and stayed
-   (confirmed from rank_bot_moves telemetry: every 1400 start crashed to
-   the 600 floor; even loss=0 moves averaged +3 because each blunder also
-   sat in the rolling window dragging the next four steps down).
-
-   Instead: map each move's cp loss to the Elo whose typical play it
-   resembles (buckets sanity-checked against the logged loss
-   distribution -- median 42, p75 275 -- and rough public ACPL-vs-rating
-   curves), then pull the dial toward that with a small EWMA step. This
-   self-limits in both directions: the dial converges to the average
-   implied strength of the moves actually being played, climbing for
-   clean play and settling low for weak play, no clamp-hugging. */
-function rankBotLossToPerf(loss) {
-  if (loss === 0) return 3000;
-  if (loss < 20) return 2400;
-  if (loss < 60) return 1700;
-  if (loss < 150) return 1150;
-  if (loss < 300) return 800;
-  return 450;
-}
-/* EWMA pull per move toward the implied perf -- half-life ~11 moves, so
-   one game meaningfully moves the dial but one move can't hijack it. */
-const RANK_BOT_EWMA_K = 0.06;
-/* A cp loss this big is a "throw" (hung piece / mate-in-sight ignored). */
-const RANK_BOT_THROW_CP = 300;
-/* Sandbagging/erratic-play guards: once throws pile up in the recent
-   window (more than THROWS_TO_SUSPECT of them), the dial moves at
-   quarter weight in BOTH directions -- v3 dampened only the downs,
-   which live telemetry showed backfiring for genuinely erratic players
-   (see the v3.1 notes in adjustRankBotDial). No single game may drag
-   the dial down more than MAX_GAME_DROP points total, however it's
-   played. Genuine collapses still register (capped), while the material
-   override + full-strength swing check elsewhere means the bot punishes
-   the hung pieces themselves either way. */
-const RANK_BOT_THROWS_TO_SUSPECT = 2;
-const RANK_BOT_SUSPECT_WEIGHT = 0.25;
-const RANK_BOT_MAX_GAME_DROP = 250;
-/* Soft counterpart to MAX_GAME_DROP, for climbing instead of falling.
-   Climbing isn't adversarial the way sandbagging is -- it just means the
-   dial started too low -- so this doesn't wall it off, it tapers the step
-   linearly to zero as the game's climb approaches this many points (see
-   the taper in adjustRankBotDial). Deliberately looser than the drop cap:
-   telemetry showed one calibration-window game climb 1115 points in a
-   single sitting (600 -> 1751, gradual, not a bug -- just an accurate
-   dial finally catching up to a player who started at the floor), which
-   is the kind of fast recognition worth mostly preserving, just not
-   letting run fully unbounded. */
-const RANK_BOT_MAX_GAME_CLIMB = 600;
-/* Game outcome feedback (v3): move quality is the primary signal, but
-   the result is real evidence too -- the bot plays AT the player's
-   estimated level, so beating it says the estimate is too low. Losing
-   is close to expected and worth less; a draw leans mildly positive.
-   Also blunts sandbagging: throwing pieces now mostly just loses the
-   game, and a loss is worth far less dial movement than the throws
-   would have been without the caps above. */
-const RANK_BOT_RESULT_STEP = { win: 120, draw: 20, loss: -80 };
-/* The per-move dial above only updates *after* the player moves, and only
-   by a small step -- fine for a slow-moving skill estimate, but it means
-   a bot sitting on a weak dial would blunder-roll right past a just-hung
-   queen because "skill this low" says so. Material/tactical reality has
-   to trump the calibration in the moment: a big swing overrides the dial
-   for that one move only (never persisted), snapping to full strength to
-   grab (or dodge) it, and easing off when the bot is already dominating
-   so the game doesn't turn into a blowout. */
-const RANK_BOT_SWING_CP = 400;
-/* Budget for the full-strength sanity search in stockfishMove -- short
-   since it's only checking "is there something decisive right now", not
-   doing real analysis; confirmed reliable at this length even at only
-   300ms in testing. Adds this much to Rank Bot's per-move latency. */
-const RANK_BOT_SANITY_MS = 400;
-const RANK_BOT_DOMINANT_CAP = 900;
-/* The live dial above drives actual in-game difficulty and never stops
-   moving -- but that's a bad number to show the player directly (it can
-   swing mid-game). Every RANK_BOT_ASSESSMENT_EVERY completed games, this
-   averages that batch's ending dial values into one displayed Elo,
-   smoothing out one unusually easy/hard game rather than trusting
-   whichever number the dial happened to land on last. */
-const RANK_BOT_ASSESSMENT_EVERY = 3;
-function rankBotBlunderChance(elo) {
-  if (elo >= STOCKFISH_MIN_ELO) return 0;
-  const deficit = STOCKFISH_MIN_ELO - elo;
-  return Math.min(0.75, 0.3 + deficit / 1000);
-}
-
-/* Named weight presets on evaluate()'s existing material/position/king-safety
-   terms — same eval function, different personality, no engine duplication.
-   The bot picks and adapts its own style (see pickPersonality below) rather
-   than exposing it as a player-facing setting. */
-const PERSONALITIES = [
-  { label: "Balanced", material: 1, pawnValue: 1, position: 1, kingSafety: 1 },
-  { label: "Aggressive", material: 0.95, pawnValue: 1, position: 1.3, kingSafety: 0.6 },
-  { label: "Positional", material: 1, pawnValue: 1, position: 1.35, kingSafety: 1 },
-  { label: "Defensive", material: 1.15, pawnValue: 1.05, position: 0.85, kingSafety: 1.7 },
-  { label: "Tactical", material: 0.9, pawnValue: 0.85, position: 1.15, kingSafety: 0.9 },
-  { label: "Gambit", material: 1, pawnValue: 0.65, position: 1.2, kingSafety: 0.8 },
-  { label: "Endgame", material: 1.05, pawnValue: 1.15, position: 1.1, kingSafety: 0.9 },
-];
-const byStyle = label => PERSONALITIES.find(p => p.label === label);
-const BALANCED = byStyle("Balanced");
-/* One style is rolled per game (its "personality of the day"), then nudged
-   situationally: complicate when losing badly, play it safe when winning
-   big, switch to technique once the game reaches a long endgame. */
-const GAME_STYLES = ["Aggressive", "Positional", "Defensive", "Tactical", "Gambit"];
-const randomStyle = () => byStyle(GAME_STYLES[(Math.random() * GAME_STYLES.length) | 0]);
-function pickPersonality(baseStyle, plyCount, botAdvantagePawns) {
-  if (plyCount > 40) return byStyle("Endgame");
-  if (botAdvantagePawns <= -2.5) return byStyle("Tactical");
-  if (botAdvantagePawns >= 3) return byStyle("Defensive");
-  return baseStyle;
-}
-
 const FILES = "abcdefgh";
 const PIECE_NAME = { 1: "pawn", 2: "knight", 3: "bishop", 4: "rook", 5: "queen", 6: "king" };
 
-/* Recognizes which curated opening (if any) the current game matches,
-   by longest common SAN prefix -- once the game runs past a curated
-   entry's own move list it keeps naming that opening (nothing deeper
-   to compare against), same as how a live board usually keeps showing
-   "last known opening" after leaving book. */
-function detectOpening(moveList) {
-  let best = null;
-  for (const op of OPENINGS) {
-    const len = Math.min(moveList.length, op.moves.length);
-    if (len === 0) continue;
-    let matches = true;
-    for (let i = 0; i < len; i++) {
-      if (moveList[i] !== op.moves[i]) { matches = false; break; }
-    }
-    if (matches && (!best || len > best.len)) best = { opening: op, len };
-  }
-  return best ? best.opening : null;
-}
-/* Deterministic "same puzzle for everyone today" -- purely a function of
-   the UTC date and the puzzle pool, no server/schedule needed. */
-function todayKey() {
-  const d = new Date();
-  return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`;
-}
-function dailyPuzzle(allPuzzles) {
-  if (!allPuzzles.length) return null;
-  const dayNum = Math.floor(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate()) / 86400000);
-  return allPuzzles[dayNum % allPuzzles.length];
-}
-/* Shared by manual next/prev and the "ended" auto-advance -- shuffle picks
-   any other track at random, otherwise steps sequentially with wraparound. */
-function pickTrackIndex(current, len, delta, shuffle) {
-  if (len <= 1) return 0;
-  if (shuffle) {
-    let next;
-    do { next = Math.floor(Math.random() * len); } while (next === current);
-    return next;
-  }
-  return ((current + delta) % len + len) % len;
-}
-const PTS = { 1: 1, 2: 3, 3: 3, 4: 5, 5: 9 };
 /* "book" = memorized theory (tagged via the ECO line data, not engine
    judgment); "miss" = the opponent just blundered and this move let the
    punishment slip -- chess.com's vocabulary, and the distinction players
    actually learn from: a miss is a found-nothing, not a played-badly. */
 const GRADE_TAG = { brilliant: "!!", great: "★", best: "!", book: "≡", inaccuracy: "?!", miss: "✗", mistake: "?", blunder: "??" };
 const GRADE_COLOR = { brilliant: "#3EE7F5", great: "#4EA8DE", best: "#6FCF97", book: "#9D8FC4", inaccuracy: "#F5D93E", miss: "#FF8A5C", mistake: "#F0A548", blunder: "#F05348" };
-const START_COUNT = { 1: 8, 2: 2, 3: 2, 4: 2, 5: 1 };
-
-/* Lichess's published move-accuracy curve: convert the eval to a win
-   percentage before and after each move, and score how much winning
-   chance the move burned. Using win% rather than raw centipawns is what
-   keeps accuracy fair across positions -- dropping 100cp in a dead-even
-   game matters, dropping it while up a queen doesn't. */
-const winPctOf = (cp) => 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * cp)) - 1);
-const moveAccuracy = (wpBefore, wpAfter) => {
-  const drop = Math.max(0, wpBefore - wpAfter);
-  return Math.max(0, Math.min(100, 103.1668 * Math.exp(-0.04354 * drop) - 3.1669));
-};
 
 /* Clickable eval graph for the post-game report -- the same "story of
    the game" area chart chess.com/lichess center their review on. scores
@@ -374,28 +170,6 @@ const PIECE_SLIDE_MS = 150;
    row, drop back one band on a miss so a rough patch doesn't strand the
    player facing puzzles far above what they just missed. */
 const RUSH_STEP_UP_EVERY = 3;
-
-function materialState(eng) {
-  const rem = { 1: {}, "-1": {} };
-  for (const t of [1, 2, 3, 4, 5]) { rem[1][t] = 0; rem[-1][t] = 0; }
-  let wPts = 0, bPts = 0;
-  for (let i = 0; i < 64; i++) {
-    const p = eng.pieceAt(i);
-    if (p === EMPTY) continue;
-    const a = Math.abs(p);
-    if (a === WK) continue;
-    if (p > 0) { rem[1][a]++; wPts += PTS[a]; } else { rem[-1][a]++; bPts += PTS[a]; }
-  }
-  const taken = color => {
-    const out = [];
-    for (const t of [5, 4, 3, 2, 1]) {
-      const missing = Math.max(0, START_COUNT[t] - rem[color][t]);
-      for (let k = 0; k < missing; k++) out.push(t);
-    }
-    return out;
-  };
-  return { capturedWhite: taken(1), capturedBlack: taken(-1), diff: wPts - bPts };
-}
 
 /* Inline-SVG icon for the label prefix that used to be a raw emoji (⚡)
    -- same fill="currentColor" convention as HomePage's ICONS, just local
