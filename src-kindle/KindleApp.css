@@ -210,6 +210,18 @@ body {
 .kCtrls button.kBtnGhost { background: #FFFDF7; color: #5B3E27; box-shadow: 0 3px 0 #D8CBB0; }
 .kCtrls button:active { transform: translateY(2px); box-shadow: none; }
 .kCtrls button:disabled { opacity: 0.45; box-shadow: none; transform: none; }
+/* Second row: "where can I go" rather than "what do I do to this game".
+   Set back visually so the row above reads as the primary one. */
+.kCtrls.kCtrlsNav { margin-top: 8px; padding-top: 10px; border-top: 2px dashed #EBD9BC; align-items: center; }
+.kCtrls.kCtrlsNav button { font-size: 14px; padding: 8px 12px; }
+/* The opponent picker belongs with its label -- "Bunny ★☆☆☆☆" on its own
+   told a kid nothing about what the dropdown was for. */
+.kOpponentPick { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #7A5B3C; font-weight: bold; }
+.kOpponentPick select { font-size: 14px; padding: 8px 10px; }
+/* Colour choice: piece above the words, so the picture is the control. */
+.kSidePick { display: inline-flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 20px; }
+.kSidePick .kPc { font-size: 34px; }
+.kSidePick .kPcImg { width: 40px; height: 40px; }
 .kNewBest { color: #E8A93B; font-size: 15px; }
 
 .kAnimal { flex: none; animation: kBounce 2.2s ease-in-out infinite; overflow: visible; }

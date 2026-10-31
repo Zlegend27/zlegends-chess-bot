@@ -79,18 +79,30 @@ function materialState(eng) {
    Fox, so a kid who's been beating Dog can grind toward them without
    suddenly facing a wall. They're bought once in the shop and then just
    show up as extra options in the difficulty picker (no equip step). */
+/* `stars` (1-5) is what the kid actually sees -- the elo numbers stay in
+   the data because they're what the ladder was tuned against, but they
+   were being printed straight into the picker as "Bunny (300)". A child
+   has no idea whether 300 is good, and a kid who keeps beating Bunny is
+   quietly being told they're "a 300". Stars say the only thing that
+   matters to them: how hard is this one. Set per-animal rather than
+   derived from elo so the four unlockables (950-1100, all clustered just
+   above Dog) can share a rating honestly instead of inventing
+   differences a kid would never feel. */
 const DIFFICULTIES = [
-  { id: "bunny", label: "Bunny", elo: 300, ms: 150, blunderChance: 0.85, book: false },
-  { id: "cat", label: "Cat", elo: 600, ms: 300, blunderChance: 0.55, book: true },
-  { id: "dog", label: "Dog", elo: 900, ms: 600, blunderChance: 0.3, book: true },
-  { id: "panda", label: "Panda", elo: 950, ms: 700, blunderChance: 0.27, book: true, unlockable: true, price: 100 },
-  { id: "raccoon", label: "Raccoon", elo: 1000, ms: 800, blunderChance: 0.24, book: true, unlockable: true, price: 100 },
-  { id: "koala", label: "Koala", elo: 1050, ms: 900, blunderChance: 0.21, book: true, unlockable: true, price: 100 },
-  { id: "otter", label: "Otter", elo: 1100, ms: 1000, blunderChance: 0.18, book: true, unlockable: true, price: 100 },
-  { id: "fox", label: "Fox", elo: 1200, ms: 1200, blunderChance: 0.12, book: true },
-  { id: "owl", label: "Owl", elo: 1600, ms: 3000, blunderChance: 0.03, book: true },
-  { id: "lion", label: "Lion", elo: 2000, ms: 8000, blunderChance: 0, book: true },
+  { id: "bunny", label: "Bunny", elo: 300, stars: 1, ms: 150, blunderChance: 0.85, book: false },
+  { id: "cat", label: "Cat", elo: 600, stars: 1, ms: 300, blunderChance: 0.55, book: true },
+  { id: "dog", label: "Dog", elo: 900, stars: 2, ms: 600, blunderChance: 0.3, book: true },
+  { id: "panda", label: "Panda", elo: 950, stars: 2, ms: 700, blunderChance: 0.27, book: true, unlockable: true, price: 100 },
+  { id: "raccoon", label: "Raccoon", elo: 1000, stars: 2, ms: 800, blunderChance: 0.24, book: true, unlockable: true, price: 100 },
+  { id: "koala", label: "Koala", elo: 1050, stars: 3, ms: 900, blunderChance: 0.21, book: true, unlockable: true, price: 100 },
+  { id: "otter", label: "Otter", elo: 1100, stars: 3, ms: 1000, blunderChance: 0.18, book: true, unlockable: true, price: 100 },
+  { id: "fox", label: "Fox", elo: 1200, stars: 3, ms: 1200, blunderChance: 0.12, book: true },
+  { id: "owl", label: "Owl", elo: 1600, stars: 4, ms: 3000, blunderChance: 0.03, book: true },
+  { id: "lion", label: "Lion", elo: 2000, stars: 5, ms: 8000, blunderChance: 0, book: true },
 ];
+/* Native <option> can't hold markup, so the rating has to be text -- the
+   filled/hollow star pair reads as a scale at a glance either way. */
+const starLabel = (n) => "★".repeat(n) + "☆".repeat(5 - n);
 
 /* The rarer "outline" chess Unicode code points (white pieces) aren't
    reliably present in every font, and Kindle's font set is an unknown —
@@ -197,6 +209,15 @@ export default function KindleApp() {
   const rushMistakesRef = useRef(0);
   const rushBandIdxRef = useRef(0);
   const rushStreakRef = useRef(0);
+
+  /* "Play White" / "Play Black" used to call newGame() the instant they
+     were tapped, sitting right next to Undo in a nine-button row -- one
+     stray tap mid-game wiped the position with no warning and no way
+     back. Now a single "New Game" asks first (when there's actually a
+     game worth losing), then offers the colour choice. Same guard the
+     main app has as newGameConfirm. */
+  const [newGameConfirm, setNewGameConfirm] = useState(false);
+  const [colorPick, setColorPick] = useState(false);
 
   const [shop, setShop] = useState(() => loadShopState());
   const [shopOpen, setShopOpen] = useState(false);
@@ -339,7 +360,17 @@ export default function KindleApp() {
     } else { setSelected(-1); setTargets([]); return "deselected"; }
   };
 
+  /* Only gates a game actually under way -- there's nothing worth saving
+     in the first few moves, and once it's finished there's nothing to
+     abandon, so those cases go straight to the colour picker. */
+  const startNewGame = () => {
+    if (!result && eng.plyCount() > 4) setNewGameConfirm(true);
+    else setColorPick(true);
+  };
+
   const newGame = (color) => {
+    setNewGameConfirm(false);
+    setColorPick(false);
     eng.reset();
     setPlayerColor(color);
     moveListRef.current = [];
@@ -912,23 +943,60 @@ export default function KindleApp() {
 
       <div className="kMoves">{moveText || "No moves yet - good luck!"}</div>
 
+      {/* Split in two: things you do to THIS game on top, places you can
+          go underneath. It was previously one undifferentiated row of
+          nine buttons, which a kid reads as noise -- and "Lessons"
+          appeared twice, since the header already has its own 🎓 button. */}
       <div className="kCtrls">
-        <button className="kBtnGreen" onClick={() => newGame(1)}>Play White</button>
-        <button className="kBtnBlue" onClick={() => newGame(-1)}>Play Black</button>
+        {result && <button className="kBtnPink" onClick={() => newGame(playerColor)}>Play Again!</button>}
+        <button className="kBtnGreen" onClick={startNewGame}>New Game</button>
         <button className="kBtnGhost" onClick={undo} disabled={thinking || !!result || eng.plyCount() === 0}>Undo</button>
         <button className="kBtnGold" onClick={onHint} disabled={thinking || !!result || !!promo || hinting || eng.getSide() !== playerColor || shop.coins < HINT_COST}
           title={`Costs ${HINT_COST} coin`}>
           {hinting ? "Thinking…" : `💡 Hint (${HINT_COST}🪙)`}
         </button>
-        <select value={difficultyIdx} onChange={e => setDifficultyIdx(Number(e.target.value))}>
-          {DIFFICULTIES.map((d, i) => (!d.unlockable || shop.ownedAnimals.includes(d.id)) &&
-            <option key={i} value={i}>{d.label} ({d.elo})</option>)}
-        </select>
-        <button className="kBtnPurple" onClick={() => setView("lessonsHub")}>🎓 Lessons</button>
-        <button className="kBtnPurple" onClick={() => setView("lessons")}>How to Play</button>
-        <button className="kBtnPurple" onClick={() => setView("puzzle")} disabled={thinking}>Puzzles</button>
-        {result && <button className="kBtnPink" onClick={() => newGame(playerColor)}>Play Again!</button>}
       </div>
+      <div className="kCtrls kCtrlsNav">
+        <label className="kOpponentPick">
+          <span>Playing against</span>
+          <select value={difficultyIdx} onChange={e => setDifficultyIdx(Number(e.target.value))}>
+            {DIFFICULTIES.map((d, i) => (!d.unlockable || shop.ownedAnimals.includes(d.id)) &&
+              <option key={i} value={i}>{d.label} {starLabel(d.stars)}</option>)}
+          </select>
+        </label>
+        <button className="kBtnPurple" onClick={() => setView("puzzle")} disabled={thinking}>🧩 Puzzles</button>
+        <button className="kBtnPurple" onClick={() => setView("lessons")}>❓ How to Play</button>
+      </div>
+
+      {newGameConfirm && (
+        <div className="kShopOv" onClick={e => { if (e.target === e.currentTarget) setNewGameConfirm(false); }}>
+          <h2 className="kLessonTitle" style={{ textAlign: "center" }}>Start a new game?</h2>
+          <div className="kMoves" style={{ width: "min(92vw, 380px)", textAlign: "center", fontSize: 16 }}>
+            This game will disappear and you can&apos;t get it back.
+          </div>
+          <div className="kCtrls">
+            <button className="kBtnGreen" onClick={() => { setNewGameConfirm(false); setColorPick(true); }}>Yes, new game</button>
+            <button className="kBtnGhost" onClick={() => setNewGameConfirm(false)}>Keep playing</button>
+          </div>
+        </div>
+      )}
+
+      {colorPick && (
+        <div className="kShopOv" onClick={e => { if (e.target === e.currentTarget) setColorPick(false); }}>
+          <button className="kCloseX" onClick={() => setColorPick(false)} aria-label="Close">✕</button>
+          <h2 className="kLessonTitle" style={{ textAlign: "center" }}>Which side do you want?</h2>
+          {/* Shows the actual pieces, not just the words -- "white" and
+              "black" are the labels, but the piece is what she picks. */}
+          <div className="kCtrls">
+            <button className="kBtnGreen kSidePick" onClick={() => newGame(1)}>
+              {renderPiece(1)}<span>Play White</span>
+            </button>
+            <button className="kBtnBlue kSidePick" onClick={() => newGame(-1)}>
+              {renderPiece(-1)}<span>Play Black</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {shopOpen && (
         <div className="kShopOv" onClick={e => { if (e.target === e.currentTarget) setShopOpen(false); }}>
@@ -1012,7 +1080,7 @@ export default function KindleApp() {
               return (
                 <div className="kShopItem" key={d.id}>
                   <AnimalIcon kind={d.label} size={44} />
-                  <div>{d.label} ({d.elo})</div>
+                  <div>{d.label} {starLabel(d.stars)}</div>
                   {owned ? (
                     <button className="kEquipped" disabled>Unlocked</button>
                   ) : (
