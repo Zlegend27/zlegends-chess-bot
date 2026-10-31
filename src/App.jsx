@@ -16,7 +16,7 @@ import GamePanel from "./components/GamePanel";
 import BotBubble from "./components/BotBubble";
 import { pickPostGameLine } from "./utils/botLines";
 import { signInWithDiscord, signOut, watchAuthState, discordProfile } from "./utils/auth";
-import { migrateAnonymousDataIfNeeded } from "./utils/accountMigration";
+import { claimAnonymousData } from "./utils/accountMigration";
 import { loadSetting, saveSetting } from "./utils/storage";
 import { PANEL_RAYS, PANEL_CHORDS, HEART_RAYS, HEART_CHORDS } from "./utils/rushShatter";
 import { getUiTheme } from "./utils/uiTheme";
@@ -712,12 +712,11 @@ export default function ZlegendsBot() {
   useEffect(() => watchAuthState(setSession), []);
   const profile = discordProfile(session);
   const [accountOpen, setAccountOpen] = useState(false);
-  /* Runs once per account per browser -- folds this browser's anonymous
-     client_id data (Rank Bot rating, game history, Rush scores) onto the
-     account the first time it's ever seen here, so a returning player
-     who just signed in doesn't look like they're starting from zero. */
+  /* Folds this browser's anonymous client_id data (Rank Bot rating, game
+     history, Rush scores) onto the account, so a returning player who just
+     signed in doesn't look like they're starting from zero. */
   useEffect(() => {
-    if (session?.user?.id) migrateAnonymousDataIfNeeded(session.user.id);
+    if (session?.user?.id) claimAnonymousData(session.user.id);
   }, [session?.user?.id]);
   /* Music/Settings/Account only ever render inside the "play" branch (see
      the comment below), so opening one from another page has to flip

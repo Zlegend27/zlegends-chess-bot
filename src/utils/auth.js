@@ -47,6 +47,15 @@ export function watchAuthState(onChange) {
   return () => { cancelled = true; unsub(); };
 }
 
+/** The signed-in player's id, or null. Reads the stored session, so awaiting
+ *  it doesn't add a network round trip to a save. */
+export async function currentUserId() {
+  const supabase = await getSupabase();
+  if (!supabase) return null;
+  const { data } = await supabase.auth.getSession();
+  return data?.session?.user?.id ?? null;
+}
+
 /** Discord's profile fields land in user_metadata under provider-specific
  *  keys -- full_name/name/avatar_url are what Supabase's Discord OAuth
  *  integration populates as of writing. Returns null for a signed-out

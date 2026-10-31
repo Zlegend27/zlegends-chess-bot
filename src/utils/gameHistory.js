@@ -1,5 +1,6 @@
 import { getSupabase } from "./supabase";
 import { getClientId } from "./clientId";
+import { currentUserId } from "./auth";
 import { buildPgn } from "./pgn";
 
 /** Best-effort game save — never throws, never blocks/disrupts gameplay.
@@ -9,8 +10,10 @@ export async function saveGame({ difficultyLabel, playerColor, moveList, result,
   const supabase = await getSupabase();
   if (!supabase) return;
   try {
+    const userId = await currentUserId();
     await supabase.from("games").insert({
       client_id: getClientId(),
+      ...(userId ? { user_id: userId } : {}),
       difficulty_label: difficultyLabel,
       player_color: playerColor,
       moves: moveList,
@@ -80,8 +83,16 @@ export async function estimateRating() {
 
 const GAMES_UNREACHABLE = "Couldn't reach your game history right now. Check your connection and try again.";
 
-/** Most recent saved games for this browser, newest first. Each row
- *  carries the PGN so tapping one can load it straight into review mode
+/** PostgREST filter for a signed-in player's games: everything on their
+ *  account from any device, plus this browser's games that haven't been
+ *  claimed yet. The null check matters on a shared browser, where the same
+ *  client_id can also hold games claimed by someone else's account. */
+export function ownGamesFilter(userId, clientId) {
+  return `user_id.eq.${userId},and(client_id.eq.${clientId},user_id.is.null)`;
+}
+
+/** Most recent saved games, newest first: the player's whole account when
+ *  signed in, otherwise just this browser. Each row carries the PGN so tapping one can load it straight into review mode
  *  through the same path as a pasted game. Returns { games } or
  *  { error } -- an unconfigured or unreachable backend should read as
  *  "couldn't load", not as "you haven't played any games". */
@@ -89,10 +100,11 @@ export async function fetchRecentGames(limit = 15) {
   const supabase = await getSupabase();
   if (!supabase) return { error: "Game history isn't set up on this deployment yet." };
   try {
-    const { data, error } = await supabase
+    const userId = await currentUserId();
+    const rows = supabase
       .from("games")
-      .select("id, created_at, difficulty_label, player_color, winner, result_text, result_reason, pgn")
-      .eq("client_id", getClientId())
+      .select("id, created_at, difficulty_label, player_color, winner, result_text, result_reason, pgn");
+    const { data, error } = await (userId ? rows.or(ownGamesFilter(userId, getClientId())) : rows.eq("client_id", getClientId()))
       .not("pgn", "is", null)
       .order("created_at", { ascending: false })
       .limit(limit);
