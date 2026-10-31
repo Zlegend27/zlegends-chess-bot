@@ -157,6 +157,17 @@ export default function KindleApp() {
   const [lessonChapterId, setLessonChapterId] = useState(null);
   const [winBurst, setWinBurst] = useState(0);
   const [playerColor, setPlayerColor] = useState(1);
+  /* Mirrored onto a ref because announceResult reads it, and
+     announceResult is called from inside engineMove -- a useCallback that
+     deliberately doesn't list playerColor (or announceResult) in its
+     deps. Without this, switching sides left engineMove holding the
+     previous colour: the bot checkmating you after "Play Black" scored
+     as a WIN, paying out coins and the victory jingle while the status
+     line correctly read "Nice try!" (reproduced: 1.d4 f6 2.Nc3 g5 3.e4
+     a6 4.Qh5# paid 50 coins). Same playerColorRef convention the main
+     app uses in src/App.jsx. */
+  const playerColorRef = useRef(playerColor);
+  playerColorRef.current = playerColor;
   const [selected, setSelected] = useState(-1);
   const [targets, setTargets] = useState([]);
   const [moveList, setMoveList] = useState([]);
@@ -244,7 +255,7 @@ export default function KindleApp() {
 
   const announceResult = (over) => {
     if (!over) return;
-    if (over.winner === playerColor) {
+    if (over.winner === playerColorRef.current) {
       audio.sfxWin();
       setShop(s => addCoins(s, botCoinReward(difficultyIdx)));
       setWinBurst(n => n + 1);
@@ -350,6 +361,17 @@ export default function KindleApp() {
 
   const puzzleProgressRef = useRef([]);
   const prevPlayerColorRef = useRef(1);
+  /* onPuzzleSquare schedules follow-ups (the auto-played reply, advancing
+     to the next rush puzzle, ending the rush). Tracked so exitPuzzle can
+     cancel a pending one -- otherwise tapping "End Rush" inside that
+     400-700ms window lets nextRushPuzzle fire afterwards and drop a
+     fresh puzzle onto a board the kid already left. Same puzzleTimeoutRef
+     pattern as the main app. */
+  const puzzleTimeoutRef = useRef(null);
+  const schedulePuzzleStep = (fn, ms) => {
+    clearTimeout(puzzleTimeoutRef.current);
+    puzzleTimeoutRef.current = setTimeout(fn, ms);
+  };
 
   /* Drag-to-move (mouse and touch, via Pointer Events), same approach as
      the main site's board: pointerdown reuses whichever click handler is
@@ -366,6 +388,12 @@ export default function KindleApp() {
   const [dragCellSize, setDragCellSize] = useState(40);
 
   const loadPuzzle = (puzzle) => {
+    /* Callers index a random slot out of a filtered band, so an empty
+       band would hand us undefined and crash on .fen below. Can't happen
+       with the shipped set (136/209/208 across easy/medium/hard), but the
+       bands are re-derived from a rating cap here, so a data change
+       shouldn't be able to turn that into a white screen. */
+    if (!puzzle) return;
     eng.loadFen(puzzle.fen);
     puzzleProgressRef.current = [];
     setActivePuzzle(puzzle);
@@ -469,10 +497,10 @@ export default function KindleApp() {
             setRushBandIdx(rushBandIdxRef.current);
             if (rushMistakesRef.current >= 3) {
               setPuzzleFeedback("wrong");
-              setTimeout(() => finishRush("mistakes"), 400);
+              schedulePuzzleStep(() => finishRush("mistakes"), 400);
             } else {
               setPuzzleFeedback("wrong");
-              setTimeout(() => nextRushPuzzle(), 700);
+              schedulePuzzleStep(() => nextRushPuzzle(), 700);
             }
             return "deselected";
           }
@@ -500,7 +528,7 @@ export default function KindleApp() {
               setRushBandIdx(rushBandIdxRef.current);
             }
             setShop(s => addCoins(s, puzzleCoinReward(activePuzzle.rating)));
-            setTimeout(() => nextRushPuzzle(), 500);
+            schedulePuzzleStep(() => nextRushPuzzle(), 500);
           } else {
             const reward = puzzleCoinReward(activePuzzle.rating);
             setShop(s => {
@@ -512,7 +540,7 @@ export default function KindleApp() {
           return "moved";
         }
         const replySan = activePuzzle.moves[puzzleProgressRef.current.length];
-        setTimeout(() => {
+        schedulePuzzleStep(() => {
           const replyLegal = eng.legalMoves();
           const replyMove = replyLegal.find(mv => eng.sanOf(mv) === replySan);
           if (replyMove) {
@@ -537,6 +565,8 @@ export default function KindleApp() {
   };
 
   const exitPuzzle = () => {
+    clearTimeout(puzzleTimeoutRef.current);
+    puzzleTimeoutRef.current = null;
     eng.reset();
     replayIntoEngine(eng, moveList);
     setActivePuzzle(null); setPuzzleBand(null); setIsDailyPuzzle(false); setPuzzleFeedback(null); setPuzzleSolved(false);
