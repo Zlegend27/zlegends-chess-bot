@@ -18,6 +18,7 @@ const ICONS = {
   bolt: "M7 2v11h3v9l7-12h-4l4-8z",
   eye: "M12 5c-5 0-9.27 3.11-11 7 1.73 3.89 6 7 11 7s9.27-3.11 11-7c-1.73-3.89-6-7-11-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
   star: "M12 2l2.9 6.9L22 9.6l-5.5 4.8L18 22l-6-3.6L6 22l1.5-7.6L2 9.6l7.1-.7L12 2z",
+  search: "M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z",
   trophy: "M7 4V2h10v2h4v3c0 2.21-1.79 4-4 4h-.08A6.007 6.007 0 0 1 13 15.92V18h3v2H8v-2h3v-2.08A6.007 6.007 0 0 1 7.08 9H7c-2.21 0-4-1.79-4-4V4h4zm-2 2v1c0 1.1.9 2 2 2V6H5zm12 0v3c1.1 0 2-.9 2-2V6h-2z",
   cap: "M12 3 1 9l11 6 9-4.91V17h2V9L12 3zm0 13.5L4.24 12.3 3 13l9 5 9-5-1.24-.7L12 16.5zM5 14.18v3.82c0 1.1 3.13 3 7 3s7-1.9 7-3v-3.82l-7 3.82-7-3.82z",
   cog: "M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.5.5 0 0 0-.59.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32c.14.24.42.32.66.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.24.1.51 0 .59-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z",
@@ -63,10 +64,14 @@ const MODES = [
   { id: "lessons", label: "Lessons", desc: "Structured lessons to level up your game.", icon: ICONS.cap },
 ];
 
-/* The one mode this page spotlights instead of tiling -- same label/desc
-   Rank Bot has always used elsewhere in the app (see App.jsx's
-   DIFFICULTIES), reused verbatim here rather than writing new copy. */
-const RANK_FEATURE = { id: "rank", label: "Rank Bot", desc: "An adaptive bot that estimates your rating as you play.", icon: ICONS.star };
+/* The modes this page spotlights instead of tiling. Rank Bot keeps the same
+   label/desc it uses elsewhere in the app (see App.jsx's DIFFICULTIES).
+   Game Review's copy has to answer "what can I put in here?" before the
+   click, so it names the outside sites outright. */
+const FEATURES = [
+  { id: "review", eyebrow: "New Feature", label: "Game Review", desc: "Paste any game, even one from Chess.com or Lichess. See every move graded and practice your mistakes.", icon: ICONS.search },
+  { id: "rank", eyebrow: "Adaptive Bot", label: "Rank Bot", desc: "An adaptive bot that estimates your rating as you play.", icon: ICONS.star },
+];
 
 /* play/gold/cyan swap to Sweetheart's own gold/teal when the app-wide
    theme is active (see getUiTheme) -- pink stays fixed to magenta
@@ -156,23 +161,28 @@ export default function HomePage({ onEnter, firstVisit, rankElo, rankGames, swee
         </div>
       </div>
 
-      {/* Features -- spotlights one implemented mode at a time rather than
-          competing for space as another grid tile; Rank Bot for now. */}
+      {/* Features -- spotlights implemented modes with room for a sentence,
+          rather than competing for space as more grid tiles. */}
       <div className="mt-10 w-full max-w-4xl">
         <h2 className={"mb-4 text-xs font-bold uppercase tracking-[0.2em] " + T.dimText}>Features</h2>
-        <button
-          onClick={() => onEnter(RANK_FEATURE.id)}
-          className={`group flex w-full flex-col items-center gap-4 rounded-3xl border ${featureBorder} bg-gradient-to-br ${featureGradientFrom} ${featureGradientTo} p-6 text-center backdrop-blur-sm transition hover:-translate-y-0.5 ${featureBorderHover} sm:flex-row sm:text-left`}
-        >
-          <span className="flex h-16 shrink-0 items-center justify-center">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor" className={T.accentText} aria-hidden="true"><path d={RANK_FEATURE.icon} /></svg>
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className={"block text-[10px] font-bold uppercase tracking-[0.2em] " + T.accentText}>New Feature</span>
-            <span className={"mt-1 block text-lg font-bold " + T.ink}>{RANK_FEATURE.label}</span>
-            <span className={"mt-1 block text-sm leading-relaxed " + T.dimText}>{RANK_FEATURE.desc}</span>
-          </span>
-        </button>
+        <div className="flex flex-col gap-3">
+          {FEATURES.map((f) => (
+            <button
+              key={f.id}
+              onClick={() => onEnter(f.id)}
+              className={`group flex w-full flex-col items-center gap-4 rounded-3xl border ${featureBorder} bg-gradient-to-br ${featureGradientFrom} ${featureGradientTo} p-6 text-center backdrop-blur-sm transition hover:-translate-y-0.5 ${featureBorderHover} sm:flex-row sm:text-left`}
+            >
+              <span className="flex h-16 shrink-0 items-center justify-center">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor" className={T.accentText} aria-hidden="true"><path d={f.icon} /></svg>
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className={"block text-[10px] font-bold uppercase tracking-[0.2em] " + T.accentText}>{f.eyebrow}</span>
+                <span className={"mt-1 block text-lg font-bold " + T.ink}>{f.label}</span>
+                <span className={"mt-1 block text-sm leading-relaxed " + T.dimText}>{f.desc}</span>
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Leaderboard and Settings are both links out to their own page/modal

@@ -318,10 +318,21 @@ export default function KindleApp() {
   };
 
   const engineMoveRef = useRef(null);
+  const engineSearchIdRef = useRef(0);
   const engineMove = useCallback(() => {
     setThinking(true);
     const diff = DIFFICULTIES[difficultyIdx];
+    /* New Game stays tappable while the bot thinks, so the reply may belong
+       to a game that's gone. Applying it anyway flipped the turn on the new
+       board with no search running, which froze the game. Only the newest
+       search may clear `thinking`. */
+    const askedAt = moveListRef.current;
+    const searchId = ++engineSearchIdRef.current;
     runSearch(moveListRef.current, diff.ms, diff.blunderChance || 0, diff.book).then((res) => {
+      if (moveListRef.current !== askedAt) {
+        if (searchId === engineSearchIdRef.current) { setThinking(false); rerender(); }
+        return;
+      }
       if (res && res.move) {
         const cap = isCaptureMove(res.move);
         eng.make(res.move);
@@ -403,6 +414,7 @@ export default function KindleApp() {
   const newGame = (color) => {
     setNewGameConfirm(false);
     setColorPick(false);
+    setThinking(false);
     eng.reset();
     setPlayerColor(color);
     moveListRef.current = [];

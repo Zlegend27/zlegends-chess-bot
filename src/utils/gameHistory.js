@@ -120,6 +120,7 @@ export function summarizeGame(row) {
   return {
     id: row.id,
     opponent: row.difficulty_label || "Unknown",
+    playerColor: row.player_color === -1 ? -1 : 1,
     outcome,
     reason: row.result_reason || "",
     date: when.toLocaleDateString(undefined, { day: "numeric", month: "short" }),

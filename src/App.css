@@ -323,6 +323,18 @@
 .recentOutcome.loss{ color:#F05348; }
 .recentOutcome.draw{ color:var(--dim); }
 .recentOutcome.abandoned{ color:var(--dim); font-style:italic; }
+.pasteError{ color:#F05348; }
+/* A reviewed game's players aren't Zlegend2700 or the local player, so
+   their cards show a king in that side's colour instead of an avatar. The
+   light backing is the piece-picker's, so a black king stays visible on
+   the dark avatar box. */
+.reviewAvatarPc{ display:block; width:36px; height:36px; box-sizing:border-box; padding:2px; object-fit:contain;
+  background:#DDD6EA; border-radius:var(--r-2xs); }
+/* The green and red above are tuned for a dark background and are too
+   faint on Sweetheart's light cards. */
+:root[data-theme="sweetheart"] .recentOutcome.win{ color:#1E9E5A; }
+:root[data-theme="sweetheart"] .recentOutcome.loss,
+:root[data-theme="sweetheart"] .pasteError{ color:var(--sh-red); }
 .durationGrid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:4px 0 12px; }
 /* A <button>, not a <div> -- was a div+onClick, which meant Tab couldn't
    reach it and Enter/Space couldn't activate it. width:100% + font

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useMemo, lazy, Suspense } from "react";
+import { useState, useRef, useCallback, useEffect, useLayoutEffect, useMemo, lazy, Suspense } from "react";
 import {
   createEngine, EMPTY, WN, WB, WR, WQ, WK, M64TO120, M120TO64,
   mFrom, mTo, mPromo, mFlags, MATE, fileOf, rankOf,
@@ -20,17 +20,18 @@ import { migrateAnonymousDataIfNeeded } from "./utils/accountMigration";
 import { loadSetting, saveSetting } from "./utils/storage";
 import { PANEL_RAYS, PANEL_CHORDS, HEART_RAYS, HEART_CHORDS } from "./utils/rushShatter";
 import { getUiTheme } from "./utils/uiTheme";
-import { buildPgn, parsePgnMoves, replayForeignPgn } from "./utils/pgn";
+import { buildPgn, parsePgnMoves, replayForeignPgn, parsePgnHeaders, countPgnGames, describePasteProblem, reviewInfoFromHeaders, exporterSide } from "./utils/pgn";
 import { encodeGame, decodeGame, getSharedHash, replayIntoEngine } from "./utils/share";
 import { PIECE_SETS, getPieceSet } from "./utils/pieceSets";
 import { BOARD_COLORS, getBoardColor } from "./utils/boardColors";
-import { saveGame, estimateRating, fetchRecentGames, summarizeGame } from "./utils/gameHistory";
+import { saveGame, estimateRating } from "./utils/gameHistory";
 import { getDisplayName, setDisplayName } from "./utils/playerIdentity";
 import { submitRushScore } from "./utils/leaderboard";
 import { RUSH_DURATIONS } from "./utils/rushDurations";
 import LeaderboardPage from "./components/LeaderboardPage";
 import PuzzlesHomePage from "./components/PuzzlesHomePage";
 import LessonsPage from "./components/LessonsPage";
+import GameReviewPage from "./components/GameReviewPage";
 import { syncRankBotToSupabase, fetchRankBotFromSupabase, logRankBotMove } from "./utils/rankBot";
 import { ENGINE_VERSION } from "./utils/version";
 import { OPENINGS } from "./utils/openings";
@@ -364,6 +365,8 @@ function RushThemeArt() {
 }
 
 const formatClock = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+/* Matches the .15s used for the app's other quick UI transitions. */
+const PIECE_SLIDE_MS = 150;
 /* Puzzle Rush difficulty ramp: climb one rating band every 3 solves in a
    row, drop back one band on a miss so a rough patch doesn't strand the
    player facing puzzles far above what they just missed. */
@@ -663,9 +666,9 @@ export default function ZlegendsBot() {
      whatever's on the board now. */
   const gradeRunIdRef = useRef(0);
   const [pastedGame, setPastedGame] = useState(false);
-  const [pasteOpen, setPasteOpen] = useState(false);
-  const [pasteText, setPasteText] = useState("");
-  const [pasteError, setPasteError] = useState(null);
+  /* Who played and how it ended, for a game opened in Game Review. Without
+     this the cards would label someone else's game as Zlegend2700 vs you. */
+  const [reviewInfo, setReviewInfo] = useState(null);
   const [bestArrow, setBestArrow] = useState(null);
   const [analysisBusy, setAnalysisBusy] = useState(false);
   const [analysisExtra, setAnalysisExtra] = useState([]);
@@ -677,37 +680,6 @@ export default function ZlegendsBot() {
   const musicOpenRef = useRef(false);
   musicOpenRef.current = musicOpen;
   const [settingsOpen, setSettingsOpen] = useState(false);
-  /* Recent games lists the saved PGNs from this browser's history. `null`
-     while loading, so an empty array can mean "you haven't played yet"
-     without also meaning "still fetching". */
-  const [recentOpen, setRecentOpen] = useState(false);
-  const [recentGames, setRecentGames] = useState(null);
-  const [recentError, setRecentError] = useState(null);
-  const loadRecentGames = () => {
-    setRecentGames(null);
-    setRecentError(null);
-    fetchRecentGames().then((r) => {
-      if (r.error) setRecentError(r.error);
-      else setRecentGames(r.games.map(summarizeGame));
-    });
-  };
-  const openRecentGames = () => {
-    setSettingsOpen(false);
-    setRecentOpen(true);
-    loadRecentGames();
-  };
-  /* A saved game is replayed through the same loader as a pasted PGN, but
-     without auto-grading: the player opened it to look at it, not to wait
-     on an analysis pass. Any problem is reported in the toast, since the
-     list has no field of its own to show it in. */
-  const openSavedGame = (game) => {
-    const r = loadPgnText(game.pgn, { analyze: false });
-    setRecentOpen(false);
-    if (!r.ok) setPgnToast(r.error);
-    else if (r.partial) setPgnToast(r.partial);
-    else return;
-    setTimeout(() => setPgnToast(null), 5000);
-  };
   const [ratingInfo, setRatingInfo] = useState(null);
   /* Fetched up-front (not just when Settings opens) now that the estimate
      also shows next to the "You" card -- but deferred a few seconds past
@@ -1031,6 +1003,26 @@ export default function ZlegendsBot() {
      already-decided position rather than a live game the player is
      mid-move in. */
   const canAnalyze = reviewing || mode === "replay" || (spectateMode && spectatePaused) || (rushMode && !!rushResult) || !!missedAttempt;
+
+  /* Arrow keys step through a review or replay, which is how Chess.com's
+     Game Review moves too: left/right one move, up/down to the ends.
+     Ignored while typing or with a modal open, and when a modifier is held
+     so browser shortcuts like Alt+Left still work. */
+  useEffect(() => {
+    if (!reviewing && mode !== "replay") return;
+    const total = reviewing ? moveList.length : replayFull.length;
+    const setIndex = reviewing ? setReviewIndex : setReplayIndex;
+    const onKeyDown = (e) => {
+      if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      if (e.target.closest?.("input, textarea, select") || document.querySelector(".promoOv")) return;
+      const step = { ArrowLeft: (i) => i - 1, ArrowRight: (i) => i + 1, ArrowUp: () => 0, ArrowDown: () => total }[e.key];
+      if (!step) return;
+      e.preventDefault();
+      setIndex((i) => Math.max(0, Math.min(total, step(i))));
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [reviewing, mode, moveList.length, replayFull.length]);
   const reviewFirstRun = useRef(true);
   useEffect(() => {
     if (!reviewing) {
@@ -1133,7 +1125,10 @@ export default function ZlegendsBot() {
      answer. */
   const practiceQueue = (moveGrades && gradeDetail) ? (() => {
     const ownGame = mode !== "replay" && !pastedGame;
-    const parityWanted = ownGame ? (playerColor === 1 ? 0 : 1) : null;
+    /* "Your mistakes" means yours whenever we know which side that was. Only
+       a game with no known player drills both sides. */
+    const yourSide = ownGame ? playerColor : reviewInfo?.you ?? null;
+    const parityWanted = yourSide == null ? null : (yourSide === 1 ? 0 : 1);
     const q = [];
     moveGrades.forEach((g, i) => {
       if ((g === "mistake" || g === "blunder" || g === "miss")
@@ -1244,12 +1239,19 @@ export default function ZlegendsBot() {
   }
 
   const gradeMoves = async () => {
-    if (grading) return;
+    /* No "already grading" check here. A new run replaces any older one
+       through gradeRunIdRef below, and `grading` in this closure can be
+       stale, which used to make a second game's grading silently never
+       start. toggleAnalyze checks before calling. */
     const list = moveListRef.current;
     if (!list.length) return;
     const myRunId = ++gradeRunIdRef.current;
     setGrading(true);
     setGradeProgress(0);
+    /* A game opened straight from the Game Review page can get here before
+       the play view's own fetch of the ECO book has landed. */
+    const eco = ecoData || await loadEcoOpenings().catch(() => null);
+    if (gradeRunIdRef.current !== myRunId) return;
     /* FENs are cheap to build (just replaying moves, no search) -- do
        that up front so every grading search below is a single Stockfish
        call against a known position instead of re-deriving it. */
@@ -1264,7 +1266,7 @@ export default function ZlegendsBot() {
        of an engine grade -- shallow probes "grading" memorized theory
        was pure noise. Falls back to 0 (no book tags) if the ECO data
        chunk hasn't streamed in yet. */
-    const theoryPlies = ecoData ? theoryPlyCount(list, ecoData) : 0;
+    const theoryPlies = eco ? theoryPlyCount(list, eco) : 0;
     const bookBoundary = Math.min(theoryPlies, list.length);
     const scores = new Array(list.length + 1);
     const secondScores = new Array(list.length + 1);
@@ -1277,7 +1279,7 @@ export default function ZlegendsBot() {
          bail out now rather than keep burning searches, and definitely
          don't let a stale run's eventual setMoveGrades land on top of
          whatever's on screen at that point. */
-      if (gradeRunIdRef.current !== myRunId) { setGrading(false); return; }
+      if (gradeRunIdRef.current !== myRunId) return; // whoever replaced this run owns `grading` now
       /* A rejected search (worker error, dropped connection) is not the
          same as "the engine found nothing" -- defaulting that to a score
          of 0 used to fabricate a fake blunder/brilliancy on whichever
@@ -1547,8 +1549,23 @@ export default function ZlegendsBot() {
     });
   };
 
+  const engineSearchIdRef = useRef(0);
   const engineMove = useCallback((currentMoveList) => {
     setThinking(true);
+    /* The position this search was asked about, same check as onHint. New
+       Game isn't disabled while the bot thinks, so without this the old
+       reply landed on the fresh board: 1.h3, New Game, and 12 seconds
+       later the board read "1.h3 d5" on a position where h3 was never
+       played, with the turn flipped to the bot and no search running. The
+       game stayed frozen until a reload. The id means only the newest
+       search may clear `thinking`. */
+    const askedAt = moveListRef.current;
+    const searchId = ++engineSearchIdRef.current;
+    const finish = () => {
+      if (searchId !== engineSearchIdRef.current) return;
+      setThinking(false);
+      rerender();
+    };
     const diff = effectiveDifficulty(difficultyRef.current);
     const botColorNow = -playerColorRef.current;
     const whiteEvalNow = eng.evalWhite();
@@ -1558,6 +1575,7 @@ export default function ZlegendsBot() {
       ? stockfishMove(diff)
       : runSearch(currentMoveList, diff.ms, diff.blunderChance || 0, { personality, useBook: diff.book, bookStyle: diff.styleBook ? gameStyleRef.current.label : null });
     searchPromise.then((res) => {
+      if (moveListRef.current !== askedAt) { finish(); return; }
       if (res && res.move) {
         const cap = isCaptureMove(res.move);
         eng.make(res.move);
@@ -1582,8 +1600,7 @@ export default function ZlegendsBot() {
           finishRankBotGame(over);
         }
       }
-      setThinking(false);
-      rerender();
+      finish();
     }).catch(() => {
       /* A rejected search (Stockfish worker failed to boot, WASM fetch
          dropped) still has to clear `thinking` -- onSquare returns
@@ -1591,8 +1608,7 @@ export default function ZlegendsBot() {
          board for the rest of the session with "Zlegend2700 is
          calculating…" on screen permanently. runSearch (the homemade
          worker) only ever resolves; this covers the Stockfish tiers. */
-      setThinking(false);
-      rerender();
+      finish();
     });
   }, [eng, audio, checkGameOver, runSearch, stockfishMove]);
   const engineMoveRef = useRef(engineMove);
@@ -1608,13 +1624,14 @@ export default function ZlegendsBot() {
   const spectateMove = useCallback(() => {
     if (!spectateModeRef.current) return;
     setThinking(true);
+    const askedAt = moveListRef.current; // see engineMove
     const diff = eng.getSide() === 1 ? spectateWhiteRef.current : spectateBlackRef.current;
     const personality = pickPersonality(gameStyleRef.current, eng.plyCount(), 0);
     const searchPromise = diff.stockfishElo
       ? stockfishMove(diff)
       : runSearch(moveListRef.current, diff.ms, diff.blunderChance || 0, { personality, useBook: diff.book, bookStyle: diff.styleBook ? gameStyleRef.current.label : null });
     searchPromise.then((res) => {
-      if (res && res.move && spectateModeRef.current) {
+      if (res && res.move && spectateModeRef.current && moveListRef.current === askedAt) {
         const cap = isCaptureMove(res.move);
         eng.make(res.move);
         try { cap ? audio.sfxCapture() : audio.sfxMove(); } catch { /* audio unavailable */ }
@@ -1797,6 +1814,11 @@ export default function ZlegendsBot() {
     const inPractice = !!practice && !practice.done && practice.feedback !== "correct"
       && reviewIndex === practice.queue[practice.idx] && analysisExtra.length === 0;
     if ((spectateMode && !(spectatePaused && analyzing)) || (mode === "replay" && !analyzing && !inPractice) || thinking || promo) return "blocked";
+    /* A reviewed game is a record, not a live game. Without this, turning
+       Analyze off (or any unfinished game) fell through to the live-play
+       path below, so tapping a piece played a move and woke the bot up on
+       a board the player was only reading. */
+    if (pastedGame && !analyzing && !inPractice) return "blocked";
     const inQuiz = !!quizOpening;
     const inPuzzle = !!activePuzzle;
     if (inPuzzle && puzzleSolved) return "blocked";
@@ -1841,6 +1863,7 @@ export default function ZlegendsBot() {
      separate mouse/touch listeners) is what makes one implementation
      cover both mouse-drag and finger-drag. */
   const boardRef = useRef(null);
+  const suppressSlideRef = useRef(false);
   const [dragFrom, setDragFrom] = useState(-1);
   const [dragOverSquare, setDragOverSquare] = useState(-1);
   const [dragPos, setDragPos] = useState(null);
@@ -1880,7 +1903,11 @@ export default function ZlegendsBot() {
     if (dragFrom < 0) return;
     const dropSquare = squareFromPoint(e.clientX, e.clientY);
     setDragFrom(-1); setDragOverSquare(-1); setDragPos(null);
-    if (dropSquare >= 0) onSquareRef.current(dropSquare);
+    if (dropSquare >= 0) {
+      /* The hand already carried this piece there, so it shouldn't also
+         slide across the board from where it started. */
+      suppressSlideRef.current = onSquareRef.current(dropSquare) === "moved";
+    }
   };
   const onDragPointerCancelRef = useRef(null);
   onDragPointerCancelRef.current = () => {
@@ -1967,7 +1994,8 @@ export default function ZlegendsBot() {
   const leaveActivity = () => {
     if (puzzleTimeoutRef.current) { clearTimeout(puzzleTimeoutRef.current); puzzleTimeoutRef.current = null; }
 
-    const hadBoardActivity = !!activePuzzle || spectateModeRef.current || mode === "replay";
+    const hadBoardActivity = !!activePuzzle || spectateModeRef.current || mode === "replay" || pastedGame;
+    if (pastedGame) gradeRunIdRef.current += 1;
 
     setActivePuzzle(null);
     setPuzzleBand(null);
@@ -2015,6 +2043,7 @@ export default function ZlegendsBot() {
 
   const newGame = (color) => {
     gradeRunIdRef.current += 1;
+    setThinking(false);
     setNewGameConfirm(false);
     maybeSaveAbandonedGame();
     maybeCountAbandonedRankGame();
@@ -2318,7 +2347,6 @@ export default function ZlegendsBot() {
       if (e.key !== "Escape") return;
       if (pieceDesignsOpen) { setPieceDesignsOpen(false); setSettingsOpen(true); }
       else if (boardColorsOpen) { setBoardColorsOpen(false); setSettingsOpen(true); }
-      else if (recentOpen) setRecentOpen(false);
       else if (settingsOpen) closeSettings();
       else if (accountOpen) closeAccount();
       else if (nameEditOpen) setNameEditOpen(false);
@@ -2331,11 +2359,10 @@ export default function ZlegendsBot() {
       else if (blindOpen) setBlindOpen(false);
       else if (musicOpen) closeMusic();
       else if (spectateOpen) setSpectateOpen(false);
-      else if (pasteOpen) setPasteOpen(false);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [pieceDesignsOpen, boardColorsOpen, settingsOpen, accountOpen, nameEditOpen, shareLinkFallback, newGameConfirm, rushMode, rushResult, rushSummaryOpen, rushOpen, rankedPuzzlesOpen, openingsOpen, blindOpen, musicOpen, spectateOpen, pasteOpen, recentOpen]);
+  }, [pieceDesignsOpen, boardColorsOpen, settingsOpen, accountOpen, nameEditOpen, shareLinkFallback, newGameConfirm, rushMode, rushResult, rushSummaryOpen, rushOpen, rankedPuzzlesOpen, openingsOpen, blindOpen, musicOpen, spectateOpen]);
 
   /* Modal accessibility, applied generically rather than per-modal: this
      app has ~15 separate .promoOv/.promoBox blocks (one per open-state
@@ -2502,8 +2529,9 @@ export default function ZlegendsBot() {
   }, [eng, audio, activePuzzle, rushMode, pz]);
 
   const undo = () => {
-    if (mode === "replay" || thinking || result || eng.plyCount() === 0) return;
+    if (mode === "replay" || pastedGame || thinking || result || eng.plyCount() === 0) return;
     gradeRunIdRef.current += 1;
+    setGrading(false);
     let n;
     if (quizOpening) n = 1; // quiz: the player supplies every ply, so always step back exactly one
     else if (eng.getSide() === playerColor && eng.plyCount() >= 2) n = 2; else n = 1;
@@ -2819,28 +2847,36 @@ export default function ZlegendsBot() {
      step-through/Analyze/Grade Moves machinery as a just-finished game,
      via the pastedGame flag folded into reviewing's own definition)
      rather than building a separate viewer for it. */
-  /* Shared by Paste PGN and the recent-games list. Parses, validates and
-     loads a PGN into review mode. Returns { ok: false, error } when nothing
-     could be loaded, or { ok: true, partial } where partial is a warning
-     when only some of the moves matched. Each caller shows the result in
-     its own place: the paste dialog keeps itself open on error, while the
-     recent-games list has no field to put a message in, so it uses the
-     toast. */
-  const loadPgnText = (text, { analyze = true } = {}) => {
+  /* Parses, validates and loads a PGN into review mode, for both pasted and
+     saved games. Returns { ok: false, error } when nothing could be loaded,
+     or { ok: true, note } where note is a warning worth showing the player.
+     `side` is which colour sits at the bottom. A Chess.com export says who
+     exported it; anything else starts from White and can be flipped. */
+  const loadPgnText = (text, { side = null, info = null } = {}) => {
+    const problem = describePasteProblem(text);
+    if (problem) return { ok: false, error: problem };
     const tokens = parsePgnMoves(text);
     if (!tokens.length) return { ok: false, error: "Couldn't find any moves in that text." };
     const tempEng = createEngine();
     const { applied, sans } = replayForeignPgn(tempEng, tokens);
-    if (!applied.length) return { ok: false, error: "Couldn't match those moves to a legal game." };
+    if (!applied.length) return { ok: false, error: "That doesn't look like a chess game. Check that you copied the game's PGN text." };
     gradeRunIdRef.current += 1;
     maybeSaveAbandonedGame();
+    maybeCountAbandonedRankGame();
     eng.reset();
     replayIntoEngine(eng, sans);
     moveListRef.current = sans;
     setMoveList(sans);
+    setThinking(false);
+    const headers = parsePgnHeaders(text);
+    /* Kept apart from playerColor, which the flip button changes. */
+    const you = side ?? exporterSide(headers);
+    setPlayerColor(you ?? 1);
+    setReviewInfo({ ...(info || reviewInfoFromHeaders(headers)), you });
     setActiveOpening(null); setQuizOpening(null); setActivePuzzle(null);
     setSpectateMode(false); spectateModeRef.current = false;
-    setSelected(-1); setTargets([]); setPromo(null);
+    setSelected(-1); setTargets([]); setPromo(null); setHintMove(null); setInfo(null);
+    setAnalysisExtra([]); setBestArrow(null);
     const last = applied[applied.length - 1];
     setLastMove({ from: mFrom(last), to: mTo(last) });
     setEvalCp(eng.evalWhite());
@@ -2849,27 +2885,43 @@ export default function ZlegendsBot() {
     setPastedGame(true);
     setMode("play");
     setReviewIndex(sans.length);
-    if (analyze) { setAnalyzing(true); gradeMoves(); }
+    setAnalyzing(true);
+    gradeMoves();
     rerender();
-    const partial = applied.length < tokens.length
-      ? `Loaded ${applied.length} of ${tokens.length} moves — the rest didn't match a legal game.`
-      : null;
-    return { ok: true, partial };
+    const games = countPgnGames(text);
+    const note = applied.length < tokens.length
+      ? `Loaded ${applied.length} of ${tokens.length} moves. The rest didn't match a legal game.`
+      : games > 1 ? `That file has ${games} games. Reviewing the first one.` : null;
+    return { ok: true, note };
   };
 
-  /* The paste dialog's Analyze button. Errors stay in the dialog where the
-     player is looking; a partial match closes the dialog and reports through
-     the panel toast, which stays visible afterwards. */
-  const loadPastedPgn = () => {
-    const r = loadPgnText(pasteText);
-    if (!r.ok) { setPasteError(r.error); return; }
-    setPasteError(null);
-    setPasteOpen(false);
-    setPasteText("");
-    if (r.partial) {
-      setPgnToast(r.partial);
-      setTimeout(() => setPgnToast(null), 5000);
+  const finishReviewLoad = (r) => {
+    if (!r.ok) return r;
+    setSiteView("play");
+    if (r.note) {
+      setPgnToast(r.note);
+      setTimeout(() => setPgnToast(null), 7000);
     }
+    return r;
+  };
+  const reviewPastedGame = (text) => finishReviewLoad(loadPgnText(text));
+  /* Saved games know which side the player was on, so they open from that
+     side, the way Chess.com keeps you at the bottom by default. */
+  const reviewSavedGame = (game) => {
+    const you = displayNameRef.current || "You";
+    return finishReviewLoad(loadPgnText(game.pgn, {
+      side: game.playerColor,
+      info: {
+        white: game.playerColor === 1 ? you : game.opponent,
+        black: game.playerColor === 1 ? game.opponent : you,
+        outcome: game.reason,
+      },
+    }));
+  };
+  const reviewReturnRef = useRef("home");
+  const openReviewPage = () => {
+    reviewReturnRef.current = siteView === "review" ? reviewReturnRef.current : siteView;
+    setSiteView("review");
   };
 
 
@@ -2929,7 +2981,7 @@ export default function ZlegendsBot() {
   const youTaken = playerColor === 1 ? mat.capturedBlack : mat.capturedWhite;
   const youDiff = playerColor === 1 ? mat.diff : -mat.diff;
   useEffect(() => {
-    if (!result || spectateMode || activePuzzle || rushMode) { setBotLine(null); return; }
+    if (!result || spectateMode || activePuzzle || rushMode || pastedGame) { setBotLine(null); return; }
     setBotLine(pickPostGameLine({
       result,
       playerWon: result.winner === playerColor,
@@ -3060,24 +3112,26 @@ export default function ZlegendsBot() {
       moveGrades.forEach((g, i) => { if (g && i % 2 === parity) counts[g] += 1; });
       return counts;
     };
-    /* Accuracy + performance rating per side, from the same per-ply
-       scores the graph plots. Accuracy is the lichess win%-drop curve
-       (see moveAccuracy); performance reuses Rank Bot's loss->implied-
-       Elo mapping, averaged over the side's moves and rounded to 50. */
+    /* Accuracy per side, from the same per-ply scores the graph plots,
+       using the lichess win%-drop curve (see moveAccuracy). There used to
+       be a "~N rated play" figure here too, averaging Rank Bot's
+       loss->implied-Elo mapping over the game. It read ~2000 for an 833
+       player: a single clean move counts as 3000, so the average runs far
+       too high. That mapping was built to nudge a dial, not to be averaged
+       into a rating, so it stays off until it's calibrated on real games. */
     const sideStats = (parity) => {
       if (!gradeDetail) return null;
       const s = gradeDetail.scores;
       const ok = gradeDetail.scoreOk;
-      const accs = [], perfs = [];
+      const accs = [];
       for (let i = parity; i + 1 < s.length; i += 2) {
         if (ok && (!ok[i] || !ok[i + 1])) continue; // a failed search, not a real eval -- would skew the average
         if (Math.abs(s[i]) > MATE - 2000 || Math.abs(s[i + 1]) > MATE - 2000) continue;
         accs.push(moveAccuracy(winPctOf(s[i]), winPctOf(-s[i + 1])));
-        perfs.push(rankBotLossToPerf(Math.max(0, s[i] + s[i + 1])));
       }
       if (!accs.length) return null;
       const mean = (a) => a.reduce((x, v) => x + v, 0) / a.length;
-      return { acc: Math.round(mean(accs)), perf: Math.round(mean(perfs) / 50) * 50 };
+      return { acc: Math.round(mean(accs)) };
     };
     return {
       cols: [
@@ -3170,7 +3224,7 @@ export default function ZlegendsBot() {
                 <div key={col.label} className={"rounded-lg px-2.5 py-2 text-center " + uiT.panelBg}>
                   <div className={"text-[10px] font-bold uppercase tracking-[0.12em] " + uiT.dimText}>{col.label}</div>
                   <div className={"mt-0.5 text-xl font-bold leading-none " + uiT.interactiveText}>{col.stats ? `${col.stats.acc}%` : "—"}</div>
-                  <div className={"mt-1 text-[10px] " + uiT.dimText}>{col.stats ? `~${col.stats.perf} rated play` : "accuracy"}</div>
+                  <div className={"mt-1 text-[10px] " + uiT.dimText}>accuracy</div>
                 </div>
               ))}
             </div>
@@ -3240,7 +3294,7 @@ export default function ZlegendsBot() {
         </div>
       )
     ) : (
-      analysisHint("After each bot move, its eval, search depth, and the line it expects will show up here.")
+      !pastedGame && analysisHint("After each bot move, its eval, search depth, and the line it expects will show up here.")
     )}
     </div>
   );
@@ -3259,8 +3313,12 @@ export default function ZlegendsBot() {
     ? (replayIndex === 0 ? `${replayLabel} — starting position` : replayIndex === replayFull.length ? `${replayLabel} — final position` : `${replayLabel} — move ${replayIndex}`)
     : quizOpening
     ? `Quiz: ${quizOpening.name} — move ${moveList.length + 1} of ${quizOpening.moves.length}`
+    : pastedGame && reviewInfo?.outcome
+    ? reviewInfo.outcome
     : result
     ? `${result.reason} · ${result.text}`
+    : pastedGame
+    ? "Reviewing this game"
     : thinking ? (!engineWarm && usesStockfish ? "Warming up the engine… first move only" : "Zlegend2700 is calculating…")
     : eng.getSide() === playerColor ? "Your move, challenger" : "Bot to move";
 
@@ -3270,6 +3328,51 @@ export default function ZlegendsBot() {
     const visRow = flipped ? r : 7 - r;
     return { x: visCol + 0.5, y: visRow + 0.5 };
   };
+
+  /* Slides the piece that just moved instead of letting it teleport. The
+     board has already re-rendered by the time this runs, so the piece is
+     started back on its old square and animated home. Only for a single
+     step forward: stepping backward or jumping through a review would
+     otherwise replay a move that isn't the one that just changed the board.
+     A drag skips it too, since the hand already moved the piece there. */
+  const slidePlyRef = useRef(eng.plyCount());
+  useLayoutEffect(() => {
+    const ply = eng.plyCount();
+    const steppedForward = ply === slidePlyRef.current + 1;
+    const dragged = suppressSlideRef.current;
+    slidePlyRef.current = ply;
+    suppressSlideRef.current = false;
+    const board = boardRef.current;
+    if (!lastMove || !steppedForward || dragged || !board) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const squareSize = board.clientWidth / 8;
+    const slide = (a, b) => {
+      const cell = board.children[Math.floor(b.y)]?.children[Math.floor(b.x)];
+      const piece = cell?.querySelector("img.pc");
+      if (!piece) return;
+      /* Keep any resting transform (the Sweetheart king and knight are
+         scaled) so the piece doesn't change size mid-slide. */
+      const resting = getComputedStyle(piece).transform;
+      const rest = resting === "none" ? "" : resting;
+      const dx = (a.x - b.x) * squareSize, dy = (a.y - b.y) * squareSize;
+      cell.style.zIndex = 4; // ride above the squares it crosses
+      const anim = piece.animate(
+        [{ transform: `translate(${dx}px, ${dy}px) ${rest}` }, { transform: rest || "none" }],
+        { duration: PIECE_SLIDE_MS, easing: "ease-out" },
+      );
+      const done = () => { cell.style.zIndex = ""; };
+      anim.onfinish = done;
+      anim.oncancel = done;
+    };
+    const from = arrowPoint(lastMove.from), to = arrowPoint(lastMove.to);
+    slide(from, to);
+    /* Castling moves two pieces, and lastMove only names the king. */
+    if (Math.abs(to.x - from.x) === 2 && Math.abs(eng.pieceAt(M120TO64[lastMove.to])) === WK) {
+      const dir = Math.sign(to.x - from.x);
+      slide({ x: dir > 0 ? 7.5 : 0.5, y: to.y }, { x: from.x + dir, y: to.y });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastMove]);
   /* Best-move arrow geometry, precomputed as one path + one head polygon.
      v1 drew two <line>s with an auto-oriented marker: the knight-move
      joint showed a visible seam, and the marker overshot the target
@@ -3328,6 +3431,7 @@ export default function ZlegendsBot() {
     if (modeId === "leaderboard") { leaderboardReturnRef.current = "home"; setSiteView("leaderboard"); return; }
     leaveActivity();
     if (modeId === "lessons") { setSiteView("lessons"); return; }
+    if (modeId === "review") { openReviewPage(); return; }
     if (modeId === "settings") { gotoPlayForModal(); openSettings(); return; }
     if (modeId === "puzzles") { setSiteView("puzzlesHome"); ensurePuzzlesLoaded(); return; }
     setSiteView("play");
@@ -3374,6 +3478,21 @@ export default function ZlegendsBot() {
       <LeaderboardPage
         initialDuration={leaderboardDuration}
         onBack={() => setSiteView(leaderboardReturnRef.current)}
+        onToolSelect={onToolSelect}
+        activeToolId={activeToolId}
+        profile={profile}
+        sweetheart={sweetheart}
+      />
+    );
+  }
+
+  if (siteView === "review") {
+    return (
+      <GameReviewPage
+        onBack={() => setSiteView(reviewReturnRef.current)}
+        onReview={reviewPastedGame}
+        onOpenSaved={reviewSavedGame}
+        hasLiveGame={mode === "play" && !result && !pastedGame && !activePuzzle && !quizOpening && !spectateMode && moveList.length > 0}
         onToolSelect={onToolSelect}
         activeToolId={activeToolId}
         profile={profile}
@@ -3439,16 +3558,20 @@ export default function ZlegendsBot() {
               </div>
             </div>
           ) : (
-            <div className={"card botCard" + (mode === "play" && !result && !thinking && eng.getSide() === botColor ? " turnGlow" : "")}>
-              <div className={"avatarBox" + (botMood !== "neutral" ? " reactionBox " + botMood : "")}>
-                {botMood === "angry" && <MoodImg src="/bot-angry.webp" alt="Zlegend2700 is furious" />}
-                {botMood === "happy" && <MoodImg src="/bot-happy.webp" alt="Zlegend2700 is thrilled" />}
-                {botMood === "neutral" && <PixelAvatar rows={ZPIX} pal={ZPAL} size={44} />}
+            <div className={"card botCard" + (mode === "play" && !result && !thinking && !pastedGame && eng.getSide() === botColor ? " turnGlow" : "")}>
+              <div className={"avatarBox" + (!pastedGame && botMood !== "neutral" ? " reactionBox " + botMood : "")}>
+                {pastedGame ? <img src={pieceImgSrc(WK, botColor === 1)} alt="" className="reviewAvatarPc" /> : (
+                  <>
+                    {botMood === "angry" && <MoodImg src="/bot-angry.webp" alt="Zlegend2700 is furious" />}
+                    {botMood === "happy" && <MoodImg src="/bot-happy.webp" alt="Zlegend2700 is thrilled" />}
+                    {botMood === "neutral" && <PixelAvatar rows={ZPIX} pal={ZPAL} size={44} />}
+                  </>
+                )}
               </div>
               <div className="cardMeta">
-                <div className="cardName bot">{spectateMode ? `${DIFFICULTIES[botColor === 1 ? spectateWhiteIdx : spectateBlackIdx].label} (${botColor === 1 ? "White" : "Black"})` : "Zlegend2700"}</div>
-                <div className="trayEmpty">{gameStyle.label} today</div>
-                {!spectateMode && difficultyRef.current.id === "rank" && (
+                <div className="cardName bot">{pastedGame && reviewInfo ? (botColor === 1 ? reviewInfo.white : reviewInfo.black) : spectateMode ? `${DIFFICULTIES[botColor === 1 ? spectateWhiteIdx : spectateBlackIdx].label} (${botColor === 1 ? "White" : "Black"})` : "Zlegend2700"}</div>
+                {!pastedGame && <div className="trayEmpty">{gameStyle.label} today</div>}
+                {!spectateMode && !pastedGame && difficultyRef.current.id === "rank" && (
                   /* The checkpointed level, not the live dial. rankBotElo
                      moves after every move and was being printed straight
                      here, so the bot's own card could read a different
@@ -3548,16 +3671,20 @@ export default function ZlegendsBot() {
             </div>
           </div>
 
-          <div className={"card youCard" + (mode === "play" && !result && !thinking && eng.getSide() === playerColor ? " turnGlow" : "")}>
-            <div className="avatarBox"><img src="/you-avatar.webp" alt="You (Challenger)" className="youAvatarImg" /></div>
+          <div className={"card youCard" + (mode === "play" && !result && !thinking && !pastedGame && eng.getSide() === playerColor ? " turnGlow" : "")}>
+            <div className="avatarBox">
+              {pastedGame
+                ? <img src={pieceImgSrc(WK, playerColor === 1)} alt="" className="reviewAvatarPc" />
+                : <img src="/you-avatar.webp" alt="You (Challenger)" className="youAvatarImg" />}
+            </div>
             <div className="cardMeta">
               <div className="cardName you" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span>{spectateMode ? `${DIFFICULTIES[playerColor === 1 ? spectateWhiteIdx : spectateBlackIdx].label} (${playerColor === 1 ? "White" : "Black"})` : (displayName || "Challenger")}</span>
-                {!spectateMode && (
+                <span>{pastedGame && reviewInfo ? (playerColor === 1 ? reviewInfo.white : reviewInfo.black) : spectateMode ? `${DIFFICULTIES[playerColor === 1 ? spectateWhiteIdx : spectateBlackIdx].label} (${playerColor === 1 ? "White" : "Black"})` : (displayName || "Challenger")}</span>
+                {!spectateMode && !pastedGame && (
                   <button className="nameEditBtn" onClick={() => { setNameDraft(displayName); setNameEditOpen(true); }} title="Edit your name" aria-label="Edit your name">✎</button>
                 )}
               </div>
-              {!spectateMode && difficultyRef.current.id === "rank" ? (
+              {pastedGame ? null : !spectateMode && difficultyRef.current.id === "rank" ? (
                 <div className="trayEmpty" style={{ color: "var(--cyan)" }}>
                   {rankBotAssessedElo == null
                     ? `Calibrating Elo — game ${(rankBotGames % RANK_BOT_ASSESSMENT_EVERY) + 1}/${RANK_BOT_ASSESSMENT_EVERY}`
@@ -3648,6 +3775,15 @@ export default function ZlegendsBot() {
                   <button className={stepBtn} onClick={() => setReviewIndex(moveList.length)} disabled={reviewIndex === moveList.length} aria-label="Last move">
                     {chev("M16 6h2v12h-2zM6 18l8.5-6L6 6z")}
                   </button>
+                  {/* Not every outside game says which side was "you".
+                      playerColor only sets the orientation for these games,
+                      so flipping it moves the cards, trays and eval bar
+                      along with the board. */}
+                  {pastedGame && (
+                    <button className={stepBtn} onClick={() => setPlayerColor(c => -c)} aria-label="Flip board" title="Flip board">
+                      {chev("M7 3 3 7h3v9h2V7h3L7 3zm10 18 4-4h-3V8h-2v9h-3l4 4z")}
+                    </button>
+                  )}
                   {moveGrades && (
                     <>
                       <span className={"h-5 w-px " + (sweetheart ? "bg-sh-rose/40" : "bg-violet/40")} aria-hidden="true" />
@@ -3756,7 +3892,8 @@ export default function ZlegendsBot() {
               pairs={pairs} moveGrades={moveGrades} curMoveIdx={curMoveIdx} reviewing={reviewing}
               onReviewIndex={setReviewIndex} gradeTag={GRADE_TAG}
               hasMoves={moveList.length > 0} onCopyPgn={onCopyPgn}
-              onPastePgn={() => { setPasteOpen(true); setPasteError(null); }}
+              onPastePgn={openReviewPage}
+              openAnalysis={pastedGame}
               pgnToast={pgnToast}
               analysisContent={analysisContent} analysisLabel={analysisLabel}
               sideToMove={eng.getSide() === 1 ? "White" : "Black"}
@@ -3764,7 +3901,13 @@ export default function ZlegendsBot() {
             />
           </div>
 
-          {mode === "play" && !activePuzzle && !spectateMode && (
+          {pastedGame && mode === "play" && (
+            <div className="ctrls playCtrls">
+              <button className="btn gold" onClick={openReviewPage}>Review Another</button>
+              <button className="btn ghost" onClick={() => { setPromo(null); setColorPick(true); }}>Play a Game</button>
+            </div>
+          )}
+          {mode === "play" && !activePuzzle && !spectateMode && !pastedGame && (
             <div className="ctrls playCtrls">
               <button className="btn" onClick={() => {
                 if (!result && eng.plyCount() > 4) setNewGameConfirm(true);
@@ -4159,9 +4302,9 @@ export default function ZlegendsBot() {
                 </button>
               </div>
               <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E" }}
-                onClick={openRecentGames}>
-                <div style={{ fontWeight: 700 }}>Recent Games</div>
-                <div style={{ fontSize: 11, opacity: 0.75 }}>Step back through your last few games</div>
+                onClick={() => { setSettingsOpen(false); openReviewPage(); }}>
+                <div style={{ fontWeight: 700 }}>Game Review</div>
+                <div style={{ fontSize: 11, opacity: 0.75 }}>Paste a game, or reopen one of yours</div>
               </div>
               <div style={{ padding: "8px 2px" }}>
                 <div style={{ fontWeight: 700 }}>Your Rating</div>
@@ -4271,54 +4414,6 @@ export default function ZlegendsBot() {
               onClick={() => startSpectate(spectateWhiteIdx, spectateBlackIdx, spectateOpeningId)}>Start Spectating</button>
       </Modal>
 
-      <Modal open={recentOpen} onClose={() => setRecentOpen(false)} closeLabel="Close Recent Games" maxWidth={420}>
-            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              Recent Games
-            </div>
-            <div className="pv" style={{ fontSize: 12, opacity: 0.85 }}>
-              Tap a game to step back through it.
-            </div>
-            <div className="rows" style={{ maxHeight: "60vh", overflowY: "auto" }}>
-              {recentError ? (
-                <div className="pv" style={{ fontSize: 12 }}>
-                  <div style={{ color: "#F05348", marginBottom: 8 }}>{recentError}</div>
-                  <button type="button" className="btn ghost" onClick={loadRecentGames}>Try again</button>
-                </div>
-              ) : recentGames === null ? (
-                <div className="pv" style={{ fontSize: 12, opacity: 0.75 }}>Loading…</div>
-              ) : recentGames.length === 0 ? (
-                <div className="pv" style={{ fontSize: 12, opacity: 0.75 }}>No saved games yet — play one and it'll show up here.</div>
-              ) : recentGames.map((g) => (
-                <button key={g.id} type="button" className="openingRow recentRow" onClick={() => openSavedGame(g)}>
-                  <span>
-                    <b>vs {g.opponent}</b>
-                    <span className="recentMeta"> · {g.date}</span>
-                  </span>
-                  <span className={"recentOutcome " + g.outcome}>
-                    {{ win: "Won", loss: "Lost", draw: "Draw", abandoned: "Unfinished" }[g.outcome]}
-                  </span>
-                </button>
-              ))}
-            </div>
-      </Modal>
-
-      <Modal open={pasteOpen} onClose={() => setPasteOpen(false)} closeLabel="Close Paste PGN" maxWidth={420}>
-            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              Paste PGN
-            </div>
-            <div className="pv" style={{ fontSize: 12, opacity: 0.85 }}>
-              Paste a game's PGN text below, then press Analyze to step through it and grade the moves.
-            </div>
-            <textarea
-              value={pasteText}
-              onChange={e => setPasteText(e.target.value)}
-              placeholder={"1. e4 e5 2. Nf3 Nc6 3. Bb5 ..."}
-              rows={8}
-              className="modalInput mono"
-            />
-            {pasteError && <div className="pv" style={{ fontSize: 11, color: "#F05348" }}>{pasteError}</div>}
-            <button className="btn gold" onClick={loadPastedPgn} disabled={!pasteText.trim()}>Analyze</button>
-      </Modal>
     </div>
   );
 }
