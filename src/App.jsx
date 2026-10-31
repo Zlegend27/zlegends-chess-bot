@@ -2497,9 +2497,23 @@ export default function ZlegendsBot() {
   const onHint = () => {
     if (mode === "replay" || thinking || hinting || result || promo || eng.getSide() !== playerColor) return;
     setHinting(true);
+    /* Remember which position the hint was asked about. Every path that
+       changes the board (a move, undo, New, loading a puzzle or a
+       pasted PGN, leaving an activity) reassigns moveListRef.current to
+       a brand-new array, so an identity check is enough to tell that
+       this answer is now stale.
+       Without it the search had no cancellation at all and its arrow
+       landed on whatever was on the board when it returned -- confirmed
+       by playing 1.d4 d5 2.Bf4 Bf5, pressing Best Move and immediately
+       starting a New Game: three seconds later b1-c3 lit up on the
+       fresh board, advice for a game that no longer existed. Same
+       stale-result guard gradeMoves and the Rank Bot probe already
+       have; this was the one search path missing one. */
+    const askedAt = moveListRef.current;
     runSearch(moveList, 800, 0, { personality: BALANCED, useBook: true }).then((res) => {
+      setHinting(false); // always clear, even when discarding the result
+      if (moveListRef.current !== askedAt) return;
       if (res && res.move) setHintMove({ from: mFrom(res.move), to: mTo(res.move) });
-      setHinting(false);
     });
   };
 
@@ -2774,8 +2788,19 @@ export default function ZlegendsBot() {
     const tempEng = createEngine();
     const { applied, sans } = replayForeignPgn(tempEng, tokens);
     if (!applied.length) { setPasteError("Couldn't match those moves to a legal game."); return; }
-    if (applied.length < tokens.length) { setPasteError(`Only matched ${applied.length} of ${tokens.length} moves — loaded as far as it could.`); }
-    else setPasteError(null);
+    /* A partial match has to be reported through the toast, not
+       pasteError: the two failure cases above return early and leave
+       the dialog open so their message is visible, but this path
+       carries on and closes it a few lines down -- so the warning was
+       being written to state and hidden in the same function. Pasting a
+       PGN with one bad move silently loaded half a game with nothing
+       on screen to say so (confirmed: a 27-ply game with a mistyped
+       move 8 loaded 15 plies and reported nothing). */
+    setPasteError(null);
+    if (applied.length < tokens.length) {
+      setPgnToast(`Loaded ${applied.length} of ${tokens.length} moves — the rest didn't match a legal game.`);
+      setTimeout(() => setPgnToast(null), 5000);
+    }
     gradeRunIdRef.current += 1;
     maybeSaveAbandonedGame();
     eng.reset();
