@@ -6,13 +6,20 @@
    in the static :root block. */
 .root{
   --boardLight:#C9C2E8; --boardDark:#4A2A7A;
-  min-height:100vh; min-height:100dvh;
+  min-height:calc(100vh - var(--headerH)); min-height:calc(100dvh - var(--headerH));
   background: radial-gradient(900px 500px at 50% 0%, #3A1560 0%, var(--void2) 45%, var(--void) 100%);
   color:var(--white);
   font-family:var(--font-body);
   display:flex; flex-direction:column; align-items:center;
-  padding:calc(22px + env(safe-area-inset-top)) calc(14px + env(safe-area-inset-right)) calc(44px + env(safe-area-inset-bottom)) calc(14px + env(safe-area-inset-left));
+  padding:16px calc(14px + env(safe-area-inset-right)) calc(44px + env(safe-area-inset-bottom)) calc(14px + env(safe-area-inset-left));
   position:relative; overflow-x:hidden;
+}
+/* The app frame around every page: the sticky header, then the page. On a
+   phone the page also has to clear the fixed bottom bar. */
+.appShell{ --headerH:calc(57px + env(safe-area-inset-top)); background:var(--void); min-height:100dvh; }
+.appHeader{ padding-top:env(safe-area-inset-top); }
+@media (max-width:767px){
+  .appShell.hasBottomBar .root{ padding-bottom:calc(84px + env(safe-area-inset-bottom)); }
 }
 .starField{ position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:0; }
 .star{ position:absolute; border-radius:50%; background:#ffffff; box-shadow:0 0 4px 1px #ffffffaa;
@@ -24,8 +31,8 @@
 .sparkle{ position:absolute; animation-name:twinkle; animation-timing-function:ease-in-out; animation-iteration-count:infinite; }
 .hdr{ text-align:center; margin-bottom:16px; z-index:1; }
 /* Not scoped under .hdr -- SocialBanner.jsx renders this same markup at
-   the bottom of every page now, outside any .hdr wrapper, so the rule
-   needs to stand on its own. */
+   the bottom of Home, outside any .hdr wrapper, so the rule needs to stand
+   on its own. */
 .eyebrow{ display:inline-flex; align-items:center; gap:7px; font-size:11px; font-weight:700;
   letter-spacing:.3em; text-transform:uppercase; color:var(--cyan);
   text-shadow:0 0 10px #3EE7F5AA; }

@@ -1,0 +1,30 @@
+import { describe, test, expect } from "vitest";
+import { pathForView, viewForPath, sectionForView } from "./routes";
+
+describe("page addresses", () => {
+  test.each(["home", "play", "puzzlesHome", "leaderboard", "review", "lessons"])("%s survives a refresh", (view) => {
+    expect(viewForPath(pathForView(view))).toBe(view);
+  });
+
+  test("a trailing slash still finds the page", () => {
+    expect(viewForPath("/puzzles/")).toBe("puzzlesHome");
+  });
+
+  test("an unknown address opens Home", () => {
+    expect(viewForPath("/nope")).toBe("home");
+  });
+});
+
+describe("the highlighted menu item", () => {
+  test("follows the page", () => {
+    expect(sectionForView({ siteView: "leaderboard" })).toBe("puzzles");
+    expect(sectionForView({ siteView: "lessons" })).toBe("learn");
+  });
+
+  test("stays on the section when its activity runs on the Play screen", () => {
+    expect(sectionForView({ siteView: "play" })).toBe("play");
+    expect(sectionForView({ siteView: "play", rushMode: true })).toBe("puzzles");
+    expect(sectionForView({ siteView: "play", activePuzzle: {} })).toBe("puzzles");
+    expect(sectionForView({ siteView: "play", pastedGame: true })).toBe("review");
+  });
+});

@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import StarField from "./StarField";
-import { TopNav } from "./ExploreNav";
-import SocialBanner from "./SocialBanner";
 import { fetchRecentGames, summarizeGame } from "../utils/gameHistory";
 import { getUiTheme } from "../utils/uiTheme";
+import { overlayOpen } from "../utils/routes";
 
 /* Export steps per source. Chess.com's are from its help center ("How do I
    get a PGN of my game?"). Lichess has moved these controls over the years,
@@ -40,7 +39,7 @@ const MAX_FILE_BYTES = 5 * 1024 * 1024;
  *  page shell as LeaderboardPage.jsx. `onReview` and `onOpenSaved` both
  *  return the loader's result, so a problem can be shown here where the
  *  player is looking. On success App.jsx moves to the board. */
-export default function GameReviewPage({ onBack, onToolSelect, activeToolId, profile, sweetheart, onReview, onOpenSaved, hasLiveGame }) {
+export default function GameReviewPage({ onBack, profile, sweetheart, onReview, onOpenSaved, hasLiveGame }) {
   const T = getUiTheme(sweetheart);
   const [text, setText] = useState("");
   const [error, setError] = useState(null);
@@ -60,7 +59,7 @@ export default function GameReviewPage({ onBack, onToolSelect, activeToolId, pro
   useEffect(loadRecent, []);
 
   useEffect(() => {
-    const onKeyDown = (e) => { if (e.key === "Escape") onBack(); };
+    const onKeyDown = (e) => { if (e.key === "Escape" && !overlayOpen()) onBack(); };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onBack]);
@@ -88,7 +87,6 @@ export default function GameReviewPage({ onBack, onToolSelect, activeToolId, pro
   return (
     <div className="root">
       <StarField sweetheart={sweetheart} />
-      <TopNav onSelect={onToolSelect} active={activeToolId} profile={profile} sweetheart={sweetheart} />
 
       <button
         onClick={onBack}
@@ -193,7 +191,6 @@ export default function GameReviewPage({ onBack, onToolSelect, activeToolId, pro
         ))}
       </div>
 
-      <SocialBanner />
     </div>
   );
 }

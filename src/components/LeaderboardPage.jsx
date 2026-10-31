@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import StarField from "./StarField";
-import { TopNav } from "./ExploreNav";
-import SocialBanner from "./SocialBanner";
 import { fetchLeaderboard } from "../utils/leaderboard";
 import { RUSH_DURATIONS } from "../utils/rushDurations";
 import { getUiTheme } from "../utils/uiTheme";
+import { overlayOpen } from "../utils/routes";
 
 const getRankAccent = (sweetheart) => ({
   1: { text: sweetheart ? "text-sh-lgold" : "text-yellow", medal: "🥇" },
@@ -18,16 +17,11 @@ const getRankAccent = (sweetheart) => ({
  *  the one place that pattern lives. Self-contained: owns its own
  *  duration/rows state rather than lifting it into App.jsx.
  *
- *  onToolSelect/activeToolId are the same handlers the Play screen's
- *  TopNav uses -- every non-home page gets the same nav bar at the top,
- *  not just Play (see App.jsx's onToolSelect for why it flips siteView
- *  back to "play" for Music/Settings, which only mount there).
- *
  *  Rebuilt on Tailwind utility classes (matching HomePage.jsx/
- *  ExploreNav.jsx) instead of the raw inline `style={{...}}` this page
+ *  AppNav.jsx) instead of the raw inline `style={{...}}` this page
  *  started with -- .rows/.btn/.pv are the older hand-CSS pattern used
  *  elsewhere for modals, which this page isn't. */
-export default function LeaderboardPage({ initialDuration = 60, onBack, onToolSelect, activeToolId, profile, sweetheart }) {
+export default function LeaderboardPage({ initialDuration = 60, onBack, sweetheart }) {
   const [duration, setDuration] = useState(initialDuration);
   const [rows, setRows] = useState(null);
   const T = getUiTheme(sweetheart);
@@ -39,7 +33,7 @@ export default function LeaderboardPage({ initialDuration = 60, onBack, onToolSe
   }, [duration]);
 
   useEffect(() => {
-    const onKeyDown = (e) => { if (e.key === "Escape") onBack(); };
+    const onKeyDown = (e) => { if (e.key === "Escape" && !overlayOpen()) onBack(); };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onBack]);
@@ -47,7 +41,6 @@ export default function LeaderboardPage({ initialDuration = 60, onBack, onToolSe
   return (
     <div className="root">
       <StarField sweetheart={sweetheart} />
-      <TopNav onSelect={onToolSelect} active={activeToolId} profile={profile} sweetheart={sweetheart} />
 
       <button
         onClick={onBack}
@@ -107,7 +100,6 @@ export default function LeaderboardPage({ initialDuration = 60, onBack, onToolSe
         )}
       </div>
 
-      <SocialBanner />
     </div>
   );
 }

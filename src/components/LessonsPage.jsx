@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
 import StarField from "./StarField";
-import { TopNav } from "./ExploreNav";
-import SocialBanner from "./SocialBanner";
 import LessonPlayer from "./LessonPlayer";
 import TheoryTrainer from "./TheoryTrainer";
 import { LESSONS } from "../data/lessons";
@@ -11,9 +9,9 @@ import { getUiTheme } from "../utils/uiTheme";
 
 /** Lessons: pick a lesson -> pick a chapter (or the Theory Trainer) ->
  *  the player/trainer takes over the board. Same page-not-modal,
- *  own-page-with-TopNav pattern as LeaderboardPage.jsx -- local state
+ *  own-page pattern as LeaderboardPage.jsx -- local state
  *  only, since nothing here touches the main Play board/engine. */
-export default function LessonsPage({ onBack, onToolSelect, activeToolId, profile, sweetheart }) {
+export default function LessonsPage({ onBack, sweetheart }) {
   const [lessonId, setLessonId] = useState(null);
   const [chapterNumber, setChapterNumber] = useState(null);
   const [trainerOpen, setTrainerOpen] = useState(false);
@@ -48,7 +46,6 @@ export default function LessonsPage({ onBack, onToolSelect, activeToolId, profil
     return (
       <div className="root">
         <StarField sweetheart={sweetheart} />
-        <TopNav onSelect={onToolSelect} active={activeToolId} profile={profile} sweetheart={sweetheart} />
         {backLink(lesson.title, () => setTrainerOpen(false))}
         <div className="hdr" style={{ marginBottom: 12 }}>
           <h1 style={{ fontSize: 26 }}>Theory Trainer</h1>
@@ -63,7 +60,6 @@ export default function LessonsPage({ onBack, onToolSelect, activeToolId, profil
     return (
       <div className="root">
         <StarField sweetheart={sweetheart} />
-        <TopNav onSelect={onToolSelect} active={activeToolId} profile={profile} sweetheart={sweetheart} />
         {backLink(lesson.title, () => setChapterNumber(null))}
         <div className="hdr" style={{ marginBottom: 12 }}>
           <h1 style={{ fontSize: 26 }}>Chapter {chapter.number}</h1>
@@ -83,7 +79,6 @@ export default function LessonsPage({ onBack, onToolSelect, activeToolId, profil
   return (
     <div className="root">
       <StarField sweetheart={sweetheart} />
-      <TopNav onSelect={onToolSelect} active={activeToolId} profile={profile} sweetheart={sweetheart} />
 
       {backLink("Back", lesson ? () => setLessonId(null) : onBack)}
 
@@ -184,7 +179,6 @@ export default function LessonsPage({ onBack, onToolSelect, activeToolId, profil
         )}
       </div>
 
-      <SocialBanner />
     </div>
   );
 }

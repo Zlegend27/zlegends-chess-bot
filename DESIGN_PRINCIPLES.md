@@ -78,7 +78,7 @@ This app has two legitimate, intentionally different UI systems — don't
   every modal (`.promoOv`/`.promoBox`), the board, and anything nested inside
   them. `.btn` here is loud on purpose — italic Arial Black, uppercase — it's
   this app's brand voice for in-game chrome.
-- **The Tailwind system**: `HomePage.jsx`, `ExploreNav.jsx`'s `TopNav`,
+- **The Tailwind system**: `HomePage.jsx`, `AppNav.jsx`,
   `LeaderboardPage.jsx` — the "app shell" pages a player sees between games.
   These were deliberately designed with a calmer, card-based look (rounded
   tiles, plain-weight labels) that reads as a modern app home screen rather
@@ -105,9 +105,12 @@ the boundary between them, the "inconsistency" is intentional.
 - **Modals**: `.promoOv` (overlay) + `.promoBox` (content), with a
   `.modalCloseX` in the corner. Escape key and backdrop-click both close.
   New modals should follow this shape, not invent a new overlay pattern.
-- **Nav**: one `TopNav` (`src/components/ExploreNav.jsx`) rendered at the top
-  of every non-home page — not per-page custom headers, not a second nav
-  pattern for a new page.
+- **Nav**: one `AppHeader` and `BottomBar` (`src/components/AppNav.jsx`),
+  rendered by `App.jsx` around every page including Home — not per-page custom
+  headers, not a second nav pattern for a new page. Sections go in `SECTIONS`
+  in that file, five at most, because they have to fit the phone's bottom bar.
+  Account and preferences go in the profile menu, not in the sections. Socials
+  live in the profile menu and at the bottom of Home, not on every page.
 - **Cards/panels**: rounded corners, `border` + translucent `background`,
   `backdrop-blur-sm` where layered over the starfield. Don't nest a bordered
   box inside another bordered box for the same piece of content — pick one

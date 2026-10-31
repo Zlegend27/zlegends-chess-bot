@@ -10,8 +10,8 @@ import PixelAvatar, { ZPAL, ZPIX, BPAL, BPIX, PPAL, PPIX } from "./components/Pi
 import StarField from "./components/StarField";
 import Confetti from "./components/Confetti";
 import HomePage from "./components/HomePage";
-import { TopNav } from "./components/ExploreNav";
-import SocialBanner from "./components/SocialBanner";
+import { AppHeader, BottomBar } from "./components/AppNav";
+import { pathForView, sectionForView, viewForPath } from "./utils/routes";
 import GamePanel from "./components/GamePanel";
 import BotBubble from "./components/BotBubble";
 import { pickPostGameLine } from "./utils/botLines";
@@ -440,7 +440,7 @@ export default function ZlegendsBot() {
      that game loaded -- a viewer clicking a friend's shared link should
      never have to click through the home page first to see the position
      they were sent. */
-  const [siteView, setSiteView] = useState(initialShared ? "play" : "home");
+  const [siteView, setSiteView] = useState(() => (initialShared ? "play" : viewForPath(window.location.pathname)));
 
   const initRef = useRef(null);
   if (!initRef.current) {
@@ -693,16 +693,6 @@ export default function ZlegendsBot() {
     setSettingsOpen(true);
     if (!ratingInfo) estimateRating().then(setRatingInfo);
   };
-  /* Single dispatcher for ExploreDock (desktop)/BottomNav (mobile).
-     Openings/Puzzles/Spectate/Blind Chess used to open from here too, but
-     the nav only exposes Home/Login/Music/Settings now -- those modes are
-     reachable from the home page's mode grid instead. Login has no auth
-     wired up yet, so it's a no-op placeholder for now. */
-  /* The Music/Settings modals only render inside the "play" branch below
-     -- TopNav is now shown on every page (Play, Leaderboard, ...), so
-     opening one from a page that isn't "play" needs to flip siteView
-     first or the modal has nowhere to mount. Harmless no-op when
-     already on "play". */
   /* Discord sign-in (see utils/auth.js). watchAuthState fires once
      immediately with whatever session already exists (page reload after
      a previous sign-in), then again on every future sign-in/out --
@@ -711,41 +701,42 @@ export default function ZlegendsBot() {
   const [session, setSession] = useState(null);
   useEffect(() => watchAuthState(setSession), []);
   const profile = discordProfile(session);
-  const [accountOpen, setAccountOpen] = useState(false);
   /* Folds this browser's anonymous client_id data (Rank Bot rating, game
      history, Rush scores) onto the account, so a returning player who just
      signed in doesn't look like they're starting from zero. */
   useEffect(() => {
     if (session?.user?.id) claimAnonymousData(session.user.id);
   }, [session?.user?.id]);
-  /* Music/Settings/Account only ever render inside the "play" branch (see
-     the comment below), so opening one from another page has to flip
-     siteView to "play" first -- this remembers wherever that "first" was
-     so closing the modal (closeMusic/closeSettings/closeAccount below)
-     can put the player back on the Puzzles/Leaderboard/Lessons page they
-     actually came from instead of stranding them on the board. Always
-     captured fresh on open (even when already "play", storing "play"
-     itself) rather than guarded like leaderboardReturnRef -- there's no
-     "self" case to protect here, and a guard would go stale the next
-     time the player opens one of these mid-game from the real board. */
-  const modalReturnViewRef = useRef("play");
-  const gotoPlayForModal = () => {
-    modalReturnViewRef.current = siteView;
-    setSiteView("play");
-  };
-  const closeMusic = () => { setMusicOpen(false); setSiteView(modalReturnViewRef.current); };
-  const closeSettings = () => { setSettingsOpen(false); setSiteView(modalReturnViewRef.current); };
-  const closeAccount = () => { setAccountOpen(false); setSiteView(modalReturnViewRef.current); };
+  const closeMusic = () => setMusicOpen(false);
+  const closeSettings = () => setSettingsOpen(false);
 
-  const onToolSelect = (id) => {
-    if (id === "music") { gotoPlayForModal(); setMusicOpen(true); }
-    else if (id === "settings") { gotoPlayForModal(); openSettings(); }
-    else if (id === "home") { leaveActivity(); setSiteView("home"); }
-    else if (id === "login") {
-      if (profile) { gotoPlayForModal(); setAccountOpen(true); }
-      else signInWithDiscord();
-    }
-  };
+  /* Keeps the address bar in step with siteView, and lets the back gesture
+     drive siteView. The first run only tidies the address, so landing here
+     doesn't add a back step that goes nowhere. */
+  const firstRouteRef = useRef(true);
+  useEffect(() => {
+    const path = pathForView(siteView);
+    const first = firstRouteRef.current;
+    firstRouteRef.current = false;
+    if (window.location.pathname === path) return;
+    const url = path + window.location.search + window.location.hash;
+    if (first) history.replaceState(null, "", url);
+    else history.pushState(null, "", url);
+  }, [siteView]);
+  const leaveActivityRef = useRef(null);
+  useEffect(() => {
+    const onPopState = () => {
+      const view = viewForPath(window.location.pathname);
+      setMusicOpen(false);
+      setSettingsOpen(false);
+      /* Same exception as enterMode: Leaderboard and the board keep a Rush
+         result alive so the player can step back to it. */
+      if (view !== "leaderboard" && view !== "play") leaveActivityRef.current();
+      setSiteView(view);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
   const [displayName, setDisplayNameState] = useState(() => getDisplayName());
   const displayNameRef = useRef(displayName);
   displayNameRef.current = displayName;
@@ -762,7 +753,7 @@ export default function ZlegendsBot() {
      Back returns to whichever view the player actually came from (home
      tile vs the Rush modals on the play screen), not a hardcoded one. */
   const [leaderboardDuration, setLeaderboardDuration] = useState(60);
-  const leaderboardReturnRef = useRef("play");
+  const leaderboardReturnRef = useRef("puzzlesHome");
   const openLeaderboard = (duration) => {
     setLeaderboardDuration(duration);
     leaderboardReturnRef.current = siteView === "leaderboard" ? leaderboardReturnRef.current : siteView;
@@ -861,6 +852,10 @@ export default function ZlegendsBot() {
     puzzlesLoadingRef.current = true;
     import("./utils/puzzles").then(m => setPuzzlesData({ PUZZLES: m.PUZZLES, RATING_BANDS: m.RATING_BANDS }));
   };
+  useEffect(() => {
+    if (siteView === "puzzlesHome") ensurePuzzlesLoaded();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [siteView]);
   const [puzzleBand, setPuzzleBand] = useState(null);
   const [activePuzzle, setActivePuzzle] = useState(null);
   const [puzzleFeedback, setPuzzleFeedback] = useState(null);
@@ -1990,6 +1985,7 @@ export default function ZlegendsBot() {
      Home into Play vs Bot). Left untouched: a genuine in-progress Play vs
      Bot game -- same as today, navigating away from a real game and back
      just resumes it, since none of hadBoardActivity's checks fire for it. */
+  leaveActivityRef.current = () => leaveActivity();
   const leaveActivity = () => {
     if (puzzleTimeoutRef.current) { clearTimeout(puzzleTimeoutRef.current); puzzleTimeoutRef.current = null; }
 
@@ -2347,7 +2343,6 @@ export default function ZlegendsBot() {
       if (pieceDesignsOpen) { setPieceDesignsOpen(false); setSettingsOpen(true); }
       else if (boardColorsOpen) { setBoardColorsOpen(false); setSettingsOpen(true); }
       else if (settingsOpen) closeSettings();
-      else if (accountOpen) closeAccount();
       else if (nameEditOpen) setNameEditOpen(false);
       else if (shareLinkFallback) setShareLinkFallback(null);
       else if (newGameConfirm) setNewGameConfirm(false);
@@ -2361,7 +2356,7 @@ export default function ZlegendsBot() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [pieceDesignsOpen, boardColorsOpen, settingsOpen, accountOpen, nameEditOpen, shareLinkFallback, newGameConfirm, rushMode, rushResult, rushSummaryOpen, rushOpen, rankedPuzzlesOpen, openingsOpen, blindOpen, musicOpen, spectateOpen]);
+  }, [pieceDesignsOpen, boardColorsOpen, settingsOpen, nameEditOpen, shareLinkFallback, newGameConfirm, rushMode, rushResult, rushSummaryOpen, rushOpen, rankedPuzzlesOpen, openingsOpen, blindOpen, musicOpen, spectateOpen]);
 
   /* Modal accessibility, applied generically rather than per-modal: this
      app has ~15 separate .promoOv/.promoBox blocks (one per open-state
@@ -3080,7 +3075,6 @@ export default function ZlegendsBot() {
      the home-page mode grid, they just don't light up this nav. Home
      itself is never "active" here since clicking it navigates away from
      this screen (ExploreDock/BottomNav only render in the play view). */
-  const activeToolId = musicOpen ? "music" : settingsOpen ? "settings" : null;
   /* The tab itself is already named (Rush/Puzzle/Quiz/Opening/Analysis via
      analysisLabel), so no state repeats a heading inside its own content
      anymore -- each shows one small context chip where it earns its place,
@@ -3431,7 +3425,6 @@ export default function ZlegendsBot() {
     leaveActivity();
     if (modeId === "lessons") { setSiteView("lessons"); return; }
     if (modeId === "review") { openReviewPage(); return; }
-    if (modeId === "settings") { gotoPlayForModal(); openSettings(); return; }
     if (modeId === "puzzles") { setSiteView("puzzlesHome"); ensurePuzzlesLoaded(); return; }
     setSiteView("play");
     if (modeId === "openings") setOpeningsOpen(true);
@@ -3444,6 +3437,178 @@ export default function ZlegendsBot() {
     }
   };
 
+  /* Settings and Juice Box open from the header on any page, so they live
+     up here beside it instead of inside the Play screen. Everything else
+     stays with Play: the Rush results popup, for one, has to stay put while
+     the player steps over to the Leaderboard and back. */
+  const boardVars = { "--boardLight": getBoardColor(boardColorId).light, "--boardDark": getBoardColor(boardColorId).dark };
+  const appOverlays = (
+    <div style={boardVars}>
+      <Modal open={musicOpen} onClose={closeMusic} closeLabel="Close Juice Box"
+        className="jbBox" style={{ width: 300, minWidth: undefined, maxWidth: undefined }}>
+            <img src="/VIRTUOSO_MOLE.webp" alt="Juice Box" className="jbMole" />
+            <select value={musicSource} onChange={e => setMusicSource(e.target.value)}>
+              <option value="chiptune">Chiptune</option>
+              {MP3_PLAYLISTS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+            </select>
+            <div className="trackRow">
+              <span className="trackName" title={jbTrackLabel}>{"♪ " + jbTrackLabel}</span>
+              {!isMp3Source && trackName === "Neon Gambit" && <span className="trackTag">default</span>}
+              {isMp3Source && mp3Buffering && !jbDisabled && <span className="trackTag">buffering</span>}
+            </div>
+            {isMp3Source && (
+              <div className="mp3Progress">
+                <span className="mp3Time">{fmtTime(mp3CurrentTime)}</span>
+                <input
+                  type="range" min="0" max={mp3Duration || 0}
+                  value={Math.min(mp3CurrentTime, mp3Duration || 0)}
+                  onChange={e => seekMp3(Number(e.target.value))}
+                  disabled={jbDisabled || !mp3Duration}
+                />
+                <span className="mp3Time">{fmtTime(mp3Duration)}</span>
+              </div>
+            )}
+            <div className="audioRow">
+              {isMp3Source && (
+                <button className={"playBtn sm" + (mp3Shuffle ? " active" : "")} onClick={toggleShuffle} disabled={jbDisabled} title={mp3Shuffle ? "Shuffle on" : "Shuffle off"}>
+                  {"\u{1F500}"}
+                </button>
+              )}
+              <button className="playBtn sm" onClick={prevTrack} disabled={jbDisabled} title="Previous track">{"◀◀"}</button>
+              <button className="playBtn" onClick={toggleMusic} disabled={jbDisabled} title={jbPlaying ? "Pause music" : "Play music"}>
+                {jbPlaying ? "❚❚" : "▶"}
+              </button>
+              <button className="playBtn sm" onClick={nextTrack} disabled={jbDisabled} title="Next track">{"▶▶"}</button>
+              <input type="range" min="0" max="100" value={volume} onChange={e => onVolume(Number(e.target.value))} />
+              <span className="volPct">{volume}%</span>
+            </div>
+            {isMp3Source && mp3Tracks.length > 1 && (
+              <div className="jbTrackList">
+                {mp3Tracks.map((t, i) => (
+                  <button
+                    key={t.url}
+                    className={"jbTrackRow" + (i === mp3Idx ? " cur" : "")}
+                    onClick={() => pickMp3Track(i)}
+                    title={t.name}
+                  >
+                    {t.name}
+                  </button>
+                ))}
+              </div>
+            )}
+      </Modal>
+
+      <Modal open={settingsOpen} onClose={closeSettings} closeLabel="Close Settings">
+            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span aria-hidden="true">⚙</span>
+              Settings
+            </div>
+            <div className="rows" style={{ maxHeight: "none" }}>
+              <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E", display: "flex", alignItems: "center", gap: 10 }}
+                onClick={() => { setSettingsOpen(false); setPieceDesignsOpen(true); }}>
+                <img src={pieceImgSrc(1, true)} alt="" style={{ width: 30, height: 30, objectFit: "contain", flex: "none", background: "#DDD6EA", borderRadius: 6, padding: 3, boxSizing: "border-box" }} />
+                <div>
+                  <div style={{ fontWeight: 700 }}>Piece Designs</div>
+                  <div style={{ fontSize: 11, opacity: 0.75 }}>Currently: {getPieceSet(pieceSetId).label}</div>
+                </div>
+              </div>
+              <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E", display: "flex", alignItems: "center", gap: 10 }}
+                onClick={() => { setSettingsOpen(false); setBoardColorsOpen(true); }}>
+                <span style={{
+                  display: "grid", gridTemplateColumns: "1fr 1fr", width: 30, height: 30, flex: "none",
+                  borderRadius: 6, overflow: "hidden", border: "1px solid #ffffff22",
+                }} aria-hidden="true">
+                  <span style={{ background: getBoardColor(boardColorId).light }} />
+                  <span style={{ background: getBoardColor(boardColorId).dark }} />
+                  <span style={{ background: getBoardColor(boardColorId).dark }} />
+                  <span style={{ background: getBoardColor(boardColorId).light }} />
+                </span>
+                <div>
+                  <div style={{ fontWeight: 700 }}>Board Color</div>
+                  <div style={{ fontSize: 11, opacity: 0.75 }}>Currently: {getBoardColor(boardColorId).label}</div>
+                </div>
+              </div>
+              <div style={{ padding: "8px 2px", borderBottom: "1px solid #8B2FC92E", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                <div>
+                  <div style={{ fontWeight: 700 }}>Eval Bar</div>
+                  <div style={{ fontSize: 11, opacity: 0.75 }}>
+                    {hideEvalBar ? "Hidden — bigger board on mobile" : "Shown next to the board"}
+                  </div>
+                </div>
+                <button
+                  type="button" role="switch" aria-checked={!hideEvalBar} aria-label="Toggle eval bar"
+                  className={"toggleSwitch" + (!hideEvalBar ? " on" : "")}
+                  onClick={toggleEvalBar}
+                >
+                  <span className="toggleThumb" />
+                </button>
+              </div>
+              <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E" }}
+                onClick={() => { setSettingsOpen(false); openReviewPage(); }}>
+                <div style={{ fontWeight: 700 }}>Game Review</div>
+                <div style={{ fontSize: 11, opacity: 0.75 }}>Paste a game, or reopen one of yours</div>
+              </div>
+              <div style={{ padding: "8px 2px" }}>
+                <div style={{ fontWeight: 700 }}>Your Rating</div>
+                <div style={{ fontSize: 11, opacity: 0.75 }}>
+                  {!ratingInfo ? "Loading…"
+                    : ratingInfo.error ? ratingInfo.message
+                    : ratingInfo.games === 0 ? "Play the 1000/1500/2000 Elo bots to get an estimate"
+                    : `~${ratingInfo.rating} (from ${ratingInfo.games} game${ratingInfo.games === 1 ? "" : "s"} vs the calibrated bots)`}
+                </div>
+              </div>
+            </div>
+      </Modal>
+
+      <Modal open={pieceDesignsOpen} onClose={() => { setPieceDesignsOpen(false); setSettingsOpen(true); }} closeLabel="Close Piece Designs">
+            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              Piece Designs
+            </div>
+            <div className="rows" style={{ maxHeight: "none", display: "flex", flexDirection: "column", gap: 10 }}>
+              {PIECE_SETS.map(set => (
+                <div key={set.id}
+                  style={{
+                    cursor: "pointer", padding: "10px 8px", borderRadius: 8,
+                    border: set.id === pieceSetId ? "1px solid #F5D93E" : "1px solid #8B2FC92E",
+                    display: "flex", alignItems: "center", gap: 12,
+                  }}
+                  onClick={() => choosePieceSet(set.id)}>
+                  <div style={{ display: "flex", gap: 4, background: "#DDD6EA", borderRadius: 6, padding: 4 }}>
+                    <img src={set.svgUrl(6, true)} alt="" style={{ width: 36, height: 36, objectFit: "contain" }} />
+                    <img src={set.svgUrl(5, false)} alt="" style={{ width: 36, height: 36, objectFit: "contain" }} />
+                  </div>
+                  <div style={{ fontWeight: 700 }}>{set.label}{set.id === pieceSetId ? " (selected)" : ""}</div>
+                </div>
+              ))}
+            </div>
+      </Modal>
+
+      <Modal open={boardColorsOpen} onClose={() => { setBoardColorsOpen(false); setSettingsOpen(true); }} closeLabel="Close Board Color">
+            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              Board Color
+            </div>
+            <div className="rows" style={{ maxHeight: "none", display: "flex", flexDirection: "column", gap: 10 }}>
+              {BOARD_COLORS.map(bc => (
+                <div key={bc.id}
+                  style={{
+                    cursor: "pointer", padding: "10px 8px", borderRadius: 8,
+                    border: bc.id === boardColorId ? "1px solid #F5D93E" : "1px solid #8B2FC92E",
+                    display: "flex", alignItems: "center", gap: 12,
+                  }}
+                  onClick={() => chooseBoardColor(bc.id)}>
+                  <div style={{ display: "grid", gridTemplateColumns: "16px 16px", gridTemplateRows: "16px 16px", borderRadius: 6, overflow: "hidden" }}>
+                    <div style={{ background: bc.light }} /><div style={{ background: bc.dark }} />
+                    <div style={{ background: bc.dark }} /><div style={{ background: bc.light }} />
+                  </div>
+                  <div style={{ fontWeight: 700 }}>{bc.label}{bc.id === boardColorId ? " (selected)" : ""}</div>
+                </div>
+              ))}
+            </div>
+      </Modal>
+    </div>
+  );
+
+  const renderPage = () => {
   if (siteView === "home") {
     return (
       <HomePage
@@ -3465,9 +3630,6 @@ export default function ZlegendsBot() {
         onRush={() => { leaveActivity(); setSiteView("play"); setRushOpen(true); }}
         puzzlesReady={!!puzzlesData}
         dailySolved={dailySolvedDate === todayKey()}
-        onToolSelect={onToolSelect}
-        activeToolId={activeToolId}
-        profile={profile}
       />
     );
   }
@@ -3477,9 +3639,6 @@ export default function ZlegendsBot() {
       <LeaderboardPage
         initialDuration={leaderboardDuration}
         onBack={() => setSiteView(leaderboardReturnRef.current)}
-        onToolSelect={onToolSelect}
-        activeToolId={activeToolId}
-        profile={profile}
         sweetheart={sweetheart}
       />
     );
@@ -3492,8 +3651,6 @@ export default function ZlegendsBot() {
         onReview={reviewPastedGame}
         onOpenSaved={reviewSavedGame}
         hasLiveGame={mode === "play" && !result && !pastedGame && !activePuzzle && !quizOpening && !spectateMode && moveList.length > 0}
-        onToolSelect={onToolSelect}
-        activeToolId={activeToolId}
         profile={profile}
         sweetheart={sweetheart}
       />
@@ -3504,20 +3661,15 @@ export default function ZlegendsBot() {
     return (
       <LessonsPage
         onBack={() => setSiteView("home")}
-        onToolSelect={onToolSelect}
-        activeToolId={activeToolId}
-        profile={profile}
         sweetheart={sweetheart}
       />
     );
   }
 
   return (
-    <div className={"root" + (hideEvalBar ? " noEval" : "") + (boardColorId === "standard" ? " theme-standard" : "")} style={{ "--boardLight": getBoardColor(boardColorId).light, "--boardDark": getBoardColor(boardColorId).dark }}>
+    <div className={"root" + (hideEvalBar ? " noEval" : "") + (boardColorId === "standard" ? " theme-standard" : "")} style={boardVars}>
       <StarField sweetheart={sweetheart} />
       {rushMilestone > 0 && <Confetti key={rushMilestone} />}
-      <TopNav onSelect={onToolSelect} active={activeToolId} profile={profile} sweetheart={sweetheart} />
-
       <div className="layout">
         <div className="boardCol">
           {rushMode ? (
@@ -4003,8 +4155,6 @@ export default function ZlegendsBot() {
         </div>
       </div>
 
-      <SocialBanner />
-
       {blindOpen && (
         <Suspense fallback={
           <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }}>
@@ -4019,60 +4169,6 @@ export default function ZlegendsBot() {
           <BlindMode onClose={() => setBlindOpen(false)} />
         </Suspense>
       )}
-
-      <Modal open={musicOpen} onClose={closeMusic} closeLabel="Close Juice Box"
-        className="jbBox" style={{ width: 300, minWidth: undefined, maxWidth: undefined }}>
-            <img src="/VIRTUOSO_MOLE.webp" alt="Juice Box" className="jbMole" />
-            <select value={musicSource} onChange={e => setMusicSource(e.target.value)}>
-              <option value="chiptune">Chiptune</option>
-              {MP3_PLAYLISTS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
-            </select>
-            <div className="trackRow">
-              <span className="trackName" title={jbTrackLabel}>{"♪ " + jbTrackLabel}</span>
-              {!isMp3Source && trackName === "Neon Gambit" && <span className="trackTag">default</span>}
-              {isMp3Source && mp3Buffering && !jbDisabled && <span className="trackTag">buffering</span>}
-            </div>
-            {isMp3Source && (
-              <div className="mp3Progress">
-                <span className="mp3Time">{fmtTime(mp3CurrentTime)}</span>
-                <input
-                  type="range" min="0" max={mp3Duration || 0}
-                  value={Math.min(mp3CurrentTime, mp3Duration || 0)}
-                  onChange={e => seekMp3(Number(e.target.value))}
-                  disabled={jbDisabled || !mp3Duration}
-                />
-                <span className="mp3Time">{fmtTime(mp3Duration)}</span>
-              </div>
-            )}
-            <div className="audioRow">
-              {isMp3Source && (
-                <button className={"playBtn sm" + (mp3Shuffle ? " active" : "")} onClick={toggleShuffle} disabled={jbDisabled} title={mp3Shuffle ? "Shuffle on" : "Shuffle off"}>
-                  {"\u{1F500}"}
-                </button>
-              )}
-              <button className="playBtn sm" onClick={prevTrack} disabled={jbDisabled} title="Previous track">{"◀◀"}</button>
-              <button className="playBtn" onClick={toggleMusic} disabled={jbDisabled} title={jbPlaying ? "Pause music" : "Play music"}>
-                {jbPlaying ? "❚❚" : "▶"}
-              </button>
-              <button className="playBtn sm" onClick={nextTrack} disabled={jbDisabled} title="Next track">{"▶▶"}</button>
-              <input type="range" min="0" max="100" value={volume} onChange={e => onVolume(Number(e.target.value))} />
-              <span className="volPct">{volume}%</span>
-            </div>
-            {isMp3Source && mp3Tracks.length > 1 && (
-              <div className="jbTrackList">
-                {mp3Tracks.map((t, i) => (
-                  <button
-                    key={t.url}
-                    className={"jbTrackRow" + (i === mp3Idx ? " cur" : "")}
-                    onClick={() => pickMp3Track(i)}
-                    title={t.name}
-                  >
-                    {t.name}
-                  </button>
-                ))}
-              </div>
-            )}
-      </Modal>
 
       <Modal open={openingsOpen} onClose={() => setOpeningsOpen(false)} closeLabel="Close Openings Library"
         style={{ maxHeight: "80vh", overflowY: "auto" }}>
@@ -4255,132 +4351,6 @@ export default function ZlegendsBot() {
             }}>Copy</button>
       </Modal>
 
-      <Modal open={settingsOpen} onClose={closeSettings} closeLabel="Close Settings">
-            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span aria-hidden="true">⚙</span>
-              Settings
-            </div>
-            <div className="rows" style={{ maxHeight: "none" }}>
-              <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E", display: "flex", alignItems: "center", gap: 10 }}
-                onClick={() => { setSettingsOpen(false); setPieceDesignsOpen(true); }}>
-                <img src={pieceImgSrc(1, true)} alt="" style={{ width: 30, height: 30, objectFit: "contain", flex: "none", background: "#DDD6EA", borderRadius: 6, padding: 3, boxSizing: "border-box" }} />
-                <div>
-                  <div style={{ fontWeight: 700 }}>Piece Designs</div>
-                  <div style={{ fontSize: 11, opacity: 0.75 }}>Currently: {getPieceSet(pieceSetId).label}</div>
-                </div>
-              </div>
-              <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E", display: "flex", alignItems: "center", gap: 10 }}
-                onClick={() => { setSettingsOpen(false); setBoardColorsOpen(true); }}>
-                <span style={{
-                  display: "grid", gridTemplateColumns: "1fr 1fr", width: 30, height: 30, flex: "none",
-                  borderRadius: 6, overflow: "hidden", border: "1px solid #ffffff22",
-                }} aria-hidden="true">
-                  <span style={{ background: getBoardColor(boardColorId).light }} />
-                  <span style={{ background: getBoardColor(boardColorId).dark }} />
-                  <span style={{ background: getBoardColor(boardColorId).dark }} />
-                  <span style={{ background: getBoardColor(boardColorId).light }} />
-                </span>
-                <div>
-                  <div style={{ fontWeight: 700 }}>Board Color</div>
-                  <div style={{ fontSize: 11, opacity: 0.75 }}>Currently: {getBoardColor(boardColorId).label}</div>
-                </div>
-              </div>
-              <div style={{ padding: "8px 2px", borderBottom: "1px solid #8B2FC92E", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                <div>
-                  <div style={{ fontWeight: 700 }}>Eval Bar</div>
-                  <div style={{ fontSize: 11, opacity: 0.75 }}>
-                    {hideEvalBar ? "Hidden — bigger board on mobile" : "Shown next to the board"}
-                  </div>
-                </div>
-                <button
-                  type="button" role="switch" aria-checked={!hideEvalBar} aria-label="Toggle eval bar"
-                  className={"toggleSwitch" + (!hideEvalBar ? " on" : "")}
-                  onClick={toggleEvalBar}
-                >
-                  <span className="toggleThumb" />
-                </button>
-              </div>
-              <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E" }}
-                onClick={() => { setSettingsOpen(false); openReviewPage(); }}>
-                <div style={{ fontWeight: 700 }}>Game Review</div>
-                <div style={{ fontSize: 11, opacity: 0.75 }}>Paste a game, or reopen one of yours</div>
-              </div>
-              <div style={{ padding: "8px 2px" }}>
-                <div style={{ fontWeight: 700 }}>Your Rating</div>
-                <div style={{ fontSize: 11, opacity: 0.75 }}>
-                  {!ratingInfo ? "Loading…"
-                    : ratingInfo.error ? ratingInfo.message
-                    : ratingInfo.games === 0 ? "Play the 1000/1500/2000 Elo bots to get an estimate"
-                    : `~${ratingInfo.rating} (from ${ratingInfo.games} game${ratingInfo.games === 1 ? "" : "s"} vs the calibrated bots)`}
-                </div>
-              </div>
-            </div>
-      </Modal>
-
-      <Modal open={accountOpen} onClose={closeAccount} closeLabel="Close Account">
-            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              Account
-            </div>
-            {profile && (
-              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 2px 16px" }}>
-                {profile.avatarUrl && (
-                  <img src={profile.avatarUrl} alt="" style={{ width: 48, height: 48, borderRadius: "50%", flex: "none" }} />
-                )}
-                <div style={{ fontWeight: 700, fontSize: 15 }}>{profile.name}</div>
-              </div>
-            )}
-            <button className="btn ghost" style={{ width: "100%" }}
-              onClick={() => { signOut(); closeAccount(); }}>
-              Sign out
-            </button>
-      </Modal>
-
-      <Modal open={pieceDesignsOpen} onClose={() => { setPieceDesignsOpen(false); setSettingsOpen(true); }} closeLabel="Close Piece Designs">
-            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              Piece Designs
-            </div>
-            <div className="rows" style={{ maxHeight: "none", display: "flex", flexDirection: "column", gap: 10 }}>
-              {PIECE_SETS.map(set => (
-                <div key={set.id}
-                  style={{
-                    cursor: "pointer", padding: "10px 8px", borderRadius: 8,
-                    border: set.id === pieceSetId ? "1px solid #F5D93E" : "1px solid #8B2FC92E",
-                    display: "flex", alignItems: "center", gap: 12,
-                  }}
-                  onClick={() => choosePieceSet(set.id)}>
-                  <div style={{ display: "flex", gap: 4, background: "#DDD6EA", borderRadius: 6, padding: 4 }}>
-                    <img src={set.svgUrl(6, true)} alt="" style={{ width: 36, height: 36, objectFit: "contain" }} />
-                    <img src={set.svgUrl(5, false)} alt="" style={{ width: 36, height: 36, objectFit: "contain" }} />
-                  </div>
-                  <div style={{ fontWeight: 700 }}>{set.label}{set.id === pieceSetId ? " (selected)" : ""}</div>
-                </div>
-              ))}
-            </div>
-      </Modal>
-
-      <Modal open={boardColorsOpen} onClose={() => { setBoardColorsOpen(false); setSettingsOpen(true); }} closeLabel="Close Board Color">
-            <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              Board Color
-            </div>
-            <div className="rows" style={{ maxHeight: "none", display: "flex", flexDirection: "column", gap: 10 }}>
-              {BOARD_COLORS.map(bc => (
-                <div key={bc.id}
-                  style={{
-                    cursor: "pointer", padding: "10px 8px", borderRadius: 8,
-                    border: bc.id === boardColorId ? "1px solid #F5D93E" : "1px solid #8B2FC92E",
-                    display: "flex", alignItems: "center", gap: 12,
-                  }}
-                  onClick={() => chooseBoardColor(bc.id)}>
-                  <div style={{ display: "grid", gridTemplateColumns: "16px 16px", gridTemplateRows: "16px 16px", borderRadius: 6, overflow: "hidden" }}>
-                    <div style={{ background: bc.light }} /><div style={{ background: bc.dark }} />
-                    <div style={{ background: bc.dark }} /><div style={{ background: bc.light }} />
-                  </div>
-                  <div style={{ fontWeight: 700 }}>{bc.label}{bc.id === boardColorId ? " (selected)" : ""}</div>
-                </div>
-              ))}
-            </div>
-      </Modal>
-
       <Modal open={spectateOpen} onClose={() => setSpectateOpen(false)} closeLabel="Close Spectate Bots">
             <div className="boxHead" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               Spectate Bots
@@ -4413,6 +4383,38 @@ export default function ZlegendsBot() {
               onClick={() => startSpectate(spectateWhiteIdx, spectateBlackIdx, spectateOpeningId)}>Start Spectating</button>
       </Modal>
 
+    </div>
+  );
+  };
+
+  const onSection = (id) => {
+    if (id === "home") { leaveActivity(); setSiteView("home"); }
+    else enterMode(id === "learn" ? "lessons" : id);
+  };
+  /* Hidden during an activity so the board gets the screen. The header's
+     logo is still there as the way out. */
+  const focused = siteView === "play" && (rushMode || !!activePuzzle || spectateMode
+    || (mode === "play" && moveList.length > 0 && !result && !pastedGame));
+  const section = sectionForView({ siteView, rushMode, activePuzzle, pastedGame });
+  const darkNav = siteView === "puzzlesHome";
+
+  return (
+    <div className={"appShell" + (focused ? "" : " hasBottomBar")}>
+      <AppHeader
+        section={section}
+        onSection={onSection}
+        profile={profile}
+        sweetheart={sweetheart}
+        dark={darkNav}
+        onSignIn={signInWithDiscord}
+        onSignOut={signOut}
+        onYourGames={() => enterMode("review")}
+        onSettings={openSettings}
+        onMusic={() => setMusicOpen(true)}
+      />
+      {renderPage()}
+      {!focused && <BottomBar section={section} onSection={onSection} sweetheart={sweetheart} dark={darkNav} />}
+      {appOverlays}
     </div>
   );
 }

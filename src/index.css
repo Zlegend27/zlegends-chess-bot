@@ -11,7 +11,7 @@
 
 /* Bridges src/tokens.css's palette into Tailwind's color system (CSS-first
    v4 @theme) so Tailwind-authored surfaces (HomePage, LessonsPage,
-   ExploreNav, LeaderboardPage, GamePanel) can reference the app's actual
+   AppNav, LeaderboardPage, GamePanel) can reference the app's actual
    palette -- `bg-panel/80`, `text-cyan`, `border-violet/40` -- instead of
    duplicating hex literals that happen to match. Values are copy-pasted
    from tokens.css on purpose (an @theme block can't `var()` in a value

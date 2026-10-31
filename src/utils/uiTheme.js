@@ -3,7 +3,7 @@
  *  Tailwind utility classes are literal at build time (see the @theme
  *  comment in src/index.css), so unlike the CSS-custom-property system
  *  (App.css/tokens.css, which reskins live via the [data-theme] override),
- *  the Tailwind-authored surfaces (HomePage, TopNav, LeaderboardPage,
+ *  the Tailwind-authored surfaces (HomePage, AppNav, LeaderboardPage,
  *  LessonsPage, GamePanel, PuzzlesHomePage, and the handful of
  *  Tailwind-in-JSX bits inside App.jsx's own Play-screen tree) can't just
  *  react to a runtime variable change. Each of those calls

@@ -67,7 +67,7 @@
      causing a visual shift). --r-2xs for tiny inline badges/tags,
      --r-xs for small square frames (avatar box, mini stat boxes),
      --r-sm for buttons/inputs, --r-md for cards/boxes/modals, --r-lg
-     for the newer Tailwind-authored surfaces (HomePage tiles, TopNav),
+     for the newer Tailwind-authored surfaces (HomePage tiles, AppNav),
      --r-pill for toggles/badges/status pills. A handful of genuinely
      one-off values (an asymmetric speech-bubble corner, one 10px pill
      used nowhere else) are still left as literals rather than forced

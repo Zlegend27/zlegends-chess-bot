@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import StarField from "./StarField";
-import { TopNav } from "./ExploreNav";
-import SocialBanner from "./SocialBanner";
+import { overlayOpen } from "../utils/routes";
 
 /** Sweetheart's own corner of the app -- the real landing page Daily/
  *  Ranked/Rush all fan out from now, replacing what used to be a plain
@@ -9,10 +8,10 @@ import SocialBanner from "./SocialBanner";
  *  --sh-* tokens in tokens.css) rather than the game's usual violet/cyan,
  *  same art-directed exception as the heartbreak screen and the Ranked/
  *  Rush picker modals in App.jsx. Same page-shell pattern as
- *  LeaderboardPage.jsx (own Escape handling, TopNav/SocialBanner). */
-export default function PuzzlesHomePage({ onBack, onDaily, onRanked, onRush, puzzlesReady, dailySolved, onToolSelect, activeToolId, profile }) {
+ *  LeaderboardPage.jsx (own Escape handling). */
+export default function PuzzlesHomePage({ onBack, onDaily, onRanked, onRush, puzzlesReady, dailySolved }) {
   useEffect(() => {
-    const onKeyDown = (e) => { if (e.key === "Escape") onBack(); };
+    const onKeyDown = (e) => { if (e.key === "Escape" && !overlayOpen()) onBack(); };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onBack]);
@@ -49,9 +48,8 @@ export default function PuzzlesHomePage({ onBack, onDaily, onRanked, onRush, puz
           stays permanently rose/dark), so the nav matches the page it's
           drawn on. `dark` requests that fixed dark-rose nav look directly
           -- NOT `sweetheart`, which now means the app-wide LIGHT mode
-          (see ExploreNav.jsx) and would put a light nav bar on this
+          (see AppNav.jsx) and would put a light nav bar on this
           permanently-dark page. */}
-      <TopNav onSelect={onToolSelect} active={activeToolId} profile={profile} dark />
 
       <button
         onClick={onBack}
@@ -142,7 +140,6 @@ export default function PuzzlesHomePage({ onBack, onDaily, onRanked, onRush, puz
         </div>
       </div>
 
-      <SocialBanner />
     </div>
   );
 }

@@ -21,7 +21,6 @@ const ICONS = {
   search: "M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z",
   trophy: "M7 4V2h10v2h4v3c0 2.21-1.79 4-4 4h-.08A6.007 6.007 0 0 1 13 15.92V18h3v2H8v-2h3v-2.08A6.007 6.007 0 0 1 7.08 9H7c-2.21 0-4-1.79-4-4V4h4zm-2 2v1c0 1.1.9 2 2 2V6H5zm12 0v3c1.1 0 2-.9 2-2V6h-2z",
   cap: "M12 3 1 9l11 6 9-4.91V17h2V9L12 3zm0 13.5L4.24 12.3 3 13l9 5 9-5-1.24-.7L12 16.5zM5 14.18v3.82c0 1.1 3.13 3 7 3s7-1.9 7-3v-3.82l-7 3.82-7-3.82z",
-  cog: "M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.5.5 0 0 0-.59.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32c.14.24.42.32.66.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.24.1.51 0 .59-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z",
 };
 
 /** Play/Openings/Blind get bespoke icons instead of a single-fill path:
@@ -89,10 +88,9 @@ const getAccent = (sweetheart) => (sweetheart ? {
 const PINK_ACCENT = { text: "text-magenta", bg: "bg-magenta/12 group-hover:bg-magenta/20", border: "border-magenta/30 group-hover:border-magenta/60" };
 const accentFor = (m, sweetheart) => (m.id === "puzzles" ? PINK_ACCENT : m.featured ? getAccent(sweetheart).play : getAccent(sweetheart).cyan);
 
-/** The site's front door -- our real branding/hero (same .hdr markup the
- *  Play screen used to open with), then a mode picker grid, then the
- *  socials section. Fresh Tailwind-only markup below the hero so it
- *  can't collide with any of the existing hand-written CSS (see
+/** The site's front door -- the mode picker grid, then the socials
+ *  section, under the app-wide header (see AppNav.jsx). Fresh Tailwind-only
+ *  markup so it can't collide with any of the existing hand-written CSS (see
  *  vite.config.js's Tailwind comment for why that's safe here). Reuses
  *  the .root shell (dark gradient bg, color variables, safe-area
  *  padding) as its outer wrapper purely for free theming -- .root's own
@@ -120,17 +118,8 @@ export default function HomePage({ onEnter, firstVisit, rankElo, rankGames, swee
   return (
     <div className="root">
       <StarField sweetheart={sweetheart} />
-      <div className="hdr">
-        <h1>Zlegend's Chess Bot</h1>
-        <div className="sub">can you beat it??</div>
-      </div>
-
-      <p className={"mt-4 max-w-sm text-center text-sm leading-relaxed " + mutedLabel}>
-        A custom chess engine that adapts, attacks, and surprises. Challenge it at any level — or train until you can.
-      </p>
-
       {!dismissed && (
-        <div className="mt-5">
+        <div className="mt-1">
           <BotBubble line={welcomeLine} onDismiss={() => setDismissed(true)} />
         </div>
       )}
@@ -138,8 +127,7 @@ export default function HomePage({ onEnter, firstVisit, rankElo, rankGames, swee
       {/* App-icon style grid -- big square tiles (icon + label only, no
           description) rather than the horizontal list-style cards this
           used to be, per the "should look like a home screen" direction. */}
-      <div className="mt-11 w-full max-w-4xl">
-        <h2 className={"mb-4 text-xs font-bold uppercase tracking-[0.2em] " + T.dimText}>Choose a mode</h2>
+      <div className="mt-5 w-full max-w-4xl">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {MODES.map((m) => {
             const a = accentFor(m, sweetheart);
@@ -185,11 +173,8 @@ export default function HomePage({ onEnter, firstVisit, rankElo, rankGames, swee
         </div>
       </div>
 
-      {/* Leaderboard and Settings are both links out to their own page/modal
-          (App.jsx routes "leaderboard" straight to LeaderboardPage; enterMode
-          opens Settings the same way) rather than mode-grid tiles -- neither
-          is a mode you "enter" the way Play/Puzzles/etc. are, so they get
-          their own small row instead. */}
+      {/* A link out to its own page rather than a mode-grid tile, since it
+          isn't a mode you "enter" the way Play/Puzzles/etc. are. */}
       <div className="mt-8 flex items-center gap-3">
         <button
           onClick={() => onEnter("leaderboard")}
@@ -197,14 +182,6 @@ export default function HomePage({ onEnter, firstVisit, rankElo, rankGames, swee
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={ICONS.trophy} /></svg>
           Leaderboard
-        </button>
-        <button
-          onClick={() => onEnter("settings")}
-          aria-label="Settings"
-          title="Settings"
-          className={`flex size-9 items-center justify-center rounded-xl border ${sweetheart ? "border-sh-rose/30 hover:border-sh-rose/60" : "border-violet/30 hover:border-violet/60"} ${T.panelBg} ${mutedLabel} backdrop-blur-sm transition hover:-translate-y-0.5 ${T.hoverInk}`}
-        >
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={ICONS.cog} /></svg>
         </button>
       </div>
 
