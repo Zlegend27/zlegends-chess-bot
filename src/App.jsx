@@ -27,6 +27,7 @@ import { pickTrackIndex } from "./utils/trackIndex";
 import { materialState } from "./utils/material";
 import { sideAccuracy } from "./utils/reviewScoring";
 import { readRankBotTest } from "./utils/rankBotTest";
+import { reloadIfStaleBuild } from "./utils/staleBuild";
 import { gradeGame } from "./utils/gradeGame";
 import { buildPgn, parsePgnMoves, replayForeignPgn, parsePgnHeaders, countPgnGames, describePasteProblem, reviewInfoFromHeaders, exporterSide } from "./utils/pgn";
 import { encodeGame, decodeGame, getSharedHash, replayIntoEngine } from "./utils/share";
@@ -986,7 +987,9 @@ export default function ZlegendsBot() {
        of an engine grade -- shallow probes "grading" memorized theory
        was pure noise. Falls back to 0 (no book tags) if the ECO data
        chunk hasn't streamed in yet. */
-    const theoryPlies = eco ? theoryPlyCount(list, eco) : 0;
+    /* The opening data names some traps, like Fool's Mate. A game that ends
+       inside theory still needs its final blunder graded. */
+    const theoryPlies = eco ? Math.min(theoryPlyCount(list, eco), Math.max(0, list.length - 2)) : 0;
     const bookBoundary = Math.min(theoryPlies, list.length);
     const scores = new Array(list.length + 1);
     const secondScores = new Array(list.length + 1);
@@ -1071,10 +1074,11 @@ export default function ZlegendsBot() {
       gameUid: ensureRankBotGameUidRef.current(), ply, loss: res.note.cost ?? 0,
       eloBefore: res.note.playerElo, eloAfter: res.note.playerElo, detail: res.note,
     });
+    const san = eng.sanOf(move);
     /* Some searches finish so fast that the reply would feel inhuman. */
     await new Promise((r) => setTimeout(r, Math.max(0, SHADOW_MIN_THINK_MS - (Date.now() - started))));
     return {
-      move, san: eng.sanOf(move), score: res.score,
+      move, san, score: res.score,
       depth: res.info.depth, nodes: res.info.nodes, time: res.note.totalMs, pv: res.info.pv, book: false,
     };
   }, [eng]);
@@ -1131,7 +1135,8 @@ export default function ZlegendsBot() {
         }
       }
       finish();
-    }).catch(() => {
+    }).catch((e) => {
+      reloadIfStaleBuild(e);
       /* A rejected search (Stockfish worker failed to boot, WASM fetch
          dropped) still has to clear `thinking` -- onSquare returns
          "blocked" the whole time it's set, so leaving it true locks the

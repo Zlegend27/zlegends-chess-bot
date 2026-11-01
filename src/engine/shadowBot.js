@@ -12,7 +12,7 @@ import {
   expectedReplyLoss, isClosing, isLeadLost, isTrusted, learnFromMove, levelsFor, mistakeFor, newGameState, nextPace,
   optionsFor, rankOptions, stepFor,
 } from "../utils/rankBotShadow";
-import { maiaChances } from "./maiaEngine";
+import { isMaiaReady, maiaChances, warmMaia } from "./maiaEngine";
 import { stockfishAnalyze } from "./stockfishEngine";
 
 /* Saved with every move, so results can be compared across rule changes.
@@ -111,6 +111,7 @@ async function firstSound(fen, ranked, step, pace) {
  *  readout. */
 export async function chooseShadowMove(fen, ply, state) {
   const started = Date.now();
+  warmMaia();
   const lines = linesFrom(await stockfishAnalyze(fen, { nodes: Math.round(SEARCH_NODES * state.pace), multiPv: SEARCH_LINES }), fen);
   if (!lines.length) return null;
   const pace = state.pace;
@@ -140,7 +141,9 @@ export async function chooseShadowMove(fen, ply, state) {
     optionCount = options.length;
     let ranked = rankOptions(options, step, null);
     mode = "human";
-    if (options.length > 1) {
+    if (options.length > 1 && !isMaiaReady()) {
+      mode = "maia loading";
+    } else if (options.length > 1) {
       try {
         chances = await maiaChances(fen, levels.botElo, levels.potential, options.map((o) => o.uci));
         const likeliest = [...options].sort((a, b) => chances[b.uci] - chances[a.uci]).slice(0, TRAP_OPTIONS);

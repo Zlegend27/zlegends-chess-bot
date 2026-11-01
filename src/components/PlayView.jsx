@@ -188,7 +188,7 @@ export default function PlayView({ rankTestNote, GRADE_COLOR, GRADE_TAG, MoodImg
                   <button className="nameEditBtn" onClick={() => { setNameDraft(displayName); setNameEditOpen(true); }} title="Edit your name" aria-label="Edit your name">✎</button>
                 )}
               </div>
-              {pastedGame ? null : !spectateMode && difficultyRef.current.id === "rank" ? (
+              {pastedGame ? null : !spectateMode && !activePuzzle && !rushMode && difficultyRef.current.id === "rank" ? (
                 <div className="trayEmpty" style={{ color: "var(--cyan)" }}>
                   {rankBotAssessedElo == null
                     ? `Calibrating Elo — game ${(rankBotGames % RANK_BOT_ASSESSMENT_EVERY) + 1}/${RANK_BOT_ASSESSMENT_EVERY}`
@@ -396,8 +396,8 @@ export default function PlayView({ rankTestNote, GRADE_COLOR, GRADE_TAG, MoodImg
               pairs={pairs} moveGrades={moveGrades} curMoveIdx={curMoveIdx} reviewing={reviewing}
               onReviewIndex={setReviewIndex} gradeTag={GRADE_TAG}
               hasMoves={moveList.length > 0} onCopyPgn={onCopyPgn}
-              onPastePgn={openReviewPage}
-              openAnalysis={pastedGame}
+              onPastePgn={activePuzzle ? null : openReviewPage}
+              openAnalysis={pastedGame || (reviewing && analyzing)}
               pgnToast={pgnToast}
               analysisContent={analysisContent} analysisLabel={analysisLabel}
               sideToMove={eng.getSide() === 1 ? "White" : "Black"}

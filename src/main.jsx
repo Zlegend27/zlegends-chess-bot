@@ -4,6 +4,7 @@ import { registerSW } from "virtual:pwa-register";
 import App from "./App.jsx";
 import HandoffLanding from "./components/HandoffLanding.jsx";
 import { readHandoffLanding } from "./utils/authHandoff";
+import { reloadIfStaleBuild } from "./utils/staleBuild";
 import "./index.css";
 
 /* With registerType "autoUpdate" this reloads the page as soon as a new
@@ -18,6 +19,9 @@ class ErrorBoundary extends React.Component {
   state = { error: null };
   static getDerivedStateFromError(error) {
     return { error };
+  }
+  componentDidCatch(error) {
+    reloadIfStaleBuild(error);
   }
   render() {
     if (this.state.error) {

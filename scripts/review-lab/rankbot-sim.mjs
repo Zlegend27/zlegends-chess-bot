@@ -6,7 +6,7 @@
    doesn't model what humans find hard, only how much they lose.
 
    Designs:
-     today   the live logic: an Elo dial, random blunders, a +-400 override
+     today   the design before 2026-11: an Elo dial, random blunders, a +-400 override
      shadow  searches once, then picks the move that keeps a lead of about one
              of this player's typical mistakes
 
@@ -198,7 +198,7 @@ async function shadowMove(engine, eng, fen, v, state, ply) {
   return { hung, move: eng.moveFromUci(pick.uci), lead: best, step, gaveUp: best - clampCp(pick.score), ms, nodes, closing };
 }
 
-/* The live logic, from rankBotMath and stockfishMove. The dial carries across
+/* The old logic, kept as a baseline. The dial carries across
    a player's games, as it does in the app. */
 const perfOf = (l) => (l === 0 ? 3000 : l < 20 ? 2400 : l < 60 ? 1700 : l < 150 ? 1150 : l < 300 ? 800 : 450);
 const blunderChance = (elo) => (elo >= 1320 ? 0 : Math.min(0.75, 0.3 + (1320 - elo) / 1000));

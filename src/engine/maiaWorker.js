@@ -31,7 +31,7 @@ async function predict({ fen, selfElo, oppoElo, ucis }) {
 }
 
 self.onmessage = ({ data }) => {
-  predict(data).then(
+  (data.load ? load().then(() => null) : predict(data)).then(
     (chances) => self.postMessage({ id: data.id, chances }),
     (e) => self.postMessage({ id: data.id, error: String(e?.message || e) }),
   );

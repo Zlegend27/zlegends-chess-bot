@@ -48,7 +48,7 @@ export default function GamePanel({
           {hasMoves ? (
             <PanelBtn onClick={onCopyPgn} sweetheart={sweetheart}>Copy PGN</PanelBtn>
           ) : (
-            <PanelBtn onClick={onPastePgn} sweetheart={sweetheart}>Paste PGN</PanelBtn>
+            onPastePgn && <PanelBtn onClick={onPastePgn} sweetheart={sweetheart}>Paste PGN</PanelBtn>
           )}
         </div>
       </div>

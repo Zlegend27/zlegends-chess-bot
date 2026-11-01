@@ -86,7 +86,7 @@ export default function ModePages({ siteView, openLeaderboard, puzzlesInBand, pz
                       setSiteView("play");
                       startPuzzle(pool[(Math.random() * pool.length) | 0]);
                     }}>
-                    <div style={{ fontWeight: 700 }}>{band.label} <span style={{ color: "var(--sh-dim)", fontWeight: "normal" }}>({band.min}–{band.max === 9999 ? "2000+" : band.max})</span></div>
+                    <div style={{ fontWeight: 700 }}>{band.label} <span style={{ color: "var(--sh-dim)", fontWeight: "normal" }}>({band.max === 9999 ? `${band.min}+` : `${band.min}–${band.max}`})</span></div>
                     <div style={{ fontSize: 11, color: "var(--sh-dim)" }}>{pool.length} puzzle{pool.length === 1 ? "" : "s"}</div>
                   </button>
                 );
@@ -121,7 +121,7 @@ export default function ModePages({ siteView, openLeaderboard, puzzlesInBand, pz
           </div>
           <div className="rushCounterRow" style={{ color: "var(--sh-dim)" }}>
             <span>Lifetime solved: <b style={{ color: "var(--sh-text)" }}>{rushLifetime}</b></span>
-            <button className="btn ghost" style={{ padding: "4px 10px", fontSize: 10, minHeight: 30 }} onClick={resetRushCounter}>Reset</button>
+            <button className="btn ghost" style={{ padding: "4px 10px", fontSize: 10, minHeight: 44 }} onClick={resetRushCounter}>Reset</button>
           </div>
           <div style={{ display: "flex", justifyContent: "center" }}>
             <button className="rushEndTrophy" onClick={() => openLeaderboard(rushDuration ?? 60)} aria-label="View leaderboard" title="View leaderboard">
