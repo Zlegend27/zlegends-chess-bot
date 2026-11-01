@@ -60,3 +60,16 @@ describe("fetching it", () => {
     expect(await fetchLatestShort(vi.fn().mockResolvedValue({ ok: false }))).toBeNull();
   });
 });
+
+describe("reading a title from the Shorts page when the feed is down", () => {
+  test("takes the title from the Short's own label, keeping commas in the title", async () => {
+    const { titleFromShortsPage } = await import("../../api/latest-short.js");
+    const html = '..."shorts-shelf-item-abcdefghijk","accessibilityText":"Fun, not fun, 1,234 views - play Short"...';
+    expect(titleFromShortsPage(html, "abcdefghijk")).toEqual({ id: "abcdefghijk", title: "Fun, not fun", published: null });
+  });
+
+  test("a Short not on the page has no title", async () => {
+    const { titleFromShortsPage } = await import("../../api/latest-short.js");
+    expect(titleFromShortsPage("<html></html>", "abcdefghijk")).toBeNull();
+  });
+});
