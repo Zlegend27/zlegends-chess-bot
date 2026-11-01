@@ -26,6 +26,7 @@ import { todayKey, dailyPuzzle } from "./utils/dailyPuzzle";
 import { pickTrackIndex } from "./utils/trackIndex";
 import { materialState } from "./utils/material";
 import { sideAccuracy } from "./utils/reviewScoring";
+import { readRankBotTest } from "./utils/rankBotTest";
 import { gradeGame } from "./utils/gradeGame";
 import { buildPgn, parsePgnMoves, replayForeignPgn, parsePgnHeaders, countPgnGames, describePasteProblem, reviewInfoFromHeaders, exporterSide } from "./utils/pgn";
 import { encodeGame, decodeGame, getSharedHash, replayIntoEngine } from "./utils/share";
@@ -61,6 +62,7 @@ const PIECE_NAME = { 1: "pawn", 2: "knight", 3: "bishop", 4: "rook", 5: "queen",
    judgment); "miss" = the opponent just blundered and this move let the
    punishment slip -- chess.com's vocabulary, and the distinction players
    actually learn from: a miss is a found-nothing, not a played-badly. */
+const SHADOW_MIN_THINK_MS = 700;
 const GRADE_TAG = { brilliant: "!!", great: "★", best: "!", excellent: "✓", good: "•", book: "≡", inaccuracy: "?!", miss: "✗", mistake: "?", blunder: "??" };
 const GRADE_COLOR = { brilliant: "#3EE7F5", great: "#4EA8DE", best: "#6FCF97", excellent: "#8FD9A8", good: "#C9C2E8", book: "#9D8FC4", inaccuracy: "#F5D93E", miss: "#FF8A5C", mistake: "#F0A548", blunder: "#F05348" };
 
@@ -502,6 +504,15 @@ export default function ZlegendsBot() {
      floor, confirmed from the logged rank_bot_moves data -- so anyone who
      never completed a full assessment restarts from the new, higher
      default rather than keeping a rating the old math dragged down. */
+  /* The one-step-ahead Rank Bot, on only in browsers that opened the site with
+     ?rankbot=test. These games stay out of the rating and its telemetry, and
+     are saved under their own label. */
+  const [rankBotTest] = useState(readRankBotTest);
+  const [rankTestNote, setRankTestNote] = useState(null);
+  const rankBotTestRef = useRef(rankBotTest);
+  const shadowStateRef = useRef(null);
+  const gameLabel = () => (rankBotTestRef.current && difficultyRef.current.id === "rank" ? "Rank Bot Test" : difficultyRef.current.label);
+
   const [rankBotElo, setRankBotElo] = useState(() => {
     if (loadSetting("rankBotVersion", 1) < 2) {
       if (loadSetting("rankBotElo", null) != null && loadSetting("rankBotAssessedElo", null) == null) {
@@ -1074,6 +1085,25 @@ export default function ZlegendsBot() {
     });
   }, [eng]);
 
+  const shadowMove = useCallback(async () => {
+    const started = Date.now();
+    const [{ chooseShadowMove }, { newGameState, START_MISTAKE }] = await Promise.all([
+      import("./engine/shadowBot"), import("./utils/rankBotShadow"),
+    ]);
+    shadowStateRef.current ??= newGameState(loadSetting("rankBotTestMistake", START_MISTAKE));
+    const res = await chooseShadowMove(eng.fen(), eng.plyCount(), shadowStateRef.current);
+    const move = res && eng.moveFromUci(res.uci);
+    if (!move) return null;
+    saveSetting("rankBotTestMistake", shadowStateRef.current.mistake);
+    setRankTestNote(res.note);
+    /* Some searches finish so fast that the reply would feel inhuman. */
+    await new Promise((r) => setTimeout(r, Math.max(0, SHADOW_MIN_THINK_MS - (Date.now() - started))));
+    return {
+      move, san: eng.sanOf(move), score: res.score,
+      depth: res.info.depth, nodes: res.info.nodes, time: res.note.totalMs, pv: res.info.pv, book: false,
+    };
+  }, [eng]);
+
   /* Rank Bot has no fixed stockfishElo in DIFFICULTIES -- it's synthesized
      here from the live dial every time a move is needed, so engineMove
      doesn't need its own special case beyond this one substitution.
@@ -1113,7 +1143,7 @@ export default function ZlegendsBot() {
      "loss" is mostly probe noise, and letting them into the estimate was
      masking the player's real level. */
   const adjustRankBotDial = (prefixBefore, prefixAfter, gameOver) => {
-    if (difficultyRef.current.id !== "rank" || gameOver) return;
+    if (difficultyRef.current.id !== "rank" || gameOver || rankBotTestRef.current) return;
     if (prefixAfter.length <= RANK_BOT_OPENING_PLIES) return;
     const gameUid = ensureRankBotGameUid();
     const ply = prefixAfter.length;
@@ -1209,7 +1239,8 @@ export default function ZlegendsBot() {
     const whiteEvalNow = eng.evalWhite();
     const botAdvantagePawns = (botColorNow === 1 ? whiteEvalNow : -whiteEvalNow) / 100;
     const personality = pickPersonality(gameStyleRef.current, eng.plyCount(), botAdvantagePawns);
-    const searchPromise = diff.stockfishElo
+    const testGame = rankBotTestRef.current && difficultyRef.current.id === "rank";
+    const searchPromise = testGame ? shadowMove() : diff.stockfishElo
       ? stockfishMove(diff)
       : runSearch(currentMoveList, diff.ms, diff.blunderChance || 0, { personality, useBook: diff.book, bookStyle: diff.styleBook ? gameStyleRef.current.label : null });
     searchPromise.then((res) => {
@@ -1231,7 +1262,7 @@ export default function ZlegendsBot() {
           setReviewIndex(eng.plyCount());
           const isRankBot = difficultyRef.current.id === "rank";
           saveGame({
-            difficultyLabel: difficultyRef.current.label, playerColor: playerColorRef.current, moveList: newMoveList,
+            difficultyLabel: gameLabel(), playerColor: playerColorRef.current, moveList: newMoveList,
             result: over, finalEval: whiteScore, style: gameStyleRef.current.label, engineVersion: ENGINE_VERSION,
             gameUid: isRankBot ? rankBotGameUidRef.current : null, rankEloAtGame: isRankBot ? rankBotEloRef.current : null,
           });
@@ -1248,7 +1279,7 @@ export default function ZlegendsBot() {
          worker) only ever resolves; this covers the Stockfish tiers. */
       finish();
     });
-  }, [eng, audio, checkGameOver, runSearch, stockfishMove]);
+  }, [eng, audio, checkGameOver, runSearch, stockfishMove, shadowMove]);
   const engineMoveRef = useRef(engineMove);
   engineMoveRef.current = engineMove;
 
@@ -1356,6 +1387,7 @@ export default function ZlegendsBot() {
   };
 
   const finishRankBotGame = (over) => {
+    if (rankBotTestRef.current) return;
     if (difficultyRef.current.id !== "rank") return;
     const games = rankBotGamesRef.current + 1;
     rankBotGamesRef.current = games;
@@ -1428,7 +1460,7 @@ export default function ZlegendsBot() {
       setReviewIndex(eng.plyCount());
       const isRankBot = difficultyRef.current.id === "rank";
       saveGame({
-        difficultyLabel: difficultyRef.current.label, playerColor: playerColorRef.current, moveList: newMoveList,
+        difficultyLabel: gameLabel(), playerColor: playerColorRef.current, moveList: newMoveList,
         result: over, finalEval: eng.evalWhite(), style: gameStyleRef.current.label, engineVersion: ENGINE_VERSION,
         gameUid: isRankBot ? rankBotGameUidRef.current : null, rankEloAtGame: isRankBot ? rankBotEloRef.current : null,
       });
@@ -1569,7 +1601,7 @@ export default function ZlegendsBot() {
     if (moveListRef.current.length < 8) return;
     const isRankBot = difficultyRef.current.id === "rank";
     saveGame({
-      difficultyLabel: difficultyRef.current.label, playerColor: playerColorRef.current, moveList: moveListRef.current,
+      difficultyLabel: gameLabel(), playerColor: playerColorRef.current, moveList: moveListRef.current,
       result: { text: "*", reason: "Abandoned" }, finalEval: eng.evalWhite(), style: gameStyleRef.current.label,
       engineVersion: ENGINE_VERSION,
       gameUid: isRankBot ? rankBotGameUidRef.current : null, rankEloAtGame: isRankBot ? rankBotEloRef.current : null,
@@ -3215,7 +3247,7 @@ export default function ZlegendsBot() {
 
   return (
     <Suspense fallback={null}>
-      <PlayView GRADE_COLOR={GRADE_COLOR} GRADE_TAG={GRADE_TAG} MoodImg={MoodImg} RushThemeArt={RushThemeArt} Tray={Tray} activeOpening={activeOpening} activePuzzle={activePuzzle} analysisBusy={analysisBusy} analysisContent={analysisContent} analysisLabel={analysisLabel} analysisMove={analysisMove} analyzing={analyzing} arrowLine={arrowLine} beginRestartCountdown={beginRestartCountdown} bestArrow={bestArrow} boardColorId={boardColorId} boardRef={boardRef} boardVars={boardVars} botColor={botColor} botLine={botLine} botMood={botMood} botTaken={botTaken} colorPick={colorPick} curMoveIdx={curMoveIdx} difficultyIdx={difficultyIdx} difficultyRef={difficultyRef} displayName={displayName} dragCellSize={dragCellSize} dragFrom={dragFrom} dragPos={dragPos} eng={eng} evalLabel={evalLabel} evalPawns={evalPawns} exitMissedAttempt={exitMissedAttempt} exitPractice={exitPractice} exitPuzzle={exitPuzzle} exitReplay={exitReplay} exitRush={exitRush} formatClock={formatClock} gameStyle={gameStyle} gradeDetail={gradeDetail} gradeProgress={gradeProgress} grading={grading} hideEvalBar={hideEvalBar} hideRushSummary={hideRushSummary} hinting={hinting} inChk={inChk} liveOpening={liveOpening} missedAttempt={missedAttempt} missedStepIdx={missedStepIdx} mode={mode} moveGrades={moveGrades} moveList={moveList} nameDraft={nameDraft} nameEditOpen={nameEditOpen} newGame={newGame} newGameConfirm={newGameConfirm} nextPuzzle={nextPuzzle} onCopyPgn={onCopyPgn} onDifficultyChange={onDifficultyChange} onHint={onHint} onMissedSwipeEnd={onMissedSwipeEnd} onMissedSwipeStart={onMissedSwipeStart} openLeaderboard={openLeaderboard} openReviewPage={openReviewPage} pairs={pairs} pastedGame={pastedGame} pauseSpectate={pauseSpectate} pgnToast={pgnToast} pieceImgSrc={pieceImgSrc} pieceSetId={pieceSetId} playMove={playMove} playerAdvantageCp={playerAdvantageCp} playerColor={playerColor} playerShare={playerShare} practice={practice} practiceMove={practiceMove} practiceNext={practiceNext} practiceReveal={practiceReveal} promo={promo} puzzleBand={puzzleBand} puzzleFeedback={puzzleFeedback} puzzleMove={puzzleMove} puzzleSolved={puzzleSolved} pz={pz} quizDoneToast={quizDoneToast} quizMove={quizMove} quizOpening={quizOpening} rankBotAssessedElo={rankBotAssessedElo} rankBotGames={rankBotGames} ratingInfo={ratingInfo} replayFull={replayFull} replayIndex={replayIndex} replayPlaying={replayPlaying} replayStep={replayStep} restartCountdown={restartCountdown} result={result} resumeSpectate={resumeSpectate} reviewIndex={reviewIndex} reviewInfo={reviewInfo} reviewMissedPuzzle={reviewMissedPuzzle} reviewing={reviewing} rows={rows} rushBandIdx={rushBandIdx} rushBestMap={rushBestMap} rushDuration={rushDuration} rushLifetime={rushLifetime} rushMilestone={rushMilestone} rushMissed={rushMissed} rushMistakes={rushMistakes} rushMode={rushMode} rushResult={rushResult} rushSolved={rushSolved} rushSummaryOpen={rushSummaryOpen} rushTimeLeft={rushTimeLeft} saveDisplayName={saveDisplayName} setBotLine={setBotLine} setColorPick={setColorPick} setMissedStepIdx={setMissedStepIdx} setNameDraft={setNameDraft} setNameEditOpen={setNameEditOpen} setNewGameConfirm={setNewGameConfirm} setPlayerColor={setPlayerColor} setPromo={setPromo} setReplayIndex={setReplayIndex} setReviewIndex={setReviewIndex} setRushSummaryOpen={setRushSummaryOpen} setShareLinkFallback={setShareLinkFallback} setShareToast={setShareToast} setSiteView={setSiteView} shareLinkFallback={shareLinkFallback} shareToast={shareToast} spectateBlackIdx={spectateBlackIdx} spectateMode={spectateMode} spectateOpeningId={spectateOpeningId} spectatePaused={spectatePaused} spectateWhiteIdx={spectateWhiteIdx} startPuzzle={startPuzzle} startQuiz={startQuiz} startSpectate={startSpectate} status={status} stopSpectate={stopSpectate} sweetheart={sweetheart} thinking={thinking} toggleAnalyze={toggleAnalyze} toggleReplayPlay={toggleReplayPlay} uiT={uiT} undo={undo} youDiff={youDiff} youTaken={youTaken} />
+      <PlayView rankTestNote={rankBotTest && difficultyRef.current.id === "rank" ? (rankTestNote || {}) : null} GRADE_COLOR={GRADE_COLOR} GRADE_TAG={GRADE_TAG} MoodImg={MoodImg} RushThemeArt={RushThemeArt} Tray={Tray} activeOpening={activeOpening} activePuzzle={activePuzzle} analysisBusy={analysisBusy} analysisContent={analysisContent} analysisLabel={analysisLabel} analysisMove={analysisMove} analyzing={analyzing} arrowLine={arrowLine} beginRestartCountdown={beginRestartCountdown} bestArrow={bestArrow} boardColorId={boardColorId} boardRef={boardRef} boardVars={boardVars} botColor={botColor} botLine={botLine} botMood={botMood} botTaken={botTaken} colorPick={colorPick} curMoveIdx={curMoveIdx} difficultyIdx={difficultyIdx} difficultyRef={difficultyRef} displayName={displayName} dragCellSize={dragCellSize} dragFrom={dragFrom} dragPos={dragPos} eng={eng} evalLabel={evalLabel} evalPawns={evalPawns} exitMissedAttempt={exitMissedAttempt} exitPractice={exitPractice} exitPuzzle={exitPuzzle} exitReplay={exitReplay} exitRush={exitRush} formatClock={formatClock} gameStyle={gameStyle} gradeDetail={gradeDetail} gradeProgress={gradeProgress} grading={grading} hideEvalBar={hideEvalBar} hideRushSummary={hideRushSummary} hinting={hinting} inChk={inChk} liveOpening={liveOpening} missedAttempt={missedAttempt} missedStepIdx={missedStepIdx} mode={mode} moveGrades={moveGrades} moveList={moveList} nameDraft={nameDraft} nameEditOpen={nameEditOpen} newGame={newGame} newGameConfirm={newGameConfirm} nextPuzzle={nextPuzzle} onCopyPgn={onCopyPgn} onDifficultyChange={onDifficultyChange} onHint={onHint} onMissedSwipeEnd={onMissedSwipeEnd} onMissedSwipeStart={onMissedSwipeStart} openLeaderboard={openLeaderboard} openReviewPage={openReviewPage} pairs={pairs} pastedGame={pastedGame} pauseSpectate={pauseSpectate} pgnToast={pgnToast} pieceImgSrc={pieceImgSrc} pieceSetId={pieceSetId} playMove={playMove} playerAdvantageCp={playerAdvantageCp} playerColor={playerColor} playerShare={playerShare} practice={practice} practiceMove={practiceMove} practiceNext={practiceNext} practiceReveal={practiceReveal} promo={promo} puzzleBand={puzzleBand} puzzleFeedback={puzzleFeedback} puzzleMove={puzzleMove} puzzleSolved={puzzleSolved} pz={pz} quizDoneToast={quizDoneToast} quizMove={quizMove} quizOpening={quizOpening} rankBotAssessedElo={rankBotAssessedElo} rankBotGames={rankBotGames} ratingInfo={ratingInfo} replayFull={replayFull} replayIndex={replayIndex} replayPlaying={replayPlaying} replayStep={replayStep} restartCountdown={restartCountdown} result={result} resumeSpectate={resumeSpectate} reviewIndex={reviewIndex} reviewInfo={reviewInfo} reviewMissedPuzzle={reviewMissedPuzzle} reviewing={reviewing} rows={rows} rushBandIdx={rushBandIdx} rushBestMap={rushBestMap} rushDuration={rushDuration} rushLifetime={rushLifetime} rushMilestone={rushMilestone} rushMissed={rushMissed} rushMistakes={rushMistakes} rushMode={rushMode} rushResult={rushResult} rushSolved={rushSolved} rushSummaryOpen={rushSummaryOpen} rushTimeLeft={rushTimeLeft} saveDisplayName={saveDisplayName} setBotLine={setBotLine} setColorPick={setColorPick} setMissedStepIdx={setMissedStepIdx} setNameDraft={setNameDraft} setNameEditOpen={setNameEditOpen} setNewGameConfirm={setNewGameConfirm} setPlayerColor={setPlayerColor} setPromo={setPromo} setReplayIndex={setReplayIndex} setReviewIndex={setReviewIndex} setRushSummaryOpen={setRushSummaryOpen} setShareLinkFallback={setShareLinkFallback} setShareToast={setShareToast} setSiteView={setSiteView} shareLinkFallback={shareLinkFallback} shareToast={shareToast} spectateBlackIdx={spectateBlackIdx} spectateMode={spectateMode} spectateOpeningId={spectateOpeningId} spectatePaused={spectatePaused} spectateWhiteIdx={spectateWhiteIdx} startPuzzle={startPuzzle} startQuiz={startQuiz} startSpectate={startSpectate} status={status} stopSpectate={stopSpectate} sweetheart={sweetheart} thinking={thinking} toggleAnalyze={toggleAnalyze} toggleReplayPlay={toggleReplayPlay} uiT={uiT} undo={undo} youDiff={youDiff} youTaken={youTaken} />
     </Suspense>
   );
   };

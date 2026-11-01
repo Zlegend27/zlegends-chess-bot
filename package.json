@@ -1,6 +1,7 @@
 {
   "name": "zlegends-bot-app",
   "private": true,
+  "license": "AGPL-3.0-only",
   "version": "1.0.0",
   "type": "module",
   "scripts": {
@@ -15,6 +16,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.0",
+    "onnxruntime-web": "1.30.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
