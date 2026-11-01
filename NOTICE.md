@@ -2,7 +2,8 @@
 
 Copyright (C) 2026 Zlegend27
 
-The source code in this repository is free software: you can redistribute it
+Apart from Kinnda Chess (see below), the source code in this repository is
+free software: you can redistribute it
 and/or modify it under the terms of the GNU Affero General Public License,
 version 3, as published by the Free Software Foundation. See [LICENSE](LICENSE).
 
@@ -15,8 +16,12 @@ https://github.com/Zlegend27/zlegends-chess-bot.
 
 ## What this license does not cover
 
-The license covers the code. It gives no rights to the following:
+The license covers the code of the Zlegend2700 site. It gives no rights to the
+following:
 
+- Kinnda Chess, a separate app: everything in `src-kindle/` and `kindle-web/`.
+  It's published here for reference only, and it reuses some code from `src/`,
+  which stays under the license above.
 - The names Zlegend27, Zlegend2700, Zlegend's Chess Bot, Z27Tube and Kinnda
   Chess, and their logos.
 - The original artwork in this repository, including the images in `public/`
