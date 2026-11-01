@@ -19,7 +19,7 @@ import { loadSetting, saveSetting } from "./utils/storage";
 const RushThemeArt = lazy(() => import("./components/RushThemeArt"));
 import { getUiTheme } from "./utils/uiTheme";
 import { DIFFICULTIES } from "./utils/difficulties";
-import { RANK_BOT_MIN_ELO, RANK_BOT_MAX_ELO, RANK_BOT_DEFAULT_ELO, RANK_BOT_CALIBRATION_GAMES, RANK_BOT_CALIBRATION_MULT, RANK_BOT_PROBE_MS, RANK_BOT_OPENING_PLIES, RANK_BOT_MIN_TRACKED_MOVES, rankBotLossToPerf, RANK_BOT_EWMA_K, RANK_BOT_THROW_CP, RANK_BOT_THROWS_TO_SUSPECT, RANK_BOT_SUSPECT_WEIGHT, RANK_BOT_MAX_GAME_DROP, RANK_BOT_MAX_GAME_CLIMB, RANK_BOT_RESULT_STEP, RANK_BOT_SWING_CP, RANK_BOT_SANITY_MS, RANK_BOT_DOMINANT_CAP, RANK_BOT_ASSESSMENT_EVERY, rankBotBlunderChance } from "./utils/rankBotMath";
+import { RANK_BOT_DEFAULT_ELO, RANK_BOT_OPENING_PLIES, RANK_BOT_MIN_TRACKED_MOVES, RANK_BOT_ASSESSMENT_EVERY } from "./utils/rankBotMath";
 import { BALANCED, randomStyle, pickPersonality } from "./utils/personalities";
 import { detectOpening } from "./utils/openingDetect";
 import { todayKey, dailyPuzzle } from "./utils/dailyPuzzle";
@@ -47,7 +47,7 @@ import { syncRankBotToSupabase, fetchRankBotFromSupabase, logRankBotMove } from 
 import { ENGINE_VERSION } from "./utils/version";
 import { OPENINGS } from "./utils/openings";
 import { loadEcoOpenings, detectEcoOpening, theoryPlyCount } from "./utils/ecoOpenings";
-import { stockfishBestMove, stockfishAnalyze, STOCKFISH_MIN_ELO, warmUpStockfish, isStockfishWarm } from "./engine/stockfishEngine";
+import { stockfishBestMove, stockfishAnalyze, warmUpStockfish, isStockfishWarm } from "./engine/stockfishEngine";
 import "./tokens.css";
 import "./App.css";
 
@@ -504,14 +504,14 @@ export default function ZlegendsBot() {
      floor, confirmed from the logged rank_bot_moves data -- so anyone who
      never completed a full assessment restarts from the new, higher
      default rather than keeping a rating the old math dragged down. */
-  /* The one-step-ahead Rank Bot, on only in browsers that opened the site with
-     ?rankbot=test. These games stay out of the rating and its telemetry, and
-     are saved under their own label. */
+  /* Rank Bot's choices live in engine/shadowBot.js. This state is what it has
+     learned about the player this session, and the private readout that
+     ?rankbot=test shows under the board. */
   const [rankBotTest] = useState(readRankBotTest);
   const [rankTestNote, setRankTestNote] = useState(null);
-  const rankBotTestRef = useRef(rankBotTest);
   const shadowStateRef = useRef(null);
-  const gameLabel = () => (rankBotTestRef.current && difficultyRef.current.id === "rank" ? "Rank Bot Test" : difficultyRef.current.label);
+  /* The latest estimate of this player, once it's based on enough moves. */
+  const rankLevelRef = useRef(null);
 
   const [rankBotElo, setRankBotElo] = useState(() => {
     if (loadSetting("rankBotVersion", 1) < 2) {
@@ -535,27 +535,10 @@ export default function ZlegendsBot() {
      there are enough for a new checkpoint, then reset. */
   const [rankBotAssessedElo, setRankBotAssessedElo] = useState(() => loadSetting("rankBotAssessedElo", null));
   const rankBotRecentGameElosRef = useRef(loadSetting("rankBotRecentGameElos", []));
-  /* Last few of the player's own move-quality scores this game -- reset
-     each new game, not persisted. v3 uses it only for sandbag detection
-     (counting recent throws), not for smoothing: v2 fed the window
-     average back into the step on top of the per-move step, which
-     double-counted every blunder across the next four moves and was a
-     big part of why the dial could only fall. */
-  const rankBotWindowRef = useRef([]);
-  /* How many post-opening player moves the dial tracked this game --
+  /* How many post-opening moves Rank Bot tracked this game --
      an abandoned game with enough of these still counts toward the
      assessment (see maybeCountAbandonedRankGame). */
   const rankBotTrackedRef = useRef(0);
-  /* Dial value when this game's first tracked move landed -- the anchor
-     for RANK_BOT_MAX_GAME_DROP's per-game floor. Null until then. */
-  const rankBotGameStartEloRef = useRef(null);
-  /* Bumped on every undo/new-game/abandon -- an in-flight adjustRankBotDial
-     probe (two 250ms searches) captures the epoch when it starts and
-     checks it again before applying its result, so undoing a move can't
-     let a stale probe for a move that no longer happened still nudge the
-     dial and log a row (confirmed in production data: a duplicate ply
-     entry from exactly this race). */
-  const rankBotEpochRef = useRef(0);
   /* Client-generated id linking one Rank Bot game's rank_bot_moves rows
      back to its single games-table row (that insert is fire-and-forget
      and doesn't return its own id) -- lazily created on this game's first
@@ -570,6 +553,7 @@ export default function ZlegendsBot() {
     }
     return rankBotGameUidRef.current;
   };
+  const ensureRankBotGameUidRef = useRef(ensureRankBotGameUid);
   /* Recovers a returning player's rating on a fresh browser/device --
      only if localStorage has never seen a Rank Bot game here, so it
      can't clobber an in-progress session's own local state. */
@@ -1050,28 +1034,11 @@ export default function ZlegendsBot() {
   const stockfishMove = useCallback((diff) => {
     const fen = eng.fen();
     const mainSearch = stockfishBestMove(fen, diff.stockfishElo, diff.moveTimeMs || 1000);
-    /* Rank Bot only: a short full-strength sanity check run alongside the
-       calibrated search. Testing this directly against the engine showed
-       why this needs its own search rather than just reading diff's own
-       result -- UCI_LimitStrength doesn't just search shallower, it
-       deliberately weakens Stockfish's play, so a low-Elo search can
-       simply fail to notice a one-move queen capture even given ample
-       time (confirmed: 600 Elo missed it at 900ms/1200ms in testing,
-       while full strength found it consistently even at 300ms). Piece
-       value/board reality has to come from a search that isn't itself
-       handicapped -- the calibrated search stays in charge of "how" the
-       bot plays, this only overrides "whether it takes the free queen". */
-    const sanitySearch = diff.adaptive ? stockfishBestMove(fen, 3190, RANK_BOT_SANITY_MS) : Promise.resolve(null);
-    return Promise.all([mainSearch, sanitySearch]).then(([{ uci, info }, sanity]) => {
+    return mainSearch.then(({ uci, info }) => {
       if (!uci) return null;
       let move = eng.moveFromUci(uci);
-      let score = info ? info.score : 0;
-      const sanityMove = sanity && sanity.info && sanity.info.score >= RANK_BOT_SWING_CP && sanity.uci
-        ? eng.moveFromUci(sanity.uci) : null;
-      if (sanityMove) {
-        move = sanityMove;
-        score = sanity.info.score;
-      } else if (move && diff.blunderChance && Math.random() < diff.blunderChance) {
+      const score = info ? info.score : 0;
+      if (move && diff.blunderChance && Math.random() < diff.blunderChance) {
         const legal = eng.legalMoves();
         if (legal.length) move = legal[(Math.random() * legal.length) | 0];
       }
@@ -1087,15 +1054,24 @@ export default function ZlegendsBot() {
 
   const shadowMove = useCallback(async () => {
     const started = Date.now();
-    const [{ chooseShadowMove }, { newGameState, START_MISTAKE }] = await Promise.all([
+    const [{ chooseShadowMove }, { newGameState }] = await Promise.all([
       import("./engine/shadowBot"), import("./utils/rankBotShadow"),
     ]);
-    shadowStateRef.current ??= newGameState(loadSetting("rankBotTestMistake", START_MISTAKE));
-    const res = await chooseShadowMove(eng.fen(), eng.plyCount(), shadowStateRef.current);
+    shadowStateRef.current ??= newGameState(loadSetting("rankBotProfile", {}));
+    const ply = eng.plyCount();
+    const res = await chooseShadowMove(eng.fen(), ply, shadowStateRef.current);
     const move = res && eng.moveFromUci(res.uci);
     if (!move) return null;
-    saveSetting("rankBotTestMistake", shadowStateRef.current.mistake);
+    const { recent, peakElo } = shadowStateRef.current;
+    saveSetting("rankBotProfile", { recent, peakElo });
     setRankTestNote(res.note);
+    rankLevelRef.current = res.note.trusted ? res.note.playerElo : null;
+    if (ply > RANK_BOT_OPENING_PLIES) {
+      rankBotTrackedRef.current += 1;
+      if (res.note.cost != null) {
+        logRankBotMove({ gameUid: ensureRankBotGameUidRef.current(), ply, loss: res.note.cost, eloBefore: res.note.playerElo, eloAfter: res.note.playerElo });
+      }
+    }
     /* Some searches finish so fast that the reply would feel inhuman. */
     await new Promise((r) => setTimeout(r, Math.max(0, SHADOW_MIN_THINK_MS - (Date.now() - started))));
     return {
@@ -1103,119 +1079,6 @@ export default function ZlegendsBot() {
       depth: res.info.depth, nodes: res.info.nodes, time: res.note.totalMs, pv: res.info.pv, book: false,
     };
   }, [eng]);
-
-  /* Rank Bot has no fixed stockfishElo in DIFFICULTIES -- it's synthesized
-     here from the live dial every time a move is needed, so engineMove
-     doesn't need its own special case beyond this one substitution.
-     During the opening plies it plays unthrottled (3190 is Stockfish's
-     own UCI_Elo ceiling): everyone's theory moves are "perfect", so a
-     weakened bot stumbling out of a normal opening reads as random
-     rather than adaptive, and the dial isn't measuring yet anyway. */
-  const effectiveDifficulty = (diff) => {
-    if (!diff.adaptive) return diff;
-    if (eng.plyCount() < RANK_BOT_OPENING_PLIES) {
-      return { ...diff, stockfishElo: 3190, blunderChance: 0 };
-    }
-    let elo = rankBotEloRef.current;
-    /* Real-time material/eval reality check, evaluated fresh every move
-       (cheap -- reuses the existing static eval, no extra search) rather
-       than waiting on the slow per-move dial to catch up:
-       - bot is getting crushed (a hung queen, a blundered piece) -> play
-         its actual best move this instant regardless of calibration;
-       - bot is already crushing the player -> cap its own strength down
-         so the position doesn't snowball into a blowout. */
-    const botColorNow = -playerColorRef.current;
-    const whiteEval = eng.evalWhite();
-    const botAdvantageCp = botColorNow === 1 ? whiteEval : -whiteEval;
-    if (botAdvantageCp <= -RANK_BOT_SWING_CP) elo = RANK_BOT_MAX_ELO;
-    else if (botAdvantageCp >= RANK_BOT_SWING_CP) elo = Math.min(elo, RANK_BOT_DOMINANT_CAP);
-    return { ...diff, stockfishElo: Math.max(elo, STOCKFISH_MIN_ELO), blunderChance: rankBotBlunderChance(elo) };
-  };
-
-  /* Runs after each of the player's own moves (playMove only -- not
-     puzzles/analysis/quiz), purely when Rank Bot is the opponent. Two
-     quick background searches (before/after the move, same shape as the
-     N+1-search trick gradeMoves uses for move-grading) estimate how much
-     eval the player's actual move gave up; rankBotLossToPerf maps that to
-     an implied performance Elo and the dial EWMAs toward it (see the v3
-     block by the constants for why v2's threshold steps had to go).
-     Opening plies are skipped entirely: they're theory, their measured
-     "loss" is mostly probe noise, and letting them into the estimate was
-     masking the player's real level. */
-  const adjustRankBotDial = (prefixBefore, prefixAfter, gameOver) => {
-    if (difficultyRef.current.id !== "rank" || gameOver || rankBotTestRef.current) return;
-    if (prefixAfter.length <= RANK_BOT_OPENING_PLIES) return;
-    const gameUid = ensureRankBotGameUid();
-    const ply = prefixAfter.length;
-    const epoch = rankBotEpochRef.current;
-    Promise.all([
-      runSearch(prefixBefore, RANK_BOT_PROBE_MS, 0, { useBook: false }),
-      runSearch(prefixAfter, RANK_BOT_PROBE_MS, 0, { useBook: false }),
-    ]).then(([before, after]) => {
-      if (rankBotEpochRef.current !== epoch) return; // undone/reset since this probe started
-      if (!before || !after) return;
-      /* Mate-range scores don't behave like normal centipawn evals -- two
-         shallow (250ms) probe searches finding forced mate at slightly
-         different distances can disagree by tens of thousands of "cp",
-         which reads as a catastrophic blunder even when the player's
-         move was fine or literally the best move in a mating sequence.
-         Confirmed from logged games: this is what was smashing the dial
-         back to the floor mid-mate even while the player kept playing
-         cleanly. Skip the whole adjustment rather than trust either
-         number once either side sees mate. */
-      if (Math.abs(before.score) > MATE - 2000 || Math.abs(after.score) > MATE - 2000) return;
-      const loss = Math.max(0, before.score + after.score);
-      const window = rankBotWindowRef.current;
-      const prevLoss = window.length ? window[window.length - 1] : 0;
-      window.push(loss);
-      if (window.length > 8) window.shift();
-      rankBotTrackedRef.current += 1;
-      const eloBefore = rankBotEloRef.current;
-      if (rankBotGameStartEloRef.current == null) rankBotGameStartEloRef.current = eloBefore;
-      /* v3.1 sandbag/erratic-play handling, retuned from the first game
-         of live v3 telemetry. v3 dampened only DOWN-steps while the
-         window looked suspect, which the data showed backfiring for a
-         genuinely erratic player: their hung pieces got discounted while
-         their (often forced) "perfect" replies pulled hard toward 3000,
-         so a 203cp-average-loss game still climbed 700+ Elo. Two fixes:
-         - A clean move immediately after a throw caps at 2400 implied
-           perf -- a lone 0-loss reply right after hanging a piece is
-           usually a forced recapture the probe scores as perfect, not
-           GM-level insight.
-         - Once the window is suspect (3+ throws), the dial dampens in
-           BOTH directions: uncertainty about whether play is genuine
-           should freeze the estimate, not ratchet it either way. The
-           game-outcome step still lands full-size at the end either
-           way, so manipulated games mostly just... lose. */
-      const throwsInWindow = window.filter(l => l >= RANK_BOT_THROW_CP).length;
-      const windowSuspect = throwsInWindow > RANK_BOT_THROWS_TO_SUSPECT;
-      const mult = rankBotGamesRef.current < RANK_BOT_CALIBRATION_GAMES ? RANK_BOT_CALIBRATION_MULT : 1;
-      let perf = rankBotLossToPerf(loss);
-      if (loss < 20 && prevLoss >= RANK_BOT_THROW_CP) perf = Math.min(perf, 2400);
-      let step = (perf - eloBefore) * RANK_BOT_EWMA_K * mult;
-      if (windowSuspect) step *= RANK_BOT_SUSPECT_WEIGHT;
-      /* Soft per-game ceiling: taper (not clamp) an upward step as this
-         game's own climb approaches RANK_BOT_MAX_GAME_CLIMB, so a player
-         who's clearly stronger than the dial still gets recognized fast
-         early in the game -- it just runs out of room rather than
-         stopping dead, unlike the hard drop floor below. */
-      if (step > 0) {
-        const climbedSoFar = Math.max(0, eloBefore - rankBotGameStartEloRef.current);
-        step *= Math.max(0, 1 - climbedSoFar / RANK_BOT_MAX_GAME_CLIMB);
-      }
-      /* Per-game floor: however this game goes, the dial can't be dragged
-         down more than RANK_BOT_MAX_GAME_DROP from where it started. */
-      const gameFloor = Math.max(RANK_BOT_MIN_ELO, rankBotGameStartEloRef.current - RANK_BOT_MAX_GAME_DROP);
-      let next = Math.round(eloBefore + step);
-      next = Math.max(gameFloor, Math.min(RANK_BOT_MAX_ELO, next));
-      if (next !== eloBefore) {
-        rankBotEloRef.current = next;
-        setRankBotElo(next);
-        saveSetting("rankBotElo", next);
-      }
-      logRankBotMove({ gameUid, ply, loss, eloBefore, eloAfter: next });
-    });
-  };
 
   const engineSearchIdRef = useRef(0);
   const engineMove = useCallback((currentMoveList) => {
@@ -1234,13 +1097,12 @@ export default function ZlegendsBot() {
       setThinking(false);
       rerender();
     };
-    const diff = effectiveDifficulty(difficultyRef.current);
+    const diff = difficultyRef.current;
     const botColorNow = -playerColorRef.current;
     const whiteEvalNow = eng.evalWhite();
     const botAdvantagePawns = (botColorNow === 1 ? whiteEvalNow : -whiteEvalNow) / 100;
     const personality = pickPersonality(gameStyleRef.current, eng.plyCount(), botAdvantagePawns);
-    const testGame = rankBotTestRef.current && difficultyRef.current.id === "rank";
-    const searchPromise = testGame ? shadowMove() : diff.stockfishElo
+    const searchPromise = diff.id === "rank" ? shadowMove() : diff.stockfishElo
       ? stockfishMove(diff)
       : runSearch(currentMoveList, diff.ms, diff.blunderChance || 0, { personality, useBook: diff.book, bookStyle: diff.styleBook ? gameStyleRef.current.label : null });
     searchPromise.then((res) => {
@@ -1262,11 +1124,11 @@ export default function ZlegendsBot() {
           setReviewIndex(eng.plyCount());
           const isRankBot = difficultyRef.current.id === "rank";
           saveGame({
-            difficultyLabel: gameLabel(), playerColor: playerColorRef.current, moveList: newMoveList,
+            difficultyLabel: difficultyRef.current.label, playerColor: playerColorRef.current, moveList: newMoveList,
             result: over, finalEval: whiteScore, style: gameStyleRef.current.label, engineVersion: ENGINE_VERSION,
             gameUid: isRankBot ? rankBotGameUidRef.current : null, rankEloAtGame: isRankBot ? rankBotEloRef.current : null,
           });
-          finishRankBotGame(over);
+          finishRankBotGame();
         }
       }
       finish();
@@ -1386,30 +1248,21 @@ export default function ZlegendsBot() {
     setTimeout(() => spectateMoveRef.current(), 60);
   };
 
-  const finishRankBotGame = (over) => {
-    if (rankBotTestRef.current) return;
+  const finishRankBotGame = () => {
     if (difficultyRef.current.id !== "rank") return;
     const games = rankBotGamesRef.current + 1;
     rankBotGamesRef.current = games;
     setRankBotGames(games);
     saveSetting("rankBotGames", games);
-    rankBotWindowRef.current = [];
     rankBotGameUidRef.current = null;
     rankBotTrackedRef.current = 0;
-    rankBotGameStartEloRef.current = null;
 
-    /* Outcome feedback (v3) -- see RANK_BOT_RESULT_STEP. Abandoned games
-       pass no result and skip this; only decisive/drawn finishes count. */
-    if (over) {
-      const step = over.winner === playerColorRef.current ? RANK_BOT_RESULT_STEP.win
-        : over.winner ? RANK_BOT_RESULT_STEP.loss
-        : RANK_BOT_RESULT_STEP.draw;
-      const next = Math.max(RANK_BOT_MIN_ELO, Math.min(RANK_BOT_MAX_ELO, rankBotEloRef.current + step));
-      if (next !== rankBotEloRef.current) {
-        rankBotEloRef.current = next;
-        setRankBotElo(next);
-        saveSetting("rankBotElo", next);
-      }
+    /* The rating follows what the bot has measured. Results say little here,
+       since he's built to win almost every game. */
+    if (rankLevelRef.current != null && rankLevelRef.current !== rankBotEloRef.current) {
+      rankBotEloRef.current = rankLevelRef.current;
+      setRankBotElo(rankLevelRef.current);
+      saveSetting("rankBotElo", rankLevelRef.current);
     }
 
     const recent = [...rankBotRecentGameElosRef.current, rankBotEloRef.current];
@@ -1428,23 +1281,19 @@ export default function ZlegendsBot() {
   };
 
   /* An abandoned Rank Bot game (player hits New mid-game) still counts
-     toward the assessment if the dial tracked enough real moves --
+     toward the assessment if enough real moves were tracked --
      otherwise players who rarely play to checkmate would never complete
      3 "games" and never see their Elo. Finished games reset the tracked
      counter inside finishRankBotGame, so this can't double-count. */
   const maybeCountAbandonedRankGame = () => {
-    rankBotEpochRef.current += 1;
-    if (rankBotTrackedRef.current >= RANK_BOT_MIN_TRACKED_MOVES) finishRankBotGame(null);
-    rankBotWindowRef.current = [];
+    if (rankBotTrackedRef.current >= RANK_BOT_MIN_TRACKED_MOVES) finishRankBotGame();
     rankBotGameUidRef.current = null;
     rankBotTrackedRef.current = 0;
-    rankBotGameStartEloRef.current = null;
   };
 
   const playMove = useCallback((m) => {
     const cap = isCaptureMove(m);
     const san = eng.sanOf(m);
-    const prefixBefore = moveListRef.current;
     eng.make(m);
     try { cap ? audio.sfxCapture() : audio.sfxMove(); } catch { /* audio unavailable */ }
     setLastMove({ from: mFrom(m), to: mTo(m) });
@@ -1455,16 +1304,15 @@ export default function ZlegendsBot() {
     setEvalCp(eng.evalWhite());
     const over = checkGameOver();
     setResult(over);
-    adjustRankBotDial(prefixBefore, newMoveList, !!over);
     if (over) {
       setReviewIndex(eng.plyCount());
       const isRankBot = difficultyRef.current.id === "rank";
       saveGame({
-        difficultyLabel: gameLabel(), playerColor: playerColorRef.current, moveList: newMoveList,
+        difficultyLabel: difficultyRef.current.label, playerColor: playerColorRef.current, moveList: newMoveList,
         result: over, finalEval: eng.evalWhite(), style: gameStyleRef.current.label, engineVersion: ENGINE_VERSION,
         gameUid: isRankBot ? rankBotGameUidRef.current : null, rankEloAtGame: isRankBot ? rankBotEloRef.current : null,
       });
-      finishRankBotGame(over);
+      finishRankBotGame();
     }
     rerender();
     if (!over) engineMoveRef.current(newMoveList);
@@ -1601,7 +1449,7 @@ export default function ZlegendsBot() {
     if (moveListRef.current.length < 8) return;
     const isRankBot = difficultyRef.current.id === "rank";
     saveGame({
-      difficultyLabel: gameLabel(), playerColor: playerColorRef.current, moveList: moveListRef.current,
+      difficultyLabel: difficultyRef.current.label, playerColor: playerColorRef.current, moveList: moveListRef.current,
       result: { text: "*", reason: "Abandoned" }, finalEval: eng.evalWhite(), style: gameStyleRef.current.label,
       engineVersion: ENGINE_VERSION,
       gameUid: isRankBot ? rankBotGameUidRef.current : null, rankEloAtGame: isRankBot ? rankBotEloRef.current : null,
@@ -2200,19 +2048,10 @@ export default function ZlegendsBot() {
     let n;
     if (quizOpening) n = 1; // quiz: the player supplies every ply, so always step back exactly one
     else if (eng.getSide() === playerColor && eng.plyCount() >= 2) n = 2; else n = 1;
-    /* Bump first (see rankBotEpochRef): any adjustRankBotDial probe still
-       in flight for the move(s) being undone will find its epoch stale
-       and discard its result instead of logging/adjusting for a move
-       that's about to stop existing. n===2 means a full player+bot pair
-       is being undone -- if that player move was past the opening and
-       already got tracked, unwind that bookkeeping too rather than
-       leaving the count/window one move ahead of reality. */
+    /* A full player+bot pair going back past the opening stops counting
+       toward the game's tracked moves. */
     if (n === 2 && difficultyRef.current.id === "rank" && moveListRef.current.length - n >= RANK_BOT_OPENING_PLIES) {
-      rankBotEpochRef.current += 1;
-      rankBotWindowRef.current.pop();
       rankBotTrackedRef.current = Math.max(0, rankBotTrackedRef.current - 1);
-    } else if (difficultyRef.current.id === "rank") {
-      rankBotEpochRef.current += 1;
     }
     for (let i = 0; i < n; i++) eng.unmake();
     const newMoveList = moveListRef.current.slice(0, moveListRef.current.length - n);

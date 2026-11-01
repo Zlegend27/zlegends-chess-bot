@@ -1,7 +1,7 @@
 import { loadSetting, saveSetting } from "./storage";
 
-/* The hidden Rank Bot test mode. Open the site once with ?rankbot=test to
-   turn it on for this browser, and ?rankbot=off to turn it off. */
+/* Rank Bot's private readout under the board. Open the site once with
+   ?rankbot=test to show it in this browser, and ?rankbot=off to hide it. */
 const KEY = "rankBotTest";
 
 export function readRankBotTest(search = window.location.search) {

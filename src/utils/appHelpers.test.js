@@ -1,7 +1,6 @@
 import { describe, test, expect } from "vitest";
 import { createEngine } from "../engine/chessEngine";
 import { DIFFICULTIES } from "./difficulties";
-import { rankBotLossToPerf, rankBotBlunderChance } from "./rankBotMath";
 import { BALANCED, pickPersonality } from "./personalities";
 import { detectOpening } from "./openingDetect";
 import { dailyPuzzle, todayKey } from "./dailyPuzzle";
@@ -13,20 +12,6 @@ describe("difficulty tiers", () => {
   test("the Elo tiers come first, then Rank Bot, then the homemade engine", () => {
     expect(DIFFICULTIES.map((d) => d.label)).toEqual(["1000 Elo", "1500 Elo", "2000 Elo", "Rank Bot", "Casual", "Master"]);
     expect(DIFFICULTIES.find((d) => d.id === "rank")).toBeTruthy();
-  });
-});
-
-describe("Rank Bot maths", () => {
-  test("a move's centipawn loss maps to the strength it resembles", () => {
-    expect(rankBotLossToPerf(0)).toBe(3000);
-    expect(rankBotLossToPerf(25)).toBe(1700);
-    expect(rankBotLossToPerf(500)).toBe(450);
-  });
-
-  test("the blunder chance only applies below Stockfish's floor", () => {
-    expect(rankBotBlunderChance(2000)).toBe(0);
-    expect(rankBotBlunderChance(1000)).toBeGreaterThanOrEqual(0.3);
-    expect(rankBotBlunderChance(0)).toBeLessThanOrEqual(0.75);
   });
 });
 

@@ -172,7 +172,7 @@ export default function PlayView({ rankTestNote, GRADE_COLOR, GRADE_TAG, MoodImg
 
           {rankTestNote && (
             <div className="text-center font-mono text-xs" style={{ color: "var(--dim)" }}>
-              Test mode{rankTestNote.step != null && <> · lead {(rankTestNote.lead / 100).toFixed(1)} · step {(rankTestNote.step / 100).toFixed(1)} · you ~{rankTestNote.playerElo} · {rankTestNote.closing ? "closing" : "human " + rankTestNote.maia} · {(rankTestNote.totalMs / 1000).toFixed(1)}s</>}
+              Test mode{rankTestNote.step != null && <> · lead {(rankTestNote.lead / 100).toFixed(1)} · step {(rankTestNote.step / 100).toFixed(1)} · you ~{rankTestNote.playerElo} (up to {rankTestNote.potential}) · {rankTestNote.mode} · {(rankTestNote.totalMs / 1000).toFixed(1)}s</>}
             </div>
           )}
           <div className={"card youCard" + (mode === "play" && !result && !thinking && !pastedGame && eng.getSide() === playerColor ? " turnGlow" : "")}>
