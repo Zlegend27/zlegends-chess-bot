@@ -232,10 +232,10 @@ export default function YouTubeTv({ sweetheart }) {
       </div>
       {video && (
         <div className="flex max-w-[300px] flex-col items-center gap-1">
-          <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[13px] font-extrabold tracking-wide" style={{ background: "#FF0000", color: "#FFFFFF" }}>
+          <a href={`https://www.youtube.com/shorts/${video.id}`} target="_blank" rel="noopener noreferrer" aria-label="Watch this Short on YouTube" className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-[13px] font-extrabold tracking-wide no-underline" style={{ background: "#FF0000", color: "#FFFFFF" }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
             Z27Tube
-          </span>
+          </a>
           <BotBubble line={video.title} muted avatarSize={40} />
         </div>
       )}
