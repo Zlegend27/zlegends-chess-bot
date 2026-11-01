@@ -1,8 +1,8 @@
 import { loadSetting, saveSetting } from "./storage";
 
-/* The browser remembers the answer for 12 hours as well, so a returning
+/* The browser remembers the answer for an hour as well, so a returning
    visitor doesn't ask the server again. The server caches the same way. */
-export const SHORT_TTL_MS = 12 * 60 * 60 * 1000;
+export const SHORT_TTL_MS = 60 * 60 * 1000;
 const KEY = "latestShort";
 
 /** Whatever was remembered, if it's still fresh. */

@@ -28,14 +28,14 @@ describe("finding the newest Short", () => {
   });
 });
 
-describe("remembering the answer for 12 hours", () => {
+describe("remembering the answer for an hour", () => {
   const video = { id: "m9RvsiZL8Cs", title: "x", published: null };
 
-  test("fresh within 12 hours", () => {
+  test("fresh within an hour", () => {
     expect(freshShort({ video, fetchedAt: 1000 }, 1000 + SHORT_TTL_MS - 1)).toEqual(video);
   });
 
-  test("stale after 12 hours", () => {
+  test("stale after an hour", () => {
     expect(freshShort({ video, fetchedAt: 1000 }, 1000 + SHORT_TTL_MS)).toBeNull();
     expect(freshShort(undefined)).toBeNull();
   });

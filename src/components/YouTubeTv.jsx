@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { fetchLatestShort } from "../utils/latestShort";
+import BotBubble from "./BotBubble";
 
 /* The TV on Home plays your newest Short while it sits near the middle of
    the screen, and pauses when it's scrolled away. Browsers only let a video
@@ -71,6 +72,8 @@ export default function YouTubeTv({ sweetheart }) {
   const frameRef = useRef(null);
   const timerRef = useRef(null);
   const soundRef = useRef(false);
+  const playingRef = useRef(false);
+  const [isPlaying, setIsPlaying] = useState(false);
   const wantRef = useRef("pause");
   const applyRef = useRef(null);
 
@@ -136,7 +139,12 @@ export default function YouTubeTv({ sweetheart }) {
       if (e.source !== frameRef.current?.contentWindow || typeof e.data !== "string") return;
       try {
         const data = JSON.parse(e.data);
-        if (data.event === "infoDelivery" && data.info?.playerState === 1) setPlaying(true);
+        if (data.event === "infoDelivery" && typeof data.info?.playerState === "number") {
+          const on = data.info.playerState === 1;
+          playingRef.current = on;
+          setIsPlaying(on);
+          if (on) setPlaying(true);
+        }
       } catch { /* not a player message */ }
     };
     window.addEventListener("message", onMessage);
@@ -149,12 +157,18 @@ export default function YouTubeTv({ sweetheart }) {
     };
   }, [video]);
 
-  /* A tap is the one gesture every browser accepts for sound. */
+  /* A tap plays with sound, or pauses if it's already playing. A tap is the
+     one gesture every browser accepts for sound. */
   const tap = () => {
-    soundRef.current = true;
-    setSoundOn(true);
     clearTimeout(timerRef.current);
     timerRef.current = null;
+    if (playingRef.current) {
+      wantRef.current = "pause";
+      applyRef.current?.();
+      return;
+    }
+    soundRef.current = true;
+    setSoundOn(true);
     wantRef.current = "play";
     applyRef.current?.();
   };
@@ -195,10 +209,13 @@ export default function YouTubeTv({ sweetheart }) {
               />
               <button
                 type="button"
-                aria-label={soundOn ? "Playing your latest Short" : "Play your latest Short with sound"}
+                aria-label={isPlaying ? "Pause your latest Short" : "Play your latest Short with sound"}
                 onClick={tap}
                 className="absolute inset-0 cursor-pointer border-0 bg-transparent focus-visible:outline-none"
               >
+                <span aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center text-2xl text-white opacity-0 transition-opacity drop-shadow group-hover:opacity-100">
+                  {isPlaying ? "❚❚" : "▶"}
+                </span>
                 {!soundOn && (
                   <span className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-black/70 px-3 py-1 text-[11px] font-bold text-white opacity-0 transition-opacity group-hover:opacity-100">
                     Tap for sound
@@ -214,9 +231,10 @@ export default function YouTubeTv({ sweetheart }) {
         </div>
       </div>
       {video && (
-        <p className={"m-0 max-w-[260px] text-center text-xs " + T.ink}>
-          Latest Short: <span className="font-bold">{video.title}</span>
-        </p>
+        <div className="flex max-w-[300px] flex-col items-center gap-1">
+          <span className={`text-[11px] font-bold uppercase tracking-[0.3em] ${T.accentText}`}>Z27Tube</span>
+          <BotBubble line={video.title} muted avatarSize={40} />
+        </div>
       )}
     </div>
   );

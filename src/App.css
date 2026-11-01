@@ -720,10 +720,11 @@ select:hover{ border-color:var(--cyan); }
   border-radius:var(--r-md) var(--r-md) var(--r-md) var(--r-2xs); padding:10px 30px 10px 14px;
   font-size:13.5px; color:var(--liliac); line-height:1.5; cursor:pointer; backdrop-blur:8px; }
 .botBubbleCaret{ color:var(--cyan); animation:blink 1s infinite; }
-.botBubbleClose{ position:absolute; top:4px; right:4px; width:44px; height:44px; display:flex; align-items:center; justify-content:center; font-size:14px; border:none; background:transparent;
-  color:var(--dim); font-size:11px; cursor:pointer; display:flex; align-items:center; justify-content:center;
-  border-radius:50%; transition:color .15s ease, background .15s ease; }
+.botBubbleClose{ position:absolute; top:2px; right:2px; width:44px; height:44px; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:700; line-height:1; border-radius:50%; color:var(--white); border:none; background:#8B2FC92E;
+  cursor:pointer; transition:color .15s ease, background .15s ease; }
 .botBubbleClose:hover{ color:var(--white); background:#8B2FC933; }
+/* Keeps the words clear of the close button. */
+.botBubble:has(> .botBubbleClose){ padding-right:52px; }
 /* Renders as ErrorBoundary's fallback in main.jsx -- replaces <App/>
    entirely on a crash, so it's never actually a descendant of .root.
    Safe to use the bare tokens directly (no var(--x, literal) fallback

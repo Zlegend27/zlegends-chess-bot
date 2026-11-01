@@ -5,11 +5,11 @@
    date from the feed. It runs on the server because YouTube doesn't allow
    browsers to read these pages directly.
 
-   Vercel caches the answer for 12 hours, so the channel is checked at most
-   twice a day no matter how many people open the site. */
+   Vercel caches the answer for an hour, so the channel is checked at most
+   once an hour no matter how many people open the site. */
 const CHANNEL_HANDLE = "Zlegend27";
 const CHANNEL_ID = "UC37m20fElWAcq9_E0vR2iNg";
-const TWELVE_HOURS = 12 * 60 * 60;
+const ONE_HOUR = 60 * 60;
 const UA = "Mozilla/5.0 (compatible; zlegends-chess-bot)";
 
 /** The newest Short's id from a Shorts-tab page, or null. */
@@ -39,7 +39,7 @@ export default async function handler(req, res) {
     const id = newestShortId(shortsPage);
     const video = id && entryFor(feed, id);
     if (!video) throw new Error("no short found");
-    res.setHeader("Cache-Control", `s-maxage=${TWELVE_HOURS}, stale-while-revalidate=3600`);
+    res.setHeader("Cache-Control", `s-maxage=${ONE_HOUR}, stale-while-revalidate=3600`);
     res.status(200).json(video);
   } catch {
     res.setHeader("Cache-Control", "no-store");
