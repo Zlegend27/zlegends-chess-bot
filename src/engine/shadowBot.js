@@ -15,6 +15,10 @@ import {
 import { maiaChances } from "./maiaEngine";
 import { stockfishAnalyze } from "./stockfishEngine";
 
+/* Saved with every move, so results can be compared across rule changes.
+   Raise it when the rules change. */
+const DESIGN_VERSION = 2;
+
 const SEARCH_NODES = 90000;
 const SEARCH_LINES = 18;
 const CHECK_NODES = 200000;
@@ -88,15 +92,18 @@ async function trapValues(fen, options, levels, started, pace) {
   return traps;
 }
 
-/** The first of `ranked` that still holds the lead when searched deeper, or
- *  null. Returns the deeper score too, since that's the truer one. */
+/** The first of `ranked` that still holds the lead when searched deeper, if
+ *  any, with the deeper score since that's the truer one. Also says how many
+ *  failed the check. */
 async function firstSound(fen, ranked, step, pace) {
+  let rejected = 0;
   for (const option of ranked.slice(0, CHECKED_MOVES)) {
     const res = await stockfishAnalyze(fen, { nodes: Math.round(CHECK_NODES * pace), multiPv: 1, searchMoves: [option.uci] });
     const score = reviewCp(res.lines[0]?.score ?? -MATE_EVAL);
-    if (score >= step) return { ...option, score };
+    if (score >= step) return { sound: { ...option, score }, rejected };
+    rejected++;
   }
-  return null;
+  return { sound: null, rejected };
 }
 
 /** `state` comes from newGameState and is updated in place. Returns the
@@ -116,8 +123,13 @@ export async function chooseShadowMove(fen, ply, state) {
   const closing = isClosing(ply, state.closePly, pieceCount(at(fen)));
   const leadLost = isLeadLost(lines[0], step);
 
+  const searchMs = Date.now() - started;
   let pick = lines[0];
   let mode = closing ? "closing" : "best";
+  let chances = null;
+  let traps = {};
+  let optionCount = 1;
+  let rejected = 0;
   if (!closing && !leadLost) {
     const hangs = (uci) => {
       const probe = at(fen);
@@ -125,21 +137,25 @@ export async function chooseShadowMove(fen, ply, state) {
       return Math.max(0, ...Object.values(hangingPieces(probe))) >= REAL_PIECE;
     };
     const options = optionsFor(lines, step, hangs);
+    optionCount = options.length;
     let ranked = rankOptions(options, step, null);
     mode = "human";
     if (options.length > 1) {
       try {
-        const chances = await maiaChances(fen, levels.botElo, levels.potential, options.map((o) => o.uci));
+        chances = await maiaChances(fen, levels.botElo, levels.potential, options.map((o) => o.uci));
         const likeliest = [...options].sort((a, b) => chances[b.uci] - chances[a.uci]).slice(0, TRAP_OPTIONS);
-        ranked = rankOptions(options, step, chances, await trapValues(fen, likeliest, levels, started, pace));
+        traps = await trapValues(fen, likeliest, levels, started, pace);
+        ranked = rankOptions(options, step, chances, traps);
       } catch {
+        chances = null;
         mode = "maia failed";
       }
     }
     if (ranked[0] !== lines[0]) {
-      const sound = await firstSound(fen, ranked, step, pace);
-      pick = sound ?? lines[0];
-      if (!sound) mode = "best";
+      const check = await firstSound(fen, ranked, step, pace);
+      rejected = check.rejected;
+      pick = check.sound ?? lines[0];
+      if (!check.sound) mode = "best";
     }
   }
   state.expected = pick.score;
@@ -147,8 +163,18 @@ export async function chooseShadowMove(fen, ply, state) {
   return {
     uci: pick.uci, score: pick.score, info: pick.info,
     note: {
-      lead: lines[0].score, step: Math.round(step), playerElo: levels.elo, potential: levels.potential, mode, cost,
-      trusted: isTrusted(state), totalMs: Date.now() - started,
+      v: DESIGN_VERSION, mode, cost, uci: pick.uci, best: lines[0].uci,
+      /* Where the move sat in the engine's list: 1 is its first choice. */
+      rank: lines.findIndex((l) => l.uci === pick.uci) + 1,
+      lead: lines[0].score, after: pick.score, material: lines[0].material, moveMaterial: pick.material,
+      step: Math.round(step), mistake: Math.round(mistakeFor(state.recent)), moves: state.recent.length,
+      playerElo: levels.elo, potential: levels.potential, botElo: levels.botElo, trusted: isTrusted(state),
+      /* Whether Maia3 helped choose this move, and how it read the options. */
+      human: chances != null, options: optionCount,
+      chance: chances ? Math.round((chances[pick.uci] ?? 0) * 100) : null,
+      topChance: chances ? Math.round(Math.max(...Object.values(chances)) * 100) : null,
+      trap: traps[pick.uci] != null ? Math.round(traps[pick.uci]) : null,
+      rejected, pace: Math.round(pace * 100) / 100, searchMs, totalMs: Date.now() - started,
     },
   };
 }

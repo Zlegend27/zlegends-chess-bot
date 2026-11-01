@@ -19,7 +19,7 @@ import { loadSetting, saveSetting } from "./utils/storage";
 const RushThemeArt = lazy(() => import("./components/RushThemeArt"));
 import { getUiTheme } from "./utils/uiTheme";
 import { DIFFICULTIES } from "./utils/difficulties";
-import { RANK_BOT_DEFAULT_ELO, RANK_BOT_OPENING_PLIES, RANK_BOT_MIN_TRACKED_MOVES, RANK_BOT_ASSESSMENT_EVERY } from "./utils/rankBotMath";
+import { RANK_BOT_DEFAULT_ELO, RANK_BOT_OPENING_PLIES, RANK_BOT_MIN_TRACKED_MOVES, RANK_BOT_ASSESSMENT_EVERY, nextRankRating } from "./utils/rankBotMath";
 import { BALANCED, randomStyle, pickPersonality } from "./utils/personalities";
 import { detectOpening } from "./utils/openingDetect";
 import { todayKey, dailyPuzzle } from "./utils/dailyPuzzle";
@@ -1066,12 +1066,11 @@ export default function ZlegendsBot() {
     saveSetting("rankBotProfile", { recent, peakElo });
     setRankTestNote(res.note);
     rankLevelRef.current = res.note.trusted ? res.note.playerElo : null;
-    if (ply > RANK_BOT_OPENING_PLIES) {
-      rankBotTrackedRef.current += 1;
-      if (res.note.cost != null) {
-        logRankBotMove({ gameUid: ensureRankBotGameUidRef.current(), ply, loss: res.note.cost, eloBefore: res.note.playerElo, eloAfter: res.note.playerElo });
-      }
-    }
+    if (ply > RANK_BOT_OPENING_PLIES) rankBotTrackedRef.current += 1;
+    logRankBotMove({
+      gameUid: ensureRankBotGameUidRef.current(), ply, loss: res.note.cost ?? 0,
+      eloBefore: res.note.playerElo, eloAfter: res.note.playerElo, detail: res.note,
+    });
     /* Some searches finish so fast that the reply would feel inhuman. */
     await new Promise((r) => setTimeout(r, Math.max(0, SHADOW_MIN_THINK_MS - (Date.now() - started))));
     return {
@@ -1257,12 +1256,13 @@ export default function ZlegendsBot() {
     rankBotGameUidRef.current = null;
     rankBotTrackedRef.current = 0;
 
-    /* The rating follows what the bot has measured. Results say little here,
-       since he's built to win almost every game. */
-    if (rankLevelRef.current != null && rankLevelRef.current !== rankBotEloRef.current) {
-      rankBotEloRef.current = rankLevelRef.current;
-      setRankBotElo(rankLevelRef.current);
-      saveSetting("rankBotElo", rankLevelRef.current);
+    /* The rating follows what the bot has measured, a little each game.
+       Results say little here, since he's built to win almost every game. */
+    if (rankLevelRef.current != null) {
+      const next = nextRankRating(rankBotEloRef.current, rankLevelRef.current);
+      rankBotEloRef.current = next;
+      setRankBotElo(next);
+      saveSetting("rankBotElo", next);
     }
 
     const recent = [...rankBotRecentGameElosRef.current, rankBotEloRef.current];

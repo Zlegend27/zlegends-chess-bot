@@ -43,18 +43,22 @@ export async function fetchRankBotFromSupabase() {
  *  to the single games-table row for that game (see saveGame's gameUid
  *  param), so a game's whole difficulty curve can be reconstructed by
  *  querying rank_bot_moves for that game_uid ordered by ply. */
-export async function logRankBotMove({ gameUid, ply, loss, eloBefore, eloAfter }) {
+export async function logRankBotMove({ gameUid, ply, loss, eloBefore, eloAfter, detail }) {
   const supabase = await getSupabase();
   if (!supabase) return;
   try {
-    await supabase.from("rank_bot_moves").insert({
+    const row = {
       client_id: getClientId(),
       game_uid: gameUid,
       ply,
       loss: Math.round(loss),
       elo_before: eloBefore,
       elo_after: eloAfter,
-    });
+    };
+    const { error } = await supabase.from("rank_bot_moves").insert({ ...row, detail });
+    /* Before supabase/003_rank_bot_detail.sql has run there's no detail
+       column, and the basics are still worth keeping. */
+    if (error) await supabase.from("rank_bot_moves").insert(row);
   } catch {
     /* analysis log is a nice-to-have, not worth surfacing an error over */
   }

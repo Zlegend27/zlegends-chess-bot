@@ -9,8 +9,12 @@ import { MATE_EVAL } from "./reviewScoring.js";
 const START_MISTAKE = 38;
 const MAX_COUNTED_MISTAKE = 300;
 /* Moves remembered, across games, and how many it takes to trust them. */
-const MEMORY = 40;
-const TRUSTED_MOVES = 16;
+const MEMORY = 80;
+/* Below this many, the estimate leans on the starting guess. */
+const SETTLED_MOVES = 16;
+/* Enough moves to span a couple of games, before a rating or a best level
+   rests on them. */
+const TRUSTED_MOVES = 40;
 /* Once a game is decided, moves say little about skill, so they aren't
    counted. */
 const DECIDED_CP = 400;
@@ -51,7 +55,7 @@ export const newGameState = ({ recent = [], peakElo = 0, pace = 1 } = {}, random
 /** The player's average mistake, leaving out their worst moves. Early on,
  *  most of it is the starting guess. */
 export function mistakeFor(recent) {
-  const known = [...recent, ...new Array(Math.max(0, TRUSTED_MOVES - recent.length)).fill(START_MISTAKE)];
+  const known = [...recent, ...new Array(Math.max(0, SETTLED_MOVES - recent.length)).fill(START_MISTAKE)];
   const sorted = known.sort((a, b) => a - b).slice(0, Math.ceil(known.length * KEPT_SHARE));
   return sorted.reduce((a, b) => a + b, 0) / sorted.length;
 }
@@ -75,7 +79,7 @@ export function learnFromMove(state, best, ply) {
   if (state.expected == null || state.expectedPly !== ply - 2 || Math.abs(state.expected) >= DECIDED_CP) return null;
   const cost = Math.min(MAX_COUNTED_MISTAKE, Math.max(0, best - state.expected));
   state.recent = [...state.recent, cost].slice(-MEMORY);
-  if (state.recent.length >= MEMORY) state.peakElo = Math.max(state.peakElo, eloFor(mistakeFor(state.recent)));
+  if (state.recent.length >= TRUSTED_MOVES) state.peakElo = Math.max(state.peakElo, eloFor(mistakeFor(state.recent)));
   return cost;
 }
 

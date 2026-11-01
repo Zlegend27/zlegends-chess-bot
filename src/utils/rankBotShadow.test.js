@@ -44,10 +44,10 @@ describe("reading the player", () => {
   });
 
   test("the memory carries across games, and stays short", () => {
-    const state = { ...newGameState({ recent: full(10) }), expected: 0, expectedPly: 20 };
+    const state = { ...newGameState({ recent: new Array(80).fill(10) }), expected: 0, expectedPly: 20 };
     learnFromMove(state, 50, 22);
-    expect(state.recent).toHaveLength(40);
-    expect(state.recent[39]).toBe(50);
+    expect(state.recent).toHaveLength(80);
+    expect(state.recent[79]).toBe(50);
     expect(newGameState({ recent: [5], peakElo: 1500 })).toMatchObject({ recent: [5], peakElo: 1500 });
   });
 
@@ -81,7 +81,7 @@ describe("reading the player", () => {
   });
 
   test("the estimate is trusted only after enough moves", () => {
-    expect(isTrusted({ recent: [] })).toBe(false);
+    expect(isTrusted({ recent: new Array(20).fill(10) })).toBe(false);
     expect(isTrusted({ recent: full(10) })).toBe(true);
   });
 

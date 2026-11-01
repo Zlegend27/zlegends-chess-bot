@@ -11,3 +11,11 @@ export const RANK_BOT_MIN_TRACKED_MOVES = 8;
    directly. Every RANK_BOT_ASSESSMENT_EVERY completed games, this averages
    that batch into one displayed Elo. */
 export const RANK_BOT_ASSESSMENT_EVERY = 3;
+/* A rating closes a third of the gap to what was measured, and never moves
+   more than this in one game, so one rough game can't sink it. */
+const RATING_CLOSE_SHARE = 1 / 3;
+const MAX_RATING_STEP = 75;
+export function nextRankRating(rating, measured) {
+  const move = (measured - rating) * RATING_CLOSE_SHARE;
+  return Math.round(rating + Math.max(-MAX_RATING_STEP, Math.min(MAX_RATING_STEP, move)));
+}
