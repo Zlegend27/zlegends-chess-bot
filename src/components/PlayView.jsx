@@ -71,16 +71,13 @@ export default function PlayView({ rechecking, betterMoveLine, rankTestNote, GRA
                 <div className="cardName bot">{pastedGame && reviewInfo ? (botColor === 1 ? reviewInfo.white : reviewInfo.black) : spectateMode ? `${DIFFICULTIES[botColor === 1 ? spectateWhiteIdx : spectateBlackIdx].label} (${botColor === 1 ? "White" : "Black"})` : "Zlegend2700"}</div>
                 {!pastedGame && <div className="trayEmpty">{gameStyle.label} today</div>}
                 {!spectateMode && !pastedGame && difficultyRef.current.id === "rank" && (
-                  /* The checkpointed level, not the live dial. rankBotElo
-                     moves after every move and was being printed straight
-                     here, so the bot's own card could read a different
-                     number from the player card a second later. The
-                     checkpoint only changes every few games, and is the
-                     same number the player card shows. */
+                  /* He plays relative to the player, so this names their level
+                     rather than a strength of his own. It's the checkpointed
+                     number, the same one the player card shows. */
                   <div className="trayEmpty openingTag" title="Rank Bot adapts to how you play">
                     {rankBotAssessedElo == null
                       ? "Still learning your level"
-                      : `Playing around ~${rankBotAssessedElo} Elo`}
+                      : `One step ahead of ~${rankBotAssessedElo} Elo`}
                   </div>
                 )}
                 {liveOpening && (
@@ -127,8 +124,10 @@ export default function PlayView({ rechecking, betterMoveLine, rankTestNote, GRA
                 {arrowLine && (() => {
                   /* One geometry for every theme now (see arrowLine above)
                      -- only the color differs: chess.com green on the
-                     Standard board, this app's yellow everywhere else. */
-                  const std = boardColorId === "standard";
+                     Standard board, this app's yellow everywhere else. The
+                     green better-move arrow takes priority, so the two can
+                     always be told apart. */
+                  const std = boardColorId === "standard" && !betterMoveLine;
                   const color = std ? "#15A310" : "#F5D93E";
                   const opacity = std ? 0.8 : 0.85;
                   return (

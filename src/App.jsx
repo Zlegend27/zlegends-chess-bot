@@ -841,7 +841,7 @@ export default function ZlegendsBot() {
     return () => { cancelled = true; };
   }, [canAnalyze, reviewing, analyzing, posVersion, moveList, reviewIndex, analysisExtra, gradeDetail, eng, runSearch]);
 
-  const isCaptureMove = m => eng.pieceAt(M120TO64[mTo(m)]) !== EMPTY || (mFlags(m) & 1);
+  const isCaptureMove = useCallback((m) => eng.pieceAt(M120TO64[mTo(m)]) !== EMPTY || (mFlags(m) & 1), [eng]);
 
   const analysisMove = useCallback((m) => {
     const cap = isCaptureMove(m);
@@ -855,7 +855,7 @@ export default function ZlegendsBot() {
     setAnalysisExtra(prev => [...prev, san]);
     setPosVersion(v => v + 1);
     rerender();
-  }, [eng, audio]);
+  }, [eng, audio, isCaptureMove]);
 
   const toggleAnalyze = () => {
     if (!canAnalyze) return;
@@ -1191,7 +1191,7 @@ export default function ZlegendsBot() {
          worker) only ever resolves; this covers the Stockfish tiers. */
       finish();
     });
-  }, [eng, audio, checkGameOver, runSearch, stockfishMove, shadowMove]);
+  }, [eng, audio, checkGameOver, runSearch, stockfishMove, shadowMove, isCaptureMove]);
   const engineMoveRef = useRef(engineMove);
   engineMoveRef.current = engineMove;
 
@@ -1239,7 +1239,7 @@ export default function ZlegendsBot() {
       setThinking(false);
       rerender();
     });
-  }, [eng, audio, checkGameOver, runSearch, stockfishMove]);
+  }, [eng, audio, checkGameOver, runSearch, stockfishMove, isCaptureMove]);
   const spectateMoveRef = useRef(spectateMove);
   spectateMoveRef.current = spectateMove;
 
@@ -1367,7 +1367,7 @@ export default function ZlegendsBot() {
     }
     rerender();
     if (!over) engineMoveRef.current(newMoveList);
-  }, [eng, audio, checkGameOver]);
+  }, [eng, audio, checkGameOver, isCaptureMove]);
 
   /* Returns a status string ("moved"/"promo"/"selected"/"deselected"/
      "blocked") purely so drag handling (below) can tell, synchronously,
@@ -1723,7 +1723,7 @@ export default function ZlegendsBot() {
       setTimeout(() => setQuizDoneToast(null), 3000);
     }
     rerender();
-  }, [eng, audio, quizOpening, checkGameOver]);
+  }, [eng, audio, quizOpening, checkGameOver, isCaptureMove]);
 
   const puzzlesInBand = (band) => band ? pz.PUZZLES.filter(p => p.rating >= band.min && p.rating < band.max) : pz.PUZZLES;
 
@@ -2122,7 +2122,9 @@ export default function ZlegendsBot() {
       }
     }, 500);
     rerender();
-  }, [eng, audio, activePuzzle, rushMode, pz]);
+    /* finishRush and nextRushPuzzle read refs, so a stale copy behaves the same. */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eng, audio, activePuzzle, rushMode, pz, dailyStreak, isCaptureMove]);
 
   const undo = () => {
     if (mode === "replay" || pastedGame || thinking || result || eng.plyCount() === 0) return;
@@ -2200,12 +2202,14 @@ export default function ZlegendsBot() {
     if (!musicOpen || musicSource === "chiptune") return;
     if (mp3TracksRef.current.length || mp3Loading) return;
     loadMp3Playlist(musicSource);
+    /* Only opening the player should load a playlist, not a change to the source. */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [musicOpen]);
   /* The theme is a single track meant to play indefinitely rather than
      stop dead after ~30s -- native loop restarts it itself and never
      fires "ended" at all, so the multi-track auto-advance below doesn't
      need a special case for playlists of length 1. */
-  useEffect(() => { mp3Audio.loop = musicSource === THEME_ID; }, [musicSource]);
+  useEffect(() => { mp3Audio.loop = musicSource === THEME_ID; }, [musicSource, mp3Audio]);
   /* Keeps the <audio> element's src in sync with the selected track,
      re-playing automatically if music was already playing -- covers both
      manual next/prev and the "ended" auto-advance below. */
@@ -2218,6 +2222,8 @@ export default function ZlegendsBot() {
       setMp3CurrentTime(0);
       if (mp3PlayingRef.current) { resumeMp3Gain(); mp3Audio.play().catch(() => {}); }
     }
+    /* Only a new track should reload the audio, and mp3Audio never changes. */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [musicSource, mp3Tracks, mp3Idx]);
   useEffect(() => {
     const onEnded = () => {
@@ -2251,7 +2257,7 @@ export default function ZlegendsBot() {
       mp3Audio.removeEventListener("playing", onReady);
       mp3Audio.removeEventListener("canplay", onReady);
     };
-  }, []);
+  }, [mp3Audio]);
   /* "visitedBefore" needs to be unconditional -- it now also drives
      HomePage's welcome-beat line (see isFirstVisitRef above), not just
      autoplay-arming, so it has to flip for every first-time visitor, not
@@ -2286,6 +2292,8 @@ export default function ZlegendsBot() {
       document.removeEventListener("pointerdown", start);
       document.removeEventListener("keydown", start);
     };
+    /* Runs only when the volume or player changes. The helpers it calls are rebuilt every render. */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   /* Backgrounding the tab (swiped away, phone locked, switched apps) is
      supposed to keep music playing -- that's the whole point of it being
