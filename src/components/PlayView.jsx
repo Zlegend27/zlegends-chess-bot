@@ -13,7 +13,7 @@ import { RUSH_DURATIONS } from "../utils/rushDurations";
 /* The game screen: the board, the bot card, the move list and the controls
    for a live game, a puzzle, a review or a rush. Loaded when a game starts
    (see App.jsx). Everything it reads or does comes in as a prop. */
-export default function PlayView({ rankTestNote, GRADE_COLOR, GRADE_TAG, MoodImg, RushThemeArt, Tray, activeOpening, activePuzzle, analysisBusy, analysisContent, analysisLabel, analysisMove, analyzing, arrowLine, beginRestartCountdown, bestArrow, boardColorId, boardRef, boardVars, botColor, botLine, botMood, botTaken, colorPick, curMoveIdx, difficultyIdx, difficultyRef, displayName, dragCellSize, dragFrom, dragPos, eng, evalLabel, evalPawns, exitMissedAttempt, exitPractice, exitPuzzle, exitReplay, exitRush, formatClock, gameStyle, gradeDetail, gradeProgress, grading, hideEvalBar, hideRushSummary, hinting, inChk, liveOpening, missedAttempt, missedStepIdx, mode, moveGrades, moveList, nameDraft, nameEditOpen, newGame, newGameConfirm, nextPuzzle, onCopyPgn, onDifficultyChange, onHint, onMissedSwipeEnd, onMissedSwipeStart, openLeaderboard, openReviewPage, pairs, pastedGame, pauseSpectate, pgnToast, pieceImgSrc, pieceSetId, playMove, playerAdvantageCp, playerColor, playerShare, practice, practiceMove, practiceNext, practiceReveal, promo, puzzleBand, puzzleFeedback, puzzleMove, puzzleSolved, pz, quizDoneToast, quizMove, quizOpening, rankBotAssessedElo, rankBotGames, ratingInfo, replayFull, replayIndex, replayPlaying, replayStep, restartCountdown, result, resumeSpectate, reviewIndex, reviewInfo, reviewMissedPuzzle, reviewing, rows, rushBandIdx, rushBestMap, rushDuration, rushLifetime, rushMilestone, rushMissed, rushMistakes, rushMode, rushResult, rushSolved, rushSummaryOpen, rushTimeLeft, saveDisplayName, setBotLine, setColorPick, setMissedStepIdx, setNameDraft, setNameEditOpen, setNewGameConfirm, setPlayerColor, setPromo, setReplayIndex, setReviewIndex, setRushSummaryOpen, setShareLinkFallback, setShareToast, setSiteView, shareLinkFallback, shareToast, spectateBlackIdx, spectateMode, spectateOpeningId, spectatePaused, spectateWhiteIdx, startPuzzle, startQuiz, startSpectate, status, stopSpectate, sweetheart, thinking, toggleAnalyze, toggleReplayPlay, uiT, undo, youDiff, youTaken }) {
+export default function PlayView({ rechecking, betterMoveLine, rankTestNote, GRADE_COLOR, GRADE_TAG, MoodImg, RushThemeArt, Tray, activeOpening, activePuzzle, analysisBusy, analysisContent, analysisLabel, analysisMove, analyzing, arrowLine, beginRestartCountdown, bestArrow, boardColorId, boardRef, boardVars, botColor, botLine, botMood, botTaken, colorPick, curMoveIdx, difficultyIdx, difficultyRef, displayName, dragCellSize, dragFrom, dragPos, eng, evalLabel, evalPawns, exitMissedAttempt, exitPractice, exitPuzzle, exitReplay, exitRush, formatClock, gameStyle, gradeDetail, gradeProgress, grading, hideEvalBar, hideRushSummary, hinting, inChk, liveOpening, missedAttempt, missedStepIdx, mode, moveGrades, moveList, nameDraft, nameEditOpen, newGame, newGameConfirm, nextPuzzle, onCopyPgn, onDifficultyChange, onHint, onMissedSwipeEnd, onMissedSwipeStart, openLeaderboard, openReviewPage, pairs, pastedGame, pauseSpectate, pgnToast, pieceImgSrc, pieceSetId, playMove, playerAdvantageCp, playerColor, playerShare, practice, practiceMove, practiceNext, practiceReveal, promo, puzzleBand, puzzleFeedback, puzzleMove, puzzleSolved, pz, quizDoneToast, quizMove, quizOpening, rankBotAssessedElo, rankBotGames, ratingInfo, replayFull, replayIndex, replayPlaying, replayStep, restartCountdown, result, resumeSpectate, reviewIndex, reviewInfo, reviewMissedPuzzle, reviewing, rows, rushBandIdx, rushBestMap, rushDuration, rushLifetime, rushMilestone, rushMissed, rushMistakes, rushMode, rushResult, rushSolved, rushSummaryOpen, rushTimeLeft, saveDisplayName, setBotLine, setColorPick, setMissedStepIdx, setNameDraft, setNameEditOpen, setNewGameConfirm, setPlayerColor, setPromo, setReplayIndex, setReviewIndex, setRushSummaryOpen, setShareLinkFallback, setShareToast, setSiteView, shareLinkFallback, shareToast, spectateBlackIdx, spectateMode, spectateOpeningId, spectatePaused, spectateWhiteIdx, startPuzzle, startQuiz, startSpectate, status, stopSpectate, sweetheart, thinking, toggleAnalyze, toggleReplayPlay, uiT, undo, youDiff, youTaken }) {
   return (
     <div className={"root" + (hideEvalBar ? " noEval" : "") + (boardColorId === "standard" ? " theme-standard" : "")} style={boardVars}>
       <StarField sweetheart={sweetheart} />
@@ -118,6 +118,12 @@ export default function PlayView({ rankTestNote, GRADE_COLOR, GRADE_TAG, MoodImg
             <div style={{ position: "relative", flex: 1 }}>
               <div className="board" role="grid" aria-label="Chess board" ref={boardRef}>
                 {rows}
+                {betterMoveLine && (
+                  <svg className="arrowLayer" viewBox="0 0 8 8" aria-hidden="true">
+                    <path d={betterMoveLine.path} fill="none" stroke="#3FAE5A" strokeOpacity={0.85} strokeWidth="0.26" strokeLinecap="round" strokeLinejoin="round" />
+                    <polygon points={betterMoveLine.head} fill="#3FAE5A" fillOpacity={0.85} />
+                  </svg>
+                )}
                 {arrowLine && (() => {
                   /* One geometry for every theme now (see arrowLine above)
                      -- only the color differs: chess.com green on the
@@ -262,7 +268,7 @@ export default function PlayView({ rankTestNote, GRADE_COLOR, GRADE_TAG, MoodImg
               </svg>
             );
             return (
-              <div className="reviewCtrls mt-1 flex items-center justify-center gap-2">
+              <div className="reviewCtrls mt-1 flex flex-wrap items-center justify-center gap-2">
                 <div className={`flex items-center overflow-hidden rounded-xl border backdrop-blur-sm ${uiT.cardBorder} ${uiT.panelBg}`}>
                   <button className={stepBtn} onClick={() => setReviewIndex(0)} disabled={reviewIndex === 0} aria-label="First move">
                     {chev("M6 6h2v12H6zm3.5 6 8.5 6V6z")}
@@ -315,7 +321,7 @@ export default function PlayView({ rankTestNote, GRADE_COLOR, GRADE_TAG, MoodImg
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     <path d="M12 2 9.5 9.5 2 12l7.5 2.5L12 22l2.5-7.5L22 12l-7.5-2.5L12 2z" />
                   </svg>
-                  {analyzing ? (grading ? `Grading ${gradeProgress}/${moveList.length}` : "Analyzing") : "Analyze"}
+                  {analyzing ? (grading ? `Grading ${gradeProgress}/${moveList.length}` : rechecking ? "Double-checking" : "Analyzing") : "Analyze"}
                 </button>
               </div>
             );
@@ -374,10 +380,10 @@ export default function PlayView({ rankTestNote, GRADE_COLOR, GRADE_TAG, MoodImg
             const played = moveList[reviewIndex - 1];
             if (!best || best === played) return null;
             return (
-              <div className="status analyzeHint" style={{ fontSize: 11, opacity: 0.9, textTransform: "none" }}>
-                <b style={{ color: GRADE_COLOR[g] }}>{played}{GRADE_TAG[g]}</b>
-                <span style={{ opacity: 0.8 }}> — {g === "miss" ? "missed" : "best was"} </span>
-                <b style={{ color: "#6FCF97" }}>{best}</b>
+              <div className="status analyzeHint" style={{ fontSize: 12, textTransform: "none" }}>
+                <b style={{ color: sweetheart ? "var(--sh-red)" : GRADE_COLOR[g] }}>{played}{GRADE_TAG[g]}</b>
+                <span> — {g === "miss" ? "missed" : "best was"} </span>
+                <b style={{ color: sweetheart ? "#1F7A44" : "#6FCF97" }}>{best}</b>
               </div>
             );
           })()}

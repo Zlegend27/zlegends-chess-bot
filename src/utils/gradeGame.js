@@ -14,8 +14,9 @@ const BAD_POSITION_CP = -100;
    piece counts, a minor piece for a minor piece doesn't. */
 const SACRIFICE_POINTS = 2;
 const LEFT_EN_PRISE_POINTS = 5;
-/* Points the runner-up would have cost: a Mistake or worse. */
-const ONLY_MOVE_LOSS = 10;
+/* Points the runner-up would have cost. Chess.com gave Great to a move whose
+   runner-up cost about this much, so it's lower than a full Mistake. */
+const ONLY_MOVE_LOSS = 5;
 const MISS_AFTER_LOSS = 10;
 const MISS_MIN_LOSS = 5;
 
@@ -83,8 +84,8 @@ export function isBrilliant({ isBest, forced, inCheck, before, after, sacrificed
 }
 
 /** The one move that holds the position, and one that took finding: getting
- *  out of check, taking back, trading or grabbing a free piece is often the
- *  only good move too, but it's never a discovery. */
+ *  out of check, taking back or grabbing a free piece is often the only good
+ *  move too, but it's never a discovery. */
 export function isGreat({ isBest, forced, inCheck, before, second, obviousCapture }) {
   if (!isBest || forced || inCheck || obviousCapture || second == null) return false;
   return second < ALREADY_WINNING_CP && pointsLost(before, second) >= ONLY_MOVE_LOSS;
@@ -117,7 +118,6 @@ export function gradeGame({ list, scores, secondScores, bestSans, scoreOk, theor
     const inCheck = eng.inCheckNow();
     const toSq = mTo(move);
     const captured = eng.pieceAt(M120TO64[toSq]) === EMPTY ? 0 : pieceValue(eng, toSq);
-    const moverValue = pieceValue(eng, mFrom(move));
     const recapture = toSq === lastCaptureSq;
     lastCaptureSq = captured ? toSq : null;
     eng.make(move);
@@ -147,7 +147,7 @@ export function gradeGame({ list, scores, secondScores, bestSans, scoreOk, theor
       : {};
     const sacrificed = sacrificedPoints(offered, hangingAfter[i - 2] || {}, captured, M120TO64[toSq]);
     const second = secondScores[i] == null ? null : reviewCp(secondScores[i]);
-    const obviousCapture = captured > 0 && (recapture || captured >= moverValue || captured > exchangeGain(eng, toSq));
+    const obviousCapture = captured > 0 && (recapture || captured > exchangeGain(eng, toSq));
 
     let tag = isBest ? "best" : gradeFromLoss(loss);
     if (mated) tag = "best";

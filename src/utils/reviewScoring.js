@@ -15,6 +15,9 @@ export const MATE_EVAL = 2000;
 
 /** Points lost that still count as nearly the engine's choice. */
 export const NEAR_BEST_LOSS = 2;
+/** Points a move must lose to get a deeper look, since a search this size can
+ *  misjudge a position by 30cp or more, which is enough to change a label. */
+export const RECHECK_LOSS = 3;
 /** Points lost that count as a blunder. */
 export const BLUNDER_LOSS = 20;
 

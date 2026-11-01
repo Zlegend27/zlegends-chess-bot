@@ -146,6 +146,8 @@
 :root[data-theme="sweetheart"] .btn.gold:active:not(:disabled){ box-shadow:0 1px 0 #C2799180, 0 1px 4px #00000022; }
 :root[data-theme="sweetheart"] .btn.ghost{ border-color:#F06BAE66; }
 :root[data-theme="sweetheart"] .btn.ghost:hover:not(:disabled){ background:#F06BAE1A; }
+:root[data-theme="sweetheart"] .status{ color:var(--dim); }
+:root[data-theme="sweetheart"] .status.over{ color:var(--sh-red); text-shadow:none; }
 :root[data-theme="sweetheart"] .evalbar{ background:var(--sh-panel2); border-color:#F06BAE55; }
 :root[data-theme="sweetheart"] .promoBox .modalCloseX{ border-color:#F06BAE66; background:#FFF6E9; }
 :root[data-theme="sweetheart"] .promoBox .modalCloseX:hover{ background:#F06BAE22; }
@@ -397,7 +399,7 @@
    board can grow, and lets it use noticeably more of the viewport width
    on phones -- the whole point being a visibly bigger board on small
    screens, not just removing the bar. */
-.root.noEval .board{ width:min(96vw,460px); }
+.root.noEval .board{ width:min(calc(100vw - 28px),460px); }
 .root.noEval .card{ width:min(96vw,460px); padding-left:12px; }
 .arrowLayer{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:6;
   filter:drop-shadow(0 0 4px #F5D93E88); }
