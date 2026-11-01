@@ -184,7 +184,7 @@ export default function YouTubeTv({ sweetheart }) {
 
   return (
     <div className="flex flex-col items-center gap-2">
-      <div ref={boxRef} className="group relative w-[280px] max-w-[88vw] transition hover:-translate-y-0.5">
+      <div ref={boxRef} className="group relative w-[240px] sm:w-[280px] max-w-[88vw] transition hover:-translate-y-0.5">
         <TvBody />
         <div className="absolute overflow-hidden bg-black" style={{ ...SCREEN_PCT, containerType: "size" }}>
           {video ? (
@@ -232,7 +232,10 @@ export default function YouTubeTv({ sweetheart }) {
       </div>
       {video && (
         <div className="flex max-w-[300px] flex-col items-center gap-1">
-          <span className={`text-[11px] font-bold uppercase tracking-[0.3em] ${T.accentText}`}>Z27Tube</span>
+          <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[13px] font-extrabold tracking-wide" style={{ background: "#FF0000", color: "#FFFFFF" }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
+            Z27Tube
+          </span>
           <BotBubble line={video.title} muted avatarSize={40} />
         </div>
       )}
