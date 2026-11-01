@@ -3,3 +3,6 @@ dist-kindle
 node_modules
 # Vendored Stockfish WASM glue -- generated, not ours to lint.
 public/stockfish
+
+# The lab's local copy of the engine, also generated.
+scripts/review-lab/data

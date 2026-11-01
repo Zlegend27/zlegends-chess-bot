@@ -1,4 +1,4 @@
-import { EMPTY, WK } from "../engine/chessEngine";
+import { EMPTY, WK } from "../engine/chessEngine.js";
 
 export const PTS = { 1: 1, 2: 3, 3: 3, 4: 5, 5: 9 };
 

@@ -514,6 +514,8 @@
 .moveGrade.brilliant{ color:var(--cyan); text-shadow:0 0 6px #3EE7F588; }
 .moveGrade.great{ color:#4EA8DE; text-shadow:0 0 6px #4EA8DE77; }
 .moveGrade.best{ color:#6FCF97; }
+.moveGrade.excellent{ color:#8FD9A8; }
+.moveGrade.good{ color:var(--liliac); }
 .moveGrade.book{ color:var(--dim); }
 .moveGrade.inaccuracy{ color:var(--yellow); }
 .moveGrade.miss{ color:#FF8A5C; }
@@ -526,6 +528,8 @@
 .boardGrade.brilliant{ color:var(--cyan); box-shadow:0 0 8px #3EE7F599; }
 .boardGrade.great{ color:#4EA8DE; box-shadow:0 0 8px #4EA8DE99; }
 .boardGrade.best{ color:#6FCF97; box-shadow:0 0 6px #6FCF9788; }
+.boardGrade.excellent{ color:#8FD9A8; }
+.boardGrade.good{ color:var(--liliac); }
 .boardGrade.book{ color:var(--dim); }
 .boardGrade.inaccuracy{ color:var(--yellow); box-shadow:0 0 6px #F5D93E88; }
 .boardGrade.miss{ color:#FF8A5C; box-shadow:0 0 6px #FF8A5C88; }

@@ -7,7 +7,6 @@ import { detectOpening } from "./openingDetect";
 import { dailyPuzzle, todayKey } from "./dailyPuzzle";
 import { pickTrackIndex } from "./trackIndex";
 import { materialState } from "./material";
-import { winPctOf, moveAccuracy } from "./accuracy";
 import { OPENINGS } from "./openings";
 
 describe("difficulty tiers", () => {
@@ -98,24 +97,5 @@ describe("material count", () => {
     expect(m.diff).toBe(0);
     expect(m.capturedWhite).toEqual([]);
     expect(m.capturedBlack).toEqual([]);
-  });
-});
-
-describe("move accuracy", () => {
-  test("a win percentage of an equal position is 50", () => {
-    expect(winPctOf(0)).toBeCloseTo(50, 6);
-  });
-
-  test("a move that loses nothing scores near full accuracy, and a big drop scores low", () => {
-    expect(moveAccuracy(60, 60)).toBeGreaterThan(95);
-    expect(moveAccuracy(80, 20)).toBeLessThan(20);
-  });
-
-  test("accuracy always stays between 0 and 100", () => {
-    for (const [before, after] of [[0, 100], [100, 0], [50, 50], [90, 10]]) {
-      const a = moveAccuracy(before, after);
-      expect(a).toBeGreaterThanOrEqual(0);
-      expect(a).toBeLessThanOrEqual(100);
-    }
   });
 });

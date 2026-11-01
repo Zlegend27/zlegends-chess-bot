@@ -24,8 +24,9 @@ import { BALANCED, randomStyle, pickPersonality } from "./utils/personalities";
 import { detectOpening } from "./utils/openingDetect";
 import { todayKey, dailyPuzzle } from "./utils/dailyPuzzle";
 import { pickTrackIndex } from "./utils/trackIndex";
-import { PTS, materialState } from "./utils/material";
-import { winPctOf, moveAccuracy } from "./utils/accuracy";
+import { materialState } from "./utils/material";
+import { sideAccuracy } from "./utils/reviewScoring";
+import { gradeGame } from "./utils/gradeGame";
 import { buildPgn, parsePgnMoves, replayForeignPgn, parsePgnHeaders, countPgnGames, describePasteProblem, reviewInfoFromHeaders, exporterSide } from "./utils/pgn";
 import { encodeGame, decodeGame, getSharedHash, replayIntoEngine } from "./utils/share";
 import { getPieceSet } from "./utils/pieceSets";
@@ -60,8 +61,8 @@ const PIECE_NAME = { 1: "pawn", 2: "knight", 3: "bishop", 4: "rook", 5: "queen",
    judgment); "miss" = the opponent just blundered and this move let the
    punishment slip -- chess.com's vocabulary, and the distinction players
    actually learn from: a miss is a found-nothing, not a played-badly. */
-const GRADE_TAG = { brilliant: "!!", great: "★", best: "!", book: "≡", inaccuracy: "?!", miss: "✗", mistake: "?", blunder: "??" };
-const GRADE_COLOR = { brilliant: "#3EE7F5", great: "#4EA8DE", best: "#6FCF97", book: "#9D8FC4", inaccuracy: "#F5D93E", miss: "#FF8A5C", mistake: "#F0A548", blunder: "#F05348" };
+const GRADE_TAG = { brilliant: "!!", great: "★", best: "!", excellent: "✓", good: "•", book: "≡", inaccuracy: "?!", miss: "✗", mistake: "?", blunder: "??" };
+const GRADE_COLOR = { brilliant: "#3EE7F5", great: "#4EA8DE", best: "#6FCF97", excellent: "#8FD9A8", good: "#C9C2E8", book: "#9D8FC4", inaccuracy: "#F5D93E", miss: "#FF8A5C", mistake: "#F0A548", blunder: "#F05348" };
 
 /* Clickable eval graph for the post-game report -- the same "story of
    the game" area chart chess.com/lichess center their review on. scores
@@ -933,22 +934,13 @@ export default function ZlegendsBot() {
      happened), MultiPV 2 so the runner-up line's score is available too
      (that's what "great" needs -- see below).
 
-     Thresholds are win%-drop, not raw centipawns (winPctOf/moveAccuracy
-     above, same Lichess curve): a 100cp drop matters enormously in an
-     equal position and barely at all when already up a rook, and a flat
-     centipawn cutoff can't tell those apart -- it was flagging routine
-     moves in decided positions as "mistakes" for no real reason. The
-     cutoffs below (6/12/24 win%) are picked to match the old cp cutoffs
-     (20/60/150) at dead-equal positions, where the two scales roughly
-     line up, while decaying correctly once the game is already decided. */
-  function classifyLoss(wpDrop) {
-    if (wpDrop >= 24) return "blunder";
-    if (wpDrop >= 12) return "mistake";
-    if (wpDrop >= 6) return "inaccuracy";
-    return null;
-  }
+     Labels come from utils/gradeGame.js and accuracy from
+     utils/reviewScoring.js, which is tuned against Chess.com's own scores. */
 
-  const GRADE_MOVE_TIME_MS = 500;
+  /* A fixed search size rather than a time limit, so the same game grades
+     the same on every device. The curves in reviewScoring were fitted at
+     this size. */
+  const GRADE_NODES = 100000;
 
   /* One Stockfish search per grading position was slow: a 60-ply game
      meant 61 sequential ~500ms searches, and 10-16 of the leading ones
@@ -1006,7 +998,7 @@ export default function ZlegendsBot() {
     const scoreOk = new Array(list.length + 1).fill(true);
     const bestSans = new Array(list.length);
     for (let k = bookBoundary; k <= list.length; k++) {
-      const res = await stockfishAnalyze(fens[k], { moveTimeMs: GRADE_MOVE_TIME_MS, multiPv: 2 }).catch(() => null);
+      const res = await stockfishAnalyze(fens[k], { nodes: GRADE_NODES, multiPv: 2 }).catch(() => null);
       /* The board this run was grading may not even be the current game
          anymore (new game, undo, a fresh pasted PGN all bump this) --
          bail out now rather than keep burning searches, and definitely
@@ -1034,96 +1026,9 @@ export default function ZlegendsBot() {
       setGradeProgress(k + 1);
     }
     scoreBookRange(bookBoundary, scores, scoreOk);
-    const tempEng = createEngine();
-    const grades = [];
-    const wpDrops = [];
-    for (let i = 0; i < list.length; i++) {
-      const legal = tempEng.legalMoves();
-      const move = legal.find(m => tempEng.sanOf(m) === list[i]);
-      if (!move) { grades.push(null); wpDrops.push(0); continue; }
-      /* Book comes first, before the scoreOk gate below: it's derived from
-         theoryPlyCount, not an engine score, so a ply still inside known
-         theory should never go ungraded just because scoreBookRange
-         propagated a failed boundary search's scoreOk=false backward onto
-         it (every ply in the book range shares that one flag) -- without
-         this ordering, a single dropped request at the first out-of-book
-         position used to silently blank the "book" tag off the entire
-         opening instead of leaving it tagged. */
-      if (i < theoryPlies) {
-        tempEng.make(move);
-        grades.push("book");
-        wpDrops.push(0);
-        continue;
-      }
-      /* Ply touches a position that failed to score on either side --
-         nothing honest to grade it against, so it stays ungraded (not a
-         silent "blunder") and gets excluded from accuracy in sideStats
-         below. The move still gets played for real so every later ply's
-         legal-move lookup and the final checkmate check stay correct. */
-      if (!scoreOk[i] || !scoreOk[i + 1]) {
-        tempEng.make(move);
-        grades.push(null);
-        wpDrops.push(0);
-        continue;
-      }
-      const wpDrop = Math.max(0, winPctOf(scores[i]) - winPctOf(-scores[i + 1]));
-      wpDrops.push(wpDrop);
-      let tag = classifyLoss(wpDrop);
-      tempEng.make(move); // advances for real -- this ply's move stays applied for the rest of the loop
-      if (wpDrop < 6) {
-        const toSq120 = mTo(move);
-        /* "Brilliant" needs an actual sacrifice, not just any hanging-
-           but-safe move: the piece left on the board has to be worth
-           losing (knight or better -- a hanging pawn isn't a sacrifice),
-           and the mover can't already be cruising to a win before this
-           move (winPctOf(scores[i]) is that side's win% BEFORE it played
-           -- a "sacrifice" at 95% win probability isn't brilliant, it's
-           mopping up). Both checks are cheap and run only in the same
-           narrow window (wpDrop < 6, i.e. the engine already approves of
-           the move) the old single hanging-piece probe used. */
-        const movedValue = PTS[Math.abs(tempEng.pieceAt(M120TO64[toSq120]))] || 0;
-        const alreadyWinning = winPctOf(scores[i]) >= 90;
-        const attacker = (!alreadyWinning && movedValue >= 3)
-          ? tempEng.legalMoves().find(m => mTo(m) === toSq120)
-          : null;
-        if (attacker) {
-          tempEng.make(attacker); // probe only
-          const recapture = tempEng.legalMoves().some(m => mTo(m) === toSq120);
-          tempEng.unmake(); // undo the probe, not the real move
-          if (!recapture) tag = "brilliant";
-        }
-        if (tag !== "brilliant" && bestSans[i] === list[i]) {
-          /* "Great" vs. plain "best": was there actually a runner-up move
-             worth considering, or was the top choice just clearly best
-             with nothing else close? A big win% gap to the 2nd-best line
-             means finding this exact move mattered -- chess.com's own
-             definition of "great" (the only good move here). */
-          const wpGap = secondScores[i] != null ? winPctOf(scores[i]) - winPctOf(secondScores[i]) : 0;
-          tag = wpGap >= 10 ? "great" : "best";
-        }
-      }
-      /* A bad move right after the opponent's own blunder is a "miss" --
-         the advantage they handed over slipped away unpunished. Book plies
-         never reach here (continued above), so wpDrops[i-1] is always a
-         real value or the harmless 0 a book ply pushes. */
-      if ((tag === "mistake" || tag === "blunder") && i > 0 && wpDrops[i - 1] >= 24) tag = "miss";
-      grades.push(tag);
-    }
-    /* The search has no move to return at a finished game's final
-       position (checkmate), so that last score defaults to a neutral 0
-       rather than "this side is completely lost" -- without this fix,
-       the very move that delivers checkmate gets wrongly flagged as a
-       blunder purely from that missing data. Detected off tempEng (which
-       has every move applied by now) rather than the `result` state:
-       when a pasted game kicks off grading in the same tick it loads,
-       the state closure still holds the pre-load value and a state-based
-       guard silently never fires. And mate earns "best", not a blank --
-       there is no better move than the one that ends the game. */
-    if (grades.length && tempEng.legalMoves().length === 0 && tempEng.inCheckNow()) {
-      grades[grades.length - 1] = "best";
-    }
+    const { grades, plyScores } = gradeGame({ list, scores, secondScores, bestSans, scoreOk, theoryPlies });
     setMoveGrades(grades);
-    setGradeDetail({ scores, bestSans, scoreOk });
+    setGradeDetail({ scores, bestSans, scoreOk, plyScores });
     setGrading(false);
   };
 
@@ -2835,30 +2740,19 @@ export default function ZlegendsBot() {
     const whiteIsYou = ownGame && playerColor === 1;
     const blackIsYou = ownGame && playerColor === -1;
     const tally = (parity) => {
-      const counts = { brilliant: 0, great: 0, best: 0, book: 0, inaccuracy: 0, miss: 0, mistake: 0, blunder: 0 };
+      const counts = { brilliant: 0, great: 0, best: 0, excellent: 0, good: 0, book: 0, inaccuracy: 0, miss: 0, mistake: 0, blunder: 0 };
       moveGrades.forEach((g, i) => { if (g && i % 2 === parity) counts[g] += 1; });
       return counts;
     };
-    /* Accuracy per side, from the same per-ply scores the graph plots,
-       using the lichess win%-drop curve (see moveAccuracy). There used to
-       be a "~N rated play" figure here too, averaging Rank Bot's
-       loss->implied-Elo mapping over the game. It read ~2000 for an 833
-       player: a single clean move counts as 3000, so the average runs far
-       too high. That mapping was built to nudge a dial, not to be averaged
-       into a rating, so it stays off until it's calibrated on real games. */
+    /* There used to be a "~N rated play" figure here too, averaging Rank
+       Bot's loss->implied-Elo mapping over the game. It read ~2000 for an 833
+       player: a single clean move counts as 3000, so the average runs far too
+       high. That mapping was built to nudge a dial, not to be averaged into a
+       rating, so it stays off until it's calibrated on real games. */
     const sideStats = (parity) => {
       if (!gradeDetail) return null;
-      const s = gradeDetail.scores;
-      const ok = gradeDetail.scoreOk;
-      const accs = [];
-      for (let i = parity; i + 1 < s.length; i += 2) {
-        if (ok && (!ok[i] || !ok[i + 1])) continue; // a failed search, not a real eval -- would skew the average
-        if (Math.abs(s[i]) > MATE - 2000 || Math.abs(s[i + 1]) > MATE - 2000) continue;
-        accs.push(moveAccuracy(winPctOf(s[i]), winPctOf(-s[i + 1])));
-      }
-      if (!accs.length) return null;
-      const mean = (a) => a.reduce((x, v) => x + v, 0) / a.length;
-      return { acc: Math.round(mean(accs)) };
+      const acc = sideAccuracy(gradeDetail.plyScores.filter((m, i) => m && i % 2 === parity));
+      return acc == null ? null : { acc: Math.round(acc) };
     };
     return {
       cols: [
@@ -2967,9 +2861,9 @@ export default function ZlegendsBot() {
                 <div className={"mb-1.5 text-xs font-bold " + uiT.ink}>{col.label}</div>
                 <div className="flex flex-col gap-1">
                   {Object.entries(col.counts).map(([g, n]) => (
-                    <div key={g} className="flex items-center justify-between text-[11px]">
-                      <span className={"flex items-center gap-1.5 capitalize " + uiT.mutedLabel}>
-                        <b style={{ color: GRADE_COLOR[g], minWidth: 16 }}>{GRADE_TAG[g]}</b>{g}
+                    <div key={g} className="flex items-center justify-between gap-1 text-[11px]">
+                      <span className={"flex items-center gap-1 capitalize " + uiT.mutedLabel}>
+                        <b style={{ color: GRADE_COLOR[g], minWidth: 14 }}>{GRADE_TAG[g]}</b>{g}
                       </span>
                       <span className={n > 0 ? "font-bold " + uiT.ink : uiT.dimText}>{n}</span>
                     </div>

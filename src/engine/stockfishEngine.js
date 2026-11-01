@@ -148,7 +148,7 @@ export function stockfishBestMove(fen, elo, moveTimeMs = 1000) {
  *  apart from "a good move, but so was the alternative" (tag: best).
  *  Resolves `{ uci, lines }`, `lines` sorted by multipv rank ascending
  *  (lines[0] is the engine's top choice). */
-export function stockfishAnalyze(fen, { moveTimeMs = 500, multiPv = 1 } = {}) {
+export function stockfishAnalyze(fen, { moveTimeMs = 500, nodes = null, multiPv = 1 } = {}) {
   const run = () => new Promise((resolve, reject) => {
     getWorker().then((worker) => {
       const byRank = new Map();
@@ -169,7 +169,7 @@ export function stockfishAnalyze(fen, { moveTimeMs = 500, multiPv = 1 } = {}) {
       worker.postMessage("setoption name UCI_LimitStrength value false");
       worker.postMessage(`setoption name MultiPV value ${multiPv}`);
       worker.postMessage(`position fen ${fen}`);
-      worker.postMessage(`go movetime ${moveTimeMs}`);
+      worker.postMessage(nodes ? `go nodes ${nodes}` : `go movetime ${moveTimeMs}`);
     }).catch(reject);
   });
   const result = queue.then(run);
