@@ -17,6 +17,10 @@
 /* The app frame around every page: the sticky header, then the page. On a
    phone the page also has to clear the fixed bottom bar. */
 .appShell{ --headerH:calc(57px + env(safe-area-inset-top)); background:var(--void); min-height:100dvh; }
+/* Each screen eases in when you move to it. index.css turns this off for
+   players who ask for reduced motion. */
+.pageIn{ animation:pageIn .2s ease-out; }
+@keyframes pageIn{ from{ opacity:0; transform:translateY(6px); } to{ opacity:1; transform:none; } }
 .appHeader{ padding-top:env(safe-area-inset-top); }
 /* Popups that open from the header sit outside .root, so they need the
    text color and font it would otherwise have passed down. */
@@ -45,7 +49,7 @@
 /* Icons themselves stay 16px (unchanged visual size/rhythm) -- padding
    brings the actual tap target to ~32px square, since the old bare
    16x16px anchor was well under any reasonable touch-target minimum. */
-.socialIcon{ display:flex; align-items:center; justify-content:center; padding:8px;
+.socialIcon{ display:flex; align-items:center; justify-content:center; padding:14px; min-width:44px; min-height:44px; box-sizing:border-box;
   color:var(--cyan); opacity:.8; text-shadow:none; transition:opacity .15s ease, filter .15s ease; }
 .socialIcon:hover{ opacity:1; filter:drop-shadow(0 0 6px #3EE7F5AA); }
 @keyframes blink{ 0%,100%{opacity:1} 50%{opacity:.35} }
@@ -593,10 +597,12 @@ input[type=range]{ flex:1; min-width:0; accent-color:var(--magenta); }
 .nameEditBtn:focus-visible, .jbTrackRow:focus-visible, input[type=range]:focus-visible,
 input[type=text]:focus-visible, .promoBox button:focus-visible{
   outline:2px solid var(--cyan); outline-offset:2px; }
-.nameEditBtn{ font-size:11px; line-height:1; padding:2px 4px; border:1px solid #3EE7F555; border-radius:var(--r-2xs);
+.nameEditBtn{ position:relative; font-size:11px; line-height:1; padding:2px 4px; border:1px solid #3EE7F555; border-radius:var(--r-2xs);
   background:transparent; color:var(--cyan); cursor:pointer; text-transform:none; opacity:.75; flex:none;
   transition:opacity .15s ease, background .15s ease; }
 .nameEditBtn:hover{ opacity:1; background:#3EE7F522; }
+/* A bigger invisible tap area, so the small pencil is easy to hit on a phone. */
+.nameEditBtn::before{ content:""; position:absolute; inset:-12px; }
 select{ font-family:inherit; font-size:12px; font-weight:700; border-radius:var(--r-sm); padding:8px;
   border:1px solid #8B2FC966; background:#1D1038; color:var(--white); cursor:pointer;
   transition:border-color .15s ease; }
@@ -714,7 +720,7 @@ select:hover{ border-color:var(--cyan); }
   border-radius:var(--r-md) var(--r-md) var(--r-md) var(--r-2xs); padding:10px 30px 10px 14px;
   font-size:13.5px; color:var(--liliac); line-height:1.5; cursor:pointer; backdrop-blur:8px; }
 .botBubbleCaret{ color:var(--cyan); animation:blink 1s infinite; }
-.botBubbleClose{ position:absolute; top:4px; right:4px; width:22px; height:22px; border:none; background:transparent;
+.botBubbleClose{ position:absolute; top:4px; right:4px; width:44px; height:44px; display:flex; align-items:center; justify-content:center; font-size:14px; border:none; background:transparent;
   color:var(--dim); font-size:11px; cursor:pointer; display:flex; align-items:center; justify-content:center;
   border-radius:50%; transition:color .15s ease, background .15s ease; }
 .botBubbleClose:hover{ color:var(--white); background:#8B2FC933; }

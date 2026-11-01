@@ -2,7 +2,7 @@ import { describe, test, expect } from "vitest";
 import { pathForView, viewForPath, sectionForView, historyStep } from "./routes";
 
 describe("page addresses", () => {
-  test.each(["home", "playHub", "play", "puzzlesHome", "leaderboard", "review", "lessons", "openings", "watch", "ranked", "rush"])("%s survives a refresh", (view) => {
+  test.each(["home", "playHub", "play", "puzzlesHome", "leaderboard", "review", "lessons", "openings", "watch", "ranked", "rush", "profile"])("%s survives a refresh", (view) => {
     expect(viewForPath(pathForView(view))).toBe(view);
   });
 

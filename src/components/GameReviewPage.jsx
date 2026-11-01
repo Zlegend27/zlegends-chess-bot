@@ -135,7 +135,7 @@ export default function GameReviewPage({ onBack, profile, sweetheart, onReview, 
               key={s.id}
               onClick={() => setSourceId(s.id)}
               aria-pressed={s.id === sourceId}
-              className={`rounded-lg border-0 px-3 py-1.5 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 ${T.ring} ${
+              className={`inline-flex min-h-11 items-center rounded-lg border-0 px-3 py-1.5 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 ${T.ring} ${
                 s.id === sourceId
                   ? (sweetheart ? "bg-sh-lteal/15 text-sh-lteal" : "bg-cyan/12 text-cyan")
                   : `bg-transparent ${T.dimText} ${T.hoverInk}`

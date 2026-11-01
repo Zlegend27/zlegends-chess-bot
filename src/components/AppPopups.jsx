@@ -6,7 +6,7 @@ import Modal from "./Modal";
 /* The Juice Box, Settings, Piece Designs and Board Colors popups. Loaded only
    when one of them is open (see App.jsx). Everything they read comes in as a
    prop, so this file holds no state of its own. */
-export default function AppPopups({ boardColorId, boardColorsOpen, chooseBoardColor, choosePieceSet, closeMusic, closeSettings, fmtTime, hideEvalBar, isMp3Source, jbDisabled, jbPlaying, jbTrackLabel, mp3Buffering, mp3CurrentTime, mp3Duration, mp3Idx, mp3Shuffle, mp3Tracks, musicOpen, musicSource, nextTrack, onVolume, openReviewPage, pickMp3Track, pieceDesignsOpen, pieceImgSrc, pieceSetId, prevTrack, ratingInfo, seekMp3, setBoardColorsOpen, setMusicSource, setPieceDesignsOpen, setSettingsOpen, settingsOpen, toggleEvalBar, toggleMusic, toggleShuffle, trackName, volume }) {
+export default function AppPopups({ boardColorId, boardColorsOpen, chooseBoardColor, choosePieceSet, closeMusic, closeSettings, fmtTime, hideEvalBar, isMp3Source, jbDisabled, jbPlaying, jbTrackLabel, mp3Buffering, mp3CurrentTime, mp3Duration, mp3Idx, mp3Shuffle, mp3Tracks, musicOpen, musicSource, nextTrack, onVolume, pickMp3Track, pieceDesignsOpen, pieceImgSrc, pieceSetId, prevTrack, seekMp3, setBoardColorsOpen, setMusicSource, setPieceDesignsOpen, setSettingsOpen, settingsOpen, toggleEvalBar, toggleMusic, toggleShuffle, trackName, volume }) {
   return (
     <>
       <Modal open={musicOpen} onClose={closeMusic} closeLabel="Close Juice Box"
@@ -69,7 +69,8 @@ export default function AppPopups({ boardColorId, boardColorsOpen, chooseBoardCo
               Settings
             </div>
             <div className="rows" style={{ maxHeight: "none" }}>
-              <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E", display: "flex", alignItems: "center", gap: 10 }}
+              <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E", display: "flex", alignItems: "center", gap: 10 }} role="button" tabIndex={0}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSettingsOpen(false); setPieceDesignsOpen(true); } }}
                 onClick={() => { setSettingsOpen(false); setPieceDesignsOpen(true); }}>
                 <img src={pieceImgSrc(1, true)} alt="" style={{ width: 30, height: 30, objectFit: "contain", flex: "none", background: "#DDD6EA", borderRadius: 6, padding: 3, boxSizing: "border-box" }} />
                 <div>
@@ -77,7 +78,8 @@ export default function AppPopups({ boardColorId, boardColorsOpen, chooseBoardCo
                   <div style={{ fontSize: 11, opacity: 0.75 }}>Currently: {getPieceSet(pieceSetId).label}</div>
                 </div>
               </div>
-              <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E", display: "flex", alignItems: "center", gap: 10 }}
+              <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E", display: "flex", alignItems: "center", gap: 10 }} role="button" tabIndex={0}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSettingsOpen(false); setBoardColorsOpen(true); } }}
                 onClick={() => { setSettingsOpen(false); setBoardColorsOpen(true); }}>
                 <span style={{
                   display: "grid", gridTemplateColumns: "1fr 1fr", width: 30, height: 30, flex: "none",
@@ -107,20 +109,6 @@ export default function AppPopups({ boardColorId, boardColorsOpen, chooseBoardCo
                 >
                   <span className="toggleThumb" />
                 </button>
-              </div>
-              <div style={{ cursor: "pointer", padding: "8px 2px", borderBottom: "1px solid #8B2FC92E" }}
-                onClick={() => { setSettingsOpen(false); openReviewPage(); }}>
-                <div style={{ fontWeight: 700 }}>Game Review</div>
-                <div style={{ fontSize: 11, opacity: 0.75 }}>Paste a game, or reopen one of yours</div>
-              </div>
-              <div style={{ padding: "8px 2px" }}>
-                <div style={{ fontWeight: 700 }}>Your Rating</div>
-                <div style={{ fontSize: 11, opacity: 0.75 }}>
-                  {!ratingInfo ? "Loading…"
-                    : ratingInfo.error ? ratingInfo.message
-                    : ratingInfo.games === 0 ? "Play the 1000/1500/2000 Elo bots to get an estimate"
-                    : `~${ratingInfo.rating} (from ${ratingInfo.games} game${ratingInfo.games === 1 ? "" : "s"} vs the calibrated bots)`}
-                </div>
               </div>
             </div>
       </Modal>

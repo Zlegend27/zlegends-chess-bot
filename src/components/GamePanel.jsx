@@ -13,11 +13,14 @@ export default function GamePanel({
   analysisContent, analysisLabel = "Analysis", sideToMove = "White", sweetheart,
 }) {
   const [tab, setTab] = useState("moves");
+  /* On a phone the moves start folded away, so the controls under the board
+     stay on screen. Desktop always shows them (see md:block below). */
+  const [open, setOpen] = useState(false);
   const T = getUiTheme(sweetheart);
   /* A reviewed game opens on its report. Chess.com moved Game Review's
      graph and accuracy to the top of the screen for the same reason: that
      summary is what the player came for. */
-  useEffect(() => { if (openAnalysis) setTab("analysis"); }, [openAnalysis]);
+  useEffect(() => { if (openAnalysis) { setTab("analysis"); setOpen(true); } }, [openAnalysis]);
 
   /* App.jsx clears pgnToast with a hard setTimeout, which used to make
      the message vanish instantly. Mirroring it into local state that
@@ -38,8 +41,9 @@ export default function GamePanel({
   return (
     <div className={`overflow-hidden rounded-2xl border ${T.cardBorder} ${T.panelBg} backdrop-blur-sm`}>
       <div className={"flex flex-wrap items-center gap-1 border-b p-1.5 " + (sweetheart ? "border-sh-rose/24" : "border-violet/24")}>
-        <TabButton active={tab === "moves"} onClick={() => setTab("moves")} sweetheart={sweetheart}>Moves</TabButton>
-        <TabButton active={tab === "analysis"} onClick={() => setTab("analysis")} sweetheart={sweetheart}>{analysisLabel}</TabButton>
+        <TabButton active={tab === "moves"} onClick={() => { setTab("moves"); setOpen(true); }} sweetheart={sweetheart}>Moves</TabButton>
+        <TabButton active={tab === "analysis"} onClick={() => { setTab("analysis"); setOpen(true); }} sweetheart={sweetheart}>{analysisLabel}</TabButton>
+        <button type="button" aria-expanded={open} onClick={() => setOpen(o => !o)} className={"md:hidden flex h-8 items-center whitespace-nowrap rounded-lg border-0 bg-transparent px-2.5 text-[11px] font-bold tracking-wide " + T.dimText}>{open ? "Hide" : "Show"}</button>
         <div className="ml-auto flex items-center gap-1 pr-0.5">
           {hasMoves ? (
             <PanelBtn onClick={onCopyPgn} sweetheart={sweetheart}>Copy PGN</PanelBtn>
@@ -49,7 +53,7 @@ export default function GamePanel({
         </div>
       </div>
 
-      <div className="p-4">
+      <div className={"p-4 " + (open ? "" : "hidden md:block")}>
         {tab === "moves" ? (
           <div>
             {pairs.length === 0 ? (

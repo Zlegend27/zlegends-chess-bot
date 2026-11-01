@@ -13,7 +13,7 @@ import { RUSH_DURATIONS } from "../utils/rushDurations";
 /* The game screen: the board, the bot card, the move list and the controls
    for a live game, a puzzle, a review or a rush. Loaded when a game starts
    (see App.jsx). Everything it reads or does comes in as a prop. */
-export default function PlayView({ GRADE_COLOR, GRADE_TAG, MoodImg, RushThemeArt, Tray, activeOpening, activePuzzle, analysisBusy, analysisContent, analysisLabel, analysisMove, analyzing, arrowLine, beginRestartCountdown, bestArrow, boardColorId, boardRef, boardVars, botColor, botLine, botMood, botTaken, colorPick, curMoveIdx, difficultyIdx, difficultyRef, displayName, dragCellSize, dragFrom, dragPos, eng, evalLabel, evalPawns, exitMissedAttempt, exitPractice, exitPuzzle, exitReplay, exitRush, formatClock, gameStyle, gradeDetail, gradeProgress, grading, hideEvalBar, hideRushSummary, hinting, inChk, liveOpening, missedAttempt, missedStepIdx, mode, moveGrades, moveList, nameDraft, nameEditOpen, newGame, newGameConfirm, nextPuzzle, onCopyPgn, onDifficultyChange, onHint, onMissedSwipeEnd, onMissedSwipeStart, onShare, openLeaderboard, openReviewPage, pairs, pastedGame, pauseSpectate, pgnToast, pieceImgSrc, pieceSetId, playMove, playerAdvantageCp, playerColor, playerShare, practice, practiceMove, practiceNext, practiceReveal, promo, puzzleBand, puzzleFeedback, puzzleMove, puzzleSolved, pz, quizDoneToast, quizMove, quizOpening, rankBotAssessedElo, rankBotGames, ratingInfo, replayFull, replayIndex, replayPlaying, replayStep, restartCountdown, result, resumeSpectate, reviewIndex, reviewInfo, reviewMissedPuzzle, reviewing, rows, rushBandIdx, rushBestMap, rushDuration, rushLifetime, rushMilestone, rushMissed, rushMistakes, rushMode, rushResult, rushSolved, rushSummaryOpen, rushTimeLeft, saveDisplayName, setBotLine, setColorPick, setMissedStepIdx, setNameDraft, setNameEditOpen, setNewGameConfirm, setPlayerColor, setPromo, setReplayIndex, setReviewIndex, setRushSummaryOpen, setShareLinkFallback, setShareToast, setSiteView, shareLinkFallback, shareToast, spectateBlackIdx, spectateMode, spectateOpeningId, spectatePaused, spectateWhiteIdx, startPuzzle, startQuiz, startSpectate, status, stopSpectate, sweetheart, thinking, toggleAnalyze, toggleReplayPlay, uiT, undo, youDiff, youTaken }) {
+export default function PlayView({ GRADE_COLOR, GRADE_TAG, MoodImg, RushThemeArt, Tray, activeOpening, activePuzzle, analysisBusy, analysisContent, analysisLabel, analysisMove, analyzing, arrowLine, beginRestartCountdown, bestArrow, boardColorId, boardRef, boardVars, botColor, botLine, botMood, botTaken, colorPick, curMoveIdx, difficultyIdx, difficultyRef, displayName, dragCellSize, dragFrom, dragPos, eng, evalLabel, evalPawns, exitMissedAttempt, exitPractice, exitPuzzle, exitReplay, exitRush, formatClock, gameStyle, gradeDetail, gradeProgress, grading, hideEvalBar, hideRushSummary, hinting, inChk, liveOpening, missedAttempt, missedStepIdx, mode, moveGrades, moveList, nameDraft, nameEditOpen, newGame, newGameConfirm, nextPuzzle, onCopyPgn, onDifficultyChange, onHint, onMissedSwipeEnd, onMissedSwipeStart, openLeaderboard, openReviewPage, pairs, pastedGame, pauseSpectate, pgnToast, pieceImgSrc, pieceSetId, playMove, playerAdvantageCp, playerColor, playerShare, practice, practiceMove, practiceNext, practiceReveal, promo, puzzleBand, puzzleFeedback, puzzleMove, puzzleSolved, pz, quizDoneToast, quizMove, quizOpening, rankBotAssessedElo, rankBotGames, ratingInfo, replayFull, replayIndex, replayPlaying, replayStep, restartCountdown, result, resumeSpectate, reviewIndex, reviewInfo, reviewMissedPuzzle, reviewing, rows, rushBandIdx, rushBestMap, rushDuration, rushLifetime, rushMilestone, rushMissed, rushMistakes, rushMode, rushResult, rushSolved, rushSummaryOpen, rushTimeLeft, saveDisplayName, setBotLine, setColorPick, setMissedStepIdx, setNameDraft, setNameEditOpen, setNewGameConfirm, setPlayerColor, setPromo, setReplayIndex, setReviewIndex, setRushSummaryOpen, setShareLinkFallback, setShareToast, setSiteView, shareLinkFallback, shareToast, spectateBlackIdx, spectateMode, spectateOpeningId, spectatePaused, spectateWhiteIdx, startPuzzle, startQuiz, startSpectate, status, stopSpectate, sweetheart, thinking, toggleAnalyze, toggleReplayPlay, uiT, undo, youDiff, youTaken }) {
   return (
     <div className={"root" + (hideEvalBar ? " noEval" : "") + (boardColorId === "standard" ? " theme-standard" : "")} style={boardVars}>
       <StarField sweetheart={sweetheart} />
@@ -336,13 +336,13 @@ export default function PlayView({ GRADE_COLOR, GRADE_TAG, MoodImg, RushThemeArt
                   <>
                     <span className={"font-bold " + (sweetheart ? "text-[#1E9E5A]" : "text-[#6FCF97]")}>Correct!</span>
                     <button className={btn} onClick={practiceNext}>Next puzzle →</button>
-                    <button className={btn} onClick={exitPractice}>Exit</button>
+                    <button className={btn} onClick={exitPractice}>Close practice</button>
                   </>
                 ) : !atDrill ? (
                   <>
                     <span className={uiT.dimText}>Practice paused</span>
                     <button className={btn} onClick={() => setReviewIndex(ply)}>Resume</button>
-                    <button className={btn} onClick={exitPractice}>Exit</button>
+                    <button className={btn} onClick={exitPractice}>Close practice</button>
                   </>
                 ) : (
                   <>
@@ -352,7 +352,7 @@ export default function PlayView({ GRADE_COLOR, GRADE_TAG, MoodImg, RushThemeArt
                     </span>
                     {!practice.revealed && <button className={btn} onClick={practiceReveal}>Show answer</button>}
                     <button className={btn} onClick={practiceNext}>Skip</button>
-                    <button className={btn} onClick={exitPractice}>Exit</button>
+                    <button className={btn} onClick={exitPractice}>Close practice</button>
                   </>
                 )}
               </div>
@@ -417,10 +417,11 @@ export default function PlayView({ GRADE_COLOR, GRADE_TAG, MoodImg, RushThemeArt
                 disabled={thinking || hinting || !!result || !!promo || !!quizOpening || eng.getSide() !== playerColor}>
                 {hinting ? "Thinking…" : "Best Move"}
               </button>
-              <select value={difficultyIdx} onChange={e => onDifficultyChange(Number(e.target.value))}>
-                {DIFFICULTIES.map((d, i) => <option key={i} value={i}>{d.adaptive ? d.label : "Level: " + d.label}</option>)}
-              </select>
-              {moveList.length > 0 && <button className="btn ghost" onClick={onShare}>Share</button>}
+              {(moveList.length === 0 || !!result) && (
+                <select value={difficultyIdx} onChange={e => onDifficultyChange(Number(e.target.value))}>
+                  {DIFFICULTIES.map((d, i) => <option key={i} value={i}>{d.adaptive ? d.label : "Level: " + d.label}</option>)}
+                </select>
+              )}
               {result && <button className="btn gold" onClick={() => newGame(playerColor)}>Rematch!</button>}
               {shareToast && <div className="toast">{shareToast}</div>}
               {quizDoneToast && <div className="toast">{quizDoneToast}</div>}
@@ -450,7 +451,7 @@ export default function PlayView({ GRADE_COLOR, GRADE_TAG, MoodImg, RushThemeArt
               ) : (
                 <button className="btn ghost" onClick={pauseSpectate}>Pause</button>
               )}
-              <button className="btn ghost" onClick={stopSpectate}>Stop Spectating</button>
+              <button className="btn ghost" onClick={stopSpectate}>Stop watching</button>
             </div>
           )}
           {spectateMode && spectatePaused && analyzing && (
@@ -463,7 +464,7 @@ export default function PlayView({ GRADE_COLOR, GRADE_TAG, MoodImg, RushThemeArt
             <div className="ctrls puzzleCtrls">
               <button className="btn ghost" onClick={() => startPuzzle(activePuzzle)}>Retry</button>
               <button className="btn gold" onClick={nextPuzzle}>Next Puzzle</button>
-              <button className="btn ghost" onClick={() => { exitPuzzle(); setSiteView("puzzlesHome"); }}>Exit</button>
+              <button className="btn ghost" onClick={() => { exitPuzzle(); setSiteView("puzzlesHome"); }}>Back to puzzles</button>
             </div>
           )}
 
@@ -496,7 +497,7 @@ export default function PlayView({ GRADE_COLOR, GRADE_TAG, MoodImg, RushThemeArt
               <button className={"btn" + (analyzing ? "" : " ghost")} onClick={toggleAnalyze}>
                 {analyzing ? (analysisBusy ? "Analyzing…" : "Analyzing") : "Analyze"}
               </button>
-              <button className="btn ghost" onClick={exitMissedAttempt}>Exit</button>
+              <button className="btn ghost" onClick={exitMissedAttempt}>Back to results</button>
             </div>
           )}
 

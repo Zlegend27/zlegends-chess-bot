@@ -47,7 +47,7 @@ function MenuItem({ onClick, T, children }) {
   );
 }
 
-function ProfileMenu({ profile, onClose, onSignIn, onSignOut, onYourGames, onSettings, onMusic, surface, T }) {
+function ProfileMenu({ profile, onClose, onSignIn, onSignOut, onProfile, onShare, hasMoves, onYourGames, onSettings, onMusic, surface, T }) {
   useEffect(() => {
     const onKeyDown = (e) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKeyDown);
@@ -73,6 +73,8 @@ function ProfileMenu({ profile, onClose, onSignIn, onSignOut, onYourGames, onSet
           <MenuItem onClick={choose(onSignIn)} T={T}>Log in with Discord</MenuItem>
         )}
         <div className={divider} />
+        <MenuItem onClick={choose(onProfile)} T={T}>Profile</MenuItem>
+        {hasMoves && <MenuItem onClick={choose(onShare)} T={T}>Share this game</MenuItem>}
         <MenuItem onClick={choose(onYourGames)} T={T}>Your games</MenuItem>
         <MenuItem onClick={choose(onSettings)} T={T}>Settings</MenuItem>
         <MenuItem onClick={choose(onMusic)} T={T}>Juice Box</MenuItem>
@@ -125,7 +127,7 @@ export function AppHeader({ section, onSection, profile, sweetheart, dark, ...me
             <button
               type="button"
               onClick={menuActions.onSignIn}
-              className={`h-9 rounded-lg border ${T.cardBorder} bg-transparent px-3 text-sm font-bold ${T.ink} transition-colors hover:bg-violet/15 ${focus}`}
+              className={`h-11 rounded-lg border ${T.cardBorder} bg-transparent px-3 text-sm font-bold ${T.ink} transition-colors hover:bg-violet/15 ${focus}`}
             >
               Log in
             </button>
