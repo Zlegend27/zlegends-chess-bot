@@ -18,7 +18,7 @@ import { claimAnonymousData } from "./utils/accountMigration";
 import { loadSetting, saveSetting } from "./utils/storage";
 const RushThemeArt = lazy(() => import("./components/RushThemeArt"));
 import { getUiTheme } from "./utils/uiTheme";
-import { DIFFICULTIES } from "./utils/difficulties";
+import { CURRENT_LIST_VERSION, DIFFICULTIES, levelIdxFor, savedLevelIdx } from "./utils/difficulties";
 import { RANK_BOT_DEFAULT_ELO, RANK_BOT_OPENING_PLIES, RANK_BOT_MIN_TRACKED_MOVES, RANK_BOT_ASSESSMENT_EVERY, nextRankRating } from "./utils/rankBotMath";
 import { BALANCED, randomStyle, byStyle, pickPersonality } from "./utils/personalities";
 import { detectOpening } from "./utils/openingDetect";
@@ -65,6 +65,10 @@ const PIECE_NAME = { 1: "pawn", 2: "knight", 3: "bishop", 4: "rook", 5: "queen",
    punishment slip -- chess.com's vocabulary, and the distinction players
    actually learn from: a miss is a found-nothing, not a played-badly. */
 const SHADOW_MIN_THINK_MS = 700;
+/* Rank Bot first: he's the one to suggest. */
+const PLAY_LEVELS = DIFFICULTIES
+  .map((d, idx) => (d.id === "rank" ? { label: "Zlegend2700 (Rank Bot)", suggested: true, idx } : { label: d.label, idx }))
+  .sort((a, b) => Number(!!b.suggested) - Number(!!a.suggested));
 const GRADE_TAG = { brilliant: "!!", great: "★", best: "!", excellent: "✓", good: "•", book: "≡", inaccuracy: "?!", miss: "✗", mistake: "?", blunder: "??" };
 const GRADE_COLOR = { brilliant: "#3EE7F5", great: "#4EA8DE", best: "#6FCF97", excellent: "#8FD9A8", good: "#C9C2E8", book: "#9D8FC4", inaccuracy: "#F5D93E", miss: "#FF8A5C", mistake: "#F0A548", blunder: "#F05348" };
 
@@ -367,7 +371,13 @@ export default function ZlegendsBot() {
      yet before that) and skips entirely once the game already ended
      (New after checkmate isn't "abandoning" anything). */
   const [newGameConfirm, setNewGameConfirm] = useState(false);
-  const [difficultyIdx, setDifficultyIdx] = useState(() => resumed?.difficultyIdx ?? loadSetting("difficultyIdx", 2));
+  const [difficultyIdx, setDifficultyIdx] = useState(() => {
+    const saved = savedLevelIdx(loadSetting("difficultyIdx", 2), loadSetting("levelListVersion", 0));
+    saveSetting("difficultyIdx", saved);
+    saveSetting("levelListVersion", CURRENT_LIST_VERSION);
+    const level = resumed ? levelIdxFor(resumed.label) : -1;
+    return level >= 0 ? level : saved;
+  });
   const [gameStyle, setGameStyle] = useState(() => (resumed?.style ? byStyle(resumed.style) : randomStyle()));
   const [evalCp, setEvalCp] = useState(() => eng.evalWhite());
   const [musicOn, setMusicOn] = useState(false);
@@ -1559,7 +1569,7 @@ export default function ZlegendsBot() {
     liveGameRef.current = live;
     if (!live) { clearLiveGame(); return; }
     saveLiveGame({
-      moves: moveList, color: playerColor, difficultyIdx, label: difficultyRef.current.label, style: gameStyle.label,
+      moves: moveList, color: playerColor, label: difficultyRef.current.label, style: gameStyle.label,
       uid: rankBotGameUidRef.current, tracked: rankBotTrackedRef.current,
     });
   }, [mode, result, activePuzzle, quizOpening, spectateMode, pastedGame, rushMode, moveList, playerColor, difficultyIdx, gameStyle]);
@@ -2884,7 +2894,7 @@ export default function ZlegendsBot() {
 
   const inChk = eng.inCheckNow() && !result;
   /* Only the Stockfish tiers (and Rank Bot, which runs on Stockfish) wait
-     on the WASM boot. Casual and Master use the homemade worker, which has
+     on the WASM boot. Engine uses the homemade worker, which has
      no such delay, so they shouldn't be told the engine is warming up. */
   const usesStockfish = !!(difficultyRef.current.stockfishElo || difficultyRef.current.adaptive);
   const replayLabel = activeOpening ? activeOpening.name : "Shared game";
@@ -3044,10 +3054,10 @@ export default function ZlegendsBot() {
   const openDaily = () => { leaveActivity(); startPuzzle(dailyPuzzle(pz.PUZZLES)); setSiteView("play"); };
   /* A finished game may still be on the board, so Play starts a fresh one
      instead of reopening it. */
-  const startFromHub = () => {
-    const stale = moveList.length > 0 && !hasLiveGame;
+  const startFromHub = (idx) => {
     leaveActivity();
-    if (stale) newGame(playerColor);
+    if (moveList.length > 0) newGame(playerColor);
+    onDifficultyChange(idx);
     setSiteView("play");
   };
 
@@ -3088,7 +3098,6 @@ export default function ZlegendsBot() {
         onEnter={enterMode}
         onPlay={() => onSection("play")}
         onDaily={openDaily}
-        onOpenSaved={reviewSavedGame}
         hasLiveGame={hasLiveGame}
         daily={puzzlesData ? dailyPuzzle(pz.PUZZLES) : null}
         dailySolved={dailySolvedDate === todayKey()}
@@ -3106,11 +3115,10 @@ export default function ZlegendsBot() {
   if (siteView === "playHub") {
     return (
       <PlayPage
-        levels={DIFFICULTIES.map((d, idx) => ({ label: d.label, id: d.id, idx })).filter((d) => d.id !== "rank")}
-        levelIdx={difficultyIdx}
-        playLabel={`Play ${DIFFICULTIES[difficultyIdx].label}`}
-        onLevel={onDifficultyChange}
-        onPlay={startFromHub}
+        levels={PLAY_LEVELS}
+        hasLiveGame={hasLiveGame}
+        onPick={startFromHub}
+        onResume={() => setSiteView("play")}
         onMode={enterMode}
         sweetheart={sweetheart}
       />

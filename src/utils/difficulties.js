@@ -1,7 +1,6 @@
 import { STOCKFISH_MIN_ELO } from "../engine/stockfishEngine";
 
-/* Casual and Master keep this app's own homemade engine (they're the top
-   two tiers and were never in question). The three tiers below them are
+/* Engine keeps this app's own homemade engine. The three tiers below it are
    backed by a real Stockfish build instead of guessed search-time
    budgets, so "1000/1500/2000" are meant to actually mean something
    against chess.com's own rating scale -- see stockfishEngine.js for why.
@@ -12,10 +11,19 @@ export const DIFFICULTIES = [
   { label: "1500 Elo", stockfishElo: 1500, moveTimeMs: 700 },
   { label: "2000 Elo", stockfishElo: 2000, moveTimeMs: 1000 },
   { label: "Rank Bot", id: "rank", adaptive: true, moveTimeMs: 900 },
-  /* styleBook: Casual's opening picks lean into the bot's daily
-     personality (see STYLE_BOOK_BIAS in openingBook.js). Master stays on
-     the neutral popularity-weighted book, and the Stockfish tiers don't
-     use a book at all. */
-  { label: "Casual", ms: 600, book: true, styleBook: true },
-  { label: "Master", ms: 12000, book: true },
+  { label: "Engine", ms: 12000, book: true },
 ];
+
+/* Levels are saved by position, and Casual used to sit at 4 with Master at 5.
+   Casual players land on 1500 Elo, the nearest easy bot. */
+const LIST_VERSION = 2;
+export function savedLevelIdx(saved, version) {
+  if (version >= LIST_VERSION || saved < 4) return saved;
+  return saved === 4 ? 1 : 4;
+}
+export const CURRENT_LIST_VERSION = LIST_VERSION;
+
+/** The position of a level by name, including its name before a rename. */
+export function levelIdxFor(label) {
+  return DIFFICULTIES.findIndex((d) => d.label === (label === "Master" ? "Engine" : label));
+}

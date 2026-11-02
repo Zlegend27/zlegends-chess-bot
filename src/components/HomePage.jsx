@@ -1,15 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import StarField from "./StarField";
 import SocialBanner from "./SocialBanner";
 import BotBubble from "./BotBubble";
 import YouTubeTv from "./YouTubeTv";
 import MiniBoard from "./MiniBoard";
 import { pickWelcomeLine } from "../utils/botLines";
-import { fetchRecentGames, summarizeGame } from "../utils/gameHistory";
 import { utcDay } from "../utils/dailyStreak";
 import { getUiTheme } from "../utils/uiTheme";
-
-const OUTCOME_LABEL = { win: "Won", loss: "Lost", draw: "Draw", abandoned: "Abandoned" };
 
 /* Game Review is always on Home: it's a main feature, and on Chess.com
    reviews are paid, so it's the thing to point at. */
@@ -28,7 +25,7 @@ const SUGGESTIONS = [
  *  (AppNav.jsx) covers the full tour, and repeating it here is what the old
  *  tile grid did. Everything above the socials should fit on a phone screen. */
 export default function HomePage({
-  onEnter, onPlay, onDaily, onOpenSaved, hasLiveGame, daily, dailySolved, streak,
+  onEnter, onPlay, onDaily, hasLiveGame, daily, dailySolved, streak,
   boardColors, pieceImgSrc, firstVisit, rankElo, rankGames, sweetheart,
 }) {
   /* Picked once per mount so it doesn't reroll mid-typewriter. */
@@ -38,12 +35,6 @@ export default function HomePage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
-  const [lastGame, setLastGame] = useState(null);
-  useEffect(() => {
-    let live = true;
-    fetchRecentGames(1).then((r) => { if (live && r.games?.[0]) setLastGame(summarizeGame(r.games[0])); });
-    return () => { live = false; };
-  }, []);
 
   const T = useMemo(() => getUiTheme(sweetheart), [sweetheart]);
   const card = `flex w-full items-center gap-4 rounded-2xl border ${T.cardBorder} ${T.panelBg} p-3 text-left backdrop-blur-sm transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 ${T.ring}`;
@@ -76,18 +67,6 @@ export default function HomePage({
             )}
           </span>
         </button>
-
-        {lastGame && (
-          <button type="button" className={card} onClick={() => onOpenSaved(lastGame)}>
-            <span className="min-w-0 flex-1">
-              <span className={"block " + eyebrow}>Your last game</span>
-              <span className={"mt-1 block text-sm font-bold " + T.ink}>
-                vs {lastGame.opponent} · {OUTCOME_LABEL[lastGame.outcome]}
-              </span>
-            </span>
-            <span className={"shrink-0 text-xs font-bold " + T.interactiveText}>Review</span>
-          </button>
-        )}
 
         <button type="button" className={card} onClick={() => onEnter("review")}>
           <span className={`flex size-11 shrink-0 items-center justify-center rounded-xl ${T.accentText}`} aria-hidden="true">

@@ -1,6 +1,6 @@
 import { describe, test, expect } from "vitest";
 import { createEngine } from "../engine/chessEngine";
-import { DIFFICULTIES } from "./difficulties";
+import { CURRENT_LIST_VERSION, DIFFICULTIES, levelIdxFor, savedLevelIdx } from "./difficulties";
 import { BALANCED, pickPersonality } from "./personalities";
 import { detectOpening } from "./openingDetect";
 import { dailyPuzzle, todayKey } from "./dailyPuzzle";
@@ -9,8 +9,24 @@ import { materialState } from "./material";
 import { OPENINGS } from "./openings";
 
 describe("difficulty tiers", () => {
+  test("a level saved before Casual was removed still means the same bot", () => {
+    expect(DIFFICULTIES[savedLevelIdx(3, 0)].id).toBe("rank");
+    expect(DIFFICULTIES[savedLevelIdx(5, 0)].label).toBe("Engine");
+    expect(DIFFICULTIES[savedLevelIdx(4, 0)].label).toBe("1500 Elo");
+  });
+
+  test("a level saved since then is left alone", () => {
+    expect(savedLevelIdx(4, CURRENT_LIST_VERSION)).toBe(4);
+  });
+
+  test("a saved game finds its level by name, even the old Master", () => {
+    expect(DIFFICULTIES[levelIdxFor("Master")].label).toBe("Engine");
+    expect(DIFFICULTIES[levelIdxFor("Rank Bot")].id).toBe("rank");
+    expect(levelIdxFor("Casual")).toBe(-1);
+  });
+
   test("the Elo tiers come first, then Rank Bot, then the homemade engine", () => {
-    expect(DIFFICULTIES.map((d) => d.label)).toEqual(["1000 Elo", "1500 Elo", "2000 Elo", "Rank Bot", "Casual", "Master"]);
+    expect(DIFFICULTIES.map((d) => d.label)).toEqual(["1000 Elo", "1500 Elo", "2000 Elo", "Rank Bot", "Engine"]);
     expect(DIFFICULTIES.find((d) => d.id === "rank")).toBeTruthy();
   });
 });
