@@ -158,7 +158,7 @@ export default function GameReviewPage({ onBack, profile, sweetheart, onReview, 
       </div>
 
       <div className={`mt-4 w-full max-w-md rounded-2xl border ${T.cardBorder} ${T.panelBg} p-4 backdrop-blur-sm`}>
-        <h2 className={"m-0 mb-2 " + eyebrow}>{profile ? "Your games" : "Games you played here"}</h2>
+        <h2 className={"m-0 mb-2 " + eyebrow}>{profile ? "Your Game History" : "Games you played here"}</h2>
         {recentError ? (
           <div className="flex flex-col items-start gap-2">
             <p className={"m-0 text-sm " + T.dimText}>{recentError}</p>

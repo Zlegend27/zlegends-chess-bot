@@ -14,6 +14,9 @@ const SECTIONS = [
   { id: "learn", label: "Learn", icon: "M12 3 1 9l11 6 9-4.91V17h2V9L12 3zM5 13.18v3.82c0 1.1 3.13 3 7 3s7-1.9 7-3v-3.82l-7 3.82-7-3.82z" },
   { id: "review", label: "Game Review", icon: "M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" },
 ];
+const COG_ICON = "M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7 7 0 0 0-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.48.48 0 0 0-.47.41l-.36 2.54a7.3 7.3 0 0 0-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87a.48.48 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54a7 7 0 0 0 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.48.48 0 0 0-.12-.61l-2.01-1.58zM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2z";
+/* A juice box with its straw. */
+const JUICE_BOX_ICON = "M14.6 1.4 16.5 2l-1.1 3.5H16a1 1 0 0 1 1 1V21a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V9l2.5-3.5h3.8l1.3-4.1zM12 10.5c-1 1.4-2.4 2.8-2.4 4.4a2.4 2.4 0 0 0 4.8 0c0-1.6-1.4-3-2.4-4.4z";
 const PERSON_ICON = "M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5z";
 
 /* Solid rather than translucent: a backdrop blur here would make this the
@@ -75,9 +78,20 @@ function ProfileMenu({ profile, onClose, onSignIn, onSignOut, onProfile, onShare
         <div className={divider} />
         <MenuItem onClick={choose(onProfile)} T={T}>Profile</MenuItem>
         {hasMoves && <MenuItem onClick={choose(onShare)} T={T}>Share this game</MenuItem>}
-        <MenuItem onClick={choose(onYourGames)} T={T}>Your games</MenuItem>
-        <MenuItem onClick={choose(onSettings)} T={T}>Settings</MenuItem>
-        <MenuItem onClick={choose(onMusic)} T={T}>Juice Box</MenuItem>
+        <MenuItem onClick={choose(onYourGames)} T={T}>Your Game History</MenuItem>
+        <div className="flex gap-1">
+          <MenuItem onClick={choose(onMusic)} T={T}><Icon d={JUICE_BOX_ICON} size={20} /><span className="ml-2">Sound</span></MenuItem>
+          <button
+            type="button"
+            role="menuitem"
+            aria-label="Settings"
+            title="Settings"
+            onClick={choose(onSettings)}
+            className={`flex size-11 shrink-0 items-center justify-center rounded-lg border-0 bg-transparent ${T.ink} transition-colors hover:bg-violet/15`}
+          >
+            <Icon d={COG_ICON} size={22} />
+          </button>
+        </div>
         <div className={divider} />
         <div className="px-3 py-2"><SocialLinks /></div>
         {profile && (

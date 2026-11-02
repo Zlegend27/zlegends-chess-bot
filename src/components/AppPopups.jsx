@@ -3,23 +3,50 @@ import { PIECE_SETS, getPieceSet } from "../utils/pieceSets";
 import { BOARD_COLORS, getBoardColor } from "../utils/boardColors";
 import Modal from "./Modal";
 
+const JB_ICONS = {
+  volume: "M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05A4.5 4.5 0 0 0 16.5 12zM14 3.23v2.06a7 7 0 0 1 0 13.42v2.06a9 9 0 0 0 0-17.54z",
+  pawn: "M12 2a4 4 0 0 0-2.6 7.04L8 10.5V12h2c0 3-1.2 5-3 7h10c-1.8-2-3-4-3-7h2v-1.5l-1.4-1.46A4 4 0 0 0 12 2zM6 20h12v2H6z",
+  shuffle: "M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z",
+  prev: "M6 6h2v12H6zm3.5 6 8.5 6V6z",
+  next: "M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z",
+  play: "M8 5v14l11-7z",
+  pause: "M6 19h4V5H6v14zm8-14v14h4V5h-4z",
+};
+const JbIcon = ({ name, size = 20 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={JB_ICONS[name]} /></svg>
+);
+
 /* The Juice Box, Settings, Piece Designs and Board Colors popups. Loaded only
    when one of them is open (see App.jsx). Everything they read comes in as a
    prop, so this file holds no state of its own. */
-export default function AppPopups({ boardColorId, boardColorsOpen, chooseBoardColor, choosePieceSet, closeMusic, closeSettings, fmtTime, hideEvalBar, isMp3Source, jbDisabled, jbPlaying, jbTrackLabel, mp3Buffering, mp3CurrentTime, mp3Duration, mp3Idx, mp3Shuffle, mp3Tracks, musicOpen, musicSource, nextTrack, onVolume, pickMp3Track, pieceDesignsOpen, pieceImgSrc, pieceSetId, prevTrack, seekMp3, setBoardColorsOpen, setMusicSource, setPieceDesignsOpen, setSettingsOpen, settingsOpen, toggleEvalBar, toggleMusic, toggleShuffle, trackName, volume }) {
+export default function AppPopups({ sfxOn, toggleSfx, boardColorId, boardColorsOpen, chooseBoardColor, choosePieceSet, closeMusic, closeSettings, fmtTime, hideEvalBar, isMp3Source, jbDisabled, jbPlaying, jbTrackLabel, mp3Buffering, mp3CurrentTime, mp3Duration, mp3Idx, mp3Shuffle, mp3Tracks, musicOpen, musicSource, nextTrack, onVolume, pickMp3Track, pieceDesignsOpen, pieceImgSrc, pieceSetId, prevTrack, seekMp3, setBoardColorsOpen, setMusicSource, setPieceDesignsOpen, setSettingsOpen, settingsOpen, toggleEvalBar, toggleMusic, toggleShuffle, trackName, volume }) {
   return (
     <>
       <Modal open={musicOpen} onClose={closeMusic} closeLabel="Close Juice Box"
-        className="jbBox" style={{ width: 300, minWidth: undefined, maxWidth: undefined }}>
-            <img src="/VIRTUOSO_MOLE.webp" alt="Juice Box" className="jbMole" />
-            <select value={musicSource} onChange={e => setMusicSource(e.target.value)}>
-              <option value="chiptune">Chiptune</option>
-              {MP3_PLAYLISTS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
-            </select>
-            <div className="trackRow">
-              <span className="trackName" title={jbTrackLabel}>{"♪ " + jbTrackLabel}</span>
-              {!isMp3Source && trackName === "Neon Gambit" && <span className="trackTag">default</span>}
-              {isMp3Source && mp3Buffering && !jbDisabled && <span className="trackTag">buffering</span>}
+        className="jbBox" style={{ width: "min(440px, 92vw)", minWidth: undefined, maxWidth: undefined }}>
+            <div className="jbTitle">Sound</div>
+            <div className="jbVolume">
+              <JbIcon name="volume" />
+              <input type="range" min="0" max="100" value={volume} onChange={e => onVolume(Number(e.target.value))} aria-label="Music volume" />
+              <span className="volPct">{volume}%</span>
+              <button className={"jbSfx" + (sfxOn ? " on" : "")} onClick={toggleSfx} aria-pressed={sfxOn}
+                title={sfxOn ? "Turn sound effects off" : "Turn sound effects on"}>
+                <JbIcon name="pawn" size={18} />Effects
+              </button>
+            </div>
+            <div className="jbNow">
+              <img src="/VIRTUOSO_MOLE.webp" alt="" className="jbMole" />
+              <div className="jbNowText">
+                <select value={musicSource} onChange={e => setMusicSource(e.target.value)} aria-label="Music source">
+                  <option value="chiptune">Chiptune</option>
+                  {MP3_PLAYLISTS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                </select>
+                <div className="trackRow">
+                  <span className="trackName" title={jbTrackLabel}>{jbTrackLabel}</span>
+                  {!isMp3Source && trackName === "Neon Gambit" && <span className="trackTag">default</span>}
+                  {isMp3Source && mp3Buffering && !jbDisabled && <span className="trackTag">buffering</span>}
+                </div>
+              </div>
             </div>
             {isMp3Source && (
               <div className="mp3Progress">
@@ -29,23 +56,23 @@ export default function AppPopups({ boardColorId, boardColorsOpen, chooseBoardCo
                   value={Math.min(mp3CurrentTime, mp3Duration || 0)}
                   onChange={e => seekMp3(Number(e.target.value))}
                   disabled={jbDisabled || !mp3Duration}
+                  aria-label="Track position"
                 />
                 <span className="mp3Time">{fmtTime(mp3Duration)}</span>
               </div>
             )}
-            <div className="audioRow">
+            <div className="jbControls">
               {isMp3Source && (
-                <button className={"playBtn sm" + (mp3Shuffle ? " active" : "")} onClick={toggleShuffle} disabled={jbDisabled} title={mp3Shuffle ? "Shuffle on" : "Shuffle off"}>
-                  {"\u{1F500}"}
+                <button className={"jbBtn" + (mp3Shuffle ? " active" : "")} onClick={toggleShuffle} disabled={jbDisabled}
+                  aria-pressed={mp3Shuffle} aria-label="Shuffle" title={mp3Shuffle ? "Shuffle on" : "Shuffle off"}>
+                  <JbIcon name="shuffle" />
                 </button>
               )}
-              <button className="playBtn sm" onClick={prevTrack} disabled={jbDisabled} title="Previous track">{"◀◀"}</button>
-              <button className="playBtn" onClick={toggleMusic} disabled={jbDisabled} title={jbPlaying ? "Pause music" : "Play music"}>
-                {jbPlaying ? "❚❚" : "▶"}
+              <button className="jbBtn" onClick={prevTrack} disabled={jbDisabled} aria-label="Previous track" title="Previous track"><JbIcon name="prev" /></button>
+              <button className="jbBtn jbPlay" onClick={toggleMusic} disabled={jbDisabled} aria-label={jbPlaying ? "Pause music" : "Play music"} title={jbPlaying ? "Pause music" : "Play music"}>
+                <JbIcon name={jbPlaying ? "pause" : "play"} size={28} />
               </button>
-              <button className="playBtn sm" onClick={nextTrack} disabled={jbDisabled} title="Next track">{"▶▶"}</button>
-              <input type="range" min="0" max="100" value={volume} onChange={e => onVolume(Number(e.target.value))} />
-              <span className="volPct">{volume}%</span>
+              <button className="jbBtn" onClick={nextTrack} disabled={jbDisabled} aria-label="Next track" title="Next track"><JbIcon name="next" /></button>
             </div>
             {isMp3Source && mp3Tracks.length > 1 && (
               <div className="jbTrackList">

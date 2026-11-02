@@ -225,7 +225,7 @@ export default function ZlegendsBot() {
   }, [siteView]);
   const pieceImgSrc = (type, isWhite) => getPieceSet(pieceSetId).svgUrl(type, isWhite);
   const audioRef = useRef(null);
-  if (!audioRef.current) audioRef.current = createAudio(loadSetting("trackIdx", 0), volume / 100);
+  if (!audioRef.current) audioRef.current = createAudio(loadSetting("trackIdx", 0), volume / 100, loadSetting("sfxOn", true));
   const audio = audioRef.current;
 
   /* MP3 side of the Juice Box -- streamed from Supabase Storage rather than
@@ -2392,6 +2392,14 @@ export default function ZlegendsBot() {
       return next;
     });
   };
+  const [sfxOn, setSfxOn] = useState(() => loadSetting("sfxOn", true));
+  const toggleSfx = () => {
+    const on = !sfxOn;
+    setSfxOn(on);
+    audio.setSfxOn(on);
+    saveSetting("sfxOn", on);
+    if (on) audio.sfxMove();
+  };
   const pickMp3Track = (idx) => {
     setMp3Idx(idx);
     saveSetting("mp3Idx", idx);
@@ -3085,7 +3093,7 @@ export default function ZlegendsBot() {
 
       {(musicOpen || settingsOpen || pieceDesignsOpen || boardColorsOpen) && (
         <Suspense fallback={null}>
-          <AppPopups boardColorId={boardColorId} boardColorsOpen={boardColorsOpen} chooseBoardColor={chooseBoardColor} choosePieceSet={choosePieceSet} closeMusic={closeMusic} closeSettings={closeSettings} fmtTime={fmtTime} hideEvalBar={hideEvalBar} isMp3Source={isMp3Source} jbDisabled={jbDisabled} jbPlaying={jbPlaying} jbTrackLabel={jbTrackLabel} mp3Buffering={mp3Buffering} mp3CurrentTime={mp3CurrentTime} mp3Duration={mp3Duration} mp3Idx={mp3Idx} mp3Shuffle={mp3Shuffle} mp3Tracks={mp3Tracks} musicOpen={musicOpen} musicSource={musicSource} nextTrack={nextTrack} onVolume={onVolume} pickMp3Track={pickMp3Track} pieceDesignsOpen={pieceDesignsOpen} pieceImgSrc={pieceImgSrc} pieceSetId={pieceSetId} prevTrack={prevTrack} seekMp3={seekMp3} setBoardColorsOpen={setBoardColorsOpen} setMusicSource={setMusicSource} setPieceDesignsOpen={setPieceDesignsOpen} setSettingsOpen={setSettingsOpen} settingsOpen={settingsOpen} toggleEvalBar={toggleEvalBar} toggleMusic={toggleMusic} toggleShuffle={toggleShuffle} trackName={trackName} volume={volume} />
+          <AppPopups sfxOn={sfxOn} toggleSfx={toggleSfx} boardColorId={boardColorId} boardColorsOpen={boardColorsOpen} chooseBoardColor={chooseBoardColor} choosePieceSet={choosePieceSet} closeMusic={closeMusic} closeSettings={closeSettings} fmtTime={fmtTime} hideEvalBar={hideEvalBar} isMp3Source={isMp3Source} jbDisabled={jbDisabled} jbPlaying={jbPlaying} jbTrackLabel={jbTrackLabel} mp3Buffering={mp3Buffering} mp3CurrentTime={mp3CurrentTime} mp3Duration={mp3Duration} mp3Idx={mp3Idx} mp3Shuffle={mp3Shuffle} mp3Tracks={mp3Tracks} musicOpen={musicOpen} musicSource={musicSource} nextTrack={nextTrack} onVolume={onVolume} pickMp3Track={pickMp3Track} pieceDesignsOpen={pieceDesignsOpen} pieceImgSrc={pieceImgSrc} pieceSetId={pieceSetId} prevTrack={prevTrack} seekMp3={seekMp3} setBoardColorsOpen={setBoardColorsOpen} setMusicSource={setMusicSource} setPieceDesignsOpen={setPieceDesignsOpen} setSettingsOpen={setSettingsOpen} settingsOpen={settingsOpen} toggleEvalBar={toggleEvalBar} toggleMusic={toggleMusic} toggleShuffle={toggleShuffle} trackName={trackName} volume={volume} />
         </Suspense>
       )}
     </div>

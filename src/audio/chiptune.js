@@ -26,8 +26,12 @@ const TRACKS = [
     pad:  [45, 48, 52] },
 ];
 
-export function createAudio(initialTrackIdx = 0, initialVolume = 0.6) {
-  const st = { ctx: null, master: null, playing: false, nextTime: 0, step: 0, timer: null, volume: initialVolume };
+/* Sound effects have their own output, so the music volume doesn't silence
+   them and they can be switched off without touching the music. */
+const SFX_LEVEL = 0.6;
+
+export function createAudio(initialTrackIdx = 0, initialVolume = 0.6, initialSfxOn = true) {
+  const st = { ctx: null, master: null, sfx: null, sfxOn: initialSfxOn, playing: false, nextTime: 0, step: 0, timer: null, volume: initialVolume };
   const f = m => 440 * Math.pow(2, (m - 69) / 12);
   const ensure = () => {
     if (!st.ctx) {
@@ -36,16 +40,19 @@ export function createAudio(initialTrackIdx = 0, initialVolume = 0.6) {
       st.master = st.ctx.createGain();
       st.master.gain.value = st.volume;
       st.master.connect(st.ctx.destination);
+      st.sfx = st.ctx.createGain();
+      st.sfx.gain.value = st.sfxOn ? SFX_LEVEL : 0;
+      st.sfx.connect(st.ctx.destination);
     }
     if (st.ctx.state === "suspended") st.ctx.resume();
   };
-  const voice = (freq, t, dur, type, g0) => {
+  const voice = (freq, t, dur, type, g0, output = st.master) => {
     const o = st.ctx.createOscillator(), g = st.ctx.createGain();
     o.type = type; o.frequency.value = freq;
     g.gain.setValueAtTime(0.0001, t);
     g.gain.linearRampToValueAtTime(g0, t + 0.012);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g); g.connect(st.master);
+    o.connect(g); g.connect(output);
     o.start(t); o.stop(t + dur + 0.05);
   };
   st.trackIdx = ((initialTrackIdx % TRACKS.length) + TRACKS.length) % TRACKS.length;
@@ -99,10 +106,11 @@ export function createAudio(initialTrackIdx = 0, initialVolume = 0.6) {
     if (st.playing) st.nextTime = st.ctx.currentTime + 0.06;
   };
   st.setVolume = v => { st.volume = v; if (st.master) st.master.gain.value = v; };
+  st.setSfxOn = on => { st.sfxOn = on; if (st.sfx) st.sfx.gain.value = on ? SFX_LEVEL : 0; };
   st.sfxMove = () => {
     ensure();
     const t = st.ctx.currentTime;
-    voice(520, t, 0.07, "triangle", 0.14);
+    voice(520, t, 0.07, "triangle", 0.14, st.sfx);
   };
   st.sfxCapture = () => {
     ensure();
@@ -113,7 +121,7 @@ export function createAudio(initialTrackIdx = 0, initialVolume = 0.6) {
     o.frequency.exponentialRampToValueAtTime(140, t + 0.16);
     g.gain.setValueAtTime(0.16, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
-    o.connect(g); g.connect(st.master);
+    o.connect(g); g.connect(st.sfx);
     o.start(t); o.stop(t + 0.2);
   };
   st.sfxWrong = () => {
@@ -125,7 +133,7 @@ export function createAudio(initialTrackIdx = 0, initialVolume = 0.6) {
     o.frequency.exponentialRampToValueAtTime(90, t + 0.22);
     g.gain.setValueAtTime(0.14, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
-    o.connect(g); g.connect(st.master);
+    o.connect(g); g.connect(st.sfx);
     o.start(t); o.stop(t + 0.26);
   };
   /* Puzzle Rush clock hitting zero -- two-note alarm buzz. */
@@ -139,7 +147,7 @@ export function createAudio(initialTrackIdx = 0, initialVolume = 0.6) {
       g.gain.setValueAtTime(0.0001, t + off);
       g.gain.linearRampToValueAtTime(0.16, t + off + 0.02);
       g.gain.exponentialRampToValueAtTime(0.0001, t + off + 0.14);
-      o.connect(g); g.connect(st.master);
+      o.connect(g); g.connect(st.sfx);
       o.start(t + off); o.stop(t + off + 0.16);
     });
   };
@@ -148,7 +156,7 @@ export function createAudio(initialTrackIdx = 0, initialVolume = 0.6) {
     ensure();
     const t = st.ctx.currentTime;
     [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
-      voice(freq, t + i * 0.09, 0.3, "triangle", 0.16);
+      voice(freq, t + i * 0.09, 0.3, "triangle", 0.16, st.sfx);
     });
   };
   return st;
