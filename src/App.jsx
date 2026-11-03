@@ -65,7 +65,7 @@ const PIECE_NAME = { 1: "pawn", 2: "knight", 3: "bishop", 4: "rook", 5: "queen",
    punishment slip -- chess.com's vocabulary, and the distinction players
    actually learn from: a miss is a found-nothing, not a played-badly. */
 const SHADOW_MIN_THINK_MS = 700;
-const MATE_FX_MS = 3400;
+const MATE_FX_MS = 4600;
 /* Rank Bot first: he's the one to suggest. */
 const PLAY_LEVELS = DIFFICULTIES
   .map((d, idx) => (d.id === "rank" ? { label: "Zlegend2700 (Rank Bot)", suggested: true, idx } : { label: d.label, idx }))

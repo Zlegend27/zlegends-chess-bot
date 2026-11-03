@@ -136,31 +136,36 @@ export function createAudio(initialTrackIdx = 0, initialVolume = 0.6, initialSfx
     o.connect(g); g.connect(st.sfx);
     o.start(t); o.stop(t + 0.26);
   };
-  /* Checkmate: the king cracks, lands with a thud, and crumbles. */
+  /* Checkmate, timed to KingShatter: the crack creeps with small ticks, then
+     the king breaks with a snap and a thud and crumbles. */
   st.sfxCheckmate = () => {
     ensure();
-    const t = st.ctx.currentTime + 0.1;
+    const t = st.ctx.currentTime;
     const rate = st.ctx.sampleRate;
     const noise = st.ctx.createBuffer(1, rate * 0.5, rate);
     const samples = noise.getChannelData(0);
     for (let i = 0; i < samples.length; i++) samples[i] = (Math.random() * 2 - 1) * (1 - i / samples.length) ** 3;
-    const crack = st.ctx.createBufferSource(), filter = st.ctx.createBiquadFilter(), crackGain = st.ctx.createGain();
-    crack.buffer = noise;
-    filter.type = "highpass"; filter.frequency.value = 1400;
-    crackGain.gain.value = 0.55;
-    crack.connect(filter); filter.connect(crackGain); crackGain.connect(st.sfx);
-    crack.start(t);
+    const snap = (at, level, length) => {
+      const src = st.ctx.createBufferSource(), filter = st.ctx.createBiquadFilter(), g = st.ctx.createGain();
+      src.buffer = noise;
+      filter.type = "highpass"; filter.frequency.value = 1400;
+      g.gain.value = level;
+      src.connect(filter); filter.connect(g); g.connect(st.sfx);
+      src.start(at, 0, length);
+    };
+    [0.3, 0.45, 0.6, 0.75, 0.9, 1.02].forEach((at, i) => snap(t + at, 0.1 + i * 0.03, 0.05));
+    snap(t + 1.43, 0.6, 0.5);
     const o = st.ctx.createOscillator(), g = st.ctx.createGain();
     o.type = "sine";
-    o.frequency.setValueAtTime(150, t + 0.4);
-    o.frequency.exponentialRampToValueAtTime(38, t + 0.85);
-    g.gain.setValueAtTime(0.0001, t + 0.39);
-    g.gain.linearRampToValueAtTime(0.6, t + 0.41);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.9);
+    o.frequency.setValueAtTime(150, t + 1.45);
+    o.frequency.exponentialRampToValueAtTime(38, t + 1.9);
+    g.gain.setValueAtTime(0.0001, t + 1.44);
+    g.gain.linearRampToValueAtTime(0.6, t + 1.46);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.95);
     o.connect(g); g.connect(st.sfx);
-    o.start(t + 0.39); o.stop(t + 0.95);
+    o.start(t + 1.44); o.stop(t + 2);
     for (let i = 0; i < 9; i++) {
-      voice(240 + Math.random() * 520, t + 0.5 + i * 0.075 + Math.random() * 0.04, 0.05, "square", 0.05, st.sfx);
+      voice(240 + Math.random() * 520, t + 1.55 + i * 0.075 + Math.random() * 0.04, 0.05, "square", 0.05, st.sfx);
     }
   };
   /* Puzzle Rush clock hitting zero -- two-note alarm buzz. */

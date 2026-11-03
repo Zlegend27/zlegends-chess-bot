@@ -3,6 +3,10 @@
    each clipped to one piece of it, so this works with every piece set. `done`
    skips straight to the rubble. */
 const CRACK = [[50, 0], [44, 20], [56, 38], [46, 58], [54, 78], [48, 100]];
+const BRANCHES = ["44,20 30,30 22,27", "56,38 70,46 77,42", "46,58 33,66 28,76", "54,78 66,84 71,93"];
+const points = CRACK.map(([x, y]) => `${x},${y}`).join(" ");
+/* Dark line for a white king, the bright edge for a black one. */
+const crackLine = (pts, cls, key) => <polyline key={key} points={pts} pathLength="1" className={cls} />;
 
 /* Between each pair of crack points, one shard left of it and one right. */
 const SHARDS = CRACK.slice(1).flatMap((point, i) => {
@@ -25,11 +29,14 @@ export default function KingShatter({ x, y, src, colorClass, title, subtitle, do
           <img key={i} src={src} alt="" className={"pc kingShard " + colorClass} style={{
             clipPath: `polygon(${shard.clip})`,
             "--split": `${shard.side * 7}%`, "--x": `${shard.x}%`, "--y": `${shard.y}%`, "--r": `${shard.r}deg`,
-            animationDelay: `${0.5 + i * 0.03}s`,
+            animationDelay: `${1.45 + i * 0.03}s`,
           }} />
         ))}
         <svg className="kingCrack" viewBox="0 0 100 100" preserveAspectRatio="none">
-          <polyline points={CRACK.map(([px, py]) => `${px},${py}`).join(" ")} pathLength="1" />
+          {crackLine(points, "glow main")}
+          {crackLine(points, "core main")}
+          {BRANCHES.map((b, i) => crackLine(b, "glow branch", `g${i}`))}
+          {BRANCHES.map((b, i) => crackLine(b, "core branch", `c${i}`))}
         </svg>
       </div>
       {!done && (
