@@ -3,6 +3,7 @@ import { createEngine, mFrom, mPromo, mTo, M120TO64, EMPTY } from "../engine/che
 import { PUZZLES } from "../utils/puzzles";
 import { judgePuzzleMove } from "../utils/puzzleSession";
 import { getBoardColor } from "../utils/boardColors";
+import MiniBoard from "../components/MiniBoard";
 import { TacticaScene } from "./scene";
 
 /* Chess Tactica technical test: one real puzzle on a 3D board, so the
@@ -14,6 +15,7 @@ const TEST_PUZZLE_ID = "00IEW";
 const KNIGHT = 2, QUEEN = 5;
 const REPLY_DELAY_MS = 550;
 const OPENING_PAUSE_MS = 1100;
+const STUDY_HINT = "Tap the map to study the whole board.";
 
 const sqOf = (sq120) => M120TO64[sq120];
 
@@ -43,7 +45,7 @@ export default function TacticaPage({ pieceImgSrc, boardColorId, sweetheart }) {
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [chosen, setChosen] = useState(null);
   const [busy, setBusy] = useState(true);
-  const [message, setMessage] = useState("Study the position, then switch to the close view to move.");
+  const [message, setMessage] = useState(STUDY_HINT);
   const [solved, setSolved] = useState(false);
   const [stats, setStats] = useState(null);
 
@@ -64,8 +66,8 @@ export default function TacticaPage({ pieceImgSrc, boardColorId, sweetheart }) {
   };
 
   /* One scene per mount, rebuilt if the phone drops the 3D context. */
+  const board = getBoardColor(boardColorId);
   useEffect(() => {
-    const board = getBoardColor(boardColorId);
     const scene = new TacticaScene(canvasRef.current, {
       flipped: side === -1,
       colors: {
@@ -130,7 +132,9 @@ export default function TacticaPage({ pieceImgSrc, boardColorId, sweetheart }) {
     if (reply) await playMove(reply);
     setMessage(`Opponent played ${verdict.reply}.`);
     setPlayed([...afterMine, verdict.reply]);
-    setSelectedIdx((i) => Math.min(i, friendlySquares(eng, side).length - 1));
+    /* The character that just moved stays selected for the next move. */
+    const stillHere = friendlySquares(eng, side).indexOf(sqOf(mTo(move)));
+    setSelectedIdx((i) => (stillHere >= 0 ? stillHere : Math.min(i, friendlySquares(eng, side).length - 1)));
     setBusy(false);
   };
 
@@ -140,7 +144,7 @@ export default function TacticaPage({ pieceImgSrc, boardColorId, sweetheart }) {
     setSolved(false);
     setChosen(null);
     setSelectedIdx(0);
-    setMessage("Study the position, then switch to the close view to move.");
+    setMessage(STUDY_HINT);
     sceneRef.current?.setPieces(piecesNow());
   };
 
@@ -166,48 +170,58 @@ export default function TacticaPage({ pieceImgSrc, boardColorId, sweetheart }) {
 
   const squareName = (sq) => `${"abcdefgh"[sq % 8]}${((sq / 8) | 0) + 1}`;
   const pieceName = (sq) => ["", "Pawn", "Knight", "Bishop", "Rook", "Queen", "King"][Math.abs(eng.pieceAt(sq))] + ` on ${squareName(sq)}`;
-  const iconBtn = "flex size-11 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white disabled:opacity-40";
+  const iconBtn = "flex size-10 shrink-0 items-center justify-center rounded-full border border-white/20 bg-black/45 text-lg text-white disabled:opacity-35";
+  const isAttack = chosen != null && captures.includes(chosen);
+  const toggleView = () => { if (!busy || played.length) setView((v) => (v === "board" ? "close" : "board")); };
 
+  /* A phone-shaped column, even on a wide screen: the game is played upright. */
   return (
-    <div className="relative w-full overflow-hidden" style={{ height: "calc(100dvh - var(--headerH))" }}>
+    <div className="relative mx-auto w-full max-w-[480px] overflow-hidden" style={{ height: "calc(100dvh - var(--headerH))" }}>
       <canvas key={sceneKey} ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-center gap-2 p-3">
-        <div className="pointer-events-auto flex gap-2">
-          <button type="button" className={`btn ${view === "board" ? "" : "ghost"}`} onClick={() => setView("board")}>Board view</button>
-          <button type="button" className={`btn ${view === "close" ? "" : "ghost"}`} onClick={() => setView("close")} disabled={busy && view === "board" && !played.length}>Close view</button>
-        </div>
-        {message && <p className="m-0 max-w-sm rounded-lg bg-black/55 px-3 py-2 text-center text-sm text-white">{message}</p>}
+      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3">
+        {message ? <p className="m-0 max-w-[60%] rounded-lg bg-black/55 px-3 py-2 text-sm text-white">{message}</p> : <span />}
+        <button
+          type="button"
+          onClick={toggleView}
+          aria-label={view === "board" ? "Back to the close view" : "Show the whole board"}
+          className={"pointer-events-auto shrink-0 cursor-pointer rounded-lg border-2 bg-black/40 p-1 " + (view === "board" ? "border-[#3EE7F5]" : "border-white/30")}
+        >
+          <MiniBoard fen={eng.fen()} colors={board} pieceImgSrc={pieceImgSrc} size={96} flipped={side === -1} label="Map of the board" />
+          <span className="mt-1 block text-center text-[10px] font-bold uppercase tracking-wide text-white">{view === "board" ? "Close view" : "Map"}</span>
+        </button>
       </div>
 
-      <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+      <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 bg-gradient-to-t from-black/70 to-transparent px-3 pt-6 pb-[calc(0.6rem+env(safe-area-inset-bottom))]">
         {solved ? (
           <button type="button" className="btn gold" onClick={restart}>Play it again</button>
         ) : (
-          <>
-            <div className="flex items-center gap-3">
-              <button type="button" className={iconBtn} onClick={() => cycleCharacter(-1)} aria-label="Previous character">‹</button>
-              <span className="min-w-36 rounded-lg bg-black/55 px-3 py-2 text-center text-sm font-bold text-white">{selected != null ? pieceName(selected) : ""}</span>
-              <button type="button" className={iconBtn} onClick={() => cycleCharacter(1)} aria-label="Next character">›</button>
+          <div className="flex w-full items-center justify-between gap-2">
+            <button type="button" className={iconBtn} onClick={() => cycleCharacter(-1)} disabled={busy} aria-label="Previous character">‹</button>
+            <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
+              <span className="truncate text-sm font-bold text-white">{selected != null ? pieceName(selected) : ""}</span>
+              {view === "close" && (
+                <div className="flex items-center gap-2">
+                  <button type="button" className={iconBtn + " size-8 text-sm"} onClick={() => cycleTarget(-1)} disabled={!canMove || !targets.length} aria-label="Previous square">◀</button>
+                  {chosen != null ? (
+                    <>
+                      <button type="button" className={"btn " + (isAttack ? "gold" : "")} onClick={confirm}>{isAttack ? "Attack" : "Confirm"} {squareName(chosen)}</button>
+                      <button type="button" className="border-0 bg-transparent text-xs text-white/75 underline" onClick={() => setChosen(null)}>Cancel</button>
+                    </>
+                  ) : (
+                    <span className="px-2 text-xs text-white/80">{busy ? "…" : targets.length ? "Tap a glowing square" : "This one can't move"}</span>
+                  )}
+                  <button type="button" className={iconBtn + " size-8 text-sm"} onClick={() => cycleTarget(1)} disabled={!canMove || !targets.length} aria-label="Next square">▶</button>
+                </div>
+              )}
             </div>
-            {view === "close" && (
-              <div className="flex items-center gap-3">
-                <button type="button" className={iconBtn} onClick={() => cycleTarget(-1)} disabled={!canMove || !targets.length} aria-label="Previous square">◀</button>
-                {chosen != null ? (
-                  <>
-                    <button type="button" className={"btn " + (captures.includes(chosen) ? "gold" : "")} onClick={confirm}>{captures.includes(chosen) ? "Attack" : "Confirm"} {squareName(chosen)}</button>
-                    <button type="button" className="btn ghost" onClick={() => setChosen(null)}>Cancel</button>
-                  </>
-                ) : (
-                  <span className="rounded-lg bg-black/55 px-3 py-2 text-xs text-white">{targets.length ? "Pick a square" : "No legal moves"}</span>
-                )}
-                <button type="button" className={iconBtn} onClick={() => cycleTarget(1)} disabled={!canMove || !targets.length} aria-label="Next square">▶</button>
-              </div>
-            )}
-            <button type="button" className="border-0 bg-transparent text-xs text-white/70 underline" onClick={restart}>Restart puzzle</button>
-          </>
+            <button type="button" className={iconBtn} onClick={() => cycleCharacter(1)} disabled={busy} aria-label="Next character">›</button>
+          </div>
         )}
-        <span className="text-[10px] text-white/60">Test build · {stats?.fps ? `${stats.fps} fps while moving` : "measuring…"} · {stats?.pixelRatio ?? "-"}x</span>
+        <div className="flex items-center gap-3 text-[10px] text-white/55">
+          {!solved && <button type="button" className="border-0 bg-transparent p-0 text-[10px] text-white/70 underline" onClick={restart}>Restart</button>}
+          <span>Test build · {stats?.fps ? `${stats.fps} fps` : "measuring…"} · {stats?.pixelRatio ?? "-"}x</span>
+        </div>
       </div>
 
       {lost && (

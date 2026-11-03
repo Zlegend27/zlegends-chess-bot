@@ -125,25 +125,42 @@ export class TacticaScene {
     this.wake();
   }
 
-  /** Highlights for the selected character: its square, every legal
-   *  destination with an arrow toward it, and the chosen one. */
+  /** Highlights for the selected character: a ring under its feet, a glowing
+   *  outline on every square it can reach, and one arrow to the chosen one. */
   setMarks({ selected = null, targets = [], chosen = null, captures = [] } = {}) {
     this.marks.clear();
-    const flat = (geometry, color, opacity, at, y = 0.02) => {
-      const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false }));
+    const flat = (geometry, color, opacity, at, y, additive = false) => {
+      const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
+        color, transparent: true, opacity, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
+      }));
       mesh.rotation.x = -Math.PI / 2;
       mesh.position.copy(at).setY(y);
       this.marks.add(mesh);
-      return mesh;
     };
-    if (selected != null) flat(new THREE.PlaneGeometry(0.96, 0.96), this.colors.select, 0.45, this.worldOf(selected));
-    const from = selected != null ? this.worldOf(selected) : null;
+    this.outlineGeometry ??= (() => {
+      const outer = new THREE.Shape();
+      outer.moveTo(-0.46, -0.46); outer.lineTo(0.46, -0.46); outer.lineTo(0.46, 0.46); outer.lineTo(-0.46, 0.46); outer.closePath();
+      const hole = new THREE.Path();
+      hole.moveTo(-0.38, -0.38); hole.lineTo(-0.38, 0.38); hole.lineTo(0.38, 0.38); hole.lineTo(0.38, -0.38); hole.closePath();
+      outer.holes.push(hole);
+      return new THREE.ShapeGeometry(outer);
+    })();
+    this.glowGeometry ??= new THREE.PlaneGeometry(0.96, 0.96);
+    if (selected != null) {
+      const at = this.worldOf(selected);
+      flat(new THREE.CircleGeometry(0.55, 40), this.colors.select, 0.2, at, 0.015, true);
+      flat(new THREE.RingGeometry(0.36, 0.46, 48), this.colors.select, 0.95, at, 0.02);
+    }
     for (const sq of targets) {
-      const to = this.worldOf(sq);
+      const at = this.worldOf(sq);
       const isChosen = sq === chosen;
       const color = captures.includes(sq) ? this.colors.attack : isChosen ? this.colors.target : this.colors.highlight;
-      flat(isChosen ? new THREE.PlaneGeometry(0.96, 0.96) : new THREE.CircleGeometry(0.16, 20), color, isChosen ? 0.6 : 0.85, to, 0.03);
-      if (from) this.addArrow(from, to, color, isChosen ? 0.75 : 0.35);
+      flat(this.glowGeometry, color, isChosen ? 0.35 : 0.14, at, 0.02, true);
+      flat(this.outlineGeometry, color, isChosen ? 1 : 0.85, at, 0.03);
+    }
+    if (selected != null && chosen != null) {
+      const color = captures.includes(chosen) ? this.colors.attack : this.colors.target;
+      this.addArrow(this.worldOf(selected), this.worldOf(chosen), color, 0.85);
     }
     this.wake();
   }
@@ -170,15 +187,16 @@ export class TacticaScene {
     this.moveCamera(new THREE.Vector3(0, 11, 8), new THREE.Vector3(0, 0, 0.6));
   }
 
-  /** Tactical view: just behind the character, looking across the board. A
-   *  far destination pulls the camera back so it stays in sight. */
+  /** Tactical view: low over the character's shoulder, looking out across
+   *  the board. A far destination pulls the camera back so it stays in sight.
+   *  Switching characters swings the camera from one to the next. */
   showCloseUp(sq, destination = null) {
     const at = this.worldOf(sq);
-    const toward = destination != null ? this.worldOf(destination) : at.clone().add(new THREE.Vector3(0, 0, -2.5));
-    const reach = destination != null ? at.distanceTo(toward) : 2.5;
-    const pull = 1 + Math.max(0, reach - 2) * 0.22;
-    const look = new THREE.Vector3().addVectors(at, toward).multiplyScalar(0.5).setY(0.4);
-    const position = at.clone().add(new THREE.Vector3(0, 2.3 * pull, 3.1 * pull));
+    const toward = destination != null ? this.worldOf(destination) : at.clone().add(new THREE.Vector3(0, 0, -3.5));
+    const reach = destination != null ? at.distanceTo(toward) : 3.5;
+    const pull = 1 + Math.max(0, reach - 2.5) * 0.2;
+    const look = new THREE.Vector3().addVectors(at, toward).multiplyScalar(0.5).setY(0.35);
+    const position = at.clone().add(new THREE.Vector3(0.7, 2.2 * pull, 3.1 * pull));
     this.moveCamera(position, look);
   }
 
@@ -247,7 +265,7 @@ export class TacticaScene {
     if (!w || !h) return;
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
-    this.camera.fov = w < h ? 58 : 45;
+    this.camera.fov = w < h ? 62 : 45;
     this.camera.updateProjectionMatrix();
     this.wake();
   }
