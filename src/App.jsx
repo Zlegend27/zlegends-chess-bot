@@ -27,6 +27,7 @@ import { pickTrackIndex } from "./utils/trackIndex";
 import { materialState } from "./utils/material";
 import { RECHECK_LOSS, pointsLost, sideAccuracy } from "./utils/reviewScoring";
 import { readRankBotTest } from "./utils/rankBotTest";
+import { judgePuzzleMove } from "./utils/puzzleSession";
 import { clearLiveGame, isResumable, loadLiveGame, saveLiveGame } from "./utils/liveGame";
 import { reloadIfStaleBuild } from "./utils/staleBuild";
 import { gradeGame } from "./utils/gradeGame";
@@ -2067,10 +2068,9 @@ export default function ZlegendsBot() {
   }, [rushMode, rushResult, rushTimeLeft, rushDuration, siteView]);
 
   const puzzleMove = useCallback((m) => {
-    const idx = moveListRef.current.length;
-    const expectedSan = activePuzzle.moves[idx];
-    const attemptedSan = eng.sanOf(m);
-    if (attemptedSan !== expectedSan) {
+    const verdict = judgePuzzleMove(eng, activePuzzle, moveListRef.current, m);
+    const attemptedSan = verdict.san;
+    if (!verdict.ok) {
       try { audio.sfxWrong(); } catch { /* audio unavailable */ }
       setSelected(-1); setTargets([]);
       if (rushMode) {
@@ -2105,7 +2105,7 @@ export default function ZlegendsBot() {
     setEvalCp(eng.evalWhite());
     setPuzzleFeedback(null);
 
-    if (newMoveList.length === activePuzzle.moves.length) {
+    if (verdict.solved) {
       setPuzzleSolved(true);
       try { audio.sfxCapture(); } catch { /* audio unavailable */ }
       const daily = dailyPuzzle(pz.PUZZLES);
@@ -2135,7 +2135,7 @@ export default function ZlegendsBot() {
       rerender();
       return;
     }
-    const replySan = activePuzzle.moves[newMoveList.length];
+    const replySan = verdict.reply;
     puzzleTimeoutRef.current = setTimeout(() => {
       const legal = eng.legalMoves();
       const replyMove = legal.find(mv => eng.sanOf(mv) === replySan);
