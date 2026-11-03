@@ -2,6 +2,7 @@ import { MP3_PLAYLISTS } from "../utils/musicLibrary";
 import { PIECE_SETS, getPieceSet } from "../utils/pieceSets";
 import { BOARD_COLORS, getBoardColor } from "../utils/boardColors";
 import Modal from "./Modal";
+import PixelAvatar, { ZPAL, ZPIX } from "./PixelAvatar";
 
 const JB_ICONS = {
   volume: "M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05A4.5 4.5 0 0 0 16.5 12zM14 3.23v2.06a7 7 0 0 1 0 13.42v2.06a9 9 0 0 0 0-17.54z",
@@ -19,12 +20,12 @@ const JbIcon = ({ name, size = 20 }) => (
 /* The Juice Box, Settings, Piece Designs and Board Colors popups. Loaded only
    when one of them is open (see App.jsx). Everything they read comes in as a
    prop, so this file holds no state of its own. */
-export default function AppPopups({ sfxOn, toggleSfx, boardColorId, boardColorsOpen, chooseBoardColor, choosePieceSet, closeMusic, closeSettings, fmtTime, hideEvalBar, isMp3Source, jbDisabled, jbPlaying, jbTrackLabel, mp3Buffering, mp3CurrentTime, mp3Duration, mp3Idx, mp3Shuffle, mp3Tracks, musicOpen, musicSource, nextTrack, onVolume, pickMp3Track, pieceDesignsOpen, pieceImgSrc, pieceSetId, prevTrack, seekMp3, setBoardColorsOpen, setMusicSource, setPieceDesignsOpen, setSettingsOpen, settingsOpen, toggleEvalBar, toggleMusic, toggleShuffle, trackName, volume }) {
+export default function AppPopups({ sweetheart, chooseTheme, sfxOn, toggleSfx, boardColorId, boardColorsOpen, chooseBoardColor, choosePieceSet, closeMusic, closeSettings, fmtTime, hideEvalBar, isMp3Source, jbDisabled, jbPlaying, jbTrackLabel, mp3Buffering, mp3CurrentTime, mp3Duration, mp3Idx, mp3Shuffle, mp3Tracks, musicOpen, musicSource, nextTrack, onVolume, pickMp3Track, pieceDesignsOpen, pieceImgSrc, pieceSetId, prevTrack, seekMp3, setBoardColorsOpen, setMusicSource, setPieceDesignsOpen, setSettingsOpen, settingsOpen, toggleEvalBar, toggleMusic, toggleShuffle, trackName, volume }) {
   return (
     <>
       <Modal open={musicOpen} onClose={closeMusic} closeLabel="Close Juice Box"
         className="jbBox" style={{ width: "min(440px, 92vw)", minWidth: undefined, maxWidth: undefined }}>
-            <div className="jbTitle">Sound</div>
+            <div className="jbTitle">Music</div>
             <div className="jbVolume">
               <JbIcon name="volume" />
               <input type="range" min="0" max="100" value={volume} onChange={e => onVolume(Number(e.target.value))} aria-label="Music volume" />
@@ -137,6 +138,18 @@ export default function AppPopups({ sfxOn, toggleSfx, boardColorId, boardColorsO
                   <span className="toggleThumb" />
                 </button>
               </div>
+            </div>
+            <div className="themePick" role="group" aria-label="App theme">
+              <button className={"themeOption" + (sweetheart ? "" : " on")} aria-pressed={!sweetheart} onClick={() => chooseTheme(false)}>
+                <PixelAvatar rows={ZPIX} pal={ZPAL} size={56} />
+                <span>Zlegend27</span>
+                <small>Dark</small>
+              </button>
+              <button className={"themeOption" + (sweetheart ? " on" : "")} aria-pressed={sweetheart} onClick={() => chooseTheme(true)}>
+                <img src="/sweetheart-sprite.webp" alt="" />
+                <span>Sweetheart</span>
+                <small>Light</small>
+              </button>
             </div>
       </Modal>
 

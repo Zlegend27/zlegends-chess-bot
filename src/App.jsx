@@ -65,6 +65,7 @@ const PIECE_NAME = { 1: "pawn", 2: "knight", 3: "bishop", 4: "rook", 5: "queen",
    punishment slip -- chess.com's vocabulary, and the distinction players
    actually learn from: a miss is a found-nothing, not a played-badly. */
 const SHADOW_MIN_THINK_MS = 700;
+const MATE_FX_MS = 3400;
 /* Rank Bot first: he's the one to suggest. */
 const PLAY_LEVELS = DIFFICULTIES
   .map((d, idx) => (d.id === "rank" ? { label: "Zlegend2700 (Rank Bot)", suggested: true, idx } : { label: d.label, idx }))
@@ -185,13 +186,15 @@ export default function ZlegendsBot() {
   const [volume, setVolume] = useState(() => loadSetting("volume", 60));
   const [pieceSetId, setPieceSetId] = useState(() => loadSetting("pieceSet", "classic"));
   const [boardColorId, setBoardColorId] = useState(() => loadSetting("boardColor", "default"));
-  /* Single source of truth for the app-wide Sweetheart theme -- selecting
-     her board color reskins more than just the squares (see tokens.css's
-     [data-theme="sweetheart"] block and getUiTheme in utils/uiTheme.js).
+  /* Single source of truth for the app-wide light theme, Sweetheart's, chosen
+     in Settings and independent of the board and pieces (see tokens.css's
+     [data-theme="sweetheart"] block and getUiTheme in utils/uiTheme.js). It
+     used to follow her board color, so anyone on that board starts light.
      Mirrored onto the real document root (not just .root's className)
      because Home/Leaderboard/Lessons render as separate top-level trees
      outside .root's subtree and still need the palette to cascade. */
-  const sweetheart = boardColorId === "sweetheart";
+  const [sweetheart, setSweetheart] = useState(() => loadSetting("lightTheme", boardColorId === "sweetheart"));
+  const chooseTheme = (light) => { setSweetheart(light); saveSetting("lightTheme", light); };
   useEffect(() => {
     document.documentElement.dataset.theme = sweetheart ? "sweetheart" : "";
   }, [sweetheart]);
@@ -362,6 +365,7 @@ export default function ZlegendsBot() {
      Stockfish pass now), just the final result + material + which
      "personality of the day" the bot was playing as. */
   const [botLine, setBotLine] = useState(null);
+  const [mateFx, setMateFx] = useState(null);
   const [promo, setPromo] = useState(null);
   const [colorPick, setColorPick] = useState(false);
   /* Inline "abandon this game?" step before New wipes a game that's
@@ -709,6 +713,21 @@ export default function ZlegendsBot() {
     if (eng.insufficientMaterial()) return { text: "½–½", reason: "Insufficient material" };
     return null;
   }, [eng]);
+
+  /* The checkmate moment, for games played out here. Reviewed games and
+     puzzles have their own endings. */
+  useEffect(() => {
+    if (result?.reason !== "Checkmate" || pastedGame || activePuzzle || rushMode) { setMateFx(null); return; }
+    const loser = eng.getSide();
+    let sq = -1;
+    for (let i = 0; i < 64; i++) if (eng.pieceAt(i) === loser * WK) sq = i;
+    if (sq < 0) return;
+    setMateFx({ sq, loser, winner: result.winner, done: false });
+    try { audio.sfxCheckmate(); } catch { /* audio unavailable */ }
+    const timer = setTimeout(() => setMateFx((fx) => fx && { ...fx, done: true }), MATE_FX_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result]);
 
   /* replay mode: rebuild the position from the shared move list whenever the step changes */
   const replayFirstRun = useRef(true);
@@ -2622,6 +2641,8 @@ export default function ZlegendsBot() {
      these actually changes means unrelated state (volume, toasts, track
      name, quiz feedback text, ...) no longer forces React to re-diff all
      64 squares on every render. */
+  /* Stepping back through the moves puts the king back. */
+  const showMateFx = !!mateFx && reviewIndex === moveList.length;
   const rows = useMemo(() => {
     const gradeHere = (reviewing && moveGrades && reviewIndex >= 1) ? moveGrades[reviewIndex - 1] : null;
     const built = [];
@@ -2660,7 +2681,7 @@ export default function ZlegendsBot() {
               (isBotLast ? " botLast" : "") + (isPlayerLast ? " playerLast" : "") +
               (kingInCheck ? " chk" : "") + (isHintFrom ? " hintFrom" : "") + (isHintTo ? " hintTo" : "") +
               (isDragOver ? " dragOver" : "")}>
-            {p !== EMPTY && !isDragFrom && <img className={"pc " + (p > 0 ? "w" : "b") + (pieceSetId === "sweetheart" && Math.abs(p) === 6 ? " kingBoost" : "") + (pieceSetId === "sweetheart" && p === -2 ? " knightBoost" : "")} src={pieceImgSrc(Math.abs(p), p > 0)} alt="" draggable="false" />}
+            {p !== EMPTY && !isDragFrom && !(showMateFx && mateFx.sq === i64) && <img className={"pc " + (p > 0 ? "w" : "b") + (pieceSetId === "sweetheart" && Math.abs(p) === 6 ? " kingBoost" : "") + (pieceSetId === "sweetheart" && p === -2 ? " knightBoost" : "")} src={pieceImgSrc(Math.abs(p), p > 0)} alt="" draggable="false" />}
             {gradeHere && lastMove && lastMove.to === sq120 && <span className={"boardGrade " + gradeHere}>{GRADE_TAG[gradeHere]}</span>}
             {isTarget && <span className={"dot" + (p !== EMPTY ? " ring" : "")} />}
             {vf === 0 && <span className="coord rk">{r + 1}</span>}
@@ -3011,6 +3032,14 @@ export default function ZlegendsBot() {
   const arrowLine = arrowGeometry(bestArrow);
   /* Reviewing a slip, the move that should have been played, drawn on the
      position it was played in. */
+  const mateFxProps = showMateFx ? {
+    ...arrowPoint(M64TO120[mateFx.sq]),
+    src: pieceImgSrc(6, mateFx.loser === 1),
+    colorClass: mateFx.loser === 1 ? "w" : "b",
+    title: "Checkmate",
+    subtitle: spectateMode ? `${mateFx.winner === 1 ? "White" : "Black"} wins` : mateFx.winner === playerColor ? "You win!" : "Zlegend2700 wins",
+    done: mateFx.done,
+  } : null;
   const betterMoveLine = (() => {
     const played = reviewIndex - 1;
     const grade = moveGrades?.[played];
@@ -3093,7 +3122,7 @@ export default function ZlegendsBot() {
 
       {(musicOpen || settingsOpen || pieceDesignsOpen || boardColorsOpen) && (
         <Suspense fallback={null}>
-          <AppPopups sfxOn={sfxOn} toggleSfx={toggleSfx} boardColorId={boardColorId} boardColorsOpen={boardColorsOpen} chooseBoardColor={chooseBoardColor} choosePieceSet={choosePieceSet} closeMusic={closeMusic} closeSettings={closeSettings} fmtTime={fmtTime} hideEvalBar={hideEvalBar} isMp3Source={isMp3Source} jbDisabled={jbDisabled} jbPlaying={jbPlaying} jbTrackLabel={jbTrackLabel} mp3Buffering={mp3Buffering} mp3CurrentTime={mp3CurrentTime} mp3Duration={mp3Duration} mp3Idx={mp3Idx} mp3Shuffle={mp3Shuffle} mp3Tracks={mp3Tracks} musicOpen={musicOpen} musicSource={musicSource} nextTrack={nextTrack} onVolume={onVolume} pickMp3Track={pickMp3Track} pieceDesignsOpen={pieceDesignsOpen} pieceImgSrc={pieceImgSrc} pieceSetId={pieceSetId} prevTrack={prevTrack} seekMp3={seekMp3} setBoardColorsOpen={setBoardColorsOpen} setMusicSource={setMusicSource} setPieceDesignsOpen={setPieceDesignsOpen} setSettingsOpen={setSettingsOpen} settingsOpen={settingsOpen} toggleEvalBar={toggleEvalBar} toggleMusic={toggleMusic} toggleShuffle={toggleShuffle} trackName={trackName} volume={volume} />
+          <AppPopups sweetheart={sweetheart} chooseTheme={chooseTheme} sfxOn={sfxOn} toggleSfx={toggleSfx} boardColorId={boardColorId} boardColorsOpen={boardColorsOpen} chooseBoardColor={chooseBoardColor} choosePieceSet={choosePieceSet} closeMusic={closeMusic} closeSettings={closeSettings} fmtTime={fmtTime} hideEvalBar={hideEvalBar} isMp3Source={isMp3Source} jbDisabled={jbDisabled} jbPlaying={jbPlaying} jbTrackLabel={jbTrackLabel} mp3Buffering={mp3Buffering} mp3CurrentTime={mp3CurrentTime} mp3Duration={mp3Duration} mp3Idx={mp3Idx} mp3Shuffle={mp3Shuffle} mp3Tracks={mp3Tracks} musicOpen={musicOpen} musicSource={musicSource} nextTrack={nextTrack} onVolume={onVolume} pickMp3Track={pickMp3Track} pieceDesignsOpen={pieceDesignsOpen} pieceImgSrc={pieceImgSrc} pieceSetId={pieceSetId} prevTrack={prevTrack} seekMp3={seekMp3} setBoardColorsOpen={setBoardColorsOpen} setMusicSource={setMusicSource} setPieceDesignsOpen={setPieceDesignsOpen} setSettingsOpen={setSettingsOpen} settingsOpen={settingsOpen} toggleEvalBar={toggleEvalBar} toggleMusic={toggleMusic} toggleShuffle={toggleShuffle} trackName={trackName} volume={volume} />
         </Suspense>
       )}
     </div>
@@ -3207,7 +3236,7 @@ export default function ZlegendsBot() {
 
   return (
     <Suspense fallback={null}>
-      <PlayView rechecking={rechecking} betterMoveLine={betterMoveLine} rankTestNote={rankBotTest && difficultyRef.current.id === "rank" ? (rankTestNote || {}) : null} GRADE_COLOR={GRADE_COLOR} GRADE_TAG={GRADE_TAG} MoodImg={MoodImg} RushThemeArt={RushThemeArt} Tray={Tray} activeOpening={activeOpening} activePuzzle={activePuzzle} analysisBusy={analysisBusy} analysisContent={analysisContent} analysisLabel={analysisLabel} analysisMove={analysisMove} analyzing={analyzing} arrowLine={arrowLine} beginRestartCountdown={beginRestartCountdown} bestArrow={bestArrow} boardColorId={boardColorId} boardRef={boardRef} boardVars={boardVars} botColor={botColor} botLine={botLine} botMood={botMood} botTaken={botTaken} colorPick={colorPick} curMoveIdx={curMoveIdx} difficultyIdx={difficultyIdx} difficultyRef={difficultyRef} displayName={displayName} dragCellSize={dragCellSize} dragFrom={dragFrom} dragPos={dragPos} eng={eng} evalLabel={evalLabel} evalPawns={evalPawns} exitMissedAttempt={exitMissedAttempt} exitPractice={exitPractice} exitPuzzle={exitPuzzle} exitReplay={exitReplay} exitRush={exitRush} formatClock={formatClock} gameStyle={gameStyle} gradeDetail={gradeDetail} gradeProgress={gradeProgress} grading={grading} hideEvalBar={hideEvalBar} hideRushSummary={hideRushSummary} hinting={hinting} inChk={inChk} liveOpening={liveOpening} missedAttempt={missedAttempt} missedStepIdx={missedStepIdx} mode={mode} moveGrades={moveGrades} moveList={moveList} nameDraft={nameDraft} nameEditOpen={nameEditOpen} newGame={newGame} newGameConfirm={newGameConfirm} nextPuzzle={nextPuzzle} onCopyPgn={onCopyPgn} onDifficultyChange={onDifficultyChange} onHint={onHint} onMissedSwipeEnd={onMissedSwipeEnd} onMissedSwipeStart={onMissedSwipeStart} openLeaderboard={openLeaderboard} openReviewPage={openReviewPage} pairs={pairs} pastedGame={pastedGame} pauseSpectate={pauseSpectate} pgnToast={pgnToast} pieceImgSrc={pieceImgSrc} pieceSetId={pieceSetId} playMove={playMove} playerAdvantageCp={playerAdvantageCp} playerColor={playerColor} playerShare={playerShare} practice={practice} practiceMove={practiceMove} practiceNext={practiceNext} practiceReveal={practiceReveal} promo={promo} puzzleBand={puzzleBand} puzzleFeedback={puzzleFeedback} puzzleMove={puzzleMove} puzzleSolved={puzzleSolved} pz={pz} quizDoneToast={quizDoneToast} quizMove={quizMove} quizOpening={quizOpening} rankBotAssessedElo={rankBotAssessedElo} rankBotGames={rankBotGames} ratingInfo={ratingInfo} replayFull={replayFull} replayIndex={replayIndex} replayPlaying={replayPlaying} replayStep={replayStep} restartCountdown={restartCountdown} result={result} resumeSpectate={resumeSpectate} reviewIndex={reviewIndex} reviewInfo={reviewInfo} reviewMissedPuzzle={reviewMissedPuzzle} reviewing={reviewing} rows={rows} rushBandIdx={rushBandIdx} rushBestMap={rushBestMap} rushDuration={rushDuration} rushLifetime={rushLifetime} rushMilestone={rushMilestone} rushMissed={rushMissed} rushMistakes={rushMistakes} rushMode={rushMode} rushResult={rushResult} rushSolved={rushSolved} rushSummaryOpen={rushSummaryOpen} rushTimeLeft={rushTimeLeft} saveDisplayName={saveDisplayName} setBotLine={setBotLine} setColorPick={setColorPick} setMissedStepIdx={setMissedStepIdx} setNameDraft={setNameDraft} setNameEditOpen={setNameEditOpen} setNewGameConfirm={setNewGameConfirm} setPlayerColor={setPlayerColor} setPromo={setPromo} setReplayIndex={setReplayIndex} setReviewIndex={setReviewIndex} setRushSummaryOpen={setRushSummaryOpen} setShareLinkFallback={setShareLinkFallback} setShareToast={setShareToast} setSiteView={setSiteView} shareLinkFallback={shareLinkFallback} shareToast={shareToast} spectateBlackIdx={spectateBlackIdx} spectateMode={spectateMode} spectateOpeningId={spectateOpeningId} spectatePaused={spectatePaused} spectateWhiteIdx={spectateWhiteIdx} startPuzzle={startPuzzle} startQuiz={startQuiz} startSpectate={startSpectate} status={status} stopSpectate={stopSpectate} sweetheart={sweetheart} thinking={thinking} toggleAnalyze={toggleAnalyze} toggleReplayPlay={toggleReplayPlay} uiT={uiT} undo={undo} youDiff={youDiff} youTaken={youTaken} />
+      <PlayView mateFxProps={mateFxProps} rechecking={rechecking} betterMoveLine={betterMoveLine} rankTestNote={rankBotTest && difficultyRef.current.id === "rank" ? (rankTestNote || {}) : null} GRADE_COLOR={GRADE_COLOR} GRADE_TAG={GRADE_TAG} MoodImg={MoodImg} RushThemeArt={RushThemeArt} Tray={Tray} activeOpening={activeOpening} activePuzzle={activePuzzle} analysisBusy={analysisBusy} analysisContent={analysisContent} analysisLabel={analysisLabel} analysisMove={analysisMove} analyzing={analyzing} arrowLine={arrowLine} beginRestartCountdown={beginRestartCountdown} bestArrow={bestArrow} boardColorId={boardColorId} boardRef={boardRef} boardVars={boardVars} botColor={botColor} botLine={botLine} botMood={botMood} botTaken={botTaken} colorPick={colorPick} curMoveIdx={curMoveIdx} difficultyIdx={difficultyIdx} difficultyRef={difficultyRef} displayName={displayName} dragCellSize={dragCellSize} dragFrom={dragFrom} dragPos={dragPos} eng={eng} evalLabel={evalLabel} evalPawns={evalPawns} exitMissedAttempt={exitMissedAttempt} exitPractice={exitPractice} exitPuzzle={exitPuzzle} exitReplay={exitReplay} exitRush={exitRush} formatClock={formatClock} gameStyle={gameStyle} gradeDetail={gradeDetail} gradeProgress={gradeProgress} grading={grading} hideEvalBar={hideEvalBar} hideRushSummary={hideRushSummary} hinting={hinting} inChk={inChk} liveOpening={liveOpening} missedAttempt={missedAttempt} missedStepIdx={missedStepIdx} mode={mode} moveGrades={moveGrades} moveList={moveList} nameDraft={nameDraft} nameEditOpen={nameEditOpen} newGame={newGame} newGameConfirm={newGameConfirm} nextPuzzle={nextPuzzle} onCopyPgn={onCopyPgn} onDifficultyChange={onDifficultyChange} onHint={onHint} onMissedSwipeEnd={onMissedSwipeEnd} onMissedSwipeStart={onMissedSwipeStart} openLeaderboard={openLeaderboard} openReviewPage={openReviewPage} pairs={pairs} pastedGame={pastedGame} pauseSpectate={pauseSpectate} pgnToast={pgnToast} pieceImgSrc={pieceImgSrc} pieceSetId={pieceSetId} playMove={playMove} playerAdvantageCp={playerAdvantageCp} playerColor={playerColor} playerShare={playerShare} practice={practice} practiceMove={practiceMove} practiceNext={practiceNext} practiceReveal={practiceReveal} promo={promo} puzzleBand={puzzleBand} puzzleFeedback={puzzleFeedback} puzzleMove={puzzleMove} puzzleSolved={puzzleSolved} pz={pz} quizDoneToast={quizDoneToast} quizMove={quizMove} quizOpening={quizOpening} rankBotAssessedElo={rankBotAssessedElo} rankBotGames={rankBotGames} ratingInfo={ratingInfo} replayFull={replayFull} replayIndex={replayIndex} replayPlaying={replayPlaying} replayStep={replayStep} restartCountdown={restartCountdown} result={result} resumeSpectate={resumeSpectate} reviewIndex={reviewIndex} reviewInfo={reviewInfo} reviewMissedPuzzle={reviewMissedPuzzle} reviewing={reviewing} rows={rows} rushBandIdx={rushBandIdx} rushBestMap={rushBestMap} rushDuration={rushDuration} rushLifetime={rushLifetime} rushMilestone={rushMilestone} rushMissed={rushMissed} rushMistakes={rushMistakes} rushMode={rushMode} rushResult={rushResult} rushSolved={rushSolved} rushSummaryOpen={rushSummaryOpen} rushTimeLeft={rushTimeLeft} saveDisplayName={saveDisplayName} setBotLine={setBotLine} setColorPick={setColorPick} setMissedStepIdx={setMissedStepIdx} setNameDraft={setNameDraft} setNameEditOpen={setNameEditOpen} setNewGameConfirm={setNewGameConfirm} setPlayerColor={setPlayerColor} setPromo={setPromo} setReplayIndex={setReplayIndex} setReviewIndex={setReviewIndex} setRushSummaryOpen={setRushSummaryOpen} setShareLinkFallback={setShareLinkFallback} setShareToast={setShareToast} setSiteView={setSiteView} shareLinkFallback={shareLinkFallback} shareToast={shareToast} spectateBlackIdx={spectateBlackIdx} spectateMode={spectateMode} spectateOpeningId={spectateOpeningId} spectatePaused={spectatePaused} spectateWhiteIdx={spectateWhiteIdx} startPuzzle={startPuzzle} startQuiz={startQuiz} startSpectate={startSpectate} status={status} stopSpectate={stopSpectate} sweetheart={sweetheart} thinking={thinking} toggleAnalyze={toggleAnalyze} toggleReplayPlay={toggleReplayPlay} uiT={uiT} undo={undo} youDiff={youDiff} youTaken={youTaken} />
     </Suspense>
   );
   };
