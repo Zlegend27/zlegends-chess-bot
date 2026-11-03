@@ -14,6 +14,7 @@ const VIEW_PATHS = {
   watch: "/watch",
   ranked: "/ranked",
   rush: "/rush",
+  tactica: "/tactica",
 };
 
 export const pathForView = (view) => VIEW_PATHS[view] ?? "/";
@@ -31,7 +32,7 @@ export function sectionForView({ siteView, rushMode, activePuzzle, pastedGame })
   if (siteView === "review") return "review";
   if (siteView === "home") return "home";
   if (siteView === "profile") return "";
-  if (siteView === "playHub" || siteView === "watch") return "play";
+  if (siteView === "playHub" || siteView === "watch" || siteView === "tactica") return "play";
   if (rushMode || activePuzzle) return "puzzles";
   return pastedGame ? "review" : "play";
 }

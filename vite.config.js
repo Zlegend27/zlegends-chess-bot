@@ -28,6 +28,9 @@ export default defineConfig({
       includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'og.jpg'],
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,webp}'],
+        // Chess Tactica loads only for players who open it, so it stays out of
+        // the cache every visitor downloads.
+        globIgnores: ['**/TacticaPage-*.js'],
         // Stockfish's ~7MB wasm/js never changes without a version bump in
         // the file name here, so cache it long-term instead of re-fetching
         // every time a below-2000 difficulty tier is picked.

@@ -57,6 +57,7 @@ import "./App.css";
 /* Loaded on demand: blind mode brings its own parser/describer/speech
    stack, none of which the main board ever needs. */
 const BlindMode = lazy(() => import("./components/BlindMode"));
+const TacticaPage = lazy(() => import("./tactica/TacticaPage"));
 
 const FILES = "abcdefgh";
 const PIECE_NAME = { 1: "pawn", 2: "knight", 3: "bishop", 4: "rook", 5: "queen", 6: "king" };
@@ -3170,6 +3171,14 @@ export default function ZlegendsBot() {
     );
   }
 
+  if (siteView === "tactica") {
+    return (
+      <Suspense fallback={null}>
+        <TacticaPage pieceImgSrc={pieceImgSrc} boardColorId={boardColorId} sweetheart={sweetheart} />
+      </Suspense>
+    );
+  }
+
   if (siteView === "profile") {
     return (
       <Suspense fallback={null}>
@@ -3249,7 +3258,7 @@ export default function ZlegendsBot() {
   };
   /* Hidden during an activity so the board gets the screen. The header's
      logo is still there as the way out. */
-  const focused = siteView === "play" && (rushMode || !!activePuzzle || spectateMode
+  const focused = siteView === "tactica" || siteView === "play" && (rushMode || !!activePuzzle || spectateMode
     || (mode === "play" && moveList.length > 0 && !result && !pastedGame));
   focusedRef.current = focused;
   const section = sectionForView({ siteView, rushMode, activePuzzle, pastedGame });
