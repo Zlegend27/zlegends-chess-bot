@@ -49,6 +49,10 @@ export default function TacticaPage({ pieceImgSrc, boardColorId, sweetheart }) {
   const [held, setHeld] = useState(false);
   /* While a finger drags a character the camera is the scene's to move. */
   const draggingRef = useRef(false);
+  /* Set when ◀ ▶ pick a square, which may be off screen, so the camera
+     follows it; a tapped square is already in view, so it stays put. */
+  const followChosenRef = useRef(false);
+  const playingRef = useRef(false);
   const [busy, setBusy] = useState(true);
   const [message, setMessage] = useState(STUDY_HINT);
   const [solved, setSolved] = useState(false);
@@ -80,7 +84,7 @@ export default function TacticaPage({ pieceImgSrc, boardColorId, sweetheart }) {
         highlight: "#3EE7F5", target: "#F5D93E", attack: "#F05348", select: "#3EE7F5",
       },
       onTap: (sq) => tapRef.current(sq),
-      onDoubleTap: (sq) => pickUpRef.current(sq),
+      onDoubleTap: (sq) => doubleTapRef.current(sq),
       onSwipe: (dir) => swipeRef.current(dir),
       onDragStart: (sq) => dragStartRef.current(sq),
       onDrop: (sq) => dropRef.current(sq),
@@ -100,7 +104,7 @@ export default function TacticaPage({ pieceImgSrc, boardColorId, sweetheart }) {
     if (!scene) return;
     if (view === "board") scene.showBoard();
     else if (draggingRef.current) { /* the drag steers the camera */ }
-    else if (held && chosen == null) scene.showReach(selected, targets);
+    else if (held && !(chosen != null && followChosenRef.current)) scene.showReach(selected);
     else scene.showCloseUp(selected, chosen);
     scene.setMarks(view === "close" && !solved ? { selected, held, targets, chosen, captures } : {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -120,7 +124,7 @@ export default function TacticaPage({ pieceImgSrc, boardColorId, sweetheart }) {
    *  square a character was dropped on, which needs no Confirm. */
   const confirm = async (target = chosen) => {
     const move = movesFrom.find((m) => sqOf(mTo(m)) === target && (!mPromo(m) || mPromo(m) === QUEEN));
-    if (!move) return;
+    if (!move || busy || playingRef.current) return;
     const verdict = judgePuzzleMove(eng, puzzle, played, move);
     if (!verdict.ok) {
       setMessage(`${verdict.san} isn't the answer. In the prototype the opponent will show why. Try again.`);
@@ -130,27 +134,31 @@ export default function TacticaPage({ pieceImgSrc, boardColorId, sweetheart }) {
       return;
     }
     setBusy(true);
+    playingRef.current = true;
     setChosen(null);
     setHeld(false);
     setMessage(null);
-    await playMove(move);
-    const afterMine = [...played, verdict.san];
-    if (verdict.solved) {
-      setPlayed(afterMine);
-      setSolved(true);
+    try {
+      await playMove(move);
+      const afterMine = [...played, verdict.san];
+      if (verdict.solved) {
+        setPlayed(afterMine);
+        setSolved(true);
+        setMessage("Puzzle solved!");
+        return;
+      }
+      await new Promise((r) => setTimeout(r, REPLY_DELAY_MS));
+      const reply = eng.legalMoves().find((m) => eng.sanOf(m) === verdict.reply);
+      if (reply) await playMove(reply);
+      setMessage(`Opponent played ${verdict.reply}.`);
+      setPlayed([...afterMine, verdict.reply]);
+      /* The character that just moved stays selected for the next move. */
+      const stillHere = friendlySquares(eng, side).indexOf(sqOf(mTo(move)));
+      setSelectedIdx((i) => (stillHere >= 0 ? stillHere : Math.min(i, friendlySquares(eng, side).length - 1)));
+    } finally {
+      playingRef.current = false;
       setBusy(false);
-      setMessage("Puzzle solved!");
-      return;
     }
-    await new Promise((r) => setTimeout(r, REPLY_DELAY_MS));
-    const reply = eng.legalMoves().find((m) => eng.sanOf(m) === verdict.reply);
-    if (reply) await playMove(reply);
-    setMessage(`Opponent played ${verdict.reply}.`);
-    setPlayed([...afterMine, verdict.reply]);
-    /* The character that just moved stays selected for the next move. */
-    const stillHere = friendlySquares(eng, side).indexOf(sqOf(mTo(move)));
-    setSelectedIdx((i) => (stillHere >= 0 ? stillHere : Math.min(i, friendlySquares(eng, side).length - 1)));
-    setBusy(false);
   };
 
   const restart = () => {
@@ -173,21 +181,35 @@ export default function TacticaPage({ pieceImgSrc, boardColorId, sweetheart }) {
   const cycleTarget = (dir) => {
     if (!canMove || !targets.length) return;
     setHeld(true);
+    followChosenRef.current = true;
     const i = targets.indexOf(chosen);
     setChosen(targets[(i + dir + targets.length + (i < 0 && dir > 0 ? 1 : 0)) % targets.length]);
   };
   const tapRef = useRef(null);
   tapRef.current = (sq) => {
     if (busy) return;
-    if (held && canMove && targets.includes(sq)) { setChosen(sq); return; }
+    /* Tapping the chosen square again plays it, like a double-tap. */
+    if (held && canMove && targets.includes(sq)) {
+      if (sq === chosen) confirm(sq);
+      else { followChosenRef.current = false; setChosen(sq); }
+      return;
+    }
     const friendIdx = friends.indexOf(sq);
     if (friendIdx >= 0) { setSelectedIdx(friendIdx); setHeld(false); setChosen(null); return; }
     if (held) { setHeld(false); setChosen(null); }
   };
   const pickUpRef = useRef(null);
+  /* A double-tap on a glowing square plays it; on a character, picks it up. */
+  const doubleTapRef = useRef(null);
+  doubleTapRef.current = (sq) => {
+    if (held && canMove && targets.includes(sq)) confirm(sq);
+    else if (friends.includes(sq)) pickUpRef.current(sq);
+    else tapRef.current(sq);
+  };
   pickUpRef.current = (sq) => {
     const friendIdx = friends.indexOf(sq);
     if (busy || solved || friendIdx < 0) return;
+    followChosenRef.current = false;
     setView("close");
     setSelectedIdx(friendIdx);
     setChosen(null);
@@ -205,9 +227,11 @@ export default function TacticaPage({ pieceImgSrc, boardColorId, sweetheart }) {
   const dropRef = useRef(null);
   dropRef.current = (sq) => {
     draggingRef.current = false;
-    if (sq == null || !targets.includes(sq)) return false;
-    confirm(sq);
-    return true;
+    if (sq != null && targets.includes(sq)) { confirm(sq); return true; }
+    /* Let go anywhere else and the character is put back down. */
+    setHeld(false);
+    setChosen(null);
+    return false;
   };
   const swipeRef = useRef(null);
   swipeRef.current = cycleCharacter;
@@ -253,7 +277,7 @@ export default function TacticaPage({ pieceImgSrc, boardColorId, sweetheart }) {
                       <button type="button" className="border-0 bg-transparent text-xs text-white/75 underline" onClick={() => { setChosen(null); setHeld(false); }}>Cancel</button>
                     </>
                   ) : (
-                    <span className="px-2 text-xs text-white/80">{busy ? "…" : !targets.length ? "This one can't move" : held ? "Drag onto a glowing square, or tap one" : "Drag a character to move it"}</span>
+                    <span className="px-2 text-xs text-white/80">{busy ? "…" : !targets.length ? "This one can't move" : held ? "Drag or double-tap a glowing square" : "Drag a character, or double-tap it"}</span>
                   )}
                   <button type="button" className={iconBtn + " size-8 text-sm"} onClick={() => cycleTarget(1)} disabled={!canMove || !targets.length} aria-label="Next square">▶</button>
                 </div>

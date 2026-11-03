@@ -13,7 +13,11 @@ const CAMERA_MS = 650;
 const MOVE_MS = 420;
 const CAPTURE_MS = 320;
 const KNIGHT_HOP = 1.1;
-const DOUBLE_TAP_MS = 320;
+const DOUBLE_TAP_MS = 400;
+const DOUBLE_TAP_PX = 40;
+/* A picked-up character's view is the close view pulled back this much. */
+const HELD_WIDEN = 1.15;
+const BEAM_HEIGHT = 0.5;
 const DRAG_LIFT = 0.35;
 const HELD_OPACITY = 0.55;
 /* Dragging near a screen edge slides the camera that way, in board squares
@@ -196,10 +200,18 @@ export class TacticaScene {
       const color = captures.includes(sq) ? this.colors.attack : isChosen ? this.colors.target : this.colors.highlight;
       /* Reachable squares glow and pulse; a drag needs no arrows, since the
          character itself shows where it is going. */
-      const glow = flat(this.glowGeometry, color, isChosen ? 0.75 : 0.55, at, 0.02);
+      const glow = flat(this.glowGeometry, color, isChosen ? 0.8 : 0.6, at, 0.02);
       const edge = flat(this.outlineGeometry, color, 1, at, 0.03);
-      edge.scale.setScalar(1.04);
-      this.pulse.push({ material: glow.material, base: glow.material.opacity });
+      edge.scale.setScalar(1.06);
+      /* A short wall of light around the square, so it still stands out from
+         a low camera that sees the board almost edge on. */
+      const beam = new THREE.Mesh(this.beamGeometry(), new THREE.MeshBasicMaterial({
+        color, alphaMap: this.beamFade(), transparent: true, opacity: isChosen ? 0.95 : 0.7,
+        depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
+      }));
+      beam.position.copy(at).setY(BEAM_HEIGHT / 2);
+      this.marks.add(beam);
+      this.pulse.push({ material: glow.material, base: glow.material.opacity }, { material: beam.material, base: beam.material.opacity });
       if (chosen == null && !this.dragging) this.addArrow(this.worldOf(selected), at, color, 0.35);
     }
     if (selected != null && chosen != null) {
@@ -207,6 +219,31 @@ export class TacticaScene {
       this.addArrow(this.worldOf(selected), this.worldOf(chosen), color, 0.85);
     }
     this.wake();
+  }
+
+  /** An open square tube, one tile wide, for the walls of light. */
+  beamGeometry() {
+    if (!this.beamShape) {
+      this.beamShape = new THREE.CylinderGeometry(0.46 * Math.SQRT2, 0.46 * Math.SQRT2, BEAM_HEIGHT, 4, 1, true);
+      this.beamShape.rotateY(Math.PI / 4);
+    }
+    return this.beamShape;
+  }
+
+  /** Fades the walls of light from solid at the floor to nothing on top. */
+  beamFade() {
+    if (!this.beamTexture) {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1; canvas.height = 64;
+      const g = canvas.getContext("2d");
+      const fade = g.createLinearGradient(0, 0, 0, 64);
+      fade.addColorStop(0, "#000");
+      fade.addColorStop(1, "#fff");
+      g.fillStyle = fade;
+      g.fillRect(0, 0, 1, 64);
+      this.beamTexture = new THREE.CanvasTexture(canvas);
+    }
+    return this.beamTexture;
   }
 
   addArrow(from, to, color, opacity) {
@@ -234,11 +271,11 @@ export class TacticaScene {
   /** Tactical view: low over the character's shoulder, looking out across
    *  the board. A far destination pulls the camera back so it stays in sight.
    *  Switching characters swings the camera from one to the next. */
-  showCloseUp(sq, destination = null) {
+  showCloseUp(sq, destination = null, widen = 1) {
     const at = this.worldOf(sq);
     const toward = destination != null ? this.worldOf(destination) : at.clone().add(new THREE.Vector3(0, 0, -3.5));
     const reach = destination != null ? at.distanceTo(toward) : 3.5;
-    const pull = 1 + Math.max(0, reach - 2.5) * 0.2;
+    const pull = (1 + Math.max(0, reach - 2.5) * 0.2) * widen;
     const look = new THREE.Vector3().addVectors(at, toward).multiplyScalar(0.5).setY(0.35);
     const position = at.clone().add(new THREE.Vector3(0.7, 2.2 * pull, 3.1 * pull));
     this.moveCamera(position, look);
@@ -246,15 +283,8 @@ export class TacticaScene {
 
   /** View of a picked-up character that rises and pulls back until every
    *  square it can reach is in sight, including ones behind it. */
-  showReach(sq, targets) {
-    if (!targets.length) { this.showCloseUp(sq); return; }
-    const points = [sq, ...targets].map((t) => this.worldOf(t));
-    const xs = points.map((v) => v.x), zs = points.map((v) => v.z);
-    const minX = Math.min(...xs), maxX = Math.max(...xs), minZ = Math.min(...zs), maxZ = Math.max(...zs);
-    const span = Math.max(maxX - minX, maxZ - minZ, 2);
-    const look = new THREE.Vector3((minX + maxX) / 2, 0, (minZ + maxZ) / 2);
-    const position = new THREE.Vector3(look.x + 0.4, 2.2 + span * 1.1, maxZ + 2 + span * 0.35);
-    this.moveCamera(position, look);
+  showReach(sq) {
+    this.showCloseUp(sq, null, HELD_WIDEN);
   }
 
   /** Outlines the square a dragged character is over: gold for a legal
@@ -366,12 +396,16 @@ export class TacticaScene {
       follow(drag.pointer);
     };
 
+    /* One finger at a time: a second finger can't hijack a drag. */
     this.onDown = (e) => {
+      if (down && drag) return;
       aim(e);
-      down = { x: e.clientX, y: e.clientY, sq: spriteHit() };
+      down = { id: e.pointerId, x: e.clientX, y: e.clientY, sq: spriteHit() };
     };
     this.onMove = (e) => {
-      if (!down) return;
+      if (!down || e.pointerId !== down.id) return;
+      /* A mouse released outside the page never sends pointerup here. */
+      if (e.pointerType === "mouse" && e.buttons === 0 && !drag) { down = null; return; }
       if (!drag && down.sq != null && Math.hypot(e.clientX - down.x, e.clientY - down.y) > TAP_SLOP_PX) {
         this.dragging = true;
         if (this.onDragStart?.(down.sq)) {
@@ -385,7 +419,7 @@ export class TacticaScene {
       this.wake();
     };
     this.onUp = (e) => {
-      if (!down) return;
+      if (!down || e.pointerId !== down.id) return;
       const dx = e.clientX - down.x, dy = e.clientY - down.y;
       const pressed = down;
       down = null;
@@ -411,16 +445,20 @@ export class TacticaScene {
       const tile = raycaster.intersectObjects(this.tiles)[0]?.object.userData.sq ?? null;
       const sq = tile != null && this.targets.includes(tile) ? tile : pressed.sq ?? spriteHit() ?? tile;
       if (sq == null) return;
+      /* A double-tap is matched by where the finger landed, not by square, so
+         it still counts while the camera is swinging after the first tap. */
       const now = performance.now();
-      if (lastTap && lastTap.sq === sq && now - lastTap.at < DOUBLE_TAP_MS && this.sprites.has(sq)) {
+      if (lastTap && now - lastTap.at < DOUBLE_TAP_MS && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < DOUBLE_TAP_PX) {
+        const first = lastTap.sq;
         lastTap = null;
-        this.onDoubleTap?.(sq);
+        this.onDoubleTap?.(first);
         return;
       }
-      lastTap = { sq, at: now };
+      lastTap = { sq, at: now, x: e.clientX, y: e.clientY };
       this.onTap?.(sq);
     };
-    this.onCancel = () => {
+    this.onCancel = (e) => {
+      if (down && e?.pointerId !== down.id) return;
       if (drag?.piece) {
         drag.piece.group.position.copy(this.worldOf(drag.sq));
         this.setHover(null);
