@@ -47,6 +47,8 @@ export default function TacticaPage({ pieceImgSrc, boardColorId, sweetheart }) {
   /* A character is picked up (double-tap, drag or the square arrows) before
      its moves show. */
   const [held, setHeld] = useState(false);
+  /* While a finger drags a character the camera is the scene's to move. */
+  const draggingRef = useRef(false);
   const [busy, setBusy] = useState(true);
   const [message, setMessage] = useState(STUDY_HINT);
   const [solved, setSolved] = useState(false);
@@ -97,6 +99,7 @@ export default function TacticaPage({ pieceImgSrc, boardColorId, sweetheart }) {
     const scene = sceneRef.current;
     if (!scene) return;
     if (view === "board") scene.showBoard();
+    else if (draggingRef.current) { /* the drag steers the camera */ }
     else if (held && chosen == null) scene.showReach(selected, targets);
     else scene.showCloseUp(selected, chosen);
     scene.setMarks(view === "close" && !solved ? { selected, held, targets, chosen, captures } : {});
@@ -113,13 +116,17 @@ export default function TacticaPage({ pieceImgSrc, boardColorId, sweetheart }) {
     await scene.setPieces(piecesNow());
   };
 
-  const confirm = async () => {
-    const move = movesFrom.find((m) => sqOf(mTo(m)) === chosen && (!mPromo(m) || mPromo(m) === QUEEN));
+  /** Plays the move to `target`: the chosen square after Confirm, or the
+   *  square a character was dropped on, which needs no Confirm. */
+  const confirm = async (target = chosen) => {
+    const move = movesFrom.find((m) => sqOf(mTo(m)) === target && (!mPromo(m) || mPromo(m) === QUEEN));
     if (!move) return;
     const verdict = judgePuzzleMove(eng, puzzle, played, move);
     if (!verdict.ok) {
       setMessage(`${verdict.san} isn't the answer. In the prototype the opponent will show why. Try again.`);
       setChosen(null);
+      setHeld(false);
+      sceneRef.current?.setPieces(piecesNow());
       return;
     }
     setBusy(true);
@@ -187,16 +194,20 @@ export default function TacticaPage({ pieceImgSrc, boardColorId, sweetheart }) {
     setHeld(true);
   };
   /* Dragging picks the character up; letting go over a square it can reach
-     chooses that square, still waiting on Confirm. */
+     plays the move at once. Tapping a square still asks for Confirm. */
   const dragStartRef = useRef(null);
   dragStartRef.current = (sq) => {
     if (!canMove || !friends.includes(sq)) return false;
+    draggingRef.current = true;
     pickUpRef.current(sq);
     return true;
   };
   const dropRef = useRef(null);
   dropRef.current = (sq) => {
-    if (sq != null && targets.includes(sq)) setChosen(sq);
+    draggingRef.current = false;
+    if (sq == null || !targets.includes(sq)) return false;
+    confirm(sq);
+    return true;
   };
   const swipeRef = useRef(null);
   swipeRef.current = cycleCharacter;
@@ -238,11 +249,11 @@ export default function TacticaPage({ pieceImgSrc, boardColorId, sweetheart }) {
                   <button type="button" className={iconBtn + " size-8 text-sm"} onClick={() => cycleTarget(-1)} disabled={!canMove || !targets.length} aria-label="Previous square">◀</button>
                   {chosen != null ? (
                     <>
-                      <button type="button" className={"btn " + (isAttack ? "gold" : "")} onClick={confirm}>{isAttack ? "Attack" : "Confirm"} {squareName(chosen)}</button>
+                      <button type="button" className={"btn " + (isAttack ? "gold" : "")} onClick={() => confirm()}>{isAttack ? "Attack" : "Confirm"} {squareName(chosen)}</button>
                       <button type="button" className="border-0 bg-transparent text-xs text-white/75 underline" onClick={() => { setChosen(null); setHeld(false); }}>Cancel</button>
                     </>
                   ) : (
-                    <span className="px-2 text-xs text-white/80">{busy ? "…" : !targets.length ? "This one can't move" : held ? "Tap or drag to a glowing square" : "Double-tap or drag to pick up"}</span>
+                    <span className="px-2 text-xs text-white/80">{busy ? "…" : !targets.length ? "This one can't move" : held ? "Drag onto a glowing square, or tap one" : "Drag a character to move it"}</span>
                   )}
                   <button type="button" className={iconBtn + " size-8 text-sm"} onClick={() => cycleTarget(1)} disabled={!canMove || !targets.length} aria-label="Next square">▶</button>
                 </div>

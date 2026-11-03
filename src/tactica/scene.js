@@ -16,6 +16,13 @@ const KNIGHT_HOP = 1.1;
 const DOUBLE_TAP_MS = 320;
 const DRAG_LIFT = 0.35;
 const HELD_OPACITY = 0.55;
+/* Dragging near a screen edge slides the camera that way, in board squares
+   per second, so a far square can be reached without lifting the finger. The
+   finger has to rest there briefly first, so squares near an edge stay easy
+   to drop on. */
+const EDGE_SPEED = 3.5;
+const PULSE_MS = 900;
+const EDGE_DWELL_MS = 350;
 
 const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 const reducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -45,7 +52,8 @@ export class TacticaScene {
   /** `colors` is { light, dark, background, highlight, target, select }. The
    *  solver's side is always nearest the camera. */
   /** `onDragStart(sq)` returns whether that character may be dragged;
-   *  `onDrop(sq)` gets the square it was let go over, or null. */
+   *  `onDrop(sq)` gets the square it was let go over, or null, and returns
+   *  whether it took the move; if not, the character slides home. */
   constructor(canvas, { colors, flipped, onTap, onDoubleTap, onSwipe, onDragStart, onDrop, onLost }) {
     this.canvas = canvas;
     this.flipped = flipped;
@@ -57,6 +65,8 @@ export class TacticaScene {
     this.held = null;
     this.targets = [];
     this.captures = [];
+    this.pulse = [];
+    this.dragging = false;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "low-power" });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.scene = new THREE.Scene();
@@ -150,6 +160,7 @@ export class TacticaScene {
    *  square it can reach glows with a faint arrow; the chosen one is bold. */
   setMarks({ selected = null, held = false, targets = [], chosen = null, captures = [] } = {}) {
     this.marks.clear();
+    this.pulse = [];
     this.held = held ? selected : null;
     this.targets = held ? targets : [];
     this.captures = captures;
@@ -161,6 +172,7 @@ export class TacticaScene {
       mesh.rotation.x = -Math.PI / 2;
       mesh.position.copy(at).setY(y);
       this.marks.add(mesh);
+      return mesh;
     };
     this.outlineGeometry ??= (() => {
       const outer = new THREE.Shape();
@@ -182,9 +194,13 @@ export class TacticaScene {
       const at = this.worldOf(sq);
       const isChosen = sq === chosen;
       const color = captures.includes(sq) ? this.colors.attack : isChosen ? this.colors.target : this.colors.highlight;
-      flat(this.glowGeometry, color, isChosen ? 0.35 : 0.14, at, 0.02, true);
-      flat(this.outlineGeometry, color, isChosen ? 1 : 0.85, at, 0.03);
-      if (chosen == null) this.addArrow(this.worldOf(selected), at, color, 0.4);
+      /* Reachable squares glow and pulse; a drag needs no arrows, since the
+         character itself shows where it is going. */
+      const glow = flat(this.glowGeometry, color, isChosen ? 0.75 : 0.55, at, 0.02);
+      const edge = flat(this.outlineGeometry, color, 1, at, 0.03);
+      edge.scale.setScalar(1.04);
+      this.pulse.push({ material: glow.material, base: glow.material.opacity });
+      if (chosen == null && !this.dragging) this.addArrow(this.worldOf(selected), at, color, 0.35);
     }
     if (selected != null && chosen != null) {
       const color = captures.includes(chosen) ? this.colors.attack : this.colors.target;
@@ -280,13 +296,15 @@ export class TacticaScene {
     const mover = this.sprites.get(from);
     const victim = captured != null ? this.sprites.get(captured) : null;
     if (!mover) return Promise.resolve();
-    const a = this.worldOf(from), b = this.worldOf(to);
+    /* A dropped character lands from where it was let go, without a leap. */
+    const a = mover.group.position.clone(), b = this.worldOf(to);
+    const leap = knight && a.y < 0.01;
     const fast = reducedMotion();
     return new Promise((resolve) => {
       this.tween(fast ? 0 : MOVE_MS, (t) => {
         const k = ease(t);
         mover.group.position.lerpVectors(a, b, k);
-        mover.sprite.position.y = knight ? Math.sin(Math.PI * k) * KNIGHT_HOP : 0;
+        mover.sprite.position.y = leap ? Math.sin(Math.PI * k) * KNIGHT_HOP : 0;
       }, () => {
         if (!victim) { resolve(); return; }
         this.tween(fast ? 0 : CAPTURE_MS, (t) => {
@@ -317,6 +335,36 @@ export class TacticaScene {
     };
     const spriteHit = () => raycaster.intersectObjects([...this.sprites.values()].map((v) => v.sprite))[0]?.object.userData.sq ?? null;
     let down = null, drag = null, lastTap = null;
+    const follow = (e) => {
+      aim(e);
+      const hit = groundSquare();
+      if (!hit) return;
+      drag.piece.group.position.set(hit.point.x, DRAG_LIFT, hit.point.z);
+      this.setHover(hit.sq === drag.sq ? null : hit.sq);
+    };
+    /* Called every frame of a drag: slides the camera while the finger rests
+       near an edge, keeping the character under it. */
+    this.dragFollow = (dt) => {
+      if (!drag?.piece || !drag.pointer) return;
+      const rect = this.canvas.getBoundingClientRect();
+      const nx = (drag.pointer.clientX - rect.left) / rect.width, ny = (drag.pointer.clientY - rect.top) / rect.height;
+      const fz = ny < 0.16 ? -(0.16 - ny) / 0.16 - 0.3 : ny > 0.86 ? ((ny - 0.86) / 0.14) * 0.6 + 0.2 : 0;
+      const fx = nx < 0.08 ? -(0.08 - nx) / 0.08 - 0.3 : nx > 0.92 ? (nx - 0.92) / 0.08 + 0.3 : 0;
+      if (!fx && !fz) { drag.edgeSince = null; return; }
+      drag.edgeSince ??= performance.now();
+      if (performance.now() - drag.edgeSince < EDGE_DWELL_MS) return;
+      const step = (EDGE_SPEED * Math.min(dt, 50)) / 1000;
+      /* Stops at the board edge, but never pulls back a camera already past it. */
+      const clamp = (v, cur, lo, hi) => Math.max(Math.min(lo, cur), Math.min(Math.max(hi, cur), v));
+      const x = clamp(this.camLook.x + fx * step, this.camLook.x, -3.5, 3.5), z = clamp(this.camLook.z + fz * step, this.camLook.z, -4.5, 3.5);
+      const shift = new THREE.Vector3(x - this.camLook.x, 0, z - this.camLook.z);
+      this.camLook.add(shift);
+      this.camPos.add(shift);
+      this.camera.position.copy(this.camPos);
+      this.camera.lookAt(this.camLook);
+      this.camera.updateMatrixWorld();
+      follow(drag.pointer);
+    };
 
     this.onDown = (e) => {
       aim(e);
@@ -325,18 +373,16 @@ export class TacticaScene {
     this.onMove = (e) => {
       if (!down) return;
       if (!drag && down.sq != null && Math.hypot(e.clientX - down.x, e.clientY - down.y) > TAP_SLOP_PX) {
+        this.dragging = true;
         if (this.onDragStart?.(down.sq)) {
           drag = { sq: down.sq, piece: this.sprites.get(down.sq) };
           this.canvas.setPointerCapture?.(e.pointerId);
-        } else down.sq = null;
+        } else { down.sq = null; this.dragging = false; }
       }
       if (!drag?.piece) return;
-      aim(e);
-      const hit = groundSquare();
-      if (!hit) return;
-      drag.piece.group.position.set(hit.point.x, DRAG_LIFT, hit.point.z);
+      drag.pointer = { clientX: e.clientX, clientY: e.clientY };
+      follow(e);
       this.wake();
-      this.setHover(hit.sq === drag.sq ? null : hit.sq);
     };
     this.onUp = (e) => {
       if (!down) return;
@@ -349,11 +395,12 @@ export class TacticaScene {
         aim(e);
         const over = groundSquare()?.sq ?? null;
         this.setHover(null);
-        if (piece) {
+        this.dragging = false;
+        const taken = over !== sq && this.onDrop?.(over);
+        if (piece && !taken) {
           const from = piece.group.position.clone(), home = this.worldOf(sq);
           this.tween(reducedMotion() ? 0 : 160, (t) => piece.group.position.lerpVectors(from, home, ease(t)));
         }
-        this.onDrop?.(over === sq ? null : over);
         return;
       }
       if (Math.abs(dx) > SWIPE_PX && Math.abs(dx) > Math.abs(dy)) { this.onSwipe?.(dx < 0 ? 1 : -1); return; }
@@ -379,6 +426,7 @@ export class TacticaScene {
         this.setHover(null);
       }
       down = drag = null;
+      this.dragging = false;
     };
     this.canvas.addEventListener("pointerdown", this.onDown);
     this.canvas.addEventListener("pointermove", this.onMove);
@@ -407,9 +455,12 @@ export class TacticaScene {
   /* Draws only while something is changing, to spare phone batteries. */
   loop(now) {
     if (!this.running) return;
-    const busy = this.tweens.length > 0 || now < this.awakeUntil;
+    const busy = this.tweens.length > 0 || now < this.awakeUntil || this.dragging || this.pulse.length > 0;
     if (busy) {
       const dt = now - this.lastFrame;
+      if (this.dragging) this.dragFollow?.(dt);
+      const beat = 0.7 + 0.45 * (0.5 + 0.5 * Math.sin((now / PULSE_MS) * Math.PI * 2));
+      for (const { material, base } of this.pulse) material.opacity = Math.min(1, base * beat);
       if (dt < 200 && this.tweens.length) { this.frameTimes.push(dt); if (this.frameTimes.length > 120) this.frameTimes.shift(); }
       /* Finished tweens run their callbacks only after the list is rebuilt,
          since a callback often starts the next tween. */
