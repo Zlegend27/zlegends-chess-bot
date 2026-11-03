@@ -1,6 +1,6 @@
 /* Chess Tactica's 3D view: a board with characters standing on it, two
    cameras, and move animations. It only shows what TacticaPage tells it to and
-   reports taps and swipes back, so the chess rules can't be affected by
+   reports taps, swipes and drags back, so the chess rules can't be affected by
    anything drawn here. Characters are flat sprites that always face the
    camera, which keeps phones fast and lets art be swapped in later. */
 import * as THREE from "three";
@@ -13,6 +13,9 @@ const CAMERA_MS = 650;
 const MOVE_MS = 420;
 const CAPTURE_MS = 320;
 const KNIGHT_HOP = 1.1;
+const DOUBLE_TAP_MS = 320;
+const DRAG_LIFT = 0.35;
+const HELD_OPACITY = 0.55;
 
 const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 const reducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -41,11 +44,19 @@ function textureFor(url) {
 export class TacticaScene {
   /** `colors` is { light, dark, background, highlight, target, select }. The
    *  solver's side is always nearest the camera. */
-  constructor(canvas, { colors, flipped, onTap, onSwipe, onLost }) {
+  /** `onDragStart(sq)` returns whether that character may be dragged;
+   *  `onDrop(sq)` gets the square it was let go over, or null. */
+  constructor(canvas, { colors, flipped, onTap, onDoubleTap, onSwipe, onDragStart, onDrop, onLost }) {
     this.canvas = canvas;
     this.flipped = flipped;
     this.onTap = onTap;
+    this.onDoubleTap = onDoubleTap;
     this.onSwipe = onSwipe;
+    this.onDragStart = onDragStart;
+    this.onDrop = onDrop;
+    this.held = null;
+    this.targets = [];
+    this.captures = [];
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "low-power" });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.scene = new THREE.Scene();
@@ -58,10 +69,11 @@ export class TacticaScene {
     this.tweens = [];
     this.sprites = new Map();
     this.marks = new THREE.Group();
+    this.hoverMark = new THREE.Group();
     this.colors = colors;
     this.frameTimes = [];
     this.buildBoard();
-    this.scene.add(this.marks);
+    this.scene.add(this.marks, this.hoverMark);
 
     this.onLostEvent = (e) => { e.preventDefault(); onLost?.(); };
     canvas.addEventListener("webglcontextlost", this.onLostEvent);
@@ -73,6 +85,14 @@ export class TacticaScene {
     this.lastFrame = performance.now();
     this.loop = this.loop.bind(this);
     requestAnimationFrame(this.loop);
+  }
+
+  /** The square under a world point, or null off the board. */
+  squareAt(point) {
+    const fx = Math.round(point.x + 3.5), fz = Math.round(point.z + 3.5);
+    if (fx < 0 || fx > 7 || fz < 0 || fz > 7) return null;
+    const file = this.flipped ? 7 - fx : fx, rank = this.flipped ? fz : 7 - fz;
+    return rank * 8 + file;
   }
 
   /** World position of a square's centre. */
@@ -125,10 +145,15 @@ export class TacticaScene {
     this.wake();
   }
 
-  /** Highlights for the selected character: a ring under its feet, a glowing
-   *  outline on every square it can reach, and one arrow to the chosen one. */
-  setMarks({ selected = null, targets = [], chosen = null, captures = [] } = {}) {
+  /** Highlights: a ring under the selected character. Once it is picked up
+   *  (`held`), it turns see-through so the squares behind it show, and every
+   *  square it can reach glows with a faint arrow; the chosen one is bold. */
+  setMarks({ selected = null, held = false, targets = [], chosen = null, captures = [] } = {}) {
     this.marks.clear();
+    this.held = held ? selected : null;
+    this.targets = held ? targets : [];
+    this.captures = captures;
+    for (const [sq, { sprite }] of this.sprites) sprite.material.opacity = sq === this.held ? HELD_OPACITY : 1;
     const flat = (geometry, color, opacity, at, y, additive = false) => {
       const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
         color, transparent: true, opacity, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
@@ -148,15 +173,18 @@ export class TacticaScene {
     this.glowGeometry ??= new THREE.PlaneGeometry(0.96, 0.96);
     if (selected != null) {
       const at = this.worldOf(selected);
-      flat(new THREE.CircleGeometry(0.55, 40), this.colors.select, 0.2, at, 0.015, true);
-      flat(new THREE.RingGeometry(0.36, 0.46, 48), this.colors.select, 0.95, at, 0.02);
+      this.glowCircle ??= new THREE.CircleGeometry(0.55, 40);
+      this.ringGeometry ??= new THREE.RingGeometry(0.36, 0.46, 48);
+      flat(this.glowCircle, this.colors.select, held ? 0.35 : 0.2, at, 0.015, true);
+      flat(this.ringGeometry, this.colors.select, 0.95, at, 0.02);
     }
-    for (const sq of targets) {
+    for (const sq of this.targets) {
       const at = this.worldOf(sq);
       const isChosen = sq === chosen;
       const color = captures.includes(sq) ? this.colors.attack : isChosen ? this.colors.target : this.colors.highlight;
       flat(this.glowGeometry, color, isChosen ? 0.35 : 0.14, at, 0.02, true);
       flat(this.outlineGeometry, color, isChosen ? 1 : 0.85, at, 0.03);
+      if (chosen == null) this.addArrow(this.worldOf(selected), at, color, 0.4);
     }
     if (selected != null && chosen != null) {
       const color = captures.includes(chosen) ? this.colors.attack : this.colors.target;
@@ -200,6 +228,43 @@ export class TacticaScene {
     this.moveCamera(position, look);
   }
 
+  /** View of a picked-up character that rises and pulls back until every
+   *  square it can reach is in sight, including ones behind it. */
+  showReach(sq, targets) {
+    if (!targets.length) { this.showCloseUp(sq); return; }
+    const points = [sq, ...targets].map((t) => this.worldOf(t));
+    const xs = points.map((v) => v.x), zs = points.map((v) => v.z);
+    const minX = Math.min(...xs), maxX = Math.max(...xs), minZ = Math.min(...zs), maxZ = Math.max(...zs);
+    const span = Math.max(maxX - minX, maxZ - minZ, 2);
+    const look = new THREE.Vector3((minX + maxX) / 2, 0, (minZ + maxZ) / 2);
+    const position = new THREE.Vector3(look.x + 0.4, 2.2 + span * 1.1, maxZ + 2 + span * 0.35);
+    this.moveCamera(position, look);
+  }
+
+  /** Outlines the square a dragged character is over: gold for a legal
+   *  landing, red for a capture, grey for somewhere it can't go. */
+  setHover(sq) {
+    if (sq === this.hoverSq) return;
+    this.hoverSq = sq;
+    this.hoverMark.clear();
+    if (sq != null && this.outlineGeometry) {
+      const legal = this.targets.includes(sq);
+      const color = !legal ? 0x9a9aa8 : this.captures.includes(sq) ? this.colors.attack : this.colors.target;
+      const mesh = new THREE.Mesh(this.outlineGeometry, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: legal ? 1 : 0.6, depthWrite: false }));
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.position.copy(this.worldOf(sq)).setY(0.04);
+      mesh.scale.setScalar(legal ? 1.08 : 1);
+      this.hoverMark.add(mesh);
+      if (legal) {
+        const glow = new THREE.Mesh(this.glowGeometry, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending }));
+        glow.rotation.x = -Math.PI / 2;
+        glow.position.copy(this.worldOf(sq)).setY(0.035);
+        this.hoverMark.add(glow);
+      }
+    }
+    this.wake();
+  }
+
   moveCamera(position, look) {
     const fromPos = this.camPos.clone(), fromLook = this.camLook.clone();
     this.tween(reducedMotion() ? 0 : CAMERA_MS, (t) => {
@@ -241,22 +306,84 @@ export class TacticaScene {
 
   bindPointer() {
     const raycaster = new THREE.Raycaster();
-    let down = null;
-    this.onDown = (e) => { down = { x: e.clientX, y: e.clientY }; };
+    const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const aim = (e) => {
+      const rect = this.canvas.getBoundingClientRect();
+      raycaster.setFromCamera(new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1), this.camera);
+    };
+    const groundSquare = () => {
+      const point = raycaster.ray.intersectPlane(ground, new THREE.Vector3());
+      return point ? { point, sq: this.squareAt(point) } : null;
+    };
+    const spriteHit = () => raycaster.intersectObjects([...this.sprites.values()].map((v) => v.sprite))[0]?.object.userData.sq ?? null;
+    let down = null, drag = null, lastTap = null;
+
+    this.onDown = (e) => {
+      aim(e);
+      down = { x: e.clientX, y: e.clientY, sq: spriteHit() };
+    };
+    this.onMove = (e) => {
+      if (!down) return;
+      if (!drag && down.sq != null && Math.hypot(e.clientX - down.x, e.clientY - down.y) > TAP_SLOP_PX) {
+        if (this.onDragStart?.(down.sq)) {
+          drag = { sq: down.sq, piece: this.sprites.get(down.sq) };
+          this.canvas.setPointerCapture?.(e.pointerId);
+        } else down.sq = null;
+      }
+      if (!drag?.piece) return;
+      aim(e);
+      const hit = groundSquare();
+      if (!hit) return;
+      drag.piece.group.position.set(hit.point.x, DRAG_LIFT, hit.point.z);
+      this.wake();
+      this.setHover(hit.sq === drag.sq ? null : hit.sq);
+    };
     this.onUp = (e) => {
       if (!down) return;
       const dx = e.clientX - down.x, dy = e.clientY - down.y;
+      const pressed = down;
       down = null;
+      if (drag) {
+        const { sq, piece } = drag;
+        drag = null;
+        aim(e);
+        const over = groundSquare()?.sq ?? null;
+        this.setHover(null);
+        if (piece) {
+          const from = piece.group.position.clone(), home = this.worldOf(sq);
+          this.tween(reducedMotion() ? 0 : 160, (t) => piece.group.position.lerpVectors(from, home, ease(t)));
+        }
+        this.onDrop?.(over === sq ? null : over);
+        return;
+      }
       if (Math.abs(dx) > SWIPE_PX && Math.abs(dx) > Math.abs(dy)) { this.onSwipe?.(dx < 0 ? 1 : -1); return; }
       if (Math.hypot(dx, dy) > TAP_SLOP_PX) return;
-      const rect = this.canvas.getBoundingClientRect();
-      raycaster.setFromCamera(new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1), this.camera);
-      const sprites = [...this.sprites.values()].map((s) => s.sprite);
-      const hit = raycaster.intersectObjects(sprites)[0] || raycaster.intersectObjects(this.tiles)[0];
-      if (hit) this.onTap?.(hit.object.userData.sq);
+      aim(e);
+      /* While a character is held, a square it can reach wins over whatever
+         character is drawn in front of it, such as the held one itself. */
+      const tile = raycaster.intersectObjects(this.tiles)[0]?.object.userData.sq ?? null;
+      const sq = tile != null && this.targets.includes(tile) ? tile : pressed.sq ?? spriteHit() ?? tile;
+      if (sq == null) return;
+      const now = performance.now();
+      if (lastTap && lastTap.sq === sq && now - lastTap.at < DOUBLE_TAP_MS && this.sprites.has(sq)) {
+        lastTap = null;
+        this.onDoubleTap?.(sq);
+        return;
+      }
+      lastTap = { sq, at: now };
+      this.onTap?.(sq);
+    };
+    this.onCancel = () => {
+      if (drag?.piece) {
+        drag.piece.group.position.copy(this.worldOf(drag.sq));
+        this.setHover(null);
+      }
+      down = drag = null;
     };
     this.canvas.addEventListener("pointerdown", this.onDown);
+    this.canvas.addEventListener("pointermove", this.onMove);
     this.canvas.addEventListener("pointerup", this.onUp);
+    this.canvas.addEventListener("pointercancel", this.onCancel);
   }
 
   resize() {
@@ -307,6 +434,8 @@ export class TacticaScene {
     this.resizeObserver.disconnect();
     this.canvas.removeEventListener("pointerdown", this.onDown);
     this.canvas.removeEventListener("pointerup", this.onUp);
+    this.canvas.removeEventListener("pointermove", this.onMove);
+    this.canvas.removeEventListener("pointercancel", this.onCancel);
     this.canvas.removeEventListener("webglcontextlost", this.onLostEvent);
     this.renderer.dispose();
   }

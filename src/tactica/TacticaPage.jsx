@@ -44,6 +44,9 @@ export default function TacticaPage({ pieceImgSrc, boardColorId, sweetheart }) {
   const [played, setPlayed] = useState([]);
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [chosen, setChosen] = useState(null);
+  /* A character is picked up (double-tap, drag or the square arrows) before
+     its moves show. */
+  const [held, setHeld] = useState(false);
   const [busy, setBusy] = useState(true);
   const [message, setMessage] = useState(STUDY_HINT);
   const [solved, setSolved] = useState(false);
@@ -75,7 +78,10 @@ export default function TacticaPage({ pieceImgSrc, boardColorId, sweetheart }) {
         highlight: "#3EE7F5", target: "#F5D93E", attack: "#F05348", select: "#3EE7F5",
       },
       onTap: (sq) => tapRef.current(sq),
+      onDoubleTap: (sq) => pickUpRef.current(sq),
       onSwipe: (dir) => swipeRef.current(dir),
+      onDragStart: (sq) => dragStartRef.current(sq),
+      onDrop: (sq) => dropRef.current(sq),
       onLost: () => setLost(true),
     });
     sceneRef.current = scene;
@@ -91,10 +97,11 @@ export default function TacticaPage({ pieceImgSrc, boardColorId, sweetheart }) {
     const scene = sceneRef.current;
     if (!scene) return;
     if (view === "board") scene.showBoard();
+    else if (held && chosen == null) scene.showReach(selected, targets);
     else scene.showCloseUp(selected, chosen);
-    scene.setMarks(view === "close" && !solved ? { selected, targets, chosen, captures } : {});
+    scene.setMarks(view === "close" && !solved ? { selected, held, targets, chosen, captures } : {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, selected, chosen, played, solved, sceneKey]);
+  }, [view, selected, held, chosen, played, solved, sceneKey]);
 
   const playMove = async (move) => {
     const scene = sceneRef.current;
@@ -117,6 +124,7 @@ export default function TacticaPage({ pieceImgSrc, boardColorId, sweetheart }) {
     }
     setBusy(true);
     setChosen(null);
+    setHeld(false);
     setMessage(null);
     await playMove(move);
     const afterMine = [...played, verdict.san];
@@ -143,6 +151,7 @@ export default function TacticaPage({ pieceImgSrc, boardColorId, sweetheart }) {
     setPlayed([]);
     setSolved(false);
     setChosen(null);
+    setHeld(false);
     setSelectedIdx(0);
     setMessage(STUDY_HINT);
     sceneRef.current?.setPieces(piecesNow());
@@ -151,19 +160,43 @@ export default function TacticaPage({ pieceImgSrc, boardColorId, sweetheart }) {
   const cycleCharacter = (dir) => {
     if (busy) return;
     setChosen(null);
+    setHeld(false);
     setSelectedIdx((i) => (i + dir + friends.length) % friends.length);
   };
   const cycleTarget = (dir) => {
     if (!canMove || !targets.length) return;
+    setHeld(true);
     const i = targets.indexOf(chosen);
     setChosen(targets[(i + dir + targets.length + (i < 0 && dir > 0 ? 1 : 0)) % targets.length]);
   };
   const tapRef = useRef(null);
   tapRef.current = (sq) => {
     if (busy) return;
+    if (held && canMove && targets.includes(sq)) { setChosen(sq); return; }
     const friendIdx = friends.indexOf(sq);
-    if (friendIdx >= 0) { setSelectedIdx(friendIdx); setChosen(null); return; }
-    if (canMove && targets.includes(sq)) setChosen(sq);
+    if (friendIdx >= 0) { setSelectedIdx(friendIdx); setHeld(false); setChosen(null); return; }
+    if (held) { setHeld(false); setChosen(null); }
+  };
+  const pickUpRef = useRef(null);
+  pickUpRef.current = (sq) => {
+    const friendIdx = friends.indexOf(sq);
+    if (busy || solved || friendIdx < 0) return;
+    setView("close");
+    setSelectedIdx(friendIdx);
+    setChosen(null);
+    setHeld(true);
+  };
+  /* Dragging picks the character up; letting go over a square it can reach
+     chooses that square, still waiting on Confirm. */
+  const dragStartRef = useRef(null);
+  dragStartRef.current = (sq) => {
+    if (!canMove || !friends.includes(sq)) return false;
+    pickUpRef.current(sq);
+    return true;
+  };
+  const dropRef = useRef(null);
+  dropRef.current = (sq) => {
+    if (sq != null && targets.includes(sq)) setChosen(sq);
   };
   const swipeRef = useRef(null);
   swipeRef.current = cycleCharacter;
@@ -206,10 +239,10 @@ export default function TacticaPage({ pieceImgSrc, boardColorId, sweetheart }) {
                   {chosen != null ? (
                     <>
                       <button type="button" className={"btn " + (isAttack ? "gold" : "")} onClick={confirm}>{isAttack ? "Attack" : "Confirm"} {squareName(chosen)}</button>
-                      <button type="button" className="border-0 bg-transparent text-xs text-white/75 underline" onClick={() => setChosen(null)}>Cancel</button>
+                      <button type="button" className="border-0 bg-transparent text-xs text-white/75 underline" onClick={() => { setChosen(null); setHeld(false); }}>Cancel</button>
                     </>
                   ) : (
-                    <span className="px-2 text-xs text-white/80">{busy ? "…" : targets.length ? "Tap a glowing square" : "This one can't move"}</span>
+                    <span className="px-2 text-xs text-white/80">{busy ? "…" : !targets.length ? "This one can't move" : held ? "Tap or drag to a glowing square" : "Double-tap or drag to pick up"}</span>
                   )}
                   <button type="button" className={iconBtn + " size-8 text-sm"} onClick={() => cycleTarget(1)} disabled={!canMove || !targets.length} aria-label="Next square">▶</button>
                 </div>
