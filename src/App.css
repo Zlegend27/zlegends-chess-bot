@@ -741,29 +741,52 @@ select:hover{ border-color:var(--cyan); }
    column), and the coach's bubble and button row keep a steady height so
    the board doesn't jump as the text changes. The stage chip says whether
    a move is checked against the book, by Stockfish, or not at all. */
-.trainerCol{ position:relative; z-index:1; display:flex; flex-direction:column; gap:10px; align-items:stretch; }
-.trainerCol > .box, .trainerCol > .trainerFooter{ width:0; min-width:100%; }
-.trainerBox{ display:flex; flex-direction:column; padding:10px 12px; }
+.trainerCol{ position:relative; z-index:1; display:flex; flex-direction:column; gap:6px; align-items:stretch; }
+.trainerCol > .box, .trainerCol > .trainerFooter, .trainerCol > .trainerStats{ width:0; min-width:100%; }
+.trainerBox{ display:flex; flex-direction:column; padding:6px 12px 8px; }
 .trainerHead{ display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
-.trainerHead .lessonCoachName{ font-size:13px; }
+.trainerHead .lessonCoachName{ font-size:13px; min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .trainerStage{ flex:none; font-family:var(--font-mono); font-size:10px; text-transform:uppercase; letter-spacing:.08em;
   padding:3px 8px; border-radius:var(--r-pill); border:1px solid currentColor; opacity:.9; }
 .trainerStage.book{ color:var(--cyan); }
 .trainerStage.engine{ color:var(--yellow); }
 .trainerStage.free{ color:var(--dim); }
-.trainerMoves{ font-family:var(--font-mono); font-size:12px; color:var(--liliac); line-height:1.5; margin:4px 0 8px; }
+.trainerMoves{ font-family:var(--font-mono); font-size:12px; color:var(--liliac); line-height:1.45; margin:2px 0 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 /* Beats .botBubbleRow's own width, which is set later in this file. */
 .botBubbleRow.trainerCoach{ width:100%; margin-bottom:8px; }
-.trainerCoach .botBubble{ min-height:4.6em; padding-top:8px; padding-bottom:8px; font-size:13px; }
-.trainerActions{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; min-height:36px; }
-.trainerActions .btn{ min-height:36px; padding:6px 12px; font-size:11px; }
-.trainerStats{ display:flex; flex-wrap:wrap; gap:10px; margin-left:auto;
+.trainerCoach .botBubble{ line-height:1.4; height:calc(6 * 1.4em + 14px); overflow-y:auto; padding-top:7px; padding-bottom:7px; font-size:13px; }
+/* Always two rows tall, so the board stays put when Black's choices show. */
+.trainerActions{ display:flex; flex-wrap:wrap; align-content:flex-start; gap:6px; min-height:74px; }
+.trainerActions .btn{ min-height:34px; padding:5px 10px; font-size:11px; }
+/* Buttons here carry move names (4...Ng8, Why Nc3?), which the usual capitals
+   would turn into wrong notation. */
+.trainerActions .btn{ text-transform:none; font-size:12px; }
+.trainerActions .btn .trainerPct{ color:inherit; opacity:.7; margin-left:4px; }
+.trainerStats{ display:flex; flex-wrap:wrap; justify-content:center; gap:14px;
   font-family:var(--font-mono); font-size:11px; color:var(--dim); }
 .trainerStats b{ color:var(--white); }
 .trainerFooter{ display:flex; gap:8px; }
 .trainerFooter .btn{ flex:1; min-height:36px; padding:6px 10px; font-size:11px; }
 .trainerSettings{ display:flex; flex-direction:column; gap:10px; }
 .trainerSettings label{ display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--dim); }
+/* The line map: one card per Black second move, with how often players at
+   the chosen level play it, the gambit/quiet tag, and progress. */
+/* Without a board on screen, the cards set the column's width. */
+.trainerLines{ width:min(88vw,440px); display:flex; flex-direction:column; gap:8px; }
+.trainerLine{ display:flex; flex-direction:column; gap:6px; text-align:left; padding:10px 12px; cursor:pointer;
+  background:#1D1038CC; border:1px solid #8B2FC966; border-radius:var(--r-md); color:var(--white);
+  font-family:var(--font-body); transition:border-color .15s ease, transform .15s ease; }
+.trainerLine:hover{ border-color:var(--cyan); transform:translateY(-1px); }
+.trainerLine:focus-visible{ outline:2px solid var(--cyan); outline-offset:2px; }
+.trainerLineTop{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; font-size:15px; }
+.trainerLineSub{ display:flex; flex-wrap:wrap; gap:8px; font-size:12px; color:var(--dim); }
+/* No capitals: they would turn 3.Bc4 into 3.BC4. */
+.trainerTag{ font-family:var(--font-mono); font-size:11px; font-weight:700; }
+.trainerTag.gambit{ color:var(--yellow); }
+.trainerTag.quiet{ color:var(--cyan); }
+.trainerPct{ font-family:var(--font-mono); font-size:11px; color:var(--liliac); }
+.trainerProgress{ display:block; height:4px; border-radius:var(--r-pill); background:#8B2FC933; overflow:hidden; }
+.trainerProgress > span{ display:block; height:100%; background:var(--cyan); }
 
 /* BotBubble -- ZLEGEND2700's speech bubble (HomePage welcome beat, Play's
    post-game one-liner). Same typewriter/tap-to-skip idea as .lessonBubble

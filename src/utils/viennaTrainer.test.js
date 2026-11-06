@@ -95,3 +95,32 @@ describe("the coach's notes", () => {
     }
   });
 });
+
+describe("Learn mode's choices and the line map", () => {
+  const node = { r: { exf4: [46, 0, 0, 0, 5], d6: [21, 0, 0, 0, 1], Nc6: [19, 0, 0, 0, 1], d5: [8, 0, 0, 0, 90], Bc5: [3, 0, 0, 0, 0] } };
+
+  /* 97 games at this level: exf4 46 of them is 47%. */
+  test("offers the three most common replies, plus the main line of theory", async () => {
+    const { topReplies } = await import("./viennaTrainer");
+    expect(topReplies(node, 0)).toEqual([
+      { san: "exf4", pct: 47, main: false },
+      { san: "d6", pct: 22, main: false },
+      { san: "Nc6", pct: 20, main: false },
+      { san: "d5", pct: 8, main: true },
+    ]);
+  });
+
+  test("the map starts from Black's second move and knows the gambit lines", async () => {
+    const { lineMap } = await import("./viennaTrainer");
+    const map = lineMap(book, 0);
+    const bySan = Object.fromEntries(map.map((l) => [l.san, l]));
+    expect(bySan.Nf6.gambit).toBe(true);
+    expect(bySan.Nc6.gambit).toBe(true);
+    expect(bySan.Bc5.gambit).toBe(false);
+    expect(map[0].pct).toBeGreaterThanOrEqual(map[1].pct);
+    for (const line of map) {
+      expect(line.keys.length).toBeGreaterThan(0);
+      for (const k of line.keys) expect(k.startsWith(line.moves.join(" "))).toBe(true);
+    }
+  });
+});

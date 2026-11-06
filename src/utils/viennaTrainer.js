@@ -117,3 +117,55 @@ export function pawnsText(cp) {
   const pawns = Math.round(cp / 10) / 10;
   return `${pawns} pawn${pawns === 1 ? "" : "s"}`;
 }
+
+/* Black's second move, after 1.e4 e5 2.Nc3: where every line of the map starts. */
+export const VIENNA_START = ["e4", "e5", "Nc3"];
+/* The book's last band holds the strong players' games; their favourite
+   reply is the main line of theory. */
+const MAIN_BAND = 4;
+
+/** Black's most common replies at the chosen level, as offered in Learn
+ *  mode: the top `n`, plus the main line of theory if it isn't among them.
+ *  Returns [{ san, pct, main }] with `pct` the share at that level. */
+export function topReplies(node, band, n = 3) {
+  const entries = Object.entries(node.r);
+  const atLevel = entries.reduce((s, [, c]) => s + (c[band] || 0), 0);
+  const byLevel = [...entries].sort((a, b) => (b[1][band] || 0) - (a[1][band] || 0) || sum(b[1]) - sum(a[1]));
+  const main = [...entries].sort((a, b) => (b[1][MAIN_BAND] || 0) - (a[1][MAIN_BAND] || 0) || sum(b[1]) - sum(a[1]))[0]?.[0];
+  const picked = byLevel.slice(0, n).map(([san]) => san);
+  if (main && !picked.includes(main)) picked.push(main);
+  return picked.map((san) => ({
+    san,
+    pct: atLevel ? Math.round(((node.r[san][band] || 0) / atLevel) * 100) : 0,
+    main: entries.length > 1 && san === main,
+  }));
+}
+
+/** Every White decision you meet by following `topReplies` from `moves`:
+ *  what "learned X of Y" counts for a line. */
+export function curriculum(book, moves, band) {
+  const keys = new Set();
+  const walk = (list) => {
+    const node = nodeAt(book, list);
+    if (!node) return;
+    if (node.w) {
+      keys.add(keyOf(list));
+      walk([...list, node.w.rep]);
+    } else {
+      for (const { san } of topReplies(node, band)) walk([...list, san]);
+    }
+  };
+  walk(moves);
+  return [...keys];
+}
+
+/** The line map: one entry per Black second move, most common first, with
+ *  White's answer, whether it's the gambit, and the positions to learn. */
+export function lineMap(book, band) {
+  const start = nodeAt(book, VIENNA_START);
+  return topReplies(start, band, Object.keys(start.r).length).map(({ san, pct }) => {
+    const moves = [...VIENNA_START, san];
+    const rep = nodeAt(book, moves)?.w?.rep;
+    return { san, pct, moves, rep, gambit: rep === "f4", keys: curriculum(book, moves, band) };
+  });
+}

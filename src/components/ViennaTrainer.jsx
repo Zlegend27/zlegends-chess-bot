@@ -29,7 +29,7 @@ import { replayIntoEngine } from "../utils/share";
 import { loadSetting, saveSetting } from "../utils/storage";
 import { loadEcoOpenings, detectEcoOpening } from "../utils/ecoOpenings";
 import {
-  BANDS, VARIETY, EXTEND_TO_PLY, ENGINE_MISS_CP, keyOf, nodeAt, pickReply, pickByChance,
+  BANDS, VARIETY, EXTEND_TO_PLY, ENGINE_MISS_CP, keyOf, nodeAt, pickReply, pickByChance, topReplies, lineMap, VIENNA_START,
   judgeMove, updateWeak, pawnsText, uciOf,
 } from "../utils/viennaTrainer";
 import { explainLine, fullVerdict } from "../utils/explainLine";
@@ -47,9 +47,17 @@ const WHITE_ARROW = "#3EE7F5";
 const BLACK_ARROW = "#D94BF0";
 const HINT_ARROW = "#F5D93E";
 
-/** "1. e4 e5 2. Nc3" for a list of SAN moves. */
-function lineText(moves) {
-  return moves.map((san, i) => (i % 2 === 0 ? `${i / 2 + 1}. ${san}` : san)).join(" ");
+/** "1. e4 e5 2. Nc3" for a list of SAN moves, keeping only the latest moves
+ *  that fit in `maxChars` so the line stays on one row. */
+function lineText(moves, maxChars = 40) {
+  const parts = moves.map((san, i) => (i % 2 === 0 ? `${i / 2 + 1}. ${san}` : san));
+  let text = parts.join(" ");
+  for (let from = 1; text.length > maxChars && from < parts.length; from++) {
+    const tail = parts.slice(from);
+    if (from % 2 === 1) tail[0] = `${(from + 1) / 2}...${tail[0]}`;
+    text = `… ${tail.join(" ")}`;
+  }
+  return text;
 }
 
 /** "3.f4" or "3...exf4": a move as chess books write it. */
@@ -86,6 +94,12 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
   /* The half-move at which known theory ran out in this line, so the coach
      announces it once instead of on every move after. */
   const [theoryEndPly, setTheoryEndPly] = useState(null);
+  /* "map" lists the lines to study; "train" plays one. `root` is Black's
+     second move for the line being played, or null for "Surprise me". */
+  const [screen, setScreen] = useState("map");
+  const [root, setRoot] = useState(null);
+  /* Positions answered right first try, which is what "learned" counts. */
+  const [known, setKnown] = useState(() => loadSetting("viennaKnown", {}));
   /* "Show why": { intro, steps, verdict, idx, startFen } while a line plays
      out (idx = moves of it shown so far), or { loading: true } while
      Stockfish finds it. */
@@ -100,6 +114,7 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
   useEffect(() => { saveSetting("viennaMode", mode); }, [mode]);
   useEffect(() => { saveSetting("viennaWeak", weak); }, [weak]);
   useEffect(() => { saveSetting("viennaSeen", seen); }, [seen]);
+  useEffect(() => { saveSetting("viennaKnown", known); }, [known]);
 
   const node = offBook ? null : nodeAt(book, moves);
   const key = keyOf(moves);
@@ -112,6 +127,9 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
   const isNew = mode === "learn" && !!node?.w && !seen[key] && !missedHere;
   const note = node?.w && VIENNA_NOTES[key]?.move === node.w.rep ? VIENNA_NOTES[key] : null;
   const toReview = Object.keys(weak).filter((k) => nodeAt(book, k ? k.split(" ") : [])?.w);
+  /* Learn mode waits for you to choose Black's reply when there is a choice. */
+  const choosing = screen === "train" && mode === "learn" && !whiteToMove && !!node?.r && Object.keys(node.r).length > 1
+    && !result && !explaining && !waiting;
 
   function checkOver() {
     if (eng.legalMoves().length === 0) {
@@ -172,7 +190,7 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
      player: from real games in theory, from Maia past it, from Stockfish
      in free play. */
   useEffect(() => {
-    if (result || whiteToMove || waiting || lineDone || explaining) return;
+    if (result || whiteToMove || waiting || lineDone || explaining || choosing || screen !== "train") return;
     let cancelled = false;
     setBotThinking(true);
     const finish = (mv) => {
@@ -205,7 +223,7 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
     byStockfish();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [moves.length, result, waiting, lineDone, offBook, explaining]);
+  }, [moves.length, result, waiting, lineDone, offBook, explaining, choosing, screen]);
 
   /* "Show why" plays its line out one move at a time. */
   useEffect(() => {
@@ -237,13 +255,17 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
      taken. A move shown for the first time in Learn mode isn't a quiz. */
   const scoreRight = (k, quizzed) => {
     if (quizzed && !missedHere) {
-      if (k != null) setWeak((w) => updateWeak(w, k, true));
+      if (k != null) {
+        setWeak((w) => updateWeak(w, k, true));
+        setKnown((m) => ({ ...m, [k]: true }));
+      }
       setStats((s) => ({ ...s, asked: s.asked + 1, right: s.right + 1 }));
     }
     setMissedHere(false);
     setFeedback(null);
   };
   const scoreMiss = (k) => {
+    if (k != null) setKnown((m) => { const next = { ...m }; delete next[k]; return next; });
     if (!missedHere) {
       if (k != null) setWeak((w) => updateWeak(w, k, false));
       setStats((s) => ({ ...s, asked: s.asked + 1 }));
@@ -407,11 +429,28 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
     rebuild(list);
   };
 
+  /* Opens a line from the map: from Black's second move, or from move 1
+     for "Surprise me". */
+  const chooseLine = (san) => {
+    setRoot(san);
+    setScreen("train");
+    startLine(san ? [...VIENNA_START, san] : []);
+  };
+
   /* Jumps straight to the position missed most often. */
   const reviewMistake = () => {
     const worst = [...toReview].sort((a, b) => weak[b] - weak[a])[0];
+    setScreen("train");
+    setRoot(worst ? worst.split(" ")[3] ?? null : null);
     startLine(worst ? worst.split(" ") : []);
   };
+
+  /* In Learn mode you choose Black's reply, from the most common ones. */
+  const playBlack = (san) => {
+    const mv = eng.legalMoves().find((m) => eng.sanOf(m) === san);
+    if (mv !== undefined) play(mv);
+  };
+  const surpriseMe = () => playBlack(pickReply(node, moves, { band, power: VARIETY.find((v) => v.id === varietyId).power, weak }));
 
   const showHint = () => {
     const mv = eng.legalMoves().find((m) => eng.sanOf(m) === node.w.rep);
@@ -434,6 +473,8 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
 
   /* ---------- What Zlegend27 says ---------- */
   const level = BANDS[band];
+  const options = choosing ? topReplies(node, band) : [];
+  const lines = useMemo(() => (screen === "map" ? lineMap(book, band) : []), [screen, band]);
   const blackReply = (() => {
     if (!whiteToMove || moves.length < 2 || offBook) return null;
     const prev = nodeAt(book, moves.slice(0, -1));
@@ -452,7 +493,9 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
   const movesLeft = fullMoves(EXTEND_TO_PLY) - fullMoves(moves.length + 1) + 1;
 
   let say;
-  if (explain?.loading) {
+  if (screen === "map") {
+    say = `Pick a line to study. The percentages show how often ${level.label.toLowerCase()} players choose each reply after 1.e4 e5 2.Nc3. In the gambit lines you play 3.f4. In the quiet ones f4 doesn't work, so you develop a piece instead.`;
+  } else if (explain?.loading) {
     say = "Let me show you…";
   } else if (shown) {
     say = !shown.step ? explain.intro : shown.done ? `${shown.step.text} ${explain.verdict}` : shown.step.text;
@@ -474,6 +517,12 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
     say = `${feedback.san} is playable, but in our Vienna we play ${feedback.rep} here.`;
   } else if (offBook) {
     say = "Free play. Stockfish plays Black at your level and I'm not checking your moves.";
+  } else if (choosing) {
+    say = [
+      praiseText,
+      "What does Black play here? Pick a reply to learn our answer to it, or let me surprise you.",
+      options.some((o) => o.main) ? "The star marks the main line of theory." : null,
+    ].filter(Boolean).join(" ");
   } else if (!whiteToMove) {
     say = praiseText || "Black is thinking…";
   } else {
@@ -522,10 +571,22 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
     );
   } else if (explain?.loading) {
     actions = null;
+  } else if (choosing) {
+    actions = (
+      <>
+        {options.map((o, i) => (
+          <button key={o.san} className={"btn " + (i === 0 ? "gold" : "ghost")} onClick={() => playBlack(o.san)}>
+            {o.main ? "★ " : ""}{moveLabel(moves.length, o.san)} <span className="trainerPct">{o.pct}%</span>
+          </button>
+        ))}
+        <button className="btn ghost" onClick={surpriseMe}>Surprise me</button>
+      </>
+    );
   } else if (lineDone) {
     actions = (
       <>
-        <button className="btn gold" onClick={() => startLine()}>Next line</button>
+        <button className="btn gold" onClick={() => chooseLine(root)}>Next line</button>
+        <button className="btn ghost" onClick={() => setScreen("map")}>All lines</button>
         {toReview.length > 0 && <button className="btn ghost" onClick={reviewMistake}>Review a mistake</button>}
         {!result && <button className="btn ghost" onClick={keepPlaying}>Play it out</button>}
       </>
@@ -560,23 +621,48 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
     <div className="trainerCol">
       <div className="box trainerBox">
         <div className="trainerHead">
-          <div className="lessonCoachName" style={{ whiteSpace: "normal" }}>{opening ? opening.name : "Vienna Gambit"}</div>
-          <span className={"trainerStage " + stage.cls}>{stage.label}</span>
+          <div className="lessonCoachName" title={opening ? opening.name : undefined}>{opening ? opening.name : "Vienna Gambit"}</div>
+          {screen === "train" && <span className={"trainerStage " + stage.cls}>{stage.label}</span>}
         </div>
-        <div className="trainerMoves" aria-label="Moves in this line">{moves.length ? lineText(moves) : "1. …"}</div>
+        {screen === "train" && <div className="trainerMoves" aria-label="Moves in this line">{moves.length ? lineText(moves) : "1. …"}</div>}
 
         <BotBubble line={say} avatarSize={40} className="trainerCoach" />
 
-        <div className="trainerActions">
-          {actions}
-          <div className="trainerStats">
-            <span>First try <b>{stats.asked ? `${stats.right}/${stats.asked}` : "–"}</b></span>
-            <span>Lines <b>{stats.lines}</b></span>
-            <span>Review <b>{toReview.length}</b></span>
-          </div>
-        </div>
+        {screen === "train" && <div className="trainerActions">{actions}</div>}
       </div>
 
+      {screen === "map" ? (
+        <div className="trainerLines">
+          {lines.map((l) => {
+            const learned = l.keys.filter((k) => known[k]).length;
+            const name = eco ? detectEcoOpening(l.moves, eco)?.name.replace(/^Vienna Game(: )?/, "") : "";
+            return (
+              <button key={l.san} className="trainerLine" onClick={() => chooseLine(l.san)}>
+                <span className="trainerLineTop">
+                  <b>vs 2...{l.san}</b>
+                  <span className="trainerPct">{l.pct}%</span>
+                </span>
+                <span className="trainerLineSub">
+                  <span className={"trainerTag " + (l.gambit ? "gambit" : "quiet")}>{l.gambit ? "Gambit" : "Quiet"} · 3.{l.rep}</span>
+                  {name && <span>{name}</span>}
+                </span>
+                <span className="trainerProgress" aria-hidden="true"><span style={{ width: `${(learned / l.keys.length) * 100}%` }} /></span>
+                <span className="trainerLineSub">Learned {learned} of {l.keys.length} moves</span>
+              </button>
+            );
+          })}
+          {toReview.length > 0 && (
+            <button className="trainerLine" onClick={reviewMistake}>
+              <span className="trainerLineTop"><b>Review a mistake</b><span className="trainerPct">{toReview.length}</span></span>
+              <span className="trainerLineSub">Jump straight to the move you miss most.</span>
+            </button>
+          )}
+          <button className="trainerLine" onClick={() => chooseLine(null)}>
+            <span className="trainerLineTop"><b>Surprise me</b></span>
+            <span className="trainerLineSub">Start from move 1. Black picks like real games do.</span>
+          </button>
+        </div>
+      ) : (
       <LessonBoard
           eng={shown ? shown.eng : eng}
           orientation="white"
@@ -588,11 +674,17 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
           hint={explaining ? null : hint}
           arrows={arrows}
       />
+      )}
 
       <div className="trainerFooter">
-        <button className="btn ghost" onClick={() => startLine()}>New line</button>
+        {screen === "train" && <button className="btn ghost" onClick={() => setScreen("map")}>All lines</button>}
         <button className="btn ghost" onClick={() => setShowSettings((v) => !v)} aria-expanded={showSettings}>Settings</button>
         <button className="btn ghost" onClick={onExit}>Exit</button>
+      </div>
+      <div className="trainerStats">
+        <span>First try <b>{stats.asked ? `${stats.right}/${stats.asked}` : "–"}</b></span>
+        <span>Lines <b>{stats.lines}</b></span>
+        <span>To review <b>{toReview.length}</b></span>
       </div>
 
       {showSettings && (
@@ -600,8 +692,8 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
           <label>
             <span>Mode</span>
             <select value={mode} onChange={(e) => setMode(e.target.value)}>
-              <option value="learn">Learn: show me new moves first</option>
-              <option value="test">Test: no arrows or hints</option>
+              <option value="learn">Learn: you pick Black's replies, new moves shown first</option>
+              <option value="test">Test: Black plays like real games, no hints</option>
             </select>
           </label>
           <label>
