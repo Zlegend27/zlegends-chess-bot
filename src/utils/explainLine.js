@@ -2,12 +2,13 @@
    plus a one-line verdict ("White wins a piece"). Everything is read off
    the board, so it can't describe a move that isn't there. */
 import { createEngine, mFrom, mTo, mPromo, M120TO64 } from "../engine/chessEngine.js";
+import { uciOf } from "./chessMoves.js";
+
+export { uciOf };
 
 const NAMES = ["", "pawn", "knight", "bishop", "rook", "queen", "king"];
 const VALUES = [0, 1, 3, 3, 5, 9, 0];
 const sqName = (s120) => { const s = M120TO64[s120]; return "abcdefgh"[s % 8] + ((s >> 3) + 1); };
-/** A move in the e2e4 form engines use. */
-export const uciOf = (m) => sqName(mFrom(m)) + sqName(mTo(m)) + (["", "", "n", "b", "r", "q"][mPromo(m)] || "");
 
 /** White's material minus Black's, in pawns. */
 function materialBalance(eng) {

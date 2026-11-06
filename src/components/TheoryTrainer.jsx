@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from "react";
 import { createEngine, M64TO120, M120TO64, mFrom, mTo } from "../engine/chessEngine";
 import { stockfishBestMove, warmUpStockfish } from "../engine/stockfishEngine";
 import { replayIntoEngine } from "../utils/share";
+import { gameResult, resultSentence } from "../utils/gameResult";
 import LessonBoard from "./LessonBoard";
 
 const STRENGTHS = [
@@ -62,17 +63,8 @@ export default function TheoryTrainer({ lesson, pieceSetId, onExit }) {
     rerender();
   };
 
-  function checkOver() {
-    if (eng.legalMoves().length === 0) {
-      return eng.inCheckNow()
-        ? (eng.getSide() === 1 ? "Checkmate — you win!" : "Checkmate — the bot wins.")
-        : "Stalemate — draw.";
-    }
-    if (eng.halfClock() >= 100) return "Draw — fifty-move rule.";
-    if (eng.repetitionCount() >= 3) return "Draw — threefold repetition.";
-    if (eng.insufficientMaterial()) return "Draw — insufficient material.";
-    return null;
-  }
+  /* The student plays Black. */
+  const checkOver = () => resultSentence(gameResult(eng), -1);
 
   const inBookLines = linesMatching(lesson.repertoire, moves);
   const inBook = inBookLines.length > 0;

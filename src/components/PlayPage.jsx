@@ -10,7 +10,7 @@ const OTHER_MODES = [
 
 /** Where a new game starts. `levels` are the bots in the order to offer them,
  *  each with its index in DIFFICULTIES. Picking one starts a game. */
-export default function PlayPage({ levels, hasLiveGame, onPick, onResume, onMode, sweetheart }) {
+export default function PlayPage({ levels, hasLiveGame, onPick, onResume, onMode, onLobby, sweetheart }) {
   const T = getUiTheme(sweetheart);
   const [open, setOpen] = useState(false);
   const card = `rounded-2xl border ${T.cardBorder} ${T.panelBg} backdrop-blur-sm`;
@@ -60,13 +60,13 @@ export default function PlayPage({ levels, hasLiveGame, onPick, onResume, onMode
           )}
         </div>
 
-        <div className={`${card} p-4`} aria-disabled="true">
+        <button type="button" onClick={onLobby} className={`${card} cursor-pointer p-4 text-left`}>
           <span className="flex items-center justify-between gap-2">
             <span className={"text-sm font-bold " + T.ink}>Player vs Player</span>
-            <span className={"text-xs font-bold " + T.dimText}>Coming soon</span>
+            <span className={"text-xs font-bold " + T.interactiveText}>Lobby</span>
           </span>
-          <span className={"mt-1 block text-xs leading-relaxed " + T.dimText}>Play against a real person.</span>
-        </div>
+          <span className={"mt-1 block text-xs leading-relaxed " + T.dimText}>Join the lobby, sit at a table, and play a real person.</span>
+        </button>
 
         {OTHER_MODES.map((m) => (
           <button

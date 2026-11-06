@@ -2,11 +2,12 @@ import { useState } from "react";
 import SubPage from "./SubPage";
 import PixelAvatar, { ZPAL, ZPIX } from "./PixelAvatar";
 import { getUiTheme } from "../utils/uiTheme";
+import AvatarEditor from "./AvatarEditor";
 
 /* Your profile: who you are on this site, your name, your games, and whether
    your games follow you to other devices. The rating isn't shown here; it
    stays hidden until it's calibrated. */
-export default function ProfilePage({ profile, displayName, onSaveName, onBack, onSignIn, onSignOut, onYourGames, sweetheart }) {
+export default function ProfilePage({ profile, displayName, onSaveName, onBack, onSignIn, onSignOut, onYourGames, avatar, onSaveAvatar, sweetheart }) {
   const T = getUiTheme(sweetheart);
   const [draft, setDraft] = useState(displayName);
   const [saved, setSaved] = useState(false);
@@ -47,6 +48,8 @@ export default function ProfilePage({ profile, displayName, onSaveName, onBack, 
           {saved ? "Saved. It shows on your board and the Rush leaderboard." : "Shown on your board and the Puzzle Rush leaderboard."}
         </p>
       </div>
+
+      <AvatarEditor avatar={avatar} discordUrl={profile?.avatarUrl} signedIn={!!profile} onSave={onSaveAvatar} sweetheart={sweetheart} />
 
       <div className="flex flex-col gap-2">
         <button type="button" className="btn ghost" style={{ width: "100%" }} onClick={onYourGames}>Your games</button>

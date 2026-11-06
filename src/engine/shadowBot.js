@@ -4,7 +4,8 @@
    since a move that looks fine at first can turn out to lose the lead. If Maia
    fails, the bot plays on without it. Loaded only once someone plays Rank Bot,
    so nobody else fetches any of this. */
-import { createEngine, MATE, mFrom, mPromo, mTo, M120TO64 } from "./chessEngine";
+import { createEngine, MATE } from "./chessEngine";
+import { uciOf } from "../utils/chessMoves";
 import { hangingPieces } from "../utils/gradeGame";
 import { PTS } from "../utils/material";
 import { MATE_EVAL } from "../utils/reviewScoring";
@@ -34,11 +35,6 @@ const REAL_PIECE = 3;
 const MATERIAL_PLIES = 8;
 
 const reviewCp = (s) => (Math.abs(s) > MATE - 2000 ? Math.sign(s) * MATE_EVAL : s);
-const squareName = (sq120) => {
-  const i = M120TO64[sq120];
-  return "abcdefgh"[i % 8] + String(((i / 8) | 0) + 1);
-};
-const uciOf = (m) => squareName(mFrom(m)) + squareName(mTo(m)) + (mPromo(m) ? "  nbrq"[mPromo(m)] : "");
 
 const at = (fen) => { const eng = createEngine(); eng.loadFen(fen); return eng; };
 const pieceCount = (eng) => {

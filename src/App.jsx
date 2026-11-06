@@ -45,11 +45,14 @@ const GameReviewPage = lazy(() => import("./components/GameReviewPage"));
 const AppPopups = lazy(() => import("./components/AppPopups"));
 const ModePages = lazy(() => import("./components/ModePages"));
 const ProfilePage = lazy(() => import("./components/ProfilePage"));
+const LobbyPage = lazy(() => import("./pvp/LobbyPage"));
 const PlayView = lazy(() => import("./components/PlayView"));
 import { syncRankBotToSupabase, fetchRankBotFromSupabase, logRankBotMove } from "./utils/rankBot";
 import { ENGINE_VERSION } from "./utils/version";
 import { OPENINGS } from "./utils/openings";
 import { fullMoves } from "./utils/moveNumber";
+import { gameResult } from "./utils/gameResult";
+import { avatarFromSession, saveAvatar } from "./utils/avatar";
 import { arrowGeometry as arrowGeometryFor, arrowPoint as arrowPointAt } from "./utils/arrowGeometry";
 import { loadEcoOpenings, detectEcoOpening, theoryPlyCount } from "./utils/ecoOpenings";
 import { stockfishBestMove, stockfishAnalyze, warmUpStockfish, isStockfishWarm } from "./engine/stockfishEngine";
@@ -317,28 +320,34 @@ export default function ZlegendsBot() {
      one also requires musicSource === "chiptune"). */
   const isFirstVisitRef = useRef(!loadSetting("visitedBefore", false));
 
-  /* engine search runs in a worker so it never blocks the audio scheduler or UI */
+  /* engine search runs in a worker so it never blocks the audio scheduler or UI.
+     The worker carries the ~500KB opening book, so it starts on the way into
+     Play (or on the first search) rather than on every page load. */
   const workerRef = useRef(null);
   const pendingSearchesRef = useRef(new Map());
   const searchIdRef = useRef(0);
-  if (!workerRef.current) {
-    workerRef.current = new Worker(new URL("./engine/engineWorker.js", import.meta.url), { type: "module" });
-    workerRef.current.onmessage = (e) => {
-      const { id, result } = e.data;
-      const resolve = pendingSearchesRef.current.get(id);
-      if (resolve) { pendingSearchesRef.current.delete(id); resolve(result); }
-    };
-  }
+  const engineWorker = useCallback(() => {
+    if (!workerRef.current) {
+      workerRef.current = new Worker(new URL("./engine/engineWorker.js", import.meta.url), { type: "module" });
+      workerRef.current.onmessage = (e) => {
+        const { id, result } = e.data;
+        const resolve = pendingSearchesRef.current.get(id);
+        if (resolve) { pendingSearchesRef.current.delete(id); resolve(result); }
+      };
+    }
+    return workerRef.current;
+  }, []);
+  useEffect(() => { if (siteView === "play") engineWorker(); }, [siteView, engineWorker]);
   const runSearch = useCallback((searchMoveList, timeMs, blunderChance = 0, opts = {}) => {
     const id = ++searchIdRef.current;
     return new Promise((resolve) => {
       pendingSearchesRef.current.set(id, resolve);
-      workerRef.current.postMessage({
+      engineWorker().postMessage({
         id, moveList: searchMoveList, timeMs, blunderChance,
         personality: opts.personality, useBook: !!opts.useBook, bookStyle: opts.bookStyle || null,
       });
     });
-  }, []);
+  }, [engineWorker]);
 
   const [, force] = useState(0);
   const rerender = () => force(n => n + 1);
@@ -703,20 +712,7 @@ export default function ZlegendsBot() {
   const spectateWhiteRef = useRef(DIFFICULTIES[2]);
   const spectateBlackRef = useRef(DIFFICULTIES[2]);
 
-  const checkGameOver = useCallback(() => {
-    const legal = eng.legalMoves();
-    if (legal.length === 0) {
-      if (eng.inCheckNow()) {
-        const winner = -eng.getSide();
-        return { text: winner === 1 ? "1–0" : "0–1", reason: "Checkmate", winner };
-      }
-      return { text: "½–½", reason: "Stalemate" };
-    }
-    if (eng.halfClock() >= 100) return { text: "½–½", reason: "Fifty-move rule" };
-    if (eng.repetitionCount() >= 3) return { text: "½–½", reason: "Threefold repetition" };
-    if (eng.insufficientMaterial()) return { text: "½–½", reason: "Insufficient material" };
-    return null;
-  }, [eng]);
+  const checkGameOver = useCallback(() => gameResult(eng), [eng]);
 
   /* The checkmate moment, for games played out here. Reviewed games and
      puzzles have their own endings. */
@@ -3123,8 +3119,26 @@ export default function ZlegendsBot() {
         onPick={startFromHub}
         onResume={() => setSiteView("play")}
         onMode={enterMode}
+        onLobby={() => setSiteView("lobby")}
         sweetheart={sweetheart}
       />
+    );
+  }
+
+  if (siteView === "lobby") {
+    return (
+      <Suspense fallback={null}>
+        <LobbyPage
+          session={session}
+          profile={profile}
+          displayName={displayName}
+          avatar={avatarFromSession(session)}
+          pieceSetId={pieceSetId}
+          onBack={() => setSiteView("playHub")}
+          onSignIn={signInWithDiscord}
+          sweetheart={sweetheart}
+        />
+      </Suspense>
     );
   }
 
@@ -3155,6 +3169,8 @@ export default function ZlegendsBot() {
           onSignIn={signInWithDiscord}
           onSignOut={signOut}
           onYourGames={() => enterMode("review")}
+          avatar={avatarFromSession(session)}
+          onSaveAvatar={saveAvatar}
           sweetheart={sweetheart}
         />
       </Suspense>

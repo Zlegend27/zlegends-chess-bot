@@ -15,6 +15,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createEngine } from "../engine/chessEngine";
+import { gameResult } from "../utils/gameResult";
 import { stockfishBestMove, warmUpStockfish } from "../engine/stockfishEngine";
 import { replayIntoEngine } from "../utils/share";
 import { fullMoves } from "../utils/moveNumber";
@@ -211,19 +212,7 @@ export default function BlindMode({ onClose }) {
     setSavedGame(null);
   };
 
-  const checkGameOver = () => {
-    if (eng.legalMoves().length === 0) {
-      if (eng.inCheckNow()) {
-        const winner = -eng.getSide();
-        return { text: winner === 1 ? "1–0" : "0–1", reason: "Checkmate", winner };
-      }
-      return { text: "½–½", reason: "Stalemate" };
-    }
-    if (eng.halfClock() >= 100) return { text: "½–½", reason: "Fifty-move rule" };
-    if (eng.repetitionCount() >= 3) return { text: "½–½", reason: "Threefold repetition" };
-    if (eng.insufficientMaterial()) return { text: "½–½", reason: "Insufficient material" };
-    return null;
-  };
+  const checkGameOver = () => gameResult(eng);
 
   const finishGame = (over, spoken) => {
     setPhase("over"); phaseRef.current = "over";

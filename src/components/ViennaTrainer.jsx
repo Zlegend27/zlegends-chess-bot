@@ -26,6 +26,8 @@ import { createEngine, M64TO120, M120TO64, mFrom, mTo } from "../engine/chessEng
 import { stockfishAnalyze, stockfishBestMove, warmUpStockfish } from "../engine/stockfishEngine";
 import { maiaChances, warmMaia } from "../engine/maiaEngine";
 import { replayIntoEngine } from "../utils/share";
+import { gameResult, resultSentence } from "../utils/gameResult";
+import { lastMoveOf } from "../utils/chessMoves";
 import { loadSetting, saveSetting } from "../utils/storage";
 import { loadEcoOpenings, detectEcoOpening } from "../utils/ecoOpenings";
 import {
@@ -46,6 +48,8 @@ const EXPLAIN_PLIES = 5;
 const WHITE_ARROW = "#3EE7F5";
 const BLACK_ARROW = "#D94BF0";
 const HINT_ARROW = "#F5D93E";
+/* Most lines leave known theory between moves 6 and 9. */
+const MAIA_WARM_PLY = 8;
 
 /** "1. e4 e5 2. Nc3" for a list of SAN moves, keeping only the latest moves
  *  that fit in `maxChars` so the line stays on one row. */
@@ -108,7 +112,7 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
      arrives afterwards is ignored. */
   const epochRef = useRef(0);
 
-  useEffect(() => { warmUpStockfish(); warmMaia(); loadEcoOpenings().then(setEco); }, []);
+  useEffect(() => { warmUpStockfish(); loadEcoOpenings().then(setEco); }, []);
   useEffect(() => { saveSetting("viennaBand", band); }, [band]);
   useEffect(() => { saveSetting("viennaVariety", varietyId); }, [varietyId]);
   useEffect(() => { saveSetting("viennaMode", mode); }, [mode]);
@@ -131,30 +135,15 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
   const choosing = screen === "train" && mode === "learn" && !whiteToMove && !!node?.r && Object.keys(node.r).length > 1
     && !result && !explaining && !waiting;
 
-  function checkOver() {
-    if (eng.legalMoves().length === 0) {
-      return eng.inCheckNow() ? (eng.getSide() === 1 ? "Checkmate, Black wins." : "Checkmate, you win!") : "Stalemate, it's a draw.";
-    }
-    if (eng.halfClock() >= 100) return "Draw by the fifty-move rule.";
-    if (eng.repetitionCount() >= 3) return "Draw by threefold repetition.";
-    if (eng.insufficientMaterial()) return "Draw, not enough material to mate.";
-    return null;
-  }
-
-  const lastOf = (list) => {
-    if (!list.length) return null;
-    const probe = createEngine();
-    replayIntoEngine(probe, list.slice(0, -1));
-    const mv = probe.legalMoves().find((m) => probe.sanOf(m) === list[list.length - 1]);
-    return mv ? { from: mFrom(mv), to: mTo(mv) } : null;
-  };
+  /* You play White. */
+  const checkOver = () => resultSentence(gameResult(eng), 1);
 
   const rebuild = (list) => {
     epochRef.current++;
     eng.reset();
     replayIntoEngine(eng, list);
     setMoves(list);
-    setLastMove(lastOf(list));
+    setLastMove(lastMoveOf(list));
     setSelected(-1);
     setTargets([]);
     setResult(checkOver());
@@ -176,6 +165,13 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
     if (pastTheory && theoryEndPly == null) setTheoryEndPly(moves.length);
     else if (!pastTheory && theoryEndPly != null) setTheoryEndPly(null);
   }, [pastTheory, theoryEndPly, moves.length]);
+
+  /* Maia (about 25MB with its runtime) only plays once known theory runs
+     out, so it starts loading when a line is getting there, not when the
+     trainer opens. Its first read may still be slow; Stockfish covers it. */
+  useEffect(() => {
+    if (screen === "train" && (pastTheory || moves.length >= MAIA_WARM_PLY)) warmMaia();
+  }, [screen, pastTheory, moves.length]);
 
   /* A finished line counts once. */
   const countedRef = useRef(false);

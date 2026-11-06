@@ -36,6 +36,16 @@ export default defineConfig({
         // every time a below-2000 difficulty tier is picked.
         runtimeCaching: [
           {
+            /* Maia's ~11MB model: same deal as Stockfish, so it isn't
+               re-checked against the server on every visit. */
+            urlPattern: /\/maia3\/.*\.onnx$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'maia-model',
+              expiration: { maxEntries: 2, maxAgeSeconds: 60 * 60 * 24 * 365 },
+            },
+          },
+          {
             urlPattern: /\/stockfish\/.*\.(js|wasm)$/,
             handler: 'CacheFirst',
             options: {

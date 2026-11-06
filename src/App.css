@@ -943,3 +943,15 @@ select:hover{ border-color:var(--cyan); }
 
 /* A .promoBox used as a page rather than a popup: no pop-in, and full width. */
 .promoBox.subPageBox{ flex-direction:column; gap:12px; width:100%; box-sizing:border-box; animation:none; }
+
+/* 1v1: the player strips above and below the board, and the little board
+   drawn on each lobby table. */
+.pvpPlayer{ width:0; min-width:100%; display:flex; align-items:center; gap:10px; padding:6px 10px;
+  background:#1D1038CC; border:1px solid #8B2FC966; border-radius:var(--r-md); }
+.pvpPlayer.toMove{ border-color:var(--cyan); box-shadow:0 0 12px #3EE7F533; }
+.pvpName{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:700; color:var(--white); }
+.pvpClock{ font-family:var(--font-mono); font-size:18px; font-variant-numeric:tabular-nums; color:var(--white);
+  background:#150C24; border-radius:var(--r-xs); padding:2px 8px; }
+.pvpClock.low{ color:#F05348; }
+.pvpTableTop{ width:70%; height:14px; border-radius:var(--r-2xs);
+  background:repeating-conic-gradient(var(--boardDark, #8B2FC9) 0 25%, var(--boardLight, #C9C2E8) 0 50%) 0 0/14px 14px; opacity:.75; }
