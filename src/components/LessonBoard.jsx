@@ -7,12 +7,14 @@
 
 import { M64TO120 } from "../engine/chessEngine";
 import { getPieceSet } from "../utils/pieceSets";
+import { arrowGeometry } from "../utils/arrowGeometry";
 
 const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
 
 /** `hint` ({ from, to } as 120-squares) outlines a move in gold, the same way
- *  the Play board shows Best Move. */
-export default function LessonBoard({ eng, orientation, selected, targets, lastMove, onSquare, pieceSetId, hint = null }) {
+ *  the Play board shows Best Move. `arrows` ([{ from, to, color }]) draws
+ *  arrows with the Play board's geometry. */
+export default function LessonBoard({ eng, orientation, selected, targets, lastMove, onSquare, pieceSetId, hint = null, arrows = [] }) {
   const flipped = orientation === "black";
   const pieceImgSrc = (type, isWhite) => getPieceSet(pieceSetId).svgUrl(type, isWhite);
   const rows = [];
@@ -44,5 +46,20 @@ export default function LessonBoard({ eng, orientation, selected, targets, lastM
     }
     rows.push(<div key={vr} role="row" className="brow">{cells}</div>);
   }
-  return <div className="board" role="grid" aria-label="Lesson board">{rows}</div>;
+  const drawn = arrows.map((a) => ({ ...a, geo: arrowGeometry(a, flipped) })).filter((a) => a.geo);
+  return (
+    <div className="board" role="grid" aria-label="Lesson board">
+      {rows}
+      {drawn.length > 0 && (
+        <svg className="arrowLayer" viewBox="0 0 8 8" aria-hidden="true">
+          {drawn.map((a, i) => (
+            <g key={i}>
+              <path d={a.geo.path} fill="none" stroke={a.color || "#F5D93E"} strokeOpacity={0.85} strokeWidth="0.26" strokeLinecap="round" strokeLinejoin="round" />
+              <polygon points={a.geo.head} fill={a.color || "#F5D93E"} fillOpacity={0.85} />
+            </g>
+          ))}
+        </svg>
+      )}
+    </div>
+  );
 }

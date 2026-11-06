@@ -735,6 +735,27 @@ select:hover{ border-color:var(--cyan); }
 .lessonPlayCtrls .btn{ min-height:36px; padding:6px 10px; font-size:11px; }
 .lessonAnalyzeBtn{ display:block; width:100%; margin-top:10px; font-size:11px; }
 
+/* Vienna Trainer: a lesson panel led by Zlegend27's speech bubble. The
+   stage chip says whether the move is checked against the book, by
+   Stockfish, or not at all. */
+.trainerHead{ display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+.trainerStage{ flex:none; font-family:var(--font-mono); font-size:10px; text-transform:uppercase; letter-spacing:.08em;
+  padding:3px 8px; border-radius:var(--r-pill); border:1px solid currentColor; opacity:.9; }
+.trainerStage.book{ color:var(--cyan); }
+.trainerStage.engine{ color:var(--yellow); }
+.trainerStage.free{ color:var(--dim); }
+.trainerMoves{ font-family:var(--font-mono); font-size:12px; color:var(--liliac); line-height:1.5; margin:6px 0 12px; }
+/* Beats .botBubbleRow's own width, which is set later in this file. */
+.botBubbleRow.trainerCoach{ width:100%; margin-bottom:12px; }
+.trainerActions{ display:flex; flex-wrap:wrap; gap:8px; }
+.trainerStats{ display:flex; flex-wrap:wrap; gap:14px; margin-top:auto; padding-top:14px;
+  font-family:var(--font-mono); font-size:11px; color:var(--dim); }
+.trainerStats b{ color:var(--white); }
+.trainerFooter{ display:flex; gap:8px; }
+.trainerFooter .btn{ flex:1; min-height:36px; padding:6px 10px; font-size:11px; }
+.trainerSettings{ display:flex; flex-direction:column; gap:10px; }
+.trainerSettings label{ display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--dim); }
+
 /* BotBubble -- ZLEGEND2700's speech bubble (HomePage welcome beat, Play's
    post-game one-liner). Same typewriter/tap-to-skip idea as .lessonBubble
    but standalone -- this shows up next to plain page content, not inside

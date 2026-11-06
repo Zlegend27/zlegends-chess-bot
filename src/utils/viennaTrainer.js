@@ -10,8 +10,6 @@
                                               and whether Black's last move
                                               was a mistake worth punishing */
 
-import { M120TO64, mFrom, mTo, mPromo } from "../engine/chessEngine.js";
-
 /* Lichess ratings run about 300 above Chess.com's, so the bands are built on
    Lichess numbers and described here in Chess.com terms. `maia` is the
    rating Maia plays at once real games run out; `elo` is Stockfish's
@@ -29,10 +27,7 @@ export const EXTEND_TO_PLY = 40;
 /* A move this many centipawns worse than Stockfish's best is sent back. */
 export const ENGINE_MISS_CP = 60;
 
-const PROMO = { 2: "n", 3: "b", 4: "r", 5: "q" };
-const sqName = (s120) => { const s = M120TO64[s120]; return "abcdefgh"[s % 8] + ((s >> 3) + 1); };
-/** A move in the e2e4 form engines use. */
-export const uciOf = (m) => sqName(mFrom(m)) + sqName(mTo(m)) + (PROMO[mPromo(m)] || "");
+export { uciOf } from "./explainLine.js";
 
 /** Picks Maia's move from its { uci: chance } read, ignoring long shots so
  *  a human-like reply never turns into a random one. */

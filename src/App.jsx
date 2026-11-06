@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useLayoutEffect, useMemo, lazy, Suspense } from "react";
 import {
   createEngine, EMPTY, WK, M64TO120, M120TO64,
-  mFrom, mTo, mFlags, MATE, fileOf, rankOf,
+  mFrom, mTo, mFlags, MATE,
 } from "./engine/chessEngine";
 import { createAudio } from "./audio/chiptune";
 import { getSupabase } from "./utils/supabase";
@@ -50,6 +50,7 @@ import { syncRankBotToSupabase, fetchRankBotFromSupabase, logRankBotMove } from 
 import { ENGINE_VERSION } from "./utils/version";
 import { OPENINGS } from "./utils/openings";
 import { fullMoves } from "./utils/moveNumber";
+import { arrowGeometry as arrowGeometryFor, arrowPoint as arrowPointAt } from "./utils/arrowGeometry";
 import { loadEcoOpenings, detectEcoOpening, theoryPlyCount } from "./utils/ecoOpenings";
 import { stockfishBestMove, stockfishAnalyze, warmUpStockfish, isStockfishWarm } from "./engine/stockfishEngine";
 import "./tokens.css";
@@ -2946,12 +2947,7 @@ export default function ZlegendsBot() {
     : thinking ? (!engineWarm && usesStockfish ? "Warming up the engine… first move only" : "Zlegend2700 is calculating…")
     : eng.getSide() === playerColor ? "Your move, challenger" : "Bot to move";
 
-  const arrowPoint = (sq120) => {
-    const f = fileOf(sq120), r = rankOf(sq120);
-    const visCol = flipped ? 7 - f : f;
-    const visRow = flipped ? r : 7 - r;
-    return { x: visCol + 0.5, y: visRow + 0.5 };
-  };
+  const arrowPoint = (sq120) => arrowPointAt(sq120, flipped);
 
   /* Slides the piece that just moved instead of letting it teleport. The
      board has already re-rendered by the time this runs, so the piece is
@@ -2997,40 +2993,8 @@ export default function ZlegendsBot() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastMove]);
-  /* Best-move arrow geometry, precomputed as one path + one head polygon.
-     v1 drew two <line>s with an auto-oriented marker: the knight-move
-     joint showed a visible seam, and the marker overshot the target
-     square's center -- both read as "wonky", especially at phone sizes.
-     Now: a single polyline (round joins handle the knight bend cleanly),
-     the shaft starts offset from the origin center so it doesn't bury
-     the piece, stops short of the target center, and an explicitly
-     rotated triangle puts the arrow TIP exactly on the target center. */
-  const arrowGeometry = (arrow) => {
-    if (!arrow || arrow.from === arrow.to) return null;
-    const a = arrowPoint(arrow.from), b = arrowPoint(arrow.to);
-    const dx = b.x - a.x, dy = b.y - a.y;
-    let bend = null;
-    if (Math.abs(dx) === 2 && Math.abs(dy) === 1) bend = { x: a.x + dx, y: a.y };
-    else if (Math.abs(dy) === 2 && Math.abs(dx) === 1) bend = { x: a.x, y: a.y + dy };
-    const norm = (vx, vy) => { const l = Math.hypot(vx, vy) || 1; return { x: vx / l, y: vy / l }; };
-    const first = bend || b;
-    const u0 = norm(first.x - a.x, first.y - a.y);       // direction leaving the origin
-    const prev = bend || a;
-    const u1 = norm(b.x - prev.x, b.y - prev.y);         // direction into the target
-    const HEAD_LEN = 0.42, HEAD_W = 0.5, START_OFF = 0.28;
-    const start = { x: a.x + u0.x * START_OFF, y: a.y + u0.y * START_OFF };
-    const shaftEnd = { x: b.x - u1.x * HEAD_LEN, y: b.y - u1.y * HEAD_LEN };
-    const perp = { x: -u1.y, y: u1.x };
-    const head = [
-      `${b.x},${b.y}`,
-      `${shaftEnd.x + perp.x * HEAD_W / 2},${shaftEnd.y + perp.y * HEAD_W / 2}`,
-      `${shaftEnd.x - perp.x * HEAD_W / 2},${shaftEnd.y - perp.y * HEAD_W / 2}`,
-    ].join(" ");
-    const path = bend
-      ? `M${start.x},${start.y} L${bend.x},${bend.y} L${shaftEnd.x},${shaftEnd.y}`
-      : `M${start.x},${start.y} L${shaftEnd.x},${shaftEnd.y}`;
-    return { path, head };
-  };
+  /* Shared with the lesson boards; see utils/arrowGeometry.js. */
+  const arrowGeometry = (arrow) => arrowGeometryFor(arrow, flipped);
   const arrowLine = arrowGeometry(bestArrow);
   /* Reviewing a slip, the move that should have been played, drawn on the
      position it was played in. */

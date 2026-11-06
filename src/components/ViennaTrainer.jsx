@@ -1,24 +1,27 @@
 /* ================================================================
-   Vienna Trainer -- drills the Vienna Gambit as White against the
-   replies real players make.
+   Vienna Trainer -- Zlegend27 drills the Vienna Gambit with you as
+   White, against the replies real players make.
+
+   Modelled on what works elsewhere: Chessable's learn-then-test loop
+   (a new move is shown first and quizzed the next time it comes up,
+   missed moves come back more often) and Chess.com's coach "Explain"
+   (a line played out one move at a time, with the coach saying what
+   each move does).
 
    A line has two stages:
-   - Known theory. Black's moves come from real Lichess games, picked by
-     how often players at the chosen level made them
-     (src/data/viennaRepertoire.json, built by scripts/vienna/). White's
-     move is checked against the repertoire: the right move plays on, a
-     sound alternative gets a nudge back to the repertoire, anything
-     else is sent back with "Try again" or "Show me". Missed lines are
-     remembered and come back more often.
+   - Known theory. Black's moves come from real Lichess games at the
+     chosen level (src/data/viennaRepertoire.json, built by
+     scripts/vienna/), and White's move is checked against the
+     repertoire. Zlegend27's notes on the key ideas live in
+     src/data/viennaNotes.js.
    - Past theory, to move 20. Maia plays Black like a player at the
-     chosen level, and Stockfish checks each White move: one clearly
-     worse than its best is sent back the same way.
-   "Play on anyway" leaves both stages for free play against Stockfish.
+     chosen level, and Stockfish checks each White move.
+   "Play it out" leaves both for free play against Stockfish.
 
    Own engine instance, same isolation as TheoryTrainer.
    ================================================================ */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createEngine, M64TO120, M120TO64, mFrom, mTo } from "../engine/chessEngine";
 import { stockfishAnalyze, stockfishBestMove, warmUpStockfish } from "../engine/stockfishEngine";
 import { maiaChances, warmMaia } from "../engine/maiaEngine";
@@ -29,20 +32,28 @@ import {
   BANDS, VARIETY, EXTEND_TO_PLY, ENGINE_MISS_CP, keyOf, nodeAt, pickReply, pickByChance,
   judgeMove, updateWeak, pawnsText, uciOf,
 } from "../utils/viennaTrainer";
+import { explainLine, fullVerdict } from "../utils/explainLine";
 import { fullMoves } from "../utils/moveNumber";
+import { VIENNA_NOTES } from "../data/viennaNotes";
 import book from "../data/viennaRepertoire.json";
 import LessonBoard from "./LessonBoard";
+import BotBubble from "./BotBubble";
 
 const REPLY_DELAY_MS = 650;
 const CHECK_MS = 700;
+const EXPLAIN_STEP_MS = 2200;
+const EXPLAIN_PLIES = 5;
+const WHITE_ARROW = "#3EE7F5";
+const BLACK_ARROW = "#D94BF0";
+const HINT_ARROW = "#F5D93E";
 
-/** How many half-moves into `moves` known theory ran: the book covers every
- *  position before that point and none after. */
-function theoryLength(moves) {
-  let n = 0;
-  while (n < moves.length && nodeAt(book, moves.slice(0, n + 1))) n++;
-  return n + 1;
+/** "1. e4 e5 2. Nc3" for a list of SAN moves. */
+function lineText(moves) {
+  return moves.map((san, i) => (i % 2 === 0 ? `${i / 2 + 1}. ${san}` : san)).join(" ");
 }
+
+/** "3.f4" or "3...exf4": a move as chess books write it. */
+const moveLabel = (ply, san) => `${fullMoves(ply + 1)}${ply % 2 === 0 ? "." : "..."}${san}`;
 
 export default function ViennaTrainer({ pieceSetId, onExit }) {
   const engRef = useRef(null);
@@ -55,11 +66,15 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
   const [lastMove, setLastMove] = useState(null);
   const [band, setBand] = useState(() => { const b = loadSetting("viennaBand", 0); return BANDS[b] ? b : 0; });
   const [varietyId, setVarietyId] = useState(() => { const v = loadSetting("viennaVariety", "mixed"); return VARIETY.some((x) => x.id === v) ? v : "mixed"; });
+  const [mode, setMode] = useState(() => (loadSetting("viennaMode", "learn") === "test" ? "test" : "learn"));
   const [weak, setWeak] = useState(() => loadSetting("viennaWeak", {}));
-  /* What the panel is explaining. "checking", "wrong" and "ok" hold up
-     Black's reply until they're resolved; "shown" and null don't. */
+  const [seen, setSeen] = useState(() => loadSetting("viennaSeen", {}));
+  /* What's being explained. "checking", "wrong" and "ok" hold up Black's
+     reply until they're resolved; "shown" and null don't. */
   const [feedback, setFeedback] = useState(null);
   const [hint, setHint] = useState(null);
+  /* Praise for the move just played, said along with Black's reply. */
+  const [praise, setPraise] = useState(null);
   const [offBook, setOffBook] = useState(false);
   const [missedHere, setMissedHere] = useState(false);
   const [lineMisses, setLineMisses] = useState(0);
@@ -67,31 +82,41 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
   const [botThinking, setBotThinking] = useState(false);
   const [result, setResult] = useState(null);
   const [eco, setEco] = useState(null);
-  /* Bumped on every restart and take-back, so a Stockfish check that
-     finishes afterwards is ignored. */
+  const [showSettings, setShowSettings] = useState(false);
+  /* "Show why": { intro, steps, verdict, idx, startFen } while a line plays
+     out (idx = moves of it shown so far), or { loading: true } while
+     Stockfish finds it. */
+  const [explain, setExplain] = useState(null);
+  /* Bumped on every restart and take-back, so a Stockfish answer that
+     arrives afterwards is ignored. */
   const epochRef = useRef(0);
 
   useEffect(() => { warmUpStockfish(); warmMaia(); loadEcoOpenings().then(setEco); }, []);
   useEffect(() => { saveSetting("viennaBand", band); }, [band]);
   useEffect(() => { saveSetting("viennaVariety", varietyId); }, [varietyId]);
+  useEffect(() => { saveSetting("viennaMode", mode); }, [mode]);
   useEffect(() => { saveSetting("viennaWeak", weak); }, [weak]);
+  useEffect(() => { saveSetting("viennaSeen", seen); }, [seen]);
 
   const node = offBook ? null : nodeAt(book, moves);
+  const key = keyOf(moves);
   const whiteToMove = moves.length % 2 === 0;
   const waiting = ["checking", "wrong", "ok"].includes(feedback?.type);
   const pastTheory = !offBook && !node && moves.length > 0;
-  /* Past theory the line runs on to move 20. A move still waiting on the
-     player's answer hasn't ended anything yet. */
   const lineDone = pastTheory && !waiting && (moves.length >= EXTEND_TO_PLY || !!result);
-  const theoryEnd = pastTheory ? theoryLength(moves) : null;
+  const explaining = !!explain;
+  /* In Learn mode a move you haven't been shown yet is shown first. */
+  const isNew = mode === "learn" && !!node?.w && !seen[key] && !missedHere;
+  const note = node?.w && VIENNA_NOTES[key]?.move === node.w.rep ? VIENNA_NOTES[key] : null;
+  const toReview = Object.keys(weak).filter((k) => nodeAt(book, k ? k.split(" ") : [])?.w);
 
   function checkOver() {
     if (eng.legalMoves().length === 0) {
-      return eng.inCheckNow() ? (eng.getSide() === 1 ? "Checkmate — Black wins." : "Checkmate — you win!") : "Stalemate — draw.";
+      return eng.inCheckNow() ? (eng.getSide() === 1 ? "Checkmate, Black wins." : "Checkmate, you win!") : "Stalemate, it's a draw.";
     }
-    if (eng.halfClock() >= 100) return "Draw — fifty-move rule.";
-    if (eng.repetitionCount() >= 3) return "Draw — threefold repetition.";
-    if (eng.insufficientMaterial()) return "Draw — insufficient material.";
+    if (eng.halfClock() >= 100) return "Draw by the fifty-move rule.";
+    if (eng.repetitionCount() >= 3) return "Draw by threefold repetition.";
+    if (eng.insufficientMaterial()) return "Draw, not enough material to mate.";
     return null;
   }
 
@@ -112,6 +137,7 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
     setSelected(-1);
     setTargets([]);
     setResult(checkOver());
+    setExplain(null);
   };
 
   const play = (mv) => {
@@ -138,7 +164,7 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
      player: from real games in theory, from Maia past it, from Stockfish
      in free play. */
   useEffect(() => {
-    if (result || whiteToMove || waiting || lineDone) return;
+    if (result || whiteToMove || waiting || lineDone || explaining) return;
     let cancelled = false;
     setBotThinking(true);
     const finish = (mv) => {
@@ -161,8 +187,7 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
       const level = BANDS[band].maia;
       maiaChances(eng.fen(), level, level, legal.map(uciOf))
         .then((chances) => {
-          const uci = pickByChance(chances);
-          const mv = legal.find((m) => uciOf(m) === uci);
+          const mv = legal.find((m) => uciOf(m) === pickByChance(chances));
           if (mv === undefined) byStockfish();
           else finish(mv);
         })
@@ -172,10 +197,17 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
     byStockfish();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [moves.length, result, waiting, lineDone, offBook]);
+  }, [moves.length, result, waiting, lineDone, offBook, explaining]);
+
+  /* "Show why" plays its line out one move at a time. */
+  useEffect(() => {
+    if (!explain?.steps || explain.idx >= explain.steps.length) return;
+    const t = setTimeout(() => setExplain((e) => (e?.steps ? { ...e, idx: e.idx + 1 } : e)), EXPLAIN_STEP_MS);
+    return () => clearTimeout(t);
+  }, [explain]);
 
   const onSquare = (i64) => {
-    if (result || botThinking || waiting || lineDone || !whiteToMove) return;
+    if (result || botThinking || waiting || lineDone || explaining || !whiteToMove) return;
     const legal = eng.legalMoves();
     const sq120 = M64TO120[i64];
     if (selected >= 0) {
@@ -192,19 +224,20 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
     }
   };
 
-  /* Each position counts once for "first try": right if the expected move
-     came first, missed if anything else did, even a sound move. */
-  const scoreRight = (key) => {
-    if (!missedHere) {
-      if (key != null) setWeak((w) => updateWeak(w, key, true));
+  /* Each quizzed position counts once for "first try": right if the
+     expected move came first, missed if anything else did, or a hint was
+     taken. A move shown for the first time in Learn mode isn't a quiz. */
+  const scoreRight = (k, quizzed) => {
+    if (quizzed && !missedHere) {
+      if (k != null) setWeak((w) => updateWeak(w, k, true));
       setStats((s) => ({ ...s, asked: s.asked + 1, right: s.right + 1 }));
     }
     setMissedHere(false);
     setFeedback(null);
   };
-  const scoreMiss = (key) => {
+  const scoreMiss = (k) => {
     if (!missedHere) {
-      if (key != null) setWeak((w) => updateWeak(w, key, false));
+      if (k != null) setWeak((w) => updateWeak(w, k, false));
       setStats((s) => ({ ...s, asked: s.asked + 1 }));
       setLineMisses((n) => n + 1);
     }
@@ -213,11 +246,18 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
 
   const userMove = (mv) => {
     setHint(null);
+    setPraise(null);
     if (node?.w) {
-      const key = keyOf(moves);
       const judged = judgeMove(node, eng.sanOf(mv));
+      const ply = moves.length;
+      const wasNew = isNew;
       const san = play(mv);
-      if (judged.verdict === "rep") { scoreRight(key); return; }
+      if (judged.verdict === "rep") {
+        setSeen((s) => ({ ...s, [key]: true }));
+        setPraise({ san: moveLabel(ply, san), idea: wasNew ? null : note?.idea });
+        scoreRight(key, !wasNew);
+        return;
+      }
       scoreMiss(key);
       setFeedback(judged.verdict === "ok"
         ? { type: "ok", san, rep: judged.rep }
@@ -239,15 +279,14 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
       return { loss: best.lines[0].score - mine.lines[0].score, bestUci: best.uci };
     })().then(({ loss, bestUci }) => {
       if (epoch !== epochRef.current) return;
-      if (loss < ENGINE_MISS_CP) { scoreRight(null); return; }
+      if (loss < ENGINE_MISS_CP) { scoreRight(null, true); return; }
       scoreMiss(null);
       const probe = createEngine();
       probe.loadFen(fen);
       const m = probe.legalMoves().find((x) => uciOf(x) === bestUci);
       setFeedback({ type: "wrong", san, rep: m === undefined ? null : probe.sanOf(m), loss, source: "engine" });
     }).catch(() => {
-      /* No verdict (Stockfish failed): let the move stand. */
-      if (epoch === epochRef.current) setFeedback(null);
+      if (epoch === epochRef.current) setFeedback(null); // no verdict: the move stands
     });
   };
 
@@ -262,137 +301,308 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
     setFeedback(reveal && rep ? { type: "shown", rep } : null);
   };
 
+  /* Stockfish's line from `fen`, at least EXPLAIN_PLIES long when it can be:
+     its last report is sometimes a quick partial one that only lists the
+     first move, so a short line is extended from where it ends. Returns
+     { pv, cpWhite }, the score from White's side. */
+  const engineLine = async (fen, searchMoves) => {
+    const res = await stockfishAnalyze(fen, { moveTimeMs: CHECK_MS, searchMoves });
+    let pv = res.lines[0]?.pv || [];
+    for (let tries = 0; pv.length > 0 && pv.length < EXPLAIN_PLIES && tries < 3; tries++) {
+      const sofar = explainLine(fen, pv, pv.length);
+      if (sofar.steps.length < pv.length) break;
+      const more = await stockfishAnalyze(sofar.steps[sofar.steps.length - 1].fen, { moveTimeMs: CHECK_MS });
+      if (!more.lines[0]?.pv?.length) break;
+      pv = [...pv, ...more.lines[0].pv];
+    }
+    const cp = res.lines[0]?.score ?? 0;
+    return { pv, cpWhite: fen.split(" ")[1] === "w" ? cp : -cp };
+  };
+
+  /* The book's own continuation after `first`: our repertoire moves and
+     Black's most common replies at this level, so "why" never shows a line
+     the trainer would then mark wrong. Returns { pv, cpWhite } with
+     Stockfish's score for the last White decision on the way. */
+  const bookLine = (first) => {
+    const probe = createEngine();
+    probe.loadFen(eng.fen());
+    const list = [...moves];
+    const pv = [];
+    let cpWhite = node?.w?.ev?.[first] ?? null;
+    let san = first;
+    while (san && pv.length < EXPLAIN_PLIES) {
+      const mv = probe.legalMoves().find((m) => probe.sanOf(m) === san);
+      if (mv === undefined) break;
+      pv.push(uciOf(mv));
+      probe.make(mv);
+      list.push(san);
+      const next = nodeAt(book, list);
+      if (!next) break;
+      if (next.w) {
+        san = next.w.rep;
+        cpWhite = next.w.ev[san] ?? cpWhite;
+      } else {
+        const played = (c) => (c[band] || 0) * 1000 + c.reduce((a, b) => a + b, 0);
+        san = Object.entries(next.r).sort((a, b) => played(b[1]) - played(a[1]))[0]?.[0];
+      }
+    }
+    return { pv, cpWhite };
+  };
+
+  /* Show why: after a mistake, how Black punishes it (Stockfish's line);
+     otherwise the idea behind the move, along the book where it can. */
+  const showWhy = async () => {
+    const epoch = epochRef.current;
+    const start = eng.fen();
+    let intro, find;
+    if (feedback?.type === "wrong") {
+      intro = `Watch what happens after ${feedback.san}.`;
+      find = () => engineLine(start, null);
+    } else {
+      const rep = feedback?.type === "shown" ? feedback.rep : node?.w?.rep;
+      const mv = rep && eng.legalMoves().find((m) => eng.sanOf(m) === rep);
+      if (!mv) return;
+      intro = note?.idea || `Here's the idea behind ${rep}.`;
+      const fromBook = node?.w?.rep === rep ? bookLine(rep) : null;
+      find = fromBook && fromBook.pv.length >= 3 ? async () => fromBook : () => engineLine(start, [uciOf(mv)]);
+    }
+    setExplain({ loading: true });
+    try {
+      const { pv, cpWhite } = await find();
+      if (epoch !== epochRef.current) return;
+      const line = explainLine(start, pv, EXPLAIN_PLIES);
+      setExplain(line.steps.length ? { intro, steps: line.steps, verdict: fullVerdict(line, cpWhite), idx: 0, startFen: start } : null);
+    } catch {
+      if (epoch === epochRef.current) setExplain(null);
+    }
+  };
+
   const keepPlaying = () => {
     setFeedback(null);
     setMissedHere(false);
     setOffBook(true);
   };
 
-  const newLine = () => {
+  const startLine = (list = []) => {
     countedRef.current = false;
     setFeedback(null);
     setHint(null);
+    setPraise(null);
     setOffBook(false);
     setMissedHere(false);
     setLineMisses(0);
-    rebuild([]);
+    rebuild(list);
   };
 
-  const opening = eco && moves.length ? detectEcoOpening(moves, eco) : null;
-  const moveNo = `${fullMoves(moves.length + 1)}.`;
-  const theoryNote = theoryEnd != null && `Known theory ended at move ${fullMoves(theoryEnd)}. Stockfish checks your moves from here to move ${fullMoves(EXTEND_TO_PLY)}.`;
-  const asked = stats.asked;
+  /* Jumps straight to the position missed most often. */
+  const reviewMistake = () => {
+    const worst = [...toReview].sort((a, b) => weak[b] - weak[a])[0];
+    startLine(worst ? worst.split(" ") : []);
+  };
 
-  let panel;
-  if (lineDone) {
-    panel = (
+  const showHint = () => {
+    const mv = eng.legalMoves().find((m) => eng.sanOf(m) === node.w.rep);
+    if (!mv) return;
+    scoreMiss(key);
+    setHint({ from: mFrom(mv), to: mTo(mv) });
+    setFeedback({ type: "shown", rep: node.w.rep });
+  };
+
+  /* While Show why plays, the board shows its line instead of the game. */
+  const shown = useMemo(() => {
+    if (!explain?.steps) return null;
+    const i = explain.idx;
+    const step = i > 0 ? explain.steps[i - 1] : null;
+    const probe = createEngine();
+    probe.loadFen(step ? step.fen : explain.startFen);
+    const whiteStarts = explain.startFen.split(" ")[1] === "w";
+    return { eng: probe, step, done: i >= explain.steps.length, whiteMoved: step && ((i - 1) % 2 === 0) === whiteStarts };
+  }, [explain]);
+
+  /* ---------- What Zlegend27 says ---------- */
+  const level = BANDS[band];
+  const blackReply = (() => {
+    if (!whiteToMove || moves.length < 2 || offBook) return null;
+    const prev = nodeAt(book, moves.slice(0, -1));
+    const san = moves[moves.length - 1];
+    const label = moveLabel(moves.length - 1, san);
+    /* A reply with no alternatives in the book (1...e5: every game was
+       picked for being a Vienna) has no share worth quoting. */
+    if (!prev?.r?.[san] || Object.keys(prev.r).length < 2) return `Black played ${label}.`;
+    const all = Object.values(prev.r).reduce((s, c) => s + (c[band] || 0), 0);
+    const pct = all ? Math.round(((prev.r[san][band] || 0) / all) * 100) : 0;
+    return pct ? `Black played ${label}, like ${pct}% of ${level.label.toLowerCase()} players here.` : `Black played ${label}, a rare choice at this level.`;
+  })();
+  const praiseText = praise ? `${praise.san}, that's it!${praise.idea ? ` ${praise.idea}` : ""}` : null;
+
+  let say;
+  if (explain?.loading) {
+    say = "Let me show you…";
+  } else if (shown) {
+    say = !shown.step ? explain.intro : shown.done ? `${shown.step.text} ${explain.verdict}` : shown.step.text;
+  } else if (lineDone) {
+    say = result
+      ? `${result}${lineMisses === 0 ? " And every move first try." : ""}`
+      : lineMisses === 0
+        ? "Line complete, every move first try. That's how you play the Vienna."
+        : `Line complete. You missed ${lineMisses} ${lineMisses === 1 ? "move" : "moves"}; I'll bring ${lineMisses === 1 ? "it" : "them"} back until you've got ${lineMisses === 1 ? "it" : "them"}.`;
+  } else if (result) {
+    say = result;
+  } else if (feedback?.type === "checking") {
+    say = "Let me check that one…";
+  } else if (feedback?.type === "wrong") {
+    say = feedback.source === "book"
+      ? `Not quite: ${feedback.san} isn't our Vienna move.${feedback.loss != null && feedback.loss >= 50 ? ` Stockfish rates it ${pawnsText(feedback.loss)} worse.` : ""} Want to see why?`
+      : `Careful: ${feedback.san} is ${pawnsText(feedback.loss)} worse than the best move. Want to see why?`;
+  } else if (feedback?.type === "ok") {
+    say = `${feedback.san} is playable, but in our Vienna we play ${feedback.rep} here.`;
+  } else if (offBook) {
+    say = "Free play. Stockfish plays Black at your level and I'm not checking your moves.";
+  } else if (!whiteToMove) {
+    say = praiseText || "Black is thinking…";
+  } else {
+    const parts = [];
+    if (praiseText) parts.push(praiseText);
+    if (moves.length === 0) {
+      parts.push(mode === "learn"
+        ? `I'm Zlegend27. Let's learn your Vienna Gambit. I'll play Black the way real ${level.label.toLowerCase()} players do. New moves I show you first, then I test you on them.`
+        : "Test mode: no arrows, no hints. Show me your Vienna.");
+    } else if (blackReply) {
+      parts.push(blackReply);
+    }
+    if (feedback?.type === "shown") parts.push(`Play ${feedback.rep}, outlined in gold.`);
+    else if (isNew) parts.push(`New move: ${node.w.rep}.${note && moves.length > 0 ? ` ${note.idea}` : ""} Play it on the board.`);
+    else if (node?.w?.punish) parts.push("That was a mistake by Black. Find the move that punishes it!");
+    else if (pastTheory) parts.push(`That's the end of known theory. From here I play like a real ${level.label.toLowerCase()} player and Stockfish checks your moves.`);
+    else if (moves.length > 0) parts.push("Your move. What does our Vienna play here?");
+    say = parts.join(" ");
+  }
+
+  /* ---------- Board decorations ---------- */
+  const arrows = [];
+  if (shown?.step) arrows.push({ from: shown.step.from, to: shown.step.to, color: shown.whiteMoved ? WHITE_ARROW : BLACK_ARROW });
+  if (!explaining && whiteToMove && isNew && !feedback) {
+    const mv = eng.legalMoves().find((m) => eng.sanOf(m) === node.w.rep);
+    if (mv) arrows.push({ from: mFrom(mv), to: mTo(mv), color: HINT_ARROW });
+  }
+
+  const stage = offBook ? { label: "Free play", cls: "free" }
+    : pastTheory ? { label: "Stockfish check", cls: "engine" }
+    : { label: mode === "learn" ? "Learning" : "Testing", cls: "book" };
+  const opening = eco && moves.length ? detectEcoOpening(moves, eco) : null;
+
+  /* One primary button at a time; the rest are secondary. */
+  let actions = null;
+  if (shown) {
+    actions = (
       <>
-        <p className="lessonPrompt">{result || "Line complete"}</p>
-        <p className="lessonText">
-          {lineMisses === 0
-            ? "Every move first try."
-            : `You missed ${lineMisses} ${lineMisses === 1 ? "move" : "moves"} in this line. Missed theory comes up more often until you've got it.`}
-        </p>
-        <div className="lessonNav">
-          <button className="btn gold" onClick={newLine}>Next line</button>
-          {!result && <button className="btn ghost" onClick={keepPlaying}>Play it out</button>}
-        </div>
+        <button className="btn gold" onClick={() => setExplain(null)}>{shown.done ? "Got it" : "Skip"}</button>
+        {shown.done && <button className="btn ghost" onClick={() => setExplain({ ...explain, idx: 0 })}>Replay</button>}
       </>
     );
-  } else if (result) {
-    panel = <p className="lessonPrompt">{result}</p>;
-  } else if (feedback?.type === "checking") {
-    panel = <p className="lessonHint">Checking your move…</p>;
-  } else if (feedback?.type === "wrong") {
-    panel = (
+  } else if (explain?.loading) {
+    actions = null;
+  } else if (lineDone) {
+    actions = (
       <>
-        <p className="lessonTriedFeedback">
-          {feedback.source === "book"
-            ? <>{feedback.san} isn't your Vienna move here.{feedback.loss != null && feedback.loss >= 50 && ` Stockfish rates it ${pawnsText(feedback.loss)} worse.`}</>
-            : `${feedback.san} is ${pawnsText(feedback.loss)} worse than Stockfish's choice.`}
-        </p>
-        <p className="lessonHint">Take it back and find a better move.</p>
-        <div className="lessonNav">
-          <button className="btn gold" onClick={() => takeBack(false)}>Try again</button>
-          {feedback.rep && <button className="btn ghost" onClick={() => takeBack(true)}>Show me</button>}
-        </div>
-        <button className="border-0 bg-transparent p-0 text-xs underline" style={{ color: "var(--dim)" }} onClick={keepPlaying}>Play on from here anyway</button>
+        <button className="btn gold" onClick={() => startLine()}>Next line</button>
+        {toReview.length > 0 && <button className="btn ghost" onClick={reviewMistake}>Review a mistake</button>}
+        {!result && <button className="btn ghost" onClick={keepPlaying}>Play it out</button>}
+      </>
+    );
+  } else if (feedback?.type === "wrong") {
+    actions = (
+      <>
+        <button className="btn gold" onClick={() => takeBack(false)}>Retry</button>
+        <button className="btn ghost" onClick={showWhy}>Show why</button>
+        {feedback.rep && <button className="btn ghost" onClick={() => takeBack(true)}>Show move</button>}
       </>
     );
   } else if (feedback?.type === "ok") {
-    panel = (
+    actions = (
       <>
-        <p className="lessonTriedFeedback">
-          {feedback.san} is playable, but your repertoire plays <b style={{ color: "var(--cyan)" }}>{feedback.rep}</b> here.
-        </p>
-        <div className="lessonNav">
-          <button className="btn gold" onClick={() => takeBack(false)}>Play {feedback.rep} instead</button>
-          <button className="btn ghost" onClick={keepPlaying}>Keep {feedback.san}</button>
-        </div>
+        <button className="btn gold" onClick={() => takeBack(false)}>Play {feedback.rep} instead</button>
+        <button className="btn ghost" onClick={keepPlaying}>Keep {feedback.san}</button>
       </>
     );
-  } else if (offBook) {
-    panel = (
+  } else if (whiteToMove && node?.w && !result && moves.length > 0) {
+    const shownRep = feedback?.type === "shown";
+    actions = (
       <>
-        <p className="lessonPrompt">Free play</p>
-        <p className="lessonText">Stockfish plays Black at your chosen level. Your moves aren't checked.</p>
-        {botThinking && <p className="lessonHint">Thinking…</p>}
+        {(isNew || shownRep) && <button className="btn ghost" onClick={showWhy}>Why {shownRep ? feedback.rep : node.w.rep}?</button>}
+        {!isNew && !shownRep && mode === "learn" && <button className="btn ghost" onClick={showHint}>Hint</button>}
       </>
     );
-  } else if (whiteToMove) {
-    panel = (
-      <>
-        <p className="lessonPrompt">Your move: {moveNo}</p>
-        {feedback?.type === "shown" ? (
-          <p className="lessonText">The move is <b style={{ color: "var(--yellow)" }}>{feedback.rep}</b>, outlined in gold. Play it to continue.</p>
-        ) : node?.w?.punish ? (
-          <p className="lessonText">Black's last move was a mistake. Find the move that punishes it.</p>
-        ) : pastTheory ? (
-          <p className="lessonText">{theoryNote}</p>
-        ) : (
-          <p className="lessonText">Play the Vienna Gambit move.</p>
-        )}
-      </>
-    );
-  } else {
-    panel = <p className="lessonHint">Black is thinking…</p>;
   }
 
   return (
     <div className="layout">
       <div className="boardCol">
-        <LessonBoard eng={eng} orientation="white" selected={selected} targets={targets}
-          lastMove={lastMove} onSquare={onSquare} pieceSetId={pieceSetId} hint={hint} />
+        <LessonBoard
+          eng={shown ? shown.eng : eng}
+          orientation="white"
+          selected={explaining ? -1 : selected}
+          targets={explaining ? [] : targets}
+          lastMove={explaining ? null : lastMove}
+          onSquare={onSquare}
+          pieceSetId={pieceSetId}
+          hint={explaining ? null : hint}
+          arrows={arrows}
+        />
       </div>
 
       <div className="panel lessonPanel">
-        <div className="box lessonBox">
-          <div className="lessonCoachMeta">
-            {/* Opening names run long ("Vienna Gambit, with Max Lange Defense"),
-                unlike the coach names this class was made for. */}
-            <div className="lessonCoachName" style={{ whiteSpace: "normal" }}>{opening ? opening.name : "Vienna Game"}</div>
-            <div className="lessonBeatCount">
-              Lines finished: {stats.lines} · First try: {asked ? `${stats.right}/${asked}` : "–"}
-            </div>
+        <div className="box lessonBox trainerBox">
+          <div className="trainerHead">
+            <div className="lessonCoachName" style={{ whiteSpace: "normal" }}>{opening ? opening.name : "Vienna Gambit"}</div>
+            <span className={"trainerStage " + stage.cls}>{stage.label}</span>
           </div>
+          <div className="trainerMoves" aria-label="Moves in this line">{moves.length ? lineText(moves) : "1. …"}</div>
 
-          {panel}
+          <BotBubble line={say} avatarSize={48} className="trainerCoach" />
 
-          <div className="lessonNav" style={{ alignItems: "center" }}>
-            <select value={band} onChange={(e) => setBand(Number(e.target.value))} aria-label="Opponent level">
-              {BANDS.map((b, i) => <option key={b.label} value={i}>{b.label} ({b.detail})</option>)}
-            </select>
-            <select value={varietyId} onChange={(e) => setVarietyId(e.target.value)} aria-label="How often rare lines come up">
-              {VARIETY.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
-            </select>
-            {!lineDone && <button className="btn ghost" onClick={newLine}>Restart</button>}
+          {actions && <div className="trainerActions">{actions}</div>}
+
+          <div className="trainerStats">
+            <span>First try <b>{stats.asked ? `${stats.right}/${stats.asked}` : "–"}</b></span>
+            <span>Lines <b>{stats.lines}</b></span>
+            <span>To review <b>{toReview.length}</b></span>
           </div>
         </div>
-        <p className="lessonHint" style={{ marginTop: 8 }}>
-          Black plays what real players at your level chose in {book.games.toLocaleString()} Vienna games from Lichess.
-          {book.eliteGames > 0 && ` The lines go deeper with ${book.eliteGames.toLocaleString()} more between strong players (Lichess 2200+).`}
-        </p>
-        <button className="btn ghost lessonExit" onClick={onExit}>Exit trainer</button>
+
+        <div className="trainerFooter">
+          <button className="btn ghost" onClick={() => startLine()}>New line</button>
+          <button className="btn ghost" onClick={() => setShowSettings((v) => !v)} aria-expanded={showSettings}>Settings</button>
+          <button className="btn ghost" onClick={onExit}>Exit</button>
+        </div>
+
+        {showSettings && (
+          <div className="box trainerSettings">
+            <label>
+              <span>Mode</span>
+              <select value={mode} onChange={(e) => setMode(e.target.value)}>
+                <option value="learn">Learn: show me new moves first</option>
+                <option value="test">Test: no arrows or hints</option>
+              </select>
+            </label>
+            <label>
+              <span>Black plays like</span>
+              <select value={band} onChange={(e) => setBand(Number(e.target.value))}>
+                {BANDS.map((b, i) => <option key={b.label} value={i}>{b.label} ({b.detail})</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Black's choices</span>
+              <select value={varietyId} onChange={(e) => setVarietyId(e.target.value)}>
+                {VARIETY.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+              </select>
+            </label>
+            <p className="lessonHint" style={{ margin: 0 }}>
+              Black plays what real players chose in {book.games.toLocaleString()} Vienna games from Lichess.
+              {book.eliteGames > 0 && ` The lines go deeper with ${book.eliteGames.toLocaleString()} more between strong players (Lichess 2200+).`}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

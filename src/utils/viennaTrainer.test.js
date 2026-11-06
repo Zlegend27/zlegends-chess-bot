@@ -83,3 +83,15 @@ describe("the shipped Vienna book", () => {
     }
   });
 });
+
+/* Zlegend27's notes must explain the move the trainer actually asks for. */
+describe("the coach's notes", () => {
+  test("each note sits on a White decision and names its repertoire move", async () => {
+    const { VIENNA_NOTES } = await import("../data/viennaNotes");
+    for (const [key, note] of Object.entries(VIENNA_NOTES)) {
+      const node = book.nodes[key];
+      expect(node?.w, `no White decision at "${key}"`).toBeTruthy();
+      expect(node.w.rep, `note at "${key}"`).toBe(note.move);
+    }
+  });
+});
