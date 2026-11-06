@@ -21,6 +21,7 @@ import { useEffect, useRef, useState } from "react";
 import { createEngine, M64TO120, M120TO64, mFrom, mTo } from "../engine/chessEngine";
 import { stockfishBestMove } from "../engine/stockfishEngine";
 import { replayIntoEngine } from "../utils/share";
+import { moveCounter } from "../utils/moveNumber";
 import { createSpeaker } from "../utils/speech";
 import { charBlip } from "../utils/lessonVoice";
 import { loadSetting, saveSetting } from "../utils/storage";
@@ -379,7 +380,7 @@ export default function LessonPlayer({ chapter, orientation = "white", pieceSetI
                     <button className="btn ghost" onClick={() => { setAutoPlaying(false); setPlayPly(p => Math.min(playthroughEnd, p + 1)); }} disabled={playPly >= playthroughEnd} aria-label="Next move">▶</button>
                     <button className="btn ghost" onClick={() => { setAutoPlaying(false); setPlayPly(playthroughEnd); }} disabled={playPly >= playthroughEnd} aria-label="Last move">▶|</button>
                   </div>
-                  <div className="lessonBeatCount" style={{ marginTop: 6 }}>Move {playPly} / {playthroughEnd}</div>
+                  <div className="lessonBeatCount" style={{ marginTop: 6 }}>Move {moveCounter(playPly, playthroughEnd)}</div>
                 </>
               )}
 
@@ -399,7 +400,7 @@ export default function LessonPlayer({ chapter, orientation = "white", pieceSetI
                       <button className="btn ghost" onClick={() => { setRecapPlaying(false); setRecapPly(p => Math.min(beat.afterPly, p + 1)); }} disabled={recapPly >= beat.afterPly} aria-label="Next move">▶</button>
                       <button className="btn ghost" onClick={() => { setRecapPlaying(false); setRecapPly(beat.afterPly); }} disabled={recapPly >= beat.afterPly} aria-label="Last move">▶|</button>
                     </div>
-                    <div className="lessonBeatCount" style={{ marginTop: 6 }}>Move {recapPly} / {beat.afterPly}</div>
+                    <div className="lessonBeatCount" style={{ marginTop: 6 }}>Move {moveCounter(recapPly, beat.afterPly)}</div>
                     <button className="btn ghost" style={{ marginTop: 6 }}
                       onClick={() => { setRecapPlaying(false); setRecapPly(null); gotoPly(beat.afterPly); }}>
                       ✕ Close replay

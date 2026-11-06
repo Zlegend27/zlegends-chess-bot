@@ -17,6 +17,7 @@ import { useEffect, useRef, useState } from "react";
 import { createEngine } from "../engine/chessEngine";
 import { stockfishBestMove, warmUpStockfish } from "../engine/stockfishEngine";
 import { replayIntoEngine } from "../utils/share";
+import { fullMoves } from "../utils/moveNumber";
 import { loadSetting, saveSetting } from "../utils/storage";
 import { saveGame } from "../utils/gameHistory";
 import { ENGINE_VERSION } from "../utils/version";
@@ -474,7 +475,7 @@ export default function BlindMode({ onClose }) {
     const yourMove = eng.getSide() === saved.playerColor;
     const speech = `Last move was ${sanToSpeech(lastSan)}.`;
     lastMoveSpeechRef.current = speech;
-    announce(`Resumed your game after ${saved.moveList.length} moves. ${speech}${yourMove ? " Your move." : ""}`);
+    announce(`Resumed your game after ${fullMoves(saved.moveList.length)} ${fullMoves(saved.moveList.length) === 1 ? "move" : "moves"}. ${speech}${yourMove ? " Your move." : ""}`);
     if (!yourMove) botTurn();
   };
 
@@ -570,7 +571,7 @@ export default function BlindMode({ onClose }) {
             )}
             {savedGame && (
               <button className="btn gold" onClick={resumeGame}>
-                Resume Game ({savedGame.moveList.length} {savedGame.moveList.length === 1 ? "move" : "moves"} in)
+                Resume Game ({fullMoves(savedGame.moveList.length)} {fullMoves(savedGame.moveList.length) === 1 ? "move" : "moves"} in)
               </button>
             )}
             <div className="ctrls">

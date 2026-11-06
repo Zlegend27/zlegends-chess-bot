@@ -49,6 +49,7 @@ const PlayView = lazy(() => import("./components/PlayView"));
 import { syncRankBotToSupabase, fetchRankBotFromSupabase, logRankBotMove } from "./utils/rankBot";
 import { ENGINE_VERSION } from "./utils/version";
 import { OPENINGS } from "./utils/openings";
+import { fullMoves } from "./utils/moveNumber";
 import { loadEcoOpenings, detectEcoOpening, theoryPlyCount } from "./utils/ecoOpenings";
 import { stockfishBestMove, stockfishAnalyze, warmUpStockfish, isStockfishWarm } from "./engine/stockfishEngine";
 import "./tokens.css";
@@ -2813,7 +2814,7 @@ export default function ZlegendsBot() {
     <div className="flex flex-col gap-2.5">
       <div className="flex flex-wrap items-center gap-1.5">
         {analysisChip(quizOpening.name, "cyan")}
-        {analysisChip(`Move ${Math.min(moveList.length + 1, quizOpening.moves.length)} of ${quizOpening.moves.length}`)}
+        {analysisChip(`Move ${fullMoves(Math.min(moveList.length + 1, quizOpening.moves.length))} of ${fullMoves(quizOpening.moves.length)}`)}
       </div>
       {analysisHint(quizFeedback || `Play ${eng.getSide() === 1 ? "White" : "Black"}'s next move from memory.`)}
     </div>
@@ -2829,7 +2830,7 @@ export default function ZlegendsBot() {
     <div className="flex flex-col gap-3">
       {grading && (
         <div className="flex flex-col gap-1.5">
-          <div className={"text-[12px] " + uiT.dimText}>Grading moves… {gradeProgress}/{moveList.length}</div>
+          <div className={"text-[12px] " + uiT.dimText}>Grading positions… {gradeProgress}/{moveList.length}</div>
           <div className={"h-1.5 w-full overflow-hidden rounded-full " + (sweetheart ? "bg-sh-rose/20" : "bg-violet/20")}>
             <div
               className={"h-full rounded-full transition-[width] duration-200 ease-out " + (sweetheart ? "bg-sh-lteal" : "bg-cyan")}
@@ -2933,9 +2934,9 @@ export default function ZlegendsBot() {
         : spectatePaused ? `Paused — ${DIFFICULTIES[spectateWhiteIdx].label} vs ${DIFFICULTIES[spectateBlackIdx].label}`
         : `${DIFFICULTIES[spectateWhiteIdx].label} vs ${DIFFICULTIES[spectateBlackIdx].label} — ${eng.getSide() === 1 ? "White" : "Black"} to move`)
     : mode === "replay"
-    ? (replayIndex === 0 ? `${replayLabel} — starting position` : replayIndex === replayFull.length ? `${replayLabel} — final position` : `${replayLabel} — move ${replayIndex}`)
+    ? (replayIndex === 0 ? `${replayLabel} — starting position` : replayIndex === replayFull.length ? `${replayLabel} — final position` : `${replayLabel} — move ${fullMoves(replayIndex)}`)
     : quizOpening
-    ? `Quiz: ${quizOpening.name} — move ${moveList.length + 1} of ${quizOpening.moves.length}`
+    ? `Quiz: ${quizOpening.name} — move ${fullMoves(Math.min(moveList.length + 1, quizOpening.moves.length))} of ${fullMoves(quizOpening.moves.length)}`
     : pastedGame && reviewInfo?.outcome
     ? reviewInfo.outcome
     : result

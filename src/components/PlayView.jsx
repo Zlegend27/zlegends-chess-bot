@@ -10,6 +10,7 @@ import BotBubble from "../components/BotBubble";
 import { DIFFICULTIES } from "../utils/difficulties";
 import { RANK_BOT_ASSESSMENT_EVERY } from "../utils/rankBotMath";
 import { RUSH_DURATIONS } from "../utils/rushDurations";
+import { moveCounter } from "../utils/moveNumber";
 
 /* The game screen: the board, the bot card, the move list and the controls
    for a live game, a puzzle, a review or a rush. Loaded when a game starts
@@ -223,7 +224,7 @@ export default function PlayView({ mateFxProps, rechecking, betterMoveLine, rank
             <span className={"status" + (result ? " over" : "")} aria-live="polite">{status}</span>
             {inChk && <span className="bang">!!</span>}
             {mode === "replay" && <span className="replayBadge">{activeOpening ? "Opening" : "Replay"}</span>}
-            {reviewing && <span className="replayBadge">Move {reviewIndex}/{moveList.length}</span>}
+            {reviewing && <span className="replayBadge">Move {moveCounter(reviewIndex, moveList.length)}</span>}
           </div>
 
           {mode === "replay" && (
@@ -278,7 +279,7 @@ export default function PlayView({ mateFxProps, rechecking, betterMoveLine, rank
                     {chev("M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z")}
                   </button>
                   <span className={"min-w-[52px] px-1 text-center font-mono text-[11px] tabular-nums " + uiT.dimText}>
-                    {reviewIndex}/{moveList.length}
+                    {moveCounter(reviewIndex, moveList.length)}
                   </span>
                   <button className={stepBtn} onClick={() => setReviewIndex(i => Math.min(moveList.length, i + 1))} disabled={reviewIndex === moveList.length} aria-label="Next move">
                     {chev("M8.59 16.59 10 18l6-6-6-6-1.41 1.41L13.17 12z")}
