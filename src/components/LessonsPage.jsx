@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import StarField from "./StarField";
 import LessonPlayer from "./LessonPlayer";
 import TheoryTrainer from "./TheoryTrainer";
+/* Lazy: it carries the Vienna book, which only the trainer needs. */
+const ViennaTrainer = lazy(() => import("./ViennaTrainer"));
 import { LESSONS } from "../data/lessons";
 import { loadSetting } from "../utils/storage";
 import { warmUpStockfish } from "../engine/stockfishEngine";
@@ -15,6 +17,7 @@ export default function LessonsPage({ onOpenings, sweetheart }) {
   const [lessonId, setLessonId] = useState(null);
   const [chapterNumber, setChapterNumber] = useState(null);
   const [trainerOpen, setTrainerOpen] = useState(false);
+  const [viennaOpen, setViennaOpen] = useState(false);
   const pieceSetId = loadSetting("pieceSet", "classic");
   const T = getUiTheme(sweetheart);
   const cardHoverBorder = sweetheart ? "hover:border-sh-lteal/50" : "hover:border-cyan/40";
@@ -41,6 +44,22 @@ export default function LessonsPage({ onOpenings, sweetheart }) {
       {label}
     </button>
   );
+
+  if (viennaOpen) {
+    return (
+      <div className="root">
+        <StarField sweetheart={sweetheart} />
+        {backLink("Learn", () => setViennaOpen(false))}
+        <div className="hdr" style={{ marginBottom: 12 }}>
+          <h1 style={{ fontSize: 26 }}>Vienna Trainer</h1>
+          <div className="sub" style={{ fontSize: 12 }}>You play the Vienna Gambit as White</div>
+        </div>
+        <Suspense fallback={null}>
+          <ViennaTrainer pieceSetId={pieceSetId} onExit={() => setViennaOpen(false)} />
+        </Suspense>
+      </div>
+    );
+  }
 
   if (lesson && trainerOpen) {
     return (
@@ -97,6 +116,16 @@ export default function LessonsPage({ onOpenings, sweetheart }) {
       </div>
 
       <div className="mt-4 flex w-full max-w-md flex-col gap-3">
+        {!lesson && (
+          <button
+            onClick={() => setViennaOpen(true)}
+            className={`rounded-2xl border ${featureBorder} bg-gradient-to-br ${featureGradientFrom} ${featureGradientTo} px-4 py-3 text-left backdrop-blur-sm transition hover:-translate-y-0.5 ${featureBorderHover} focus-visible:outline-none focus-visible:ring-2 ${T.ring}`}
+          >
+            <div className={"text-[11px] font-bold uppercase tracking-[0.14em] " + T.accentText}>Opening trainer</div>
+            <div className={"mt-1 font-bold " + T.ink}>Vienna Trainer</div>
+            <div className={"mt-1 text-xs " + T.dimText}>Drill the Vienna Gambit as White against the replies real players make at your level.</div>
+          </button>
+        )}
         {!lesson && (
           <button
             onClick={onOpenings}

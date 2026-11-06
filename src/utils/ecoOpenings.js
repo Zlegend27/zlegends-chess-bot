@@ -30,14 +30,15 @@ export function theoryPlyCount(moveList, data) {
   return best;
 }
 
-/* Longest common SAN-prefix match, same idea as the curated list's own
-   detector -- once the game runs past a line's own moves it keeps
-   naming that opening, since there's nothing deeper to compare against. */
+/* The longest opening whose own moves have all been played. One the game
+   has only started (the Bongcloud after 1.e4 e5) isn't named yet. Once the
+   game runs past a line's own moves it keeps naming that opening, since
+   there's nothing deeper to compare against. */
 export function detectEcoOpening(moveList, data) {
   let best = null;
   for (const op of data) {
-    const len = Math.min(moveList.length, op.moves.length);
-    if (len === 0) continue;
+    const len = op.moves.length;
+    if (len === 0 || len > moveList.length) continue;
     let matches = true;
     for (let i = 0; i < len; i++) {
       if (moveList[i] !== op.moves[i]) { matches = false; break; }

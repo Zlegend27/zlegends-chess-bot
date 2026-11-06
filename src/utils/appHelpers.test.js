@@ -47,9 +47,10 @@ describe("personalities", () => {
 });
 
 describe("opening detection", () => {
-  test("a game that starts like a curated opening is named after it", () => {
+  test("a curated opening is named once all its moves are played, not before", () => {
     const op = OPENINGS.find((o) => o.moves.length >= 3);
-    expect(detectOpening(op.moves.slice(0, 3))).toBe(op);
+    expect(detectOpening(op.moves)).toBe(op);
+    expect(detectOpening(op.moves.slice(0, -1))).not.toBe(op);
   });
 
   test("a game that matches nothing has no opening", () => {

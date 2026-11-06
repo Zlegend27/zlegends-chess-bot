@@ -10,7 +10,9 @@ import { getPieceSet } from "../utils/pieceSets";
 
 const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
 
-export default function LessonBoard({ eng, orientation, selected, targets, lastMove, onSquare, pieceSetId }) {
+/** `hint` ({ from, to } as 120-squares) outlines a move in gold, the same way
+ *  the Play board shows Best Move. */
+export default function LessonBoard({ eng, orientation, selected, targets, lastMove, onSquare, pieceSetId, hint = null }) {
   const flipped = orientation === "black";
   const pieceImgSrc = (type, isWhite) => getPieceSet(pieceSetId).svgUrl(type, isWhite);
   const rows = [];
@@ -26,12 +28,13 @@ export default function LessonBoard({ eng, orientation, selected, targets, lastM
       const isSel = selected === i64;
       const isTarget = targets.includes(i64);
       const isLast = lastMove && (lastMove.from === sq120 || lastMove.to === sq120);
+      const hintClass = hint?.from === sq120 ? " hintFrom" : hint?.to === sq120 ? " hintTo" : "";
       const squareName = FILES[f] + (r + 1);
       cells.push(
         <div key={i64} role="gridcell" tabIndex={0} aria-label={squareName}
           onClick={() => onSquare(i64)}
           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSquare(i64); } }}
-          className={"sq " + (light ? "light" : "dark") + (isSel ? " sel" : "") + (isLast ? " last" : "")}>
+          className={"sq " + (light ? "light" : "dark") + (isSel ? " sel" : "") + (isLast ? " last" : "") + hintClass}>
           {p !== 0 && <img className={"pc " + (p > 0 ? "w" : "b") + (pieceSetId === "sweetheart" && Math.abs(p) === 6 ? " kingBoost" : "") + (pieceSetId === "sweetheart" && p === -2 ? " knightBoost" : "")} src={pieceImgSrc(Math.abs(p), p > 0)} alt="" draggable="false" />}
           {isTarget && <span className={"dot" + (p !== 0 ? " ring" : "")} />}
           {vf === 0 && <span className="coord rk">{r + 1}</span>}
