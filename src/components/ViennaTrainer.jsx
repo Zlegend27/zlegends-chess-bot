@@ -389,7 +389,8 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
           </div>
         </div>
         <p className="lessonHint" style={{ marginTop: 8 }}>
-          Black plays what real players chose in {book.games.toLocaleString()} Vienna games from Lichess.
+          Black plays what real players at your level chose in {book.games.toLocaleString()} Vienna games from Lichess.
+          {book.eliteGames > 0 && ` The lines go deeper with ${book.eliteGames.toLocaleString()} more between strong players (Lichess 2200+).`}
         </p>
         <button className="btn ghost lessonExit" onClick={onExit}>Exit trainer</button>
       </div>

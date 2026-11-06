@@ -37,7 +37,7 @@ const OK_SHARE = 0.05;         // ...if at least this share of players chose it.
 const PUNISH_JUMP = 150;       // Black's reply handed White this much: flag it
 const FORCED = { "": "e4", "e4 e5": "Nc3", "e4 e5 Nc3 Nf6": "f4", "e4 e5 Nc3 Nc6": "f4" };
 
-const { counts, bands, games } = JSON.parse(readFileSync(COUNTS, "utf8"));
+const { counts, bands, games, eliteGames = 0 } = JSON.parse(readFileSync(COUNTS, "utf8"));
 const sum = (c) => c.reduce((a, b) => a + b, 0);
 const total = (moves) => Object.values(moves).reduce((s, c) => s + sum(c), 0);
 
@@ -135,9 +135,11 @@ async function worker() {
     const ev = {};
     for (const [san, m] of bySan) if (scores.has(uciOf(m))) ev[san] = scores.get(uciOf(m));
     const best = Math.max(...Object.values(ev));
-    const pop = (san) => sum(counts[key][san] || [0]);
+    /* Popularity counts stronger players more: band i weighs i + 1, so the
+       Elite band (if collected) decides between moves Stockfish rates alike. */
+    const pop = (san) => (counts[key][san] || []).reduce((s, n, i) => s + n * (i + 1), 0);
     const rep = forced ?? Object.keys(ev).filter((s) => ev[s] >= best - REP_MARGIN).sort((a, b) => pop(b) - pop(a))[0];
-    const share = (san) => pop(san) / total(counts[key]);
+    const share = (san) => sum(counts[key][san] || [0]) / total(counts[key]);
     const ok = Object.keys(ev).filter((s) => s !== rep && ev[s] >= best - OK_MARGIN && share(s) >= OK_SHARE);
     book[key] = { w: { rep, ok, ev } };
     addBlackReplies(join(key, rep), ply + 1);
@@ -165,6 +167,6 @@ for (const [key, node] of Object.entries(kept)) {
 mkdirSync(new URL("../../src/data/", import.meta.url), { recursive: true });
 writeFileSync(OUT, JSON.stringify({
   source: "Lichess games database (CC0), rated blitz, rapid and classical games, September 2026",
-  games, bands, nodes: kept,
+  games, eliteGames, bands, nodes: kept,
 }));
 console.log(`wrote ${Object.keys(kept).length} positions to src/data/viennaRepertoire.json`);
