@@ -769,6 +769,10 @@ select:hover{ border-color:var(--cyan); }
 .trainerFooter .btn{ flex:1; min-height:36px; padding:6px 10px; font-size:11px; }
 .trainerSettings{ display:flex; flex-direction:column; gap:10px; }
 .trainerSettings label{ display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--dim); }
+/* The last move stands out more here than on the Play board: in a drill,
+   seeing what Black just did matters more than a quiet board. */
+.trainerCol .sq.last::after{ background:#D94BF075; }
+:root[data-theme="sweetheart"] .trainerCol .sq.last::after{ background:#F06BAE75; }
 /* The line map: one card per Black second move, with how often players at
    the chosen level play it, the gambit/quiet tag, and progress. */
 /* Without a board on screen, the cards set the column's width. */
