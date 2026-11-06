@@ -1,15 +1,20 @@
-/* Opening book: prefer real master/lichess opening theory over search while
-   it's available, weighted by how often each move was actually played.
-   Falls back to a small hardcoded book on network failure/timeout, so a
-   flaky connection never stalls or breaks a game — this matters more here
-   than on most sites since Kinnda Chess runs on a tablet. Once neither
-   source has data for the position, the caller falls back to normal search. */
+/* Opening book: prefer real opening theory over search, weighted by how
+   often each move was actually played.
+   The theory ships with the app (openingBook-lichess.json, built from the
+   Lichess game database by scripts/import-opening-book.mjs) and covers the
+   first ~10 full moves. It used to come live from the Lichess Opening
+   Explorer, but that started answering 401 without a login in 2026-11, and
+   a token can't go in browser code. Bundled, a lookup is instant and works
+   offline, so the bot never waits on the network to play its first move.
+   Positions the bundled book doesn't have fall back to a small hardcoded
+   book, then to normal search in the caller. */
+import { bookKey } from "./bookKey";
+import LICHESS_BOOK from "./openingBook-lichess.json";
 
-const EXPLORER_URL = "https://explorer.lichess.org/lichess";
-
-/* Covers only the first couple of plies of a handful of common openings —
-   just enough that the bot doesn't play something bizarre if Explorer is
-   unreachable. Keyed by the SAN move list played so far, space-joined. */
+/* Covers only the first couple of plies of a handful of common openings.
+   The bundled book already covers all of these; this stays as a last
+   resort in case that file is ever regenerated thin or broken. Keyed by
+   the SAN move list played so far, space-joined. */
 const STATIC_BOOK = {
   "": [["e4", 5], ["d4", 4], ["c4", 2], ["Nf3", 2]],
   "e4": [["e5", 4], ["c5", 4], ["e6", 2], ["c6", 2], ["d5", 1]],
@@ -72,31 +77,29 @@ export function getStaticBookMove(moveList, style) {
   return pickWeighted(applyStyleBias(entry.map(([san, weight]) => ({ san, weight })), style));
 }
 
-export async function fetchExplorerMove(fenStr, { timeoutMs = 2500, style = null } = {}) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const url = `${EXPLORER_URL}?fen=${encodeURIComponent(fenStr)}&moves=12&topGames=0&recentGames=0`;
-    const res = await fetch(url, { signal: controller.signal });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const moves = data && data.moves;
-    if (!moves || !moves.length) return null;
-    const entries = moves
-      .map(m => ({ san: m.san, weight: (m.white || 0) + (m.draws || 0) + (m.black || 0) }))
-      .filter(e => e.weight > 0);
-    const total = entries.reduce((s, e) => s + e.weight, 0);
-    if (total < 20) return null; // too little data in the database to trust
-    return pickWeighted(applyStyleBias(entries, style));
-  } catch {
-    return null; // offline, timed out, CORS hiccup — caller falls back
-  } finally {
-    clearTimeout(timer);
+/** The bundled book's moves for a position, as {san, weight}, or null. Each
+    entry is stored as "san weight san weight ..." with weights in
+    per-mille of the games through that position; the generator already
+    dropped positions with too few games and moves too rarely played. */
+export function lichessBookEntries(fenStr) {
+  const raw = LICHESS_BOOK.positions[bookKey(fenStr)];
+  if (!raw) return null;
+  const parts = raw.split(" ");
+  const entries = [];
+  for (let i = 0; i + 1 < parts.length; i += 2) {
+    const weight = Number(parts[i + 1]);
+    if (weight > 0) entries.push({ san: parts[i], weight });
   }
+  return entries.length ? entries : null;
 }
 
-export async function getBookMove(fenStr, moveList, opts = {}) {
-  const explorerMove = await fetchExplorerMove(fenStr, opts);
-  if (explorerMove) return explorerMove;
-  return getStaticBookMove(moveList, opts.style);
+export function getLichessBookMove(fenStr, style) {
+  const entries = lichessBookEntries(fenStr);
+  return entries ? pickWeighted(applyStyleBias(entries, style)) : null;
+}
+
+/** A book move (SAN) for the position, or null when neither book has it.
+    Synchronous: nothing here touches the network. */
+export function getBookMove(fenStr, moveList, opts = {}) {
+  return getLichessBookMove(fenStr, opts.style) || getStaticBookMove(moveList, opts.style);
 }
