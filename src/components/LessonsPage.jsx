@@ -50,10 +50,6 @@ export default function LessonsPage({ onOpenings, sweetheart }) {
       <div className="root">
         <StarField sweetheart={sweetheart} />
         {backLink("Learn", () => setViennaOpen(false))}
-        <div className="hdr" style={{ marginBottom: 12 }}>
-          <h1 style={{ fontSize: 26 }}>Vienna Trainer</h1>
-          <div className="sub" style={{ fontSize: 12 }}>You play the Vienna Gambit as White</div>
-        </div>
         <Suspense fallback={null}>
           <ViennaTrainer pieceSetId={pieceSetId} onExit={() => setViennaOpen(false)} />
         </Suspense>

@@ -735,20 +735,29 @@ select:hover{ border-color:var(--cyan); }
 .lessonPlayCtrls .btn{ min-height:36px; padding:6px 10px; font-size:11px; }
 .lessonAnalyzeBtn{ display:block; width:100%; margin-top:10px; font-size:11px; }
 
-/* Vienna Trainer: a lesson panel led by Zlegend27's speech bubble. The
-   stage chip says whether the move is checked against the book, by
-   Stockfish, or not at all. */
+/* Vienna Trainer: one column, the board's width. Zlegend27's panel sits
+   above the board and the line controls below it. Each panel is sized to
+   the board (width 0 + min-width 100% keeps long text from widening the
+   column), and the coach's bubble and button row keep a steady height so
+   the board doesn't jump as the text changes. The stage chip says whether
+   a move is checked against the book, by Stockfish, or not at all. */
+.trainerCol{ position:relative; z-index:1; display:flex; flex-direction:column; gap:10px; align-items:stretch; }
+.trainerCol > .box, .trainerCol > .trainerFooter{ width:0; min-width:100%; }
+.trainerBox{ display:flex; flex-direction:column; padding:10px 12px; }
 .trainerHead{ display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+.trainerHead .lessonCoachName{ font-size:13px; }
 .trainerStage{ flex:none; font-family:var(--font-mono); font-size:10px; text-transform:uppercase; letter-spacing:.08em;
   padding:3px 8px; border-radius:var(--r-pill); border:1px solid currentColor; opacity:.9; }
 .trainerStage.book{ color:var(--cyan); }
 .trainerStage.engine{ color:var(--yellow); }
 .trainerStage.free{ color:var(--dim); }
-.trainerMoves{ font-family:var(--font-mono); font-size:12px; color:var(--liliac); line-height:1.5; margin:6px 0 12px; }
+.trainerMoves{ font-family:var(--font-mono); font-size:12px; color:var(--liliac); line-height:1.5; margin:4px 0 8px; }
 /* Beats .botBubbleRow's own width, which is set later in this file. */
-.botBubbleRow.trainerCoach{ width:100%; margin-bottom:12px; }
-.trainerActions{ display:flex; flex-wrap:wrap; gap:8px; }
-.trainerStats{ display:flex; flex-wrap:wrap; gap:14px; margin-top:auto; padding-top:14px;
+.botBubbleRow.trainerCoach{ width:100%; margin-bottom:8px; }
+.trainerCoach .botBubble{ min-height:4.6em; padding-top:8px; padding-bottom:8px; font-size:13px; }
+.trainerActions{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; min-height:36px; }
+.trainerActions .btn{ min-height:36px; padding:6px 12px; font-size:11px; }
+.trainerStats{ display:flex; flex-wrap:wrap; gap:10px; margin-left:auto;
   font-family:var(--font-mono); font-size:11px; color:var(--dim); }
 .trainerStats b{ color:var(--white); }
 .trainerFooter{ display:flex; gap:8px; }

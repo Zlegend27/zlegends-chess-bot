@@ -83,6 +83,9 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
   const [result, setResult] = useState(null);
   const [eco, setEco] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
+  /* The half-move at which known theory ran out in this line, so the coach
+     announces it once instead of on every move after. */
+  const [theoryEndPly, setTheoryEndPly] = useState(null);
   /* "Show why": { intro, steps, verdict, idx, startFen } while a line plays
      out (idx = moves of it shown so far), or { loading: true } while
      Stockfish finds it. */
@@ -150,6 +153,11 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
     setResult(checkOver());
     return san;
   };
+
+  useEffect(() => {
+    if (pastTheory && theoryEndPly == null) setTheoryEndPly(moves.length);
+    else if (!pastTheory && theoryEndPly != null) setTheoryEndPly(null);
+  }, [pastTheory, theoryEndPly, moves.length]);
 
   /* A finished line counts once. */
   const countedRef = useRef(false);
@@ -270,6 +278,7 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
     const fen = eng.fen();
     const uci = uciOf(mv);
     const epoch = epochRef.current;
+    const ply = moves.length;
     const san = play(mv);
     setFeedback({ type: "checking" });
     (async () => {
@@ -279,7 +288,11 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
       return { loss: best.lines[0].score - mine.lines[0].score, bestUci: best.uci };
     })().then(({ loss, bestUci }) => {
       if (epoch !== epochRef.current) return;
-      if (loss < ENGINE_MISS_CP) { scoreRight(null, true); return; }
+      if (loss < ENGINE_MISS_CP) {
+        scoreRight(null, true);
+        setPraise({ san: moveLabel(ply, san), engine: true });
+        return;
+      }
       scoreMiss(null);
       const probe = createEngine();
       probe.loadFen(fen);
@@ -433,7 +446,10 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
     const pct = all ? Math.round(((prev.r[san][band] || 0) / all) * 100) : 0;
     return pct ? `Black played ${label}, like ${pct}% of ${level.label.toLowerCase()} players here.` : `Black played ${label}, a rare choice at this level.`;
   })();
-  const praiseText = praise ? `${praise.san}, that's it!${praise.idea ? ` ${praise.idea}` : ""}` : null;
+  const praiseText = !praise ? null
+    : praise.engine ? `${praise.san}, good move. Stockfish agrees.`
+    : `${praise.san}, that's it!${praise.idea ? ` ${praise.idea}` : ""}`;
+  const movesLeft = fullMoves(EXTEND_TO_PLY) - fullMoves(moves.length + 1) + 1;
 
   let say;
   if (explain?.loading) {
@@ -473,7 +489,11 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
     if (feedback?.type === "shown") parts.push(`Play ${feedback.rep}, outlined in gold.`);
     else if (isNew) parts.push(`New move: ${node.w.rep}.${note && moves.length > 0 ? ` ${note.idea}` : ""} Play it on the board.`);
     else if (node?.w?.punish) parts.push("That was a mistake by Black. Find the move that punishes it!");
-    else if (pastTheory) parts.push(`That's the end of known theory. From here I play like a real ${level.label.toLowerCase()} player and Stockfish checks your moves.`);
+    else if (pastTheory && theoryEndPly != null && moves.length - theoryEndPly <= 1) {
+      parts.push(`That's the end of known theory: past here, real games go too many different ways to learn by heart. From now on I play Black like a real ${level.label.toLowerCase()} player, and Stockfish checks every move you make until move ${fullMoves(EXTEND_TO_PLY)}.`);
+    } else if (pastTheory) {
+      parts.push(`Your move. No more book, so play what the position needs. ${movesLeft === 1 ? "Last move to go." : `${movesLeft} moves to go.`}`);
+    }
     else if (moves.length > 0) parts.push("Your move. What does our Vienna play here?");
     say = parts.join(" ");
   }
@@ -535,10 +555,29 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
     );
   }
 
+  /* One column: Zlegend27's panel above the board, line controls below. */
   return (
-    <div className="layout">
-      <div className="boardCol">
-        <LessonBoard
+    <div className="trainerCol">
+      <div className="box trainerBox">
+        <div className="trainerHead">
+          <div className="lessonCoachName" style={{ whiteSpace: "normal" }}>{opening ? opening.name : "Vienna Gambit"}</div>
+          <span className={"trainerStage " + stage.cls}>{stage.label}</span>
+        </div>
+        <div className="trainerMoves" aria-label="Moves in this line">{moves.length ? lineText(moves) : "1. …"}</div>
+
+        <BotBubble line={say} avatarSize={40} className="trainerCoach" />
+
+        <div className="trainerActions">
+          {actions}
+          <div className="trainerStats">
+            <span>First try <b>{stats.asked ? `${stats.right}/${stats.asked}` : "–"}</b></span>
+            <span>Lines <b>{stats.lines}</b></span>
+            <span>Review <b>{toReview.length}</b></span>
+          </div>
+        </div>
+      </div>
+
+      <LessonBoard
           eng={shown ? shown.eng : eng}
           orientation="white"
           selected={explaining ? -1 : selected}
@@ -548,62 +587,41 @@ export default function ViennaTrainer({ pieceSetId, onExit }) {
           pieceSetId={pieceSetId}
           hint={explaining ? null : hint}
           arrows={arrows}
-        />
+      />
+
+      <div className="trainerFooter">
+        <button className="btn ghost" onClick={() => startLine()}>New line</button>
+        <button className="btn ghost" onClick={() => setShowSettings((v) => !v)} aria-expanded={showSettings}>Settings</button>
+        <button className="btn ghost" onClick={onExit}>Exit</button>
       </div>
 
-      <div className="panel lessonPanel">
-        <div className="box lessonBox trainerBox">
-          <div className="trainerHead">
-            <div className="lessonCoachName" style={{ whiteSpace: "normal" }}>{opening ? opening.name : "Vienna Gambit"}</div>
-            <span className={"trainerStage " + stage.cls}>{stage.label}</span>
-          </div>
-          <div className="trainerMoves" aria-label="Moves in this line">{moves.length ? lineText(moves) : "1. …"}</div>
-
-          <BotBubble line={say} avatarSize={48} className="trainerCoach" />
-
-          {actions && <div className="trainerActions">{actions}</div>}
-
-          <div className="trainerStats">
-            <span>First try <b>{stats.asked ? `${stats.right}/${stats.asked}` : "–"}</b></span>
-            <span>Lines <b>{stats.lines}</b></span>
-            <span>To review <b>{toReview.length}</b></span>
-          </div>
+      {showSettings && (
+        <div className="box trainerSettings">
+          <label>
+            <span>Mode</span>
+            <select value={mode} onChange={(e) => setMode(e.target.value)}>
+              <option value="learn">Learn: show me new moves first</option>
+              <option value="test">Test: no arrows or hints</option>
+            </select>
+          </label>
+          <label>
+            <span>Black plays like</span>
+            <select value={band} onChange={(e) => setBand(Number(e.target.value))}>
+              {BANDS.map((b, i) => <option key={b.label} value={i}>{b.label} ({b.detail})</option>)}
+            </select>
+          </label>
+          <label>
+            <span>Black's choices</span>
+            <select value={varietyId} onChange={(e) => setVarietyId(e.target.value)}>
+              {VARIETY.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+            </select>
+          </label>
+          <p className="lessonHint" style={{ margin: 0 }}>
+            Black plays what real players chose in {book.games.toLocaleString()} Vienna games from Lichess.
+            {book.eliteGames > 0 && ` The lines go deeper with ${book.eliteGames.toLocaleString()} more between strong players (Lichess 2200+).`}
+          </p>
         </div>
-
-        <div className="trainerFooter">
-          <button className="btn ghost" onClick={() => startLine()}>New line</button>
-          <button className="btn ghost" onClick={() => setShowSettings((v) => !v)} aria-expanded={showSettings}>Settings</button>
-          <button className="btn ghost" onClick={onExit}>Exit</button>
-        </div>
-
-        {showSettings && (
-          <div className="box trainerSettings">
-            <label>
-              <span>Mode</span>
-              <select value={mode} onChange={(e) => setMode(e.target.value)}>
-                <option value="learn">Learn: show me new moves first</option>
-                <option value="test">Test: no arrows or hints</option>
-              </select>
-            </label>
-            <label>
-              <span>Black plays like</span>
-              <select value={band} onChange={(e) => setBand(Number(e.target.value))}>
-                {BANDS.map((b, i) => <option key={b.label} value={i}>{b.label} ({b.detail})</option>)}
-              </select>
-            </label>
-            <label>
-              <span>Black's choices</span>
-              <select value={varietyId} onChange={(e) => setVarietyId(e.target.value)}>
-                {VARIETY.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
-              </select>
-            </label>
-            <p className="lessonHint" style={{ margin: 0 }}>
-              Black plays what real players chose in {book.games.toLocaleString()} Vienna games from Lichess.
-              {book.eliteGames > 0 && ` The lines go deeper with ${book.eliteGames.toLocaleString()} more between strong players (Lichess 2200+).`}
-            </p>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }
