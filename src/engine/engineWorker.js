@@ -18,7 +18,7 @@ self.onmessage = async (e) => {
   if (useBook && moveList.length < MAX_BOOK_PLIES) {
     /* bookStyle (Casual only) tilts the weighted opening pick toward the
        bot's daily personality -- see STYLE_BOOK_BIAS in openingBook.js. */
-    const bookSan = await getBookMove(eng.fen(), moveList, { timeoutMs: 2500, style: bookStyle || null });
+    const bookSan = getBookMove(eng.fen(), moveList, { style: bookStyle || null });
     const legal = bookSan ? eng.legalMoves() : [];
     const bookMove = legal.find(m => eng.sanOf(m) === bookSan);
     if (bookMove) {
