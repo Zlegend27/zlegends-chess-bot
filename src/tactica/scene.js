@@ -1,12 +1,19 @@
-/* Chess Tactica's 3D view: a board with characters standing on it, two
-   cameras, and move animations. It only shows what TacticaPage tells it to and
-   reports taps, swipes and drags back, so the chess rules can't be affected by
-   anything drawn here. Characters are flat sprites that always face the
-   camera, which keeps phones fast and lets art be swapped in later. */
+/* Chess Tactica's 3D view: a board in the chess set's own colours with the
+   living wooden pieces standing on it, two cameras, and move animations.
+   Captures play the attacker's own attack. It only shows what TacticaPage
+   tells it to and reports taps, swipes and drags back, so the chess rules
+   can't be affected by anything drawn here. */
 import * as THREE from "three";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import { woodTexture } from "./pieces/pawn.js";
+import { KINDS, BUILD, clipsFor, reactionFor, attackEffects, PAWN_ATTACK_END } from "./pieces/attacks.js";
 
-const SPRITE_SIZE = 0.95;
-const TEXTURE_PX = 256;
+/* Pieces are modelled about one square wide; this leaves a gap around them. */
+const PIECE_SCALE = 0.78;
+/* The chess set's colours (Dubrovnik II): squares and the board frame. */
+export const SET_BOARD = { light: "#EED6B0", dark: "#8A5229", frame: "#5C3317" };
+/* Idle breathing only needs about 30 frames a second. */
+const IDLE_FRAME_MS = 33;
 const SWIPE_PX = 50;
 const TAP_SLOP_PX = 10;
 const CAMERA_MS = 650;
@@ -31,25 +38,18 @@ const EDGE_DWELL_MS = 350;
 const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 const reducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-const textureCache = new Map();
-/** Piece art drawn at a size that stays sharp up close. */
-function textureFor(url) {
-  if (!textureCache.has(url)) {
-    textureCache.set(url, new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        canvas.width = canvas.height = TEXTURE_PX;
-        canvas.getContext("2d").drawImage(img, 0, 0, TEXTURE_PX, TEXTURE_PX);
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.colorSpace = THREE.SRGBColorSpace;
-        resolve(texture);
-      };
-      img.onerror = () => resolve(null);
-      img.src = url;
-    }));
-  }
-  return textureCache.get(url);
+/* One model per kind and colour, built once and cloned for every piece
+   (clones share geometry and materials). */
+const templates = new Map();
+function modelFor(kind, colour) {
+  const key = kind + colour;
+  if (!templates.has(key)) templates.set(key, BUILD[kind](colour));
+  return templates.get(key).clone(true);
+}
+const idleClips = new Map();
+function idleFor(kind) {
+  if (!idleClips.has(kind)) idleClips.set(kind, clipsFor(kind).idle);
+  return idleClips.get(kind);
 }
 
 export class TacticaScene {
@@ -73,15 +73,32 @@ export class TacticaScene {
     this.dragging = false;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "low-power" });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 0.85;
+    this.renderer.localClippingEnabled = true;
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(colors.background);
+    /* Soft room reflections for the polish and steel, a warm key light and a
+       cool rim light. */
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environmentIntensity = 0.45;
+    pmrem.dispose();
+    const key = new THREE.DirectionalLight("#ffe9cc", 2.0);
+    key.position.set(3, 8, 5);
+    const rim = new THREE.DirectionalLight("#9fc4ff", 0.7);
+    rim.position.set(-4, 3, -5);
+    this.scene.add(key, rim, new THREE.HemisphereLight("#fff6ea", "#3a2a1e", 0.55));
+    /* The solver's side is nearest the camera; each side faces the other. */
+    this.nearColour = flipped ? "black" : "white";
+    this.active = [];
     this.camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
     this.camPos = new THREE.Vector3(0, 11, 8);
     this.camLook = new THREE.Vector3(0, 0, 0.6);
     this.camera.position.copy(this.camPos);
     this.camera.lookAt(this.camLook);
     this.tweens = [];
-    this.sprites = new Map();
+    this.pieces = new Map();
     this.marks = new THREE.Group();
     this.hoverMark = new THREE.Group();
     this.colors = colors;
@@ -117,15 +134,27 @@ export class TacticaScene {
     return new THREE.Vector3(x, 0, z);
   }
 
+  /** The set's board: wooden squares in its two colours inside a dark
+   *  wooden frame. */
   buildBoard() {
-    const base = new THREE.Mesh(new THREE.BoxGeometry(8.6, 0.4, 8.6), new THREE.MeshBasicMaterial({ color: 0x120a26 }));
+    const grain = (base, seed) => {
+      const t = woodTexture({ base, shade: base, grain: "#3b2210" }, { seed, lines: 30 });
+      t.repeat.set(0.5, 0.5);
+      return t;
+    };
+    const frameMat = new THREE.MeshStandardMaterial({ map: grain(SET_BOARD.frame, 3), roughness: 0.55 });
+    const base = new THREE.Mesh(new THREE.BoxGeometry(8.7, 0.4, 8.7), frameMat);
     base.position.y = -0.21;
     this.scene.add(base);
+    const squareMat = {
+      light: new THREE.MeshStandardMaterial({ map: grain(this.colors.light, 5), roughness: 0.6 }),
+      dark: new THREE.MeshStandardMaterial({ map: grain(this.colors.dark, 9), roughness: 0.6 }),
+    };
     this.tiles = [];
     const tileGeometry = new THREE.PlaneGeometry(1, 1);
     for (let sq = 0; sq < 64; sq++) {
       const light = ((sq % 8) + ((sq / 8) | 0)) % 2 === 1;
-      const tile = new THREE.Mesh(tileGeometry, new THREE.MeshBasicMaterial({ color: light ? this.colors.light : this.colors.dark }));
+      const tile = new THREE.Mesh(tileGeometry, light ? squareMat.light : squareMat.dark);
       tile.rotation.x = -Math.PI / 2;
       tile.position.copy(this.worldOf(sq));
       tile.userData.sq = sq;
@@ -136,27 +165,98 @@ export class TacticaScene {
     this.shadowMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false });
   }
 
-  /** Replaces every character with `pieces`: [{ sq, url }]. */
-  async setPieces(pieces) {
-    const textures = await Promise.all(pieces.map((p) => textureFor(p.url)));
-    for (const { group } of this.sprites.values()) this.scene.remove(group);
-    this.sprites.clear();
-    pieces.forEach((piece, i) => {
-      if (!textures[i]) return;
+  /** Replaces every character with `pieces`: [{ sq, type, white }], type
+   *  1 pawn to 6 king. Each stands in its square facing the other side and
+   *  breathes and blinks on its own clock. */
+  setPieces(pieces) {
+    for (const entry of this.pieces.values()) this.scene.remove(entry.group);
+    this.pieces.clear();
+    for (const piece of pieces) {
+      const kind = KINDS[piece.type], colour = piece.white ? "white" : "black";
       const group = new THREE.Group();
-      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: textures[i], transparent: true }));
-      sprite.center.set(0.5, 0.02);
-      sprite.scale.set(SPRITE_SIZE, SPRITE_SIZE, 1);
-      sprite.userData.sq = piece.sq;
+      const model = modelFor(kind, colour);
+      model.scale.multiplyScalar(PIECE_SCALE);
+      const holder = new THREE.Group();
+      holder.add(model);
+      holder.rotation.y = colour === this.nearColour ? Math.PI : 0;
       const shadow = new THREE.Mesh(this.shadowGeometry, this.shadowMaterial);
       shadow.rotation.x = -Math.PI / 2;
       shadow.position.y = 0.01;
-      group.add(shadow, sprite);
+      /* An invisible column to tap or drag the character by. */
+      this.hitGeometry ??= new THREE.CylinderGeometry(0.4, 0.4, 1.5, 12);
+      this.hitMaterial ??= new THREE.MeshBasicMaterial({ visible: false });
+      const hit = new THREE.Mesh(this.hitGeometry, this.hitMaterial);
+      hit.position.y = 0.75;
+      hit.userData.sq = piece.sq;
+      group.add(shadow, holder, hit);
       group.position.copy(this.worldOf(piece.sq));
       this.scene.add(group);
-      this.sprites.set(piece.sq, { group, sprite });
-    });
+      const mixer = new THREE.AnimationMixer(model);
+      const idle = mixer.clipAction(idleFor(kind));
+      idle.play();
+      idle.time = Math.random() * idle.getClip().duration;
+      this.pieces.set(piece.sq, { group, holder, model, hit, kind, colour, mixer, idle });
+    }
     this.wake();
+    /* Warm up after the first frames are on screen, during the opening view. */
+    if (!this.warmTimer) this.warmTimer = setTimeout(() => this.prewarm(), 900);
+  }
+
+  /** Compiles, in the background, the shaders the attacks will need: the
+   *  see-through and cut-in-two versions of every piece material and the
+   *  glow, smoke and sparkle materials. Otherwise the first lightning bolt
+   *  or first cut stalls for a moment while the phone compiles them. */
+  prewarm() {
+    if (this.warmed || !this.running || !this.renderer.compileAsync) return;
+    this.warmed = true;
+    const group = new THREE.Group();
+    const geometry = new THREE.PlaneGeometry(0.01, 0.01);
+    const add = (material) => group.add(new THREE.Mesh(geometry, material));
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const seen = new Set();
+    for (const kind of KINDS.slice(1)) {
+      for (const colour of ["white", "black"]) {
+        modelFor(kind, colour).traverse((o) => {
+          if (!o.isMesh || seen.has(o.material)) return;
+          seen.add(o.material);
+          const ghost = o.material.clone();
+          ghost.transparent = true;
+          add(ghost);
+          const cut = o.material.clone();
+          cut.clippingPlanes = [plane];
+          cut.transparent = true;
+          add(cut);
+        });
+      }
+    }
+    add(new THREE.MeshBasicMaterial({ side: THREE.BackSide, clippingPlanes: [plane], transparent: true }));
+    add(new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }));
+    add(new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    add(new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
+    add(new THREE.MeshStandardMaterial({ roughness: 1, transparent: true, depthWrite: false }));
+    group.position.copy(this.camLook);
+    /* The warm-up materials are kept, not disposed: disposing them would
+       also throw away the compiled shaders. */
+    this.warmup = group;
+    this.renderer.compileAsync(group, this.camera, this.scene).catch(() => {});
+  }
+
+  /** See-through while held, so the squares behind it show. */
+  setGhost(entry, on) {
+    if (!!entry.ghost === on) return;
+    if (on) {
+      entry.ghost = new Map();
+      entry.model.traverse((o) => {
+        if (!o.isMesh) return;
+        entry.ghost.set(o, o.material);
+        o.material = o.material.clone();
+        o.material.transparent = true;
+        o.material.opacity = HELD_OPACITY;
+      });
+    } else {
+      for (const [o, m] of entry.ghost) o.material = m;
+      entry.ghost = null;
+    }
   }
 
   /** Highlights: a ring under the selected character. Once it is picked up
@@ -168,7 +268,7 @@ export class TacticaScene {
     this.held = held ? selected : null;
     this.targets = held ? targets : [];
     this.captures = captures;
-    for (const [sq, { sprite }] of this.sprites) sprite.material.opacity = sq === this.held ? HELD_OPACITY : 1;
+    for (const [sq, entry] of this.pieces) this.setGhost(entry, sq === this.held);
     const flat = (geometry, color, opacity, at, y, additive = false) => {
       const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
         color, transparent: true, opacity, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
@@ -265,6 +365,7 @@ export class TacticaScene {
 
   /** Strategic view: the whole board. */
   showBoard() {
+    if (this.holdCamera(() => this.showBoard())) return;
     this.moveCamera(new THREE.Vector3(0, 11, 8), new THREE.Vector3(0, 0, 0.6));
   }
 
@@ -272,6 +373,7 @@ export class TacticaScene {
    *  the board. A far destination pulls the camera back so it stays in sight.
    *  Switching characters swings the camera from one to the next. */
   showCloseUp(sq, destination = null, widen = 1) {
+    if (this.holdCamera(() => this.showCloseUp(sq, destination, widen))) return;
     const at = this.worldOf(sq);
     const toward = destination != null ? this.worldOf(destination) : at.clone().add(new THREE.Vector3(0, 0, -3.5));
     const reach = destination != null ? at.distanceTo(toward) : 3.5;
@@ -311,6 +413,14 @@ export class TacticaScene {
     this.wake();
   }
 
+  /** While an attack plays, its camera stays put; the latest view asked
+   *  for is applied once the attack is over. */
+  holdCamera(view) {
+    if (!this.active.length) return false;
+    this.pendingView = view;
+    return true;
+  }
+
   moveCamera(position, look) {
     const fromPos = this.camPos.clone(), fromLook = this.camLook.clone();
     this.tween(reducedMotion() ? 0 : CAMERA_MS, (t) => {
@@ -320,12 +430,14 @@ export class TacticaScene {
     });
   }
 
-  /** Moves a character; a knight leaps. A captured character sinks and fades
-   *  first. Resolves when done. */
+  /** Moves a character; a knight leaps. A capture plays the attacker's own
+   *  attack on the victim (with reduced motion the victim just fades).
+   *  Resolves when done; TacticaPage then rebuilds the pieces in place. */
   animateMove(from, to, { knight = false, captured = null } = {}) {
-    const mover = this.sprites.get(from);
-    const victim = captured != null ? this.sprites.get(captured) : null;
+    const mover = this.pieces.get(from);
+    const victim = captured != null ? this.pieces.get(captured) : null;
     if (!mover) return Promise.resolve();
+    if (victim && !reducedMotion()) return this.attack(mover, victim, from, to);
     /* A dropped character lands from where it was let go, without a leap. */
     const a = mover.group.position.clone(), b = this.worldOf(to);
     const leap = knight && a.y < 0.01;
@@ -334,14 +446,68 @@ export class TacticaScene {
       this.tween(fast ? 0 : MOVE_MS, (t) => {
         const k = ease(t);
         mover.group.position.lerpVectors(a, b, k);
-        mover.sprite.position.y = leap ? Math.sin(Math.PI * k) * KNIGHT_HOP : 0;
+        if (leap) mover.group.position.y = Math.sin(Math.PI * k) * KNIGHT_HOP;
       }, () => {
         if (!victim) { resolve(); return; }
-        this.tween(fast ? 0 : CAPTURE_MS, (t) => {
-          victim.sprite.material.opacity = 1 - t;
-          victim.group.scale.setScalar(1 - t * 0.6);
-        }, resolve);
+        this.tween(fast ? 0 : CAPTURE_MS, (t) => victim.group.scale.setScalar(Math.max(0.001, 1 - t)), resolve);
       });
+    });
+  }
+
+  /** The attacker plays its attack at the victim's square, the victim its
+   *  reaction, and the effects run on the attack's clock. */
+  attack(mover, victim, from, to) {
+    const a = this.worldOf(from), b = this.worldOf(to);
+    /* A dragged character goes back to its square to make its attack. */
+    mover.group.position.copy(a);
+    const delta = b.clone().sub(a);
+    /* The pawn's slash goes straight ahead, so it turns to face the victim. */
+    if (mover.kind === "pawn") mover.holder.rotation.y = Math.atan2(delta.x, delta.z);
+    const local = delta.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), -mover.holder.rotation.y).divideScalar(PIECE_SCALE);
+    const clip = clipsFor(mover.kind, [local.x, local.z]).attack;
+    /* The victim turns to face what is coming for it. */
+    victim.holder.rotation.y = Math.atan2(-delta.x, -delta.z);
+    mover.idle.stop();
+    const act = mover.mixer.clipAction(clip);
+    act.setLoop(THREE.LoopOnce, 1);
+    act.clampWhenFinished = true;
+    act.play();
+    const reaction = reactionFor(mover.kind, victim.model);
+    if (reaction) {
+      victim.idle.stop();
+      const r = victim.mixer.clipAction(reaction);
+      r.setLoop(THREE.LoopOnce, 1);
+      r.clampWhenFinished = true;
+      r.play();
+    }
+    const fx = attackEffects(mover.kind, {
+      scene: this.scene, attacker: mover.model, victim: victim.model, from: a, to: b,
+      scale: PIECE_SCALE, attackerColour: mover.colour, victimColour: victim.colour,
+    });
+    const end = mover.kind === "pawn" ? PAWN_ATTACK_END : clip.duration;
+    /* Pull back to frame both squares and the height of a leap, keeping the
+       camera on the side it was already looking from. */
+    const mid = a.clone().lerp(b, 0.5).setY(0.9);
+    const away = this.camPos.clone().sub(this.camLook).setY(0);
+    if (away.lengthSq() < 1e-4) away.set(0, 0, 1);
+    away.normalize();
+    const reach = 3.2 + a.distanceTo(b) * 0.7;
+    this.moveCamera(mid.clone().addScaledVector(away, reach).setY(2.2 + reach * 0.45), mid);
+    return new Promise((resolve) => {
+      this.active.push({
+        act, fx, end,
+        done: () => {
+          fx.dispose();
+          const view = this.pendingView;
+          this.pendingView = null;
+          view?.();
+          if (mover.kind !== "pawn") { resolve(); return; }
+          /* The pawn steps onto the square once its slash is done. */
+          const start = mover.group.position.clone();
+          this.tween(MOVE_MS, (t) => mover.group.position.lerpVectors(start, b, ease(t)), resolve);
+        },
+      });
+      this.wake();
     });
   }
 
@@ -363,7 +529,7 @@ export class TacticaScene {
       const point = raycaster.ray.intersectPlane(ground, new THREE.Vector3());
       return point ? { point, sq: this.squareAt(point) } : null;
     };
-    const spriteHit = () => raycaster.intersectObjects([...this.sprites.values()].map((v) => v.sprite))[0]?.object.userData.sq ?? null;
+    const pieceHit = () => raycaster.intersectObjects([...this.pieces.values()].map((v) => v.hit))[0]?.object.userData.sq ?? null;
     let down = null, drag = null, lastTap = null;
     const follow = (e) => {
       aim(e);
@@ -400,7 +566,7 @@ export class TacticaScene {
     this.onDown = (e) => {
       if (down && drag) return;
       aim(e);
-      down = { id: e.pointerId, x: e.clientX, y: e.clientY, sq: spriteHit() };
+      down = { id: e.pointerId, x: e.clientX, y: e.clientY, sq: pieceHit() };
     };
     this.onMove = (e) => {
       if (!down || e.pointerId !== down.id) return;
@@ -409,7 +575,7 @@ export class TacticaScene {
       if (!drag && down.sq != null && Math.hypot(e.clientX - down.x, e.clientY - down.y) > TAP_SLOP_PX) {
         this.dragging = true;
         if (this.onDragStart?.(down.sq)) {
-          drag = { sq: down.sq, piece: this.sprites.get(down.sq) };
+          drag = { sq: down.sq, piece: this.pieces.get(down.sq) };
           this.canvas.setPointerCapture?.(e.pointerId);
         } else { down.sq = null; this.dragging = false; }
       }
@@ -443,7 +609,7 @@ export class TacticaScene {
       /* While a character is held, a square it can reach wins over whatever
          character is drawn in front of it, such as the held one itself. */
       const tile = raycaster.intersectObjects(this.tiles)[0]?.object.userData.sq ?? null;
-      const sq = tile != null && this.targets.includes(tile) ? tile : pressed.sq ?? spriteHit() ?? tile;
+      const sq = tile != null && this.targets.includes(tile) ? tile : pressed.sq ?? pieceHit() ?? tile;
       if (sq == null) return;
       /* A double-tap is matched by where the finger landed, not by square, so
          it still counts while the camera is swinging after the first tap. */
@@ -493,9 +659,19 @@ export class TacticaScene {
   /* Draws only while something is changing, to spare phone batteries. */
   loop(now) {
     if (!this.running) return;
-    const busy = this.tweens.length > 0 || now < this.awakeUntil || this.dragging || this.pulse.length > 0;
-    if (busy) {
+    const busy = this.tweens.length > 0 || now < this.awakeUntil || this.dragging || this.pulse.length > 0 || this.active.length > 0;
+    /* With nothing else going on, the pieces' idle breathing is drawn at
+       about 30 frames a second. */
+    const idleDue = this.pieces.size > 0 && now - (this.lastDraw ?? 0) >= IDLE_FRAME_MS;
+    if (busy || idleDue) {
       const dt = now - this.lastFrame;
+      const since = Math.min(0.1, (now - (this.lastDraw ?? now)) / 1000);
+      this.lastDraw = now;
+      for (const entry of this.pieces.values()) entry.mixer.update(since);
+      for (const run of this.active) run.fx.update(run.act.time);
+      const ended = this.active.filter((run) => run.act.time >= run.end - 1e-3 || !run.act.isRunning());
+      this.active = this.active.filter((run) => !ended.includes(run));
+      ended.forEach((run) => run.done());
       if (this.dragging) this.dragFollow?.(dt);
       const beat = 0.7 + 0.45 * (0.5 + 0.5 * Math.sin((now / PULSE_MS) * Math.PI * 2));
       for (const { material, base } of this.pulse) material.opacity = Math.min(1, base * beat);
@@ -520,6 +696,7 @@ export class TacticaScene {
 
   dispose() {
     this.running = false;
+    clearTimeout(this.warmTimer);
     this.resizeObserver.disconnect();
     this.canvas.removeEventListener("pointerdown", this.onDown);
     this.canvas.removeEventListener("pointerup", this.onUp);

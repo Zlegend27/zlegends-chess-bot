@@ -2551,7 +2551,7 @@ export default function ZlegendsBot() {
   if (siteView === "tactica") {
     return (
       <Suspense fallback={null}>
-        <TacticaPage pieceImgSrc={pieceImgSrc} boardColorId={boardColorId} sweetheart={sweetheart} />
+        <TacticaPage pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} />
       </Suspense>
     );
   }

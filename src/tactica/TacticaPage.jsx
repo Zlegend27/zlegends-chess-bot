@@ -2,15 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createEngine, mFrom, mPromo, mTo, M120TO64, EMPTY } from "../engine/chessEngine";
 import { PUZZLES } from "../utils/puzzles";
 import { judgePuzzleMove } from "../utils/puzzleSession";
-import { getBoardColor } from "../utils/boardColors";
 import MiniBoard from "../components/MiniBoard";
-import { TacticaScene } from "./scene";
+import { TacticaScene, SET_BOARD } from "./scene";
 
 /* Chess Tactica technical test: one real puzzle on a 3D board, so the
    cameras, controls and speed can be tried on a phone before anything else is
-   built. Placeholder characters are the player's current piece set. Not yet
-   built: refutations of wrong moves, story, character names and capture
-   drama. */
+   built. The board and the living wooden pieces follow the chess set; a
+   capture plays the attacker's own attack. Not yet built: refutations of
+   wrong moves, story and character names. */
 const TEST_PUZZLE_ID = "00IEW";
 const KNIGHT = 2, QUEEN = 5;
 const REPLY_DELAY_MS = 550;
@@ -29,7 +28,7 @@ function friendlySquares(eng, side) {
   return squares.sort((a, b) => rank(b) - rank(a) || file(a) - file(b));
 }
 
-export default function TacticaPage({ pieceImgSrc, boardColorId, sweetheart }) {
+export default function TacticaPage({ pieceImgSrc, sweetheart }) {
   const puzzle = useMemo(() => PUZZLES.find((p) => p.id === TEST_PUZZLE_ID), []);
   const engRef = useRef(null);
   if (!engRef.current) { engRef.current = createEngine(); engRef.current.loadFen(puzzle.fen); }
@@ -69,18 +68,19 @@ export default function TacticaPage({ pieceImgSrc, boardColorId, sweetheart }) {
     const list = [];
     for (let sq = 0; sq < 64; sq++) {
       const p = eng.pieceAt(sq);
-      if (p !== EMPTY) list.push({ sq, url: pieceImgSrc(Math.abs(p), p > 0) });
+      if (p !== EMPTY) list.push({ sq, type: Math.abs(p), white: p > 0 });
     }
     return list;
   };
 
-  /* One scene per mount, rebuilt if the phone drops the 3D context. */
-  const board = getBoardColor(boardColorId);
+  /* One scene per mount, rebuilt if the phone drops the 3D context. The
+     board always uses the chess set's colours, map included. */
+  const board = SET_BOARD;
   useEffect(() => {
     const scene = new TacticaScene(canvasRef.current, {
       flipped: side === -1,
       colors: {
-        light: board.light, dark: board.dark, background: sweetheart ? "#FFF2F6" : "#0E0620",
+        light: board.light, dark: board.dark, background: sweetheart ? "#FFF2F6" : "#1b1714",
         highlight: "#3EE7F5", target: "#F5D93E", attack: "#F05348", select: "#3EE7F5",
       },
       onTap: (sq) => tapRef.current(sq),
