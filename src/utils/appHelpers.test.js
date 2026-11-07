@@ -101,3 +101,12 @@ describe("material count", () => {
     expect(m.capturedBlack).toEqual([]);
   });
 });
+
+describe("the daily puzzle calendar", () => {
+  test("gives exactly the puzzle the full pool would", async () => {
+    const { loadDailyPuzzle, dailyPuzzle } = await import("./dailyPuzzle");
+    const { PUZZLES } = await import("./puzzles");
+    const fromCalendar = await loadDailyPuzzle();
+    expect(fromCalendar).toEqual(dailyPuzzle(PUZZLES));
+  });
+});

@@ -16,3 +16,6 @@ scripts/vienna/data/
 # Private notes for the physical board. Kept on this computer only.
 BOARD_BUILD.md
 chessboard-bible/
+
+# Generated before each build and dev server by scripts/build-daily.mjs.
+src/data/dailyCalendar.json

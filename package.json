@@ -5,7 +5,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/build-daily.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/build-daily.mjs",
     "build": "vite build",
     "build:kindle": "vite build --config vite.config.kindle.js",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives",

@@ -3,10 +3,6 @@ import {
   createEngine, EMPTY, WK, M64TO120, M120TO64,
   mFrom, mTo, mFlags, MATE,
 } from "./engine/chessEngine";
-import { createAudio } from "./audio/chiptune";
-import { getSupabase } from "./utils/supabase";
-import { MP3_PLAYLISTS, THEME_ID, loadPlaylistTracks } from "./utils/musicLibrary";
-import PixelAvatar, { ZPAL, ZPIX } from "./components/PixelAvatar";
 import HomePage from "./components/HomePage";
 import { AppHeader, BottomBar } from "./components/AppNav";
 import PlayPage from "./components/PlayPage";
@@ -22,10 +18,9 @@ import { CURRENT_LIST_VERSION, DIFFICULTIES, levelIdxFor, savedLevelIdx } from "
 import { RANK_BOT_DEFAULT_ELO, RANK_BOT_OPENING_PLIES, RANK_BOT_MIN_TRACKED_MOVES, RANK_BOT_ASSESSMENT_EVERY, nextRankRating } from "./utils/rankBotMath";
 import { BALANCED, randomStyle, byStyle, pickPersonality } from "./utils/personalities";
 import { detectOpening } from "./utils/openingDetect";
-import { todayKey, dailyPuzzle } from "./utils/dailyPuzzle";
-import { pickTrackIndex } from "./utils/trackIndex";
+import { todayKey, dailyPuzzle, loadDailyPuzzle } from "./utils/dailyPuzzle";
 import { materialState } from "./utils/material";
-import { RECHECK_LOSS, pointsLost, sideAccuracy } from "./utils/reviewScoring";
+import { RECHECK_LOSS, pointsLost } from "./utils/reviewScoring";
 import { readRankBotTest } from "./utils/rankBotTest";
 import { judgePuzzleMove } from "./utils/puzzleSession";
 import { clearLiveGame, isResumable, loadLiveGame, saveLiveGame } from "./utils/liveGame";
@@ -52,6 +47,9 @@ import { ENGINE_VERSION } from "./utils/version";
 import { OPENINGS } from "./utils/openings";
 import { fullMoves } from "./utils/moveNumber";
 import { gameResult } from "./utils/gameResult";
+import { GRADE_TAG } from "./utils/grades";
+import AnalysisPanel from "./components/AnalysisPanel";
+import useMusic from "./hooks/useMusic";
 import { avatarFromSession, saveAvatar } from "./utils/avatar";
 import { arrowGeometry as arrowGeometryFor, arrowPoint as arrowPointAt } from "./utils/arrowGeometry";
 import { loadEcoOpenings, detectEcoOpening, theoryPlyCount } from "./utils/ecoOpenings";
@@ -77,50 +75,7 @@ const MATE_FX_MS = 4600;
 const PLAY_LEVELS = DIFFICULTIES
   .map((d, idx) => (d.id === "rank" ? { label: "Zlegend2700 (Rank Bot)", suggested: true, idx } : { label: d.label, idx }))
   .sort((a, b) => Number(!!b.suggested) - Number(!!a.suggested));
-const GRADE_TAG = { brilliant: "!!", great: "★", best: "!", excellent: "✓", good: "•", book: "≡", inaccuracy: "?!", miss: "✗", mistake: "?", blunder: "??" };
-const GRADE_COLOR = { brilliant: "#3EE7F5", great: "#4EA8DE", best: "#6FCF97", excellent: "#8FD9A8", good: "#C9C2E8", book: "#9D8FC4", inaccuracy: "#F5D93E", miss: "#FF8A5C", mistake: "#F0A548", blunder: "#F05348" };
 
-/* Clickable eval graph for the post-game report -- the same "story of
-   the game" area chart chess.com/lichess center their review on. scores
-   come straight from gradeMoves (side-to-move perspective, one per ply
-   plus the final position); the light region is White's share of the
-   game, squashed with the same atan the eval bar next to the board
-   uses. Tap or drag anywhere to jump the review to that ply. */
-function EvalGraph({ scores, grades, current, onSeek }) {
-  const n = scores.length - 1;
-  if (n < 1) return null;
-  const W = 100, H = 34;
-  const whiteCp = (k) => (k % 2 === 0 ? scores[k] : -scores[k]);
-  const y = (k) => (1 - Math.atan(whiteCp(k) / 300) / (Math.PI / 2)) * (H / 2);
-  const x = (k) => (k / n) * W;
-  let line = `M${x(0)},${y(0)}`;
-  for (let k = 1; k <= n; k++) line += ` L${x(k)},${y(k)}`;
-  const seek = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const frac = (e.clientX - rect.left) / rect.width;
-    onSeek(Math.max(0, Math.min(n, Math.round(frac * n))));
-  };
-  return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
-      className="block h-16 w-full cursor-pointer rounded-lg"
-      style={{ background: "#150C24", touchAction: "none" }}
-      onPointerDown={seek}
-      onPointerMove={(e) => { if (e.buttons === 1) seek(e); }}
-      role="slider" aria-label="Game evaluation graph" aria-valuemin={0} aria-valuemax={n} aria-valuenow={current}
-    >
-      <path d={`${line} L${W},${H} L0,${H} Z`} fill="#E9E4F5" fillOpacity="0.85" />
-      <line x1="0" y1={H / 2} x2={W} y2={H / 2} stroke="#8B2FC9" strokeOpacity="0.5" strokeWidth="0.4" strokeDasharray="1.6 1.6" />
-      <path d={line} fill="none" stroke="#3EE7F5" strokeOpacity="0.9" strokeWidth="0.6" />
-      {grades && grades.map((g, i) => (
-        (g === "mistake" || g === "blunder" || g === "miss") ? (
-          <circle key={i} cx={x(i + 1)} cy={y(i + 1)} r="1.6" fill={GRADE_COLOR[g]} stroke="#150C24" strokeWidth="0.5" />
-        ) : null
-      ))}
-      <line x1={x(current)} y1="0" x2={x(current)} y2={H} stroke="#F5D93E" strokeWidth="0.6" strokeOpacity="0.9" />
-    </svg>
-  );
-}
 const formatClock = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 /* Matches the .15s used for the app's other quick UI transitions. */
 const PIECE_SLIDE_MS = 150;
@@ -128,45 +83,6 @@ const PIECE_SLIDE_MS = 150;
    row, drop back one band on a miss so a rough patch doesn't strand the
    player facing puzzles far above what they just missed. */
 const RUSH_STEP_UP_EVERY = 3;
-
-/* Inline-SVG icon for the label prefix that used to be a raw emoji (⚡)
-   -- same fill="currentColor" convention as HomePage's ICONS, just local
-   to App.jsx since it's only used here. */
-function BoltIcon({ size = 12 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M7 2v11h3v9l7-12h-4l4-8z" />
-    </svg>
-  );
-}
-
-/* A plain <img src="/bot-happy.webp"> never retries once it fails --
-   browsers just leave the broken-image icon (or nothing but the alt
-   text) sitting there forever, even though the very next request for
-   the same URL might succeed (a dropped connection during dev-server
-   HMR, a flaky mobile network, whatever). Retries twice with a cache-
-   busting query param before giving up and falling back to the inline
-   PixelAvatar, which can't ever fail to load since it's not a network
-   request. Defined at module scope, not inside ZlegendsBot, so it isn't
-   redefined (and remounted) on every render. */
-function MoodImg({ src, alt }) {
-  const [attempt, setAttempt] = useState(0);
-  const [failed, setFailed] = useState(false);
-  useEffect(() => { setAttempt(0); setFailed(false); }, [src]);
-  if (failed) return <PixelAvatar rows={ZPIX} pal={ZPAL} size={44} />;
-  const onError = () => {
-    if (attempt < 2) setAttempt(a => a + 1);
-    else setFailed(true);
-  };
-  return (
-    <img
-      src={attempt === 0 ? src : `${src}?retry=${attempt}`}
-      alt={alt}
-      className="reactionImg"
-      onError={onError}
-    />
-  );
-}
 
 export default function ZlegendsBot() {
   const initialHash = useRef(getSharedHash()).current;
@@ -190,7 +106,6 @@ export default function ZlegendsBot() {
   const eng = initRef.current.engine;
   const resumed = initRef.current.resumed;
 
-  const [volume, setVolume] = useState(() => loadSetting("volume", 60));
   const [pieceSetId, setPieceSetId] = useState(() => loadSetting("pieceSet", "classic"));
   const [boardColorId, setBoardColorId] = useState(() => loadSetting("boardColor", "default"));
   /* Single source of truth for the app-wide light theme, Sweetheart's, chosen
@@ -206,6 +121,9 @@ export default function ZlegendsBot() {
     document.documentElement.dataset.theme = sweetheart ? "sweetheart" : "";
   }, [sweetheart]);
   const uiT = getUiTheme(sweetheart);
+  const [musicOpen, setMusicOpen] = useState(false);
+  const [blindOpen, setBlindOpen] = useState(false);
+  const { volume, audio, musicSource, mp3Tracks, mp3Idx, mp3Duration, mp3CurrentTime, mp3Buffering, mp3Shuffle, trackName, setMusicSource, toggleShuffle, sfxOn, toggleSfx, pickMp3Track, toggleMusic, nextTrack, prevTrack, onVolume, seekMp3, fmtTime, isMp3Source, jbTrackLabel, jbPlaying, jbDisabled } = useMusic({ musicOpen, blindOpen });
   const [hideEvalBar, setHideEvalBar] = useState(() => loadSetting("hideEvalBar", false));
   const [ecoData, setEcoData] = useState(null);
   /* The full ECO book is a ~480KB chunk that only matters once there's a
@@ -234,91 +152,17 @@ export default function ZlegendsBot() {
     warmUpStockfish().then(() => setEngineWarm(isStockfishWarm()));
   }, [siteView]);
   const pieceImgSrc = (type, isWhite) => getPieceSet(pieceSetId).svgUrl(type, isWhite);
-  const audioRef = useRef(null);
-  if (!audioRef.current) audioRef.current = createAudio(loadSetting("trackIdx", 0), volume / 100, loadSetting("sfxOn", true));
-  const audio = audioRef.current;
-
-  /* MP3 side of the Juice Box -- streamed from Supabase Storage rather than
-     synthesized, so it needs its own HTMLAudioElement instead of the
-     chiptune player's oscillator graph. musicSource picks which engine is
-     "live"; switching sources pauses whichever one was playing so they
-     never overlap. */
-  const mp3AudioRef = useRef(null);
-  if (!mp3AudioRef.current) {
-    mp3AudioRef.current = new Audio();
-    mp3AudioRef.current.volume = volume / 100;
-    /* "metadata" (not the "auto" default) so picking a playlist only costs
-       a small header fetch for duration/seek-bar purposes -- the full
-       multi-MB file doesn't start streaming until the player actually
-       presses Play. Mobile connections were stalling for a long time
-       before a song became audible because "auto" preload used to kick
-       off a full download the instant a track was selected. */
-    mp3AudioRef.current.preload = "metadata";
-    /* Required for createMediaElementSource below to work at all -- must
-       be set before any src is ever assigned. Supabase Storage serves
-       permissive CORS on public objects, verified against the live
-       bucket (non-zero, varying AnalyserNode data), so this doesn't
-       silently break playback. */
-    mp3AudioRef.current.crossOrigin = "anonymous";
-  }
-  const mp3Audio = mp3AudioRef.current;
-  /* iOS Safari hard-ignores HTMLMediaElement.volume -- the only way to
-     actually change an <audio> element's loudness there is to route it
-     through a Web Audio GainNode instead, which iOS does respect. Created
-     lazily (createMediaElementSource can only ever be called once per
-     element) the first time mp3 playback actually starts, inside a user
-     gesture so the AudioContext isn't blocked by autoplay policy. */
-  const mp3GainRef = useRef(null);
-  const volumeRef = useRef(volume);
-  volumeRef.current = volume;
-  const ensureMp3Gain = () => {
-    if (mp3GainRef.current) return mp3GainRef.current;
-    try {
-      const C = window.AudioContext || window.webkitAudioContext;
-      const ctx = new C();
-      const source = ctx.createMediaElementSource(mp3Audio);
-      const gainNode = ctx.createGain();
-      gainNode.gain.value = volumeRef.current / 100;
-      source.connect(gainNode).connect(ctx.destination);
-      mp3GainRef.current = { ctx, gainNode };
-    } catch {
-      mp3GainRef.current = null;
-    }
-    return mp3GainRef.current;
-  };
-  const resumeMp3Gain = () => {
-    const gain = ensureMp3Gain();
-    if (gain && gain.ctx.state === "suspended") gain.ctx.resume();
-  };
-  const [musicSource, setMusicSourceState] = useState(() => loadSetting("musicSource", "chiptune"));
-  const [mp3Tracks, setMp3Tracks] = useState([]);
-  const [mp3Loading, setMp3Loading] = useState(false);
-  const [mp3Idx, setMp3Idx] = useState(() => loadSetting("mp3Idx", 0));
-  const [mp3Playing, setMp3Playing] = useState(false);
-  const [mp3Duration, setMp3Duration] = useState(0);
-  const [mp3CurrentTime, setMp3CurrentTime] = useState(0);
-  const [mp3Buffering, setMp3Buffering] = useState(false);
-  const [mp3Shuffle, setMp3Shuffle] = useState(() => loadSetting("mp3Shuffle", false));
-  const mp3IdxRef = useRef(mp3Idx);
-  mp3IdxRef.current = mp3Idx;
-  const mp3TracksRef = useRef(mp3Tracks);
-  mp3TracksRef.current = mp3Tracks;
-  const mp3PlayingRef = useRef(mp3Playing);
-  mp3PlayingRef.current = mp3Playing;
-  const mp3ShuffleRef = useRef(mp3Shuffle);
-  mp3ShuffleRef.current = mp3Shuffle;
-  /* First-time visitors get the theme track playing softly the moment
-     they first interact with the page (browsers block audio-with-sound
-     autoplay before any user gesture, so we can't start it on load --
-     the very first click/tap/keydown anywhere satisfies that gesture
-     requirement while still feeling immediate). Only fires once, ever,
-     and only if they haven't already picked a source themselves. */
-  const themeAutoplayArmedRef = useRef(!loadSetting("visitedBefore", false) && loadSetting("musicSource", "chiptune") === "chiptune");
   /* Read once, before the "mark visited" effect below flips the flag --
      HomePage's welcome beat needs to know if this is a genuine first
      visit, independent of whether theme-music autoplay is armed (that
      one also requires musicSource === "chiptune"). */
   const isFirstVisitRef = useRef(!loadSetting("visitedBefore", false));
+  /* Flips for every first-time visitor once this render has read it. It also
+     arms the first-visit theme music (see hooks/useMusic.js), which reads
+     the flag before this effect runs. */
+  useEffect(() => {
+    saveSetting("visitedBefore", true);
+  }, []);
 
   /* engine search runs in a worker so it never blocks the audio scheduler or UI.
      The worker carries the ~500KB opening book, so it starts on the way into
@@ -397,8 +241,6 @@ export default function ZlegendsBot() {
   });
   const [gameStyle, setGameStyle] = useState(() => (resumed?.style ? byStyle(resumed.style) : randomStyle()));
   const [evalCp, setEvalCp] = useState(() => eng.evalWhite());
-  const [musicOn, setMusicOn] = useState(false);
-  const [trackName, setTrackName] = useState(audioRef.current.trackName());
   const [hintMove, setHintMove] = useState(null);
   const [hinting, setHinting] = useState(false);
   const [reviewIndex, setReviewIndex] = useState(null);
@@ -432,9 +274,6 @@ export default function ZlegendsBot() {
   const [shareToast, setShareToast] = useState(null);
   const [shareLinkFallback, setShareLinkFallback] = useState(null);
   const [pgnToast, setPgnToast] = useState(null);
-  const [musicOpen, setMusicOpen] = useState(false);
-  const musicOpenRef = useRef(false);
-  musicOpenRef.current = musicOpen;
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [ratingInfo, setRatingInfo] = useState(null);
   /* Fetched up-front (not just when Settings opens) now that the estimate
@@ -609,7 +448,6 @@ export default function ZlegendsBot() {
   const [quizOpening, setQuizOpening] = useState(null);
   const [quizFeedback, setQuizFeedback] = useState(null);
   const [quizDoneToast, setQuizDoneToast] = useState(null);
-  const [blindOpen, setBlindOpen] = useState(false);
   const [puzzlesData, setPuzzlesData] = useState(null);
   const puzzlesLoadingRef = useRef(false);
   const pz = puzzlesData || { PUZZLES: [], RATING_BANDS: [] };
@@ -620,12 +458,17 @@ export default function ZlegendsBot() {
   };
   useEffect(() => {
     if (["puzzlesHome", "ranked", "rush"].includes(siteView)) ensurePuzzlesLoaded();
-    /* Home only needs the puzzle pool for its Daily card, so it's fetched
-       after the first paint rather than in front of it. */
-    if (siteView !== "home") return undefined;
-    const timer = setTimeout(ensurePuzzlesLoaded, 1500);
-    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [siteView]);
+  /* Today's puzzle for the Daily card, from a small calendar rather than the
+     whole pool (see utils/dailyPuzzle.js). Refreshed on the way back home,
+     so a page left open past midnight moves on to the new day's puzzle. */
+  const [homeDaily, setHomeDaily] = useState(null);
+  useEffect(() => {
+    if (siteView !== "home" && siteView !== "puzzlesHome") return;
+    let live = true;
+    loadDailyPuzzle().then((p) => { if (live) setHomeDaily(p); });
+    return () => { live = false; };
   }, [siteView]);
   const [puzzleBand, setPuzzleBand] = useState(null);
   const [activePuzzle, setActivePuzzle] = useState(null);
@@ -2107,7 +1950,7 @@ export default function ZlegendsBot() {
     if (verdict.solved) {
       setPuzzleSolved(true);
       try { audio.sfxCapture(); } catch { /* audio unavailable */ }
-      const daily = dailyPuzzle(pz.PUZZLES);
+      const daily = homeDaily ?? dailyPuzzle(pz.PUZZLES);
       if (daily && activePuzzle.id === daily.id) {
         setDailySolvedDate(todayKey());
         saveSetting("dailyPuzzleSolvedDate", todayKey());
@@ -2152,7 +1995,7 @@ export default function ZlegendsBot() {
     rerender();
     /* finishRush and nextRushPuzzle read refs, so a stale copy behaves the same. */
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eng, audio, activePuzzle, rushMode, pz, dailyStreak, isCaptureMove]);
+  }, [eng, audio, activePuzzle, rushMode, pz, dailyStreak, isCaptureMove, homeDaily]);
 
   const undo = () => {
     if (mode === "replay" || pastedGame || thinking || result || eng.plyCount() === 0) return;
@@ -2208,257 +2051,6 @@ export default function ZlegendsBot() {
     saveSetting("difficultyIdx", idx);
   };
 
-  const loadMp3Playlist = (id) => {
-    const playlist = MP3_PLAYLISTS.find(p => p.id === id);
-    if (!playlist) return;
-    setMp3Loading(true);
-    setMp3Tracks([]);
-    getSupabase().then(sb => loadPlaylistTracks(sb, playlist)).then(tracks => {
-      setMp3Tracks(tracks);
-      setMp3Loading(false);
-    });
-  };
-  /* Only fetches the saved playlist's track list once the Juice Box is
-     actually opened, not on every app mount -- otherwise, whenever
-     someone's last-used source was an mp3 playlist, the app would import
-     supabase-js and hit Storage before they'd even looked at the music
-     player, slowing down the rest of the site (worst on mobile). Picking
-     a playlist from the dropdown already loads it directly in
-     setMusicSource below, so this only covers "reopened with a playlist
-     already selected from last time". */
-  useEffect(() => {
-    if (!musicOpen || musicSource === "chiptune") return;
-    if (mp3TracksRef.current.length || mp3Loading) return;
-    loadMp3Playlist(musicSource);
-    /* Only opening the player should load a playlist, not a change to the source. */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [musicOpen]);
-  /* The theme is a single track meant to play indefinitely rather than
-     stop dead after ~30s -- native loop restarts it itself and never
-     fires "ended" at all, so the multi-track auto-advance below doesn't
-     need a special case for playlists of length 1. */
-  useEffect(() => { mp3Audio.loop = musicSource === THEME_ID; }, [musicSource, mp3Audio]);
-  /* Keeps the <audio> element's src in sync with the selected track,
-     re-playing automatically if music was already playing -- covers both
-     manual next/prev and the "ended" auto-advance below. */
-  useEffect(() => {
-    if (musicSource === "chiptune" || !mp3Tracks.length) return;
-    const track = mp3Tracks[((mp3Idx % mp3Tracks.length) + mp3Tracks.length) % mp3Tracks.length];
-    if (mp3Audio.src !== track.url) {
-      mp3Audio.src = track.url;
-      setMp3Duration(0);
-      setMp3CurrentTime(0);
-      if (mp3PlayingRef.current) { resumeMp3Gain(); mp3Audio.play().catch(() => {}); }
-    }
-    /* Only a new track should reload the audio, and mp3Audio never changes. */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [musicSource, mp3Tracks, mp3Idx]);
-  useEffect(() => {
-    const onEnded = () => {
-      setMp3Idx(i => {
-        const tracks = mp3TracksRef.current;
-        if (!tracks.length) return i;
-        const next = pickTrackIndex(i, tracks.length, 1, mp3ShuffleRef.current);
-        saveSetting("mp3Idx", next);
-        return next;
-      });
-    };
-    const onMeta = () => setMp3Duration(mp3Audio.duration || 0);
-    /* timeupdate fires ~4x/second the whole time music plays (and the
-       theme autoplays), re-rendering the entire app each tick -- but the
-       progress bar it drives is only visible inside the Juice Box modal,
-       so skip the state write entirely while that's closed. */
-    const onTime = () => { if (musicOpenRef.current) setMp3CurrentTime(mp3Audio.currentTime); };
-    const onWaiting = () => setMp3Buffering(true);
-    const onReady = () => setMp3Buffering(false);
-    mp3Audio.addEventListener("ended", onEnded);
-    mp3Audio.addEventListener("loadedmetadata", onMeta);
-    mp3Audio.addEventListener("timeupdate", onTime);
-    mp3Audio.addEventListener("waiting", onWaiting);
-    mp3Audio.addEventListener("playing", onReady);
-    mp3Audio.addEventListener("canplay", onReady);
-    return () => {
-      mp3Audio.removeEventListener("ended", onEnded);
-      mp3Audio.removeEventListener("loadedmetadata", onMeta);
-      mp3Audio.removeEventListener("timeupdate", onTime);
-      mp3Audio.removeEventListener("waiting", onWaiting);
-      mp3Audio.removeEventListener("playing", onReady);
-      mp3Audio.removeEventListener("canplay", onReady);
-    };
-  }, [mp3Audio]);
-  /* "visitedBefore" needs to be unconditional -- it now also drives
-     HomePage's welcome-beat line (see isFirstVisitRef above), not just
-     autoplay-arming, so it has to flip for every first-time visitor, not
-     only ones who still had chiptune as their music source. */
-  useEffect(() => {
-    saveSetting("visitedBefore", true);
-  }, []);
-  /* Cues the theme track (metadata + src only, not full playback) as soon
-     as a genuine first-time visitor loads the page, so it's ready to go
-     the instant they satisfy the browser's user-gesture requirement for
-     audio-with-sound autoplay below -- without this, the first click would
-     have to wait on a fresh Storage round trip before anything could play. */
-  useEffect(() => {
-    if (!themeAutoplayArmedRef.current) return;
-    setMusicSourceState(THEME_ID);
-    saveSetting("musicSource", THEME_ID);
-    loadMp3Playlist(THEME_ID);
-  }, []);
-  useEffect(() => {
-    if (!themeAutoplayArmedRef.current) return;
-    const start = () => {
-      if (!themeAutoplayArmedRef.current) return;
-      themeAutoplayArmedRef.current = false;
-      onVolume(35);
-      setMp3Playing(true);
-      resumeMp3Gain();
-      if (mp3Audio.src) mp3Audio.play().catch(() => {});
-    };
-    document.addEventListener("pointerdown", start, { once: true });
-    document.addEventListener("keydown", start, { once: true });
-    return () => {
-      document.removeEventListener("pointerdown", start);
-      document.removeEventListener("keydown", start);
-    };
-    /* Runs only when the volume or player changes. The helpers it calls are rebuilt every render. */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  /* Backgrounding the tab (swiped away, phone locked, switched apps) is
-     supposed to keep music playing -- that's the whole point of it being
-     music -- but browsers auto-suspend AudioContexts and throttle
-     setInterval timers while hidden, which is what "music breaking after
-     leaving the app" actually was: the chiptune engine's scheduler falls
-     behind and either stays silent or bursts through its missed steps at
-     once (see chiptune.js's resumeIfNeeded), and the mp3 engine's own
-     GainNode context can end up suspended too. Nothing here pauses
-     anything ON hide -- that's the point, it should keep going in the
-     background -- this only repairs state once the tab is visible again. */
-  useEffect(() => {
-    const onVisible = () => {
-      if (document.hidden) return;
-      if (musicOn) audio.resumeIfNeeded();
-      if (mp3PlayingRef.current) {
-        resumeMp3Gain();
-        if (mp3Audio.paused) mp3Audio.play().catch(() => {});
-      }
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [musicOn]);
-  const setMusicSource = (id) => {
-    themeAutoplayArmedRef.current = false;
-    if (id === musicSource) return;
-    if (musicOn) { audio.toggle(); setMusicOn(false); }
-    if (mp3PlayingRef.current) { mp3Audio.pause(); setMp3Playing(false); }
-    setMusicSourceState(id);
-    saveSetting("musicSource", id);
-    if (id !== "chiptune") {
-      setMp3Idx(0);
-      saveSetting("mp3Idx", 0);
-      loadMp3Playlist(id);
-    }
-  };
-  /* Blind Mode reads moves aloud over speechSynthesis -- background music
-     talking over it at the same time would make both unintelligible, so
-     the two are mutually exclusive the same way switching musicSource
-     already pauses whichever engine was playing. Unlike that case,
-     leaving Blind Mode should hand playback back rather than just
-     staying off, so this remembers which engine (if either) it paused
-     and resumes only that one. Background music itself is untouched by
-     any of this -- see the visibilitychange effect above -- this is
-     purely about not overlapping with Blind Mode's own audio. */
-  const blindPausedMusicRef = useRef(null);
-  useEffect(() => {
-    if (blindOpen) {
-      if (musicSource === "chiptune" && musicOn) {
-        audio.toggle();
-        setMusicOn(false);
-        blindPausedMusicRef.current = "chiptune";
-      } else if (musicSource !== "chiptune" && mp3PlayingRef.current) {
-        mp3Audio.pause();
-        setMp3Playing(false);
-        blindPausedMusicRef.current = "mp3";
-      } else {
-        blindPausedMusicRef.current = null;
-      }
-    } else if (blindPausedMusicRef.current) {
-      if (blindPausedMusicRef.current === "chiptune") {
-        setMusicOn(audio.toggle());
-      } else {
-        resumeMp3Gain();
-        mp3Audio.play().catch(() => {});
-        setMp3Playing(true);
-      }
-      blindPausedMusicRef.current = null;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [blindOpen]);
-  const switchMp3Track = (delta) => {
-    const tracks = mp3TracksRef.current;
-    if (!tracks.length) return;
-    setMp3Idx(i => {
-      const next = pickTrackIndex(i, tracks.length, delta, mp3ShuffleRef.current);
-      saveSetting("mp3Idx", next);
-      return next;
-    });
-  };
-  const toggleShuffle = () => {
-    setMp3Shuffle(v => {
-      const next = !v;
-      saveSetting("mp3Shuffle", next);
-      return next;
-    });
-  };
-  const [sfxOn, setSfxOn] = useState(() => loadSetting("sfxOn", true));
-  const toggleSfx = () => {
-    const on = !sfxOn;
-    setSfxOn(on);
-    audio.setSfxOn(on);
-    saveSetting("sfxOn", on);
-    if (on) audio.sfxMove();
-  };
-  const pickMp3Track = (idx) => {
-    setMp3Idx(idx);
-    saveSetting("mp3Idx", idx);
-  };
-  const toggleMusic = () => {
-    if (musicSource === "chiptune") { setMusicOn(audio.toggle()); return; }
-    if (!mp3TracksRef.current.length) return;
-    if (mp3PlayingRef.current) { mp3Audio.pause(); setMp3Playing(false); }
-    else { resumeMp3Gain(); mp3Audio.play().catch(() => {}); setMp3Playing(true); }
-  };
-  const nextTrack = () => {
-    if (musicSource === "chiptune") { setTrackName(audio.next()); saveSetting("trackIdx", audio.trackIndex()); return; }
-    switchMp3Track(1);
-  };
-  const prevTrack = () => {
-    if (musicSource === "chiptune") { setTrackName(audio.prev()); saveSetting("trackIdx", audio.trackIndex()); return; }
-    switchMp3Track(-1);
-  };
-  /* Once the Web Audio graph exists, control loudness exclusively through
-     its GainNode -- that's what actually works on iOS Safari, which
-     otherwise hard-ignores HTMLMediaElement.volume entirely. Falls back to
-     the plain .volume property only before the graph exists (nothing is
-     playing yet, so it's just keeping state consistent for whenever
-     playback actually starts). */
-  const onVolume = v => {
-    setVolume(v);
-    audio.setVolume(v / 100);
-    if (mp3GainRef.current) mp3GainRef.current.gainNode.gain.value = v / 100;
-    else mp3Audio.volume = v / 100;
-    saveSetting("volume", v);
-  };
-  const seekMp3 = (t) => { mp3Audio.currentTime = t; setMp3CurrentTime(t); };
-  const fmtTime = (s) => {
-    if (!isFinite(s) || s < 0) s = 0;
-    return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
-  };
-  const isMp3Source = musicSource !== "chiptune";
-  const mp3NowPlaying = isMp3Source && mp3Tracks.length ? mp3Tracks[((mp3Idx % mp3Tracks.length) + mp3Tracks.length) % mp3Tracks.length] : null;
-  const jbTrackLabel = !isMp3Source ? trackName : mp3Loading ? "Loading…" : mp3NowPlaying ? mp3NowPlaying.name : "No tracks yet";
-  const jbPlaying = isMp3Source ? mp3Playing : musicOn;
-  const jbDisabled = isMp3Source && !mp3Tracks.length;
   const choosePieceSet = (id) => { setPieceSetId(id); saveSetting("pieceSet", id); };
   const chooseBoardColor = (id) => { setBoardColorId(id); saveSetting("boardColor", id); };
   const toggleEvalBar = () => { setHideEvalBar(v => { saveSetting("hideEvalBar", !v); return !v; }); };
@@ -2714,210 +2306,9 @@ export default function ZlegendsBot() {
      the home-page mode grid, they just don't light up this nav. Home
      itself is never "active" here since clicking it navigates away from
      this screen (ExploreDock/BottomNav only render in the play view). */
-  /* The tab itself is already named (Rush/Puzzle/Quiz/Opening/Analysis via
-     analysisLabel), so no state repeats a heading inside its own content
-     anymore -- each shows one small context chip where it earns its place,
-     then the actual text. Rush deliberately shows no clock/score here:
-     the rushHud card above the board already owns those numbers, and
-     mirroring them in a second spot was pure clutter. */
-  const analysisChip = (text, tone = "dim") => (
-    <span className={`inline-flex w-fit items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-bold tracking-wide ${
-      tone === "gold" ? (sweetheart ? "bg-sh-lgold/15 text-sh-lgold" : "bg-yellow/12 text-yellow")
-      : tone === "cyan" ? (sweetheart ? "bg-sh-lteal/15 text-sh-lteal" : "bg-cyan/12 text-cyan")
-      : (sweetheart ? "bg-sh-rose/12 " + uiT.dimText : "bg-violet/15 text-dim")
-    }`}>{text}</span>
-  );
-  const analysisHint = (text) => <p className={"m-0 text-[13px] leading-relaxed " + uiT.mutedLabel}>{text}</p>;
   const playerAdvantageCp = playerColor === 1 ? evalCp : -evalCp;
-  /* Post-game "report card": once Analyze has graded the moves, tally
-     each side's brilliants/mistakes/etc so the player gets a chess.com-
-     style game summary instead of having to scroll the scoresheet
-     counting ?? marks by hand. White's moves are the even plies. */
-  const gradeReport = (reviewing && moveGrades) ? (() => {
-    /* Pasted/shared games are someone else's moves -- plain White/Black
-       there, You/Bot only for games actually played here. */
-    const ownGame = mode !== "replay" && !pastedGame;
-    const whiteIsYou = ownGame && playerColor === 1;
-    const blackIsYou = ownGame && playerColor === -1;
-    const tally = (parity) => {
-      const counts = { brilliant: 0, great: 0, best: 0, excellent: 0, good: 0, book: 0, inaccuracy: 0, miss: 0, mistake: 0, blunder: 0 };
-      moveGrades.forEach((g, i) => { if (g && i % 2 === parity) counts[g] += 1; });
-      return counts;
-    };
-    /* There used to be a "~N rated play" figure here too, averaging Rank
-       Bot's loss->implied-Elo mapping over the game. It read ~2000 for an 833
-       player: a single clean move counts as 3000, so the average runs far too
-       high. That mapping was built to nudge a dial, not to be averaged into a
-       rating, so it stays off until it's calibrated on real games. */
-    const sideStats = (parity) => {
-      if (!gradeDetail) return null;
-      const acc = sideAccuracy(gradeDetail.plyScores.filter((m, i) => m && i % 2 === parity));
-      return acc == null ? null : { acc: Math.round(acc) };
-    };
-    return {
-      cols: [
-        { label: whiteIsYou ? "You" : blackIsYou ? "Bot" : "White", counts: tally(0), stats: sideStats(0) },
-        { label: blackIsYou ? "You" : whiteIsYou ? "Bot" : "Black", counts: tally(1), stats: sideStats(1) },
-      ],
-    };
-  })() : null;
-  const analysisContent = activePuzzle ? (
-    missedAttempt ? (
-      /* Attempting a puzzle from the heartbreak screen's missed-puzzle
-         stepper -- Analyze lives in the Retry/Analyze/Exit row under the
-         board here, not embedded in this tab, so this stays a plain hint
-         like a normal Daily/Ranked attempt. */
-      <div className="flex flex-col gap-2.5">
-        {analysisChip(`Rated ${missedAttempt.rating}`, "gold")}
-        {analysisHint(puzzleSolved ? "Solved! Nice work." : puzzleFeedback || `Find the best move for ${eng.getSide() === 1 ? "White" : "Black"}.`)}
-      </div>
-    ) : rushMode && rushResult ? (
-      /* The run is over but the final puzzle's position is still on the
-         board (see rushSummaryOpen/canAnalyze) -- the "find the best
-         move" prompt no longer applies, so this swaps to the same
-         Analyze toggle every other analyzable mode gets instead. */
-      <div className="flex flex-col gap-2.5">
-        {analysisChip("Rush over", "gold")}
-        {analysisHint("Take a look at the final position, or bring the results back up.")}
-        <button
-          onClick={toggleAnalyze}
-          className="flex h-9 w-fit items-center gap-1.5 rounded-xl border px-3.5 text-xs font-bold tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan"
-          style={analyzing
-            ? { borderColor: "#F06BAE80", background: "#F06BAE1F", color: "var(--sh-rose)" }
-            : { borderColor: "#F06BAE3D", background: "#1D0A22CC", color: "var(--sh-dim)" }}
-        >
-          {analyzing ? (
-            <img src="/sweetheart-sprite.webp" alt="" className={"shAnalyzeSpinner" + (analysisBusy ? " busy" : "")} />
-          ) : (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path d="M12 2 9.5 9.5 2 12l7.5 2.5L12 22l2.5-7.5L22 12l-7.5-2.5L12 2z" />
-            </svg>
-          )}
-          {analyzing ? (analysisBusy ? "Analyzing…" : "Analyzing") : "Analyze"}
-        </button>
-      </div>
-    ) : rushMode ? (
-      <div className="flex flex-col gap-2.5">
-        {analysisChip(<><BoltIcon size={11} />{pz.RATING_BANDS[rushBandIdx]?.label || ""}</>, "gold")}
-        {analysisHint(puzzleFeedback || `Find the best move for ${eng.getSide() === 1 ? "White" : "Black"}.`)}
-      </div>
-    ) : (
-      <div className="flex flex-col gap-2.5">
-        {analysisChip(`Rated ${activePuzzle.rating}`, "gold")}
-        {analysisHint(puzzleSolved ? "Solved! Nice work." : puzzleFeedback || `Find the best move for ${eng.getSide() === 1 ? "White" : "Black"}.`)}
-      </div>
-    )
-  ) : quizOpening ? (
-    <div className="flex flex-col gap-2.5">
-      <div className="flex flex-wrap items-center gap-1.5">
-        {analysisChip(quizOpening.name, "cyan")}
-        {analysisChip(`Move ${fullMoves(Math.min(moveList.length + 1, quizOpening.moves.length))} of ${fullMoves(quizOpening.moves.length)}`)}
-      </div>
-      {analysisHint(quizFeedback || `Play ${eng.getSide() === 1 ? "White" : "Black"}'s next move from memory.`)}
-    </div>
-  ) : activeOpening ? (
-    <div className="flex flex-col gap-2.5">
-      <div className="flex flex-wrap items-center gap-1.5">
-        {analysisChip(activeOpening.name, "cyan")}
-        {analysisChip(activeOpening.eco)}
-      </div>
-      {analysisHint(replayIndex === 0 ? activeOpening.summary : activeOpening.steps[replayIndex - 1])}
-    </div>
-  ) : (
-    <div className="flex flex-col gap-3">
-      {grading && (
-        <div className="flex flex-col gap-1.5">
-          <div className={"text-[12px] " + uiT.dimText}>Grading positions… {gradeProgress}/{moveList.length}</div>
-          <div className={"h-1.5 w-full overflow-hidden rounded-full " + (sweetheart ? "bg-sh-rose/20" : "bg-violet/20")}>
-            <div
-              className={"h-full rounded-full transition-[width] duration-200 ease-out " + (sweetheart ? "bg-sh-lteal" : "bg-cyan")}
-              style={{ width: `${Math.min(100, (gradeProgress / moveList.length) * 100)}%` }}
-            />
-          </div>
-        </div>
-      )}
-      {gradeReport && !grading && (
-        <div className={`rounded-xl border p-3 ${sweetheart ? "border-sh-rose/24 bg-sh-lcard/70" : "border-violet/24 bg-[#150C2466]"}`}>
-          <div className={"mb-2 text-[10px] font-bold uppercase tracking-[0.14em] " + uiT.dimText}>Game report</div>
-          {gradeReport.cols.some(c => c.stats) && (
-            <div className="mb-2.5 grid grid-cols-2 gap-2">
-              {gradeReport.cols.map((col) => (
-                <div key={col.label} className={"rounded-lg px-2.5 py-2 text-center " + uiT.panelBg}>
-                  <div className={"text-[10px] font-bold uppercase tracking-[0.12em] " + uiT.dimText}>{col.label}</div>
-                  <div className={"mt-0.5 text-xl font-bold leading-none " + uiT.interactiveText}>{col.stats ? `${col.stats.acc}%` : "—"}</div>
-                  <div className={"mt-1 text-[10px] " + uiT.dimText}>accuracy</div>
-                </div>
-              ))}
-            </div>
-          )}
-          {gradeDetail && (
-            <div className="mb-2.5">
-              <EvalGraph scores={gradeDetail.scores} grades={moveGrades} current={reviewIndex} onSeek={setReviewIndex} />
-            </div>
-          )}
-          <div className="grid grid-cols-2 gap-3">
-            {gradeReport.cols.map((col) => (
-              <div key={col.label}>
-                <div className={"mb-1.5 text-xs font-bold " + uiT.ink}>{col.label}</div>
-                <div className="flex flex-col gap-1">
-                  {Object.entries(col.counts).map(([g, n]) => (
-                    <div key={g} className="flex items-center justify-between gap-1 text-[11px]">
-                      <span className={"flex items-center gap-1 capitalize " + uiT.mutedLabel}>
-                        <b style={{ color: GRADE_COLOR[g], minWidth: 14 }}>{GRADE_TAG[g]}</b>{g}
-                      </span>
-                      <span className={n > 0 ? "font-bold " + uiT.ink : uiT.dimText}>{n}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-          {practiceQueue.length > 0 && !practice && (
-            <button
-              onClick={startPractice}
-              className={`mt-3 w-full rounded-lg border px-3 py-2 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 ${uiT.ring} ${sweetheart ? "border-sh-lgold/40 bg-sh-lgold/10 text-sh-lgold hover:border-sh-lgold/70 hover:bg-sh-lgold/18" : "border-yellow/30 bg-yellow/8 text-yellow hover:border-yellow/60 hover:bg-yellow/14"}`}
-            >
-              🎯 Practice your mistakes ({practiceQueue.length})
-            </button>
-          )}
-        </div>
-      )}
-      {info ? (
-      info.book ? (
-        <div className="flex flex-col gap-2.5">
-          {analysisChip("Opening book", "cyan")}
-          {analysisHint("The bot is playing known theory — analysis starts once it's out of book.")}
-        </div>
-      ) : (
-        <div className="flex flex-col gap-3">
-          <div className="grid grid-cols-2 gap-2">
-            <div className={"rounded-xl px-3 py-2.5 " + (sweetheart ? "bg-sh-lcard/80" : "bg-[#150C2480]")}>
-              <div className={`text-lg font-bold leading-none ${playerAdvantageCp >= 50 ? uiT.interactiveText : playerAdvantageCp <= -50 ? (sweetheart ? "text-sh-red" : "text-[#FF7B9C]") : uiT.ink}`}>{evalLabel}</div>
-              <div className={"mt-1 text-[10px] font-bold uppercase tracking-[0.14em] " + uiT.dimText}>Eval</div>
-            </div>
-            <div className={"rounded-xl px-3 py-2.5 " + (sweetheart ? "bg-sh-lcard/80" : "bg-[#150C2480]")}>
-              <div className={"text-lg font-bold leading-none " + uiT.ink}>{info.depth}</div>
-              <div className={"mt-1 text-[10px] font-bold uppercase tracking-[0.14em] " + uiT.dimText}>Depth</div>
-            </div>
-          </div>
-          {info.pv.length > 0 && (
-            <div>
-              <div className={"mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] " + uiT.dimText}>Expected line</div>
-              <div className="flex flex-wrap gap-1">
-                {info.pv.slice(0, 8).map((sanMove, i) => (
-                  <span key={i} className={"rounded-md px-1.5 py-0.5 font-mono text-xs " + (sweetheart ? "bg-sh-rose/15 " + uiT.ink : "bg-violet/15 text-paper")}>{sanMove}</span>
-                ))}
-                {info.pv.length > 8 && <span className={"px-1 py-0.5 text-xs " + uiT.dimText}>+{info.pv.length - 8} more</span>}
-              </div>
-            </div>
-          )}
-          <div className={"text-[11px] " + uiT.dimText}>{(info.nodes / 1000).toFixed(0)}k nodes · {(info.time / 1000).toFixed(1)}s</div>
-        </div>
-      )
-    ) : (
-      !pastedGame && analysisHint("After each bot move, its eval, search depth, and the line it expects will show up here.")
-    )}
-    </div>
+  const analysisContent = (
+    <AnalysisPanel activePuzzle={activePuzzle} missedAttempt={missedAttempt} puzzleSolved={puzzleSolved} puzzleFeedback={puzzleFeedback} eng={eng} rushMode={rushMode} rushResult={rushResult} toggleAnalyze={toggleAnalyze} analyzing={analyzing} analysisBusy={analysisBusy} pz={pz} rushBandIdx={rushBandIdx} quizOpening={quizOpening} moveList={moveList} quizFeedback={quizFeedback} activeOpening={activeOpening} replayIndex={replayIndex} grading={grading} gradeProgress={gradeProgress} reviewing={reviewing} moveGrades={moveGrades} mode={mode} pastedGame={pastedGame} playerColor={playerColor} gradeDetail={gradeDetail} reviewIndex={reviewIndex} setReviewIndex={setReviewIndex} practiceQueue={practiceQueue} practice={practice} startPractice={startPractice} info={info} evalLabel={evalLabel} sweetheart={sweetheart} uiT={uiT} playerAdvantageCp={playerAdvantageCp} />
   );
 
   const inChk = eng.inCheckNow() && !result;
@@ -3050,7 +2441,14 @@ export default function ZlegendsBot() {
   };
 
   const hasLiveGame = mode === "play" && !result && !pastedGame && !activePuzzle && !quizOpening && !spectateMode && moveList.length > 0;
-  const openDaily = () => { leaveActivity(); startPuzzle(dailyPuzzle(pz.PUZZLES)); setSiteView("play"); };
+  const openDaily = () => {
+    const daily = homeDaily ?? dailyPuzzle(pz.PUZZLES);
+    if (!daily) return;
+    leaveActivity();
+    ensurePuzzlesLoaded(); // for "next puzzle" afterwards
+    startPuzzle(daily);
+    setSiteView("play");
+  };
   /* A finished game may still be on the board, so Play starts a fresh one
      instead of reopening it. */
   const startFromHub = (idx) => {
@@ -3098,7 +2496,7 @@ export default function ZlegendsBot() {
         onPlay={() => onSection("play")}
         onDaily={openDaily}
         hasLiveGame={hasLiveGame}
-        daily={puzzlesData ? dailyPuzzle(pz.PUZZLES) : null}
+        daily={homeDaily}
         dailySolved={dailySolvedDate === todayKey()}
         streak={currentStreak(dailyStreak, utcDay())}
         boardColors={getBoardColor(boardColorId)}
@@ -3226,7 +2624,7 @@ export default function ZlegendsBot() {
 
   return (
     <Suspense fallback={null}>
-      <PlayView mateFxProps={mateFxProps} rechecking={rechecking} betterMoveLine={betterMoveLine} rankTestNote={rankBotTest && difficultyRef.current.id === "rank" ? (rankTestNote || {}) : null} GRADE_COLOR={GRADE_COLOR} GRADE_TAG={GRADE_TAG} MoodImg={MoodImg} RushThemeArt={RushThemeArt} Tray={Tray} activeOpening={activeOpening} activePuzzle={activePuzzle} analysisBusy={analysisBusy} analysisContent={analysisContent} analysisLabel={analysisLabel} analysisMove={analysisMove} analyzing={analyzing} arrowLine={arrowLine} beginRestartCountdown={beginRestartCountdown} bestArrow={bestArrow} boardColorId={boardColorId} boardRef={boardRef} boardVars={boardVars} botColor={botColor} botLine={botLine} botMood={botMood} botTaken={botTaken} colorPick={colorPick} curMoveIdx={curMoveIdx} difficultyIdx={difficultyIdx} difficultyRef={difficultyRef} displayName={displayName} dragCellSize={dragCellSize} dragFrom={dragFrom} dragPos={dragPos} eng={eng} evalLabel={evalLabel} evalPawns={evalPawns} exitMissedAttempt={exitMissedAttempt} exitPractice={exitPractice} exitPuzzle={exitPuzzle} exitReplay={exitReplay} exitRush={exitRush} formatClock={formatClock} gameStyle={gameStyle} gradeDetail={gradeDetail} gradeProgress={gradeProgress} grading={grading} hideEvalBar={hideEvalBar} hideRushSummary={hideRushSummary} hinting={hinting} inChk={inChk} liveOpening={liveOpening} missedAttempt={missedAttempt} missedStepIdx={missedStepIdx} mode={mode} moveGrades={moveGrades} moveList={moveList} nameDraft={nameDraft} nameEditOpen={nameEditOpen} newGame={newGame} newGameConfirm={newGameConfirm} nextPuzzle={nextPuzzle} onCopyPgn={onCopyPgn} onDifficultyChange={onDifficultyChange} onHint={onHint} onMissedSwipeEnd={onMissedSwipeEnd} onMissedSwipeStart={onMissedSwipeStart} openLeaderboard={openLeaderboard} openReviewPage={openReviewPage} pairs={pairs} pastedGame={pastedGame} pauseSpectate={pauseSpectate} pgnToast={pgnToast} pieceImgSrc={pieceImgSrc} pieceSetId={pieceSetId} playMove={playMove} playerAdvantageCp={playerAdvantageCp} playerColor={playerColor} playerShare={playerShare} practice={practice} practiceMove={practiceMove} practiceNext={practiceNext} practiceReveal={practiceReveal} promo={promo} puzzleBand={puzzleBand} puzzleFeedback={puzzleFeedback} puzzleMove={puzzleMove} puzzleSolved={puzzleSolved} pz={pz} quizDoneToast={quizDoneToast} quizMove={quizMove} quizOpening={quizOpening} rankBotAssessedElo={rankBotAssessedElo} rankBotGames={rankBotGames} ratingInfo={ratingInfo} replayFull={replayFull} replayIndex={replayIndex} replayPlaying={replayPlaying} replayStep={replayStep} restartCountdown={restartCountdown} result={result} resumeSpectate={resumeSpectate} reviewIndex={reviewIndex} reviewInfo={reviewInfo} reviewMissedPuzzle={reviewMissedPuzzle} reviewing={reviewing} rows={rows} rushBandIdx={rushBandIdx} rushBestMap={rushBestMap} rushDuration={rushDuration} rushLifetime={rushLifetime} rushMilestone={rushMilestone} rushMissed={rushMissed} rushMistakes={rushMistakes} rushMode={rushMode} rushResult={rushResult} rushSolved={rushSolved} rushSummaryOpen={rushSummaryOpen} rushTimeLeft={rushTimeLeft} saveDisplayName={saveDisplayName} setBotLine={setBotLine} setColorPick={setColorPick} setMissedStepIdx={setMissedStepIdx} setNameDraft={setNameDraft} setNameEditOpen={setNameEditOpen} setNewGameConfirm={setNewGameConfirm} setPlayerColor={setPlayerColor} setPromo={setPromo} setReplayIndex={setReplayIndex} setReviewIndex={setReviewIndex} setRushSummaryOpen={setRushSummaryOpen} setShareLinkFallback={setShareLinkFallback} setShareToast={setShareToast} setSiteView={setSiteView} shareLinkFallback={shareLinkFallback} shareToast={shareToast} spectateBlackIdx={spectateBlackIdx} spectateMode={spectateMode} spectateOpeningId={spectateOpeningId} spectatePaused={spectatePaused} spectateWhiteIdx={spectateWhiteIdx} startPuzzle={startPuzzle} startQuiz={startQuiz} startSpectate={startSpectate} status={status} stopSpectate={stopSpectate} sweetheart={sweetheart} thinking={thinking} toggleAnalyze={toggleAnalyze} toggleReplayPlay={toggleReplayPlay} uiT={uiT} undo={undo} youDiff={youDiff} youTaken={youTaken} />
+      <PlayView mateFxProps={mateFxProps} rechecking={rechecking} betterMoveLine={betterMoveLine} rankTestNote={rankBotTest && difficultyRef.current.id === "rank" ? (rankTestNote || {}) : null} RushThemeArt={RushThemeArt} Tray={Tray} activeOpening={activeOpening} activePuzzle={activePuzzle} analysisBusy={analysisBusy} analysisContent={analysisContent} analysisLabel={analysisLabel} analysisMove={analysisMove} analyzing={analyzing} arrowLine={arrowLine} beginRestartCountdown={beginRestartCountdown} bestArrow={bestArrow} boardColorId={boardColorId} boardRef={boardRef} boardVars={boardVars} botColor={botColor} botLine={botLine} botMood={botMood} botTaken={botTaken} colorPick={colorPick} curMoveIdx={curMoveIdx} difficultyIdx={difficultyIdx} difficultyRef={difficultyRef} displayName={displayName} dragCellSize={dragCellSize} dragFrom={dragFrom} dragPos={dragPos} eng={eng} evalLabel={evalLabel} evalPawns={evalPawns} exitMissedAttempt={exitMissedAttempt} exitPractice={exitPractice} exitPuzzle={exitPuzzle} exitReplay={exitReplay} exitRush={exitRush} formatClock={formatClock} gameStyle={gameStyle} gradeDetail={gradeDetail} gradeProgress={gradeProgress} grading={grading} hideEvalBar={hideEvalBar} hideRushSummary={hideRushSummary} hinting={hinting} inChk={inChk} liveOpening={liveOpening} missedAttempt={missedAttempt} missedStepIdx={missedStepIdx} mode={mode} moveGrades={moveGrades} moveList={moveList} nameDraft={nameDraft} nameEditOpen={nameEditOpen} newGame={newGame} newGameConfirm={newGameConfirm} nextPuzzle={nextPuzzle} onCopyPgn={onCopyPgn} onDifficultyChange={onDifficultyChange} onHint={onHint} onMissedSwipeEnd={onMissedSwipeEnd} onMissedSwipeStart={onMissedSwipeStart} openLeaderboard={openLeaderboard} openReviewPage={openReviewPage} pairs={pairs} pastedGame={pastedGame} pauseSpectate={pauseSpectate} pgnToast={pgnToast} pieceImgSrc={pieceImgSrc} pieceSetId={pieceSetId} playMove={playMove} playerAdvantageCp={playerAdvantageCp} playerColor={playerColor} playerShare={playerShare} practice={practice} practiceMove={practiceMove} practiceNext={practiceNext} practiceReveal={practiceReveal} promo={promo} puzzleBand={puzzleBand} puzzleFeedback={puzzleFeedback} puzzleMove={puzzleMove} puzzleSolved={puzzleSolved} pz={pz} quizDoneToast={quizDoneToast} quizMove={quizMove} quizOpening={quizOpening} rankBotAssessedElo={rankBotAssessedElo} rankBotGames={rankBotGames} ratingInfo={ratingInfo} replayFull={replayFull} replayIndex={replayIndex} replayPlaying={replayPlaying} replayStep={replayStep} restartCountdown={restartCountdown} result={result} resumeSpectate={resumeSpectate} reviewIndex={reviewIndex} reviewInfo={reviewInfo} reviewMissedPuzzle={reviewMissedPuzzle} reviewing={reviewing} rows={rows} rushBandIdx={rushBandIdx} rushBestMap={rushBestMap} rushDuration={rushDuration} rushLifetime={rushLifetime} rushMilestone={rushMilestone} rushMissed={rushMissed} rushMistakes={rushMistakes} rushMode={rushMode} rushResult={rushResult} rushSolved={rushSolved} rushSummaryOpen={rushSummaryOpen} rushTimeLeft={rushTimeLeft} saveDisplayName={saveDisplayName} setBotLine={setBotLine} setColorPick={setColorPick} setMissedStepIdx={setMissedStepIdx} setNameDraft={setNameDraft} setNameEditOpen={setNameEditOpen} setNewGameConfirm={setNewGameConfirm} setPlayerColor={setPlayerColor} setPromo={setPromo} setReplayIndex={setReplayIndex} setReviewIndex={setReviewIndex} setRushSummaryOpen={setRushSummaryOpen} setShareLinkFallback={setShareLinkFallback} setShareToast={setShareToast} setSiteView={setSiteView} shareLinkFallback={shareLinkFallback} shareToast={shareToast} spectateBlackIdx={spectateBlackIdx} spectateMode={spectateMode} spectateOpeningId={spectateOpeningId} spectatePaused={spectatePaused} spectateWhiteIdx={spectateWhiteIdx} startPuzzle={startPuzzle} startQuiz={startQuiz} startSpectate={startSpectate} status={status} stopSpectate={stopSpectate} sweetheart={sweetheart} thinking={thinking} toggleAnalyze={toggleAnalyze} toggleReplayPlay={toggleReplayPlay} uiT={uiT} undo={undo} youDiff={youDiff} youTaken={youTaken} />
     </Suspense>
   );
   };
