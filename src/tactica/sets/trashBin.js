@@ -683,9 +683,10 @@ export function dressTrashBin(ts) {
   /* Dark inside the bin: dim the scene's own lights and reflections. */
   scene.background = new THREE.Color("#060507");
   scene.fog = new THREE.FogExp2("#060507", 0.022);
-  scene.environmentIntensity = 0.12;
+  /* Enough room reflection for the polish to catch light on dark wood. */
+  scene.environmentIntensity = 0.32;
   scene.traverse((o) => {
-    if (o.isHemisphereLight) o.intensity = 0.22;
+    if (o.isHemisphereLight) o.intensity = 0.3;
     else if (o.isDirectionalLight) o.intensity *= 0.12;
   });
   ts.renderer.shadowMap.enabled = true;
@@ -693,6 +694,20 @@ export function dressTrashBin(ts) {
   ts.renderer.toneMappingExposure = 1.0;
   for (const t of ts.tiles) t.receiveShadow = true;
   scene.traverse((o) => { if (o.isMesh && o.geometry?.type === "BoxGeometry" && o.position.y < -0.1) o.receiveShadow = true; });
+
+  /* The hole is behind the black pieces, so they face the player in their
+     own shadow. A soft warm fill from the player's side, as if bounced off
+     the bin, lights their faces. It is a spotlight on the board only and
+     fades out before the walls, so the pieces stand out from the dark bin
+     instead of the whole bin getting lighter. */
+  const fill = new THREE.SpotLight("#ffdcb4", 60, 17, 0.55, 0.9, 2);
+  fill.position.set(0, 8, 9);
+  fill.target.position.set(0, 0, -1.5);
+  scene.add(fill, fill.target);
+  /* A cool rim from high behind, so dark silhouettes stand off the dark bin. */
+  const rimLight = new THREE.DirectionalLight("#b8d4ff", 0.8);
+  rimLight.position.set(0, 9, -9);
+  scene.add(rimLight);
 
   /* A faint cold bounce off the far wall so the ribbed metal reads. */
   const bounce = new THREE.PointLight("#8fa3b8", 18, 26, 1.4);
@@ -703,6 +718,9 @@ export function dressTrashBin(ts) {
   set.add(buildWall(), buildMound(), pizzaBox());
   fillWithRubbish(set);
   scene.add(set);
+  /* The stronger room reflections are for the pieces' polish; the bin and
+     its rubbish keep the dim reflections they had, so the bin stays dark. */
+  set.traverse((o) => { if (o.isMesh && o.material && "envMapIntensity" in o.material) o.material.envMapIntensity = 0.35; });
   const hole = buildHole(scene, new THREE.Vector3(0.3, 0, 0.8));
   const flies = buildFlies(scene);
   /* Pieces cast shadows in the light from the hole; pieces added later

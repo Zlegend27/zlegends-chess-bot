@@ -10,6 +10,9 @@ import { KINDS, BUILD, clipsFor, reactionFor, attackEffects, PAWN_ATTACK_END } f
 
 /* Pieces are modelled about one square wide; this leaves a gap around them. */
 const PIECE_SCALE = 0.78;
+/* How tall each character's invisible tap area is, so a short pawn doesn't
+   cover the squares behind it. Roughly the height of the model on the board. */
+const TAP_HEIGHT = { pawn: 1.1, knight: 1.4, bishop: 1.5, rook: 1.25, queen: 1.65, king: 1.75 };
 /* The chess set's colours (Dubrovnik II): squares and the board frame. */
 export const SET_BOARD = { light: "#EED6B0", dark: "#8A5229", frame: "#5C3317" };
 /* Idle breathing only needs about 30 frames a second. */
@@ -243,10 +246,12 @@ export class TacticaScene {
       shadow.rotation.x = -Math.PI / 2;
       shadow.position.y = 0.01;
       /* An invisible column to tap or drag the character by. */
-      this.hitGeometry ??= new THREE.CylinderGeometry(0.4, 0.4, 1.5, 12);
+      this.hitGeometry ??= new THREE.CylinderGeometry(0.36, 0.38, 1, 12);
       this.hitMaterial ??= new THREE.MeshBasicMaterial({ visible: false });
       const hit = new THREE.Mesh(this.hitGeometry, this.hitMaterial);
-      hit.position.y = 0.75;
+      const tapHeight = TAP_HEIGHT[kind] ?? 1.4;
+      hit.scale.y = tapHeight;
+      hit.position.y = tapHeight / 2;
       hit.userData.sq = piece.sq;
       group.add(shadow, holder, hit);
       group.position.copy(this.worldOf(piece.sq));
@@ -883,10 +888,11 @@ export class TacticaScene {
       if (Math.abs(dx) > SWIPE_PX && Math.abs(dx) > Math.abs(dy)) { this.onSwipe?.(dx < 0 ? 1 : -1); return; }
       if (Math.hypot(dx, dy) > TAP_SLOP_PX) return;
       aim(e);
-      /* While a character is held, a square it can reach wins over whatever
-         character is drawn in front of it, such as the held one itself. */
+      /* A tap on a character always means that character (an enemy on a
+         glowing square is that square anyway); otherwise the square under
+         the finger. A tap never lands on a square hidden behind a piece. */
       const tile = raycaster.intersectObjects(this.tiles)[0]?.object.userData.sq ?? null;
-      const sq = tile != null && this.targets.includes(tile) ? tile : pressed.sq ?? pieceHit() ?? tile;
+      const sq = pressed.sq ?? pieceHit() ?? tile;
       if (sq == null) return;
       /* A double-tap is matched by where the finger landed, not by square, so
          it still counts while the camera is swinging after the first tap. */
