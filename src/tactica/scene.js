@@ -61,6 +61,8 @@ const CAMERA_SMOOTH = 0.32;
    side; it never swings further than side-on, so the player never ends up
    looking from the enemy's side. */
 const AUTO_TURNS = [0, 0.45, -0.45, 0.9, -0.9, 1.4, -1.4];
+/* The furthest the close view pulls back to fit every glowing square. */
+const MAX_FIT_PULL = 2;
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 const turnAround = (pivot, point, angle) => point.clone().sub(pivot).applyAxisAngle(Y_AXIS, angle).add(pivot);
 /* The attack shot settles faster, so it is in place before the hit. */
@@ -613,10 +615,43 @@ export class TacticaScene {
     this.wake();
   }
 
+  /** The turn for a character's close view. It only turns on its own when
+   *  the character itself is hidden behind another piece; its squares never
+   *  decide the angle, since turning toward some of them and away from the
+   *  others would hint at (or mislead about) the answer. Squares off screen
+   *  are handled by pulling back instead (see showCloseUp); looking around
+   *  is the player's choice, with the map. Among turns that show the
+   *  character, the one closest to the player's side wins. */
+  clearTurn(sq, basePos, baseLook) {
+    return this.bestTurn(sq, basePos, baseLook, []);
+  }
+
+  /** How far (as a multiplier on the close view's distance) the camera must
+   *  pull back so every one of `targets` is on screen from `turn`. */
+  fitPull(sq, basePosFor, baseLook, turn, targets) {
+    if (!targets.length) return 1;
+    const at = this.worldOf(sq);
+    const probe = this.probe ??= new THREE.PerspectiveCamera();
+    probe.fov = this.camera.fov; probe.aspect = this.camera.aspect; probe.near = 0.1; probe.far = 100;
+    probe.updateProjectionMatrix();
+    for (let pull = 1; pull <= MAX_FIT_PULL; pull += 0.1) {
+      probe.position.copy(turnAround(at, basePosFor(pull), turn));
+      probe.lookAt(turnAround(at, baseLook, turn));
+      probe.updateMatrixWorld();
+      const fits = targets.every((t) => {
+        const ndc = this.worldOf(t).setY(0.2).project(probe);
+        return Math.abs(ndc.x) < 0.9 && ndc.y > -0.72 && ndc.y < 0.8 && ndc.z < 1;
+      });
+      if (fits) return pull;
+    }
+    return MAX_FIT_PULL;
+  }
+
   /** The turn that shows a character and the squares it can reach best:
    *  fewest of them hidden behind other pieces or off screen, then the one
    *  closest to the view from the player's side, then the one closest to
-   *  where the camera already is. */
+   *  where the camera already is. With no targets, only whether the
+   *  character itself is hidden counts. */
   bestTurn(sq, basePos, baseLook, targets) {
     /* Pieces placed since the last frame have no world position yet. */
     this.scene.updateMatrixWorld();
@@ -666,13 +701,16 @@ export class TacticaScene {
     const reach = destination != null ? at.distanceTo(toward) : 3.5;
     const pull = (1 + Math.max(0, reach - 2.5) * 0.2) * widen;
     const look = new THREE.Vector3().addVectors(at, toward).multiplyScalar(0.5).setY(0.35);
-    const position = at.clone().add(new THREE.Vector3(0.7, 2.2 * pull, 3.1 * pull));
-    /* A new character gets the clearest angle; the same one keeps a turn
-       the player made with the map. */
+    const positionFor = (extra) => at.clone().add(new THREE.Vector3(0.7, 2.2 * pull * extra, 3.1 * pull * extra));
+    /* A new character gets a clear view of itself, from the player's side
+       where possible; the same one keeps a turn the player made with the
+       map. Then the camera pulls back until every glowing square is in
+       view, so none is favoured. */
     if (sq !== this.lastSq) this.manualTurn = false;
     this.lastSq = sq;
     this.pivot.copy(at);
-    this.setTurn(this.manualTurn ? this.turn : this.bestTurn(sq, position, look, targets));
+    this.setTurn(this.manualTurn ? this.turn : this.clearTurn(sq, positionFor(1), look));
+    const position = positionFor(this.fitPull(sq, positionFor, look, this.turn, targets));
     this.moveCamera(turnAround(at, position, this.turn), turnAround(at, look, this.turn));
   }
 
@@ -811,6 +849,69 @@ export class TacticaScene {
         resolve();
       });
     });
+  }
+
+  /** A looping standoff for the menu: the character on `attackerSq` swings
+   *  its attack at `targetSq` every few seconds (the motion only: no
+   *  effects, nobody is taken), while the characters on `cowering` huddle
+   *  together, face it and shiver, harder while the blow comes. Returns a
+   *  stop function. */
+  showdown(attackerSq, targetSq, cowering) {
+    const attacker = this.pieces.get(attackerSq);
+    const victims = cowering.map((sq) => this.pieces.get(sq)).filter(Boolean);
+    if (!attacker) return () => {};
+    const a = this.worldOf(attackerSq);
+    /* Huddle: each one leans in toward the middle of the group, facing the attacker. */
+    const middle = new THREE.Vector3();
+    for (const sq of cowering) middle.add(this.worldOf(sq));
+    middle.divideScalar(Math.max(1, cowering.length));
+    for (const [i, v] of victims.entries()) {
+      const home = this.worldOf(cowering[i]);
+      v.group.position.copy(home.clone().lerp(middle, 0.22));
+      const to = a.clone().sub(v.group.position);
+      v.holder.rotation.y = Math.atan2(to.x, to.z);
+    }
+    const toward = this.worldOf(targetSq).sub(a);
+    if (attacker.kind === "pawn") attacker.holder.rotation.y = Math.atan2(toward.x, toward.z);
+    const local = toward.clone().applyAxisAngle(Y_AXIS, -attacker.holder.rotation.y).divideScalar(PIECE_SCALE);
+    const clip = clipsFor(attacker.kind, [local.x, local.z]).attack;
+    const end = attacker.kind === "pawn" ? PAWN_ATTACK_END : clip.duration;
+    const act = attacker.mixer.clipAction(clip);
+    act.setLoop(THREE.LoopOnce, 1);
+    act.clampWhenFinished = true;
+    let swingAt = -1, stopped = false;
+    const swing = () => {
+      if (stopped || reducedMotion()) return;
+      attacker.idle.stop();
+      act.reset().play();
+      swingAt = performance.now();
+    };
+    const step = () => {
+      if (stopped) return;
+      const now = performance.now();
+      /* Back to breathing once the swing is done. */
+      if (swingAt >= 0 && act.time >= end - 1e-3) {
+        act.stop();
+        const body = attacker.model.getObjectByName("body");
+        if (body) { body.position.set(0, 0, 0); body.quaternion.identity(); body.scale.set(1, 1, 1); }
+        attacker.idle.reset().play();
+        swingAt = -1;
+      }
+      const fear = swingAt >= 0 ? 1 : 0.35;
+      for (const [i, v] of victims.entries()) {
+        v.holder.rotation.z = Math.sin(now / 38 + i * 2.1) * 0.035 * fear;
+      }
+    };
+    this.everyFrame.push(step);
+    const first = setTimeout(swing, 1200);
+    const timer = setInterval(swing, 3600);
+    this.wake();
+    return () => {
+      stopped = true;
+      clearTimeout(first);
+      clearInterval(timer);
+      this.everyFrame = this.everyFrame.filter((f) => f !== step);
+    };
   }
 
   /** The enemy rush when a phase's timer runs out: every enemy piece winds

@@ -3,15 +3,13 @@ import { createEngine, mFrom, mPromo, mTo, M120TO64, EMPTY } from "../engine/che
 import { stockfishBestMove, warmUpStockfish } from "../engine/stockfishEngine";
 import { DIFFICULTIES } from "../utils/difficulties";
 import { gameResult, resultSentence } from "../utils/gameResult";
-import MiniBoard from "../components/MiniBoard";
 import { loadSetting, saveSetting } from "../utils/storage";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
+import { BrassButton, MapButton, MenuButton } from "./ui";
 import { loadBonds, levelsOf } from "./bonds";
-import { loadPace, savePace } from "./pace";
-import PaceControl from "./PaceControl";
 
-/* Play a bot in the bin: a full game on the 3D board against the site's own
+/* Regular Chess in the bin: a full game on the 3D board against the site's own
    bots (the 1000, 1500 and 2000 Elo Stockfish levels and the homemade
    Engine). Rank Bot is left out here: its games feed your rank, and a game
    in the bin isn't rated. Same controls as the tutorial; promotions become
@@ -19,7 +17,6 @@ import PaceControl from "./PaceControl";
 const BOTS = DIFFICULTIES.filter((d) => d.id !== "rank");
 const KNIGHT = 2, QUEEN = 5;
 const sqOf = (sq120) => M120TO64[sq120];
-const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--cyan)]";
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 /* A bot never answers faster than this, so its move doesn't land before
    yours has finished. */
@@ -88,8 +85,10 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
   const [thinking, setThinking] = useState(false);
   const [result, setResult] = useState(null); // { text, reason, winner?, resigned? }
   const [menuOpen, setMenuOpen] = useState(false);
-  const [pace, setPaceState] = useState(() => loadPace("bot"));
-  const setPace = (p) => { setPaceState(p); savePace("bot", p); };
+  /* How far the view is turned, so the map turns with it like a compass. */
+  const [turn, setTurn] = useState(0);
+  /* Regular Chess always plays the full attacks. */
+  const pace = "full";
   const bot = BOTS[botIdx];
 
   const myTurn = stage === "playing" && eng.getSide() === side && !thinking;
@@ -123,6 +122,7 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
       onSwipe: (dir) => cycleRef.current(dir),
       onDragStart: (sq) => dragStartRef.current(sq),
       onDrop: (sq) => dropRef.current(sq),
+      onTurn: setTurn,
     });
     sceneRef.current = scene;
     scene.setBonds(levelsOf(loadBonds()));
@@ -308,8 +308,6 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
     : !targets.length ? "This one can't move"
     : chosen != null ? (isAttack ? `Tap ${squareName(chosen)} again to strike` : `Tap ${squareName(chosen)} again to move`)
     : "Tap a glowing square, or drag there";
-  const iconBtn = "flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full border border-white/20 bg-black/45 text-lg text-white disabled:opacity-35 " + focusRing;
-  const option = (on) => "cursor-pointer rounded-xl border px-3 py-2 text-left text-sm " + (on ? "border-[var(--cyan)] bg-[var(--cyan)]/15 text-white " : "border-white/15 bg-black/40 text-white/85 ") + focusRing;
   const lastMove = moveList.length ? `${Math.ceil(moveList.length / 2)}${moveList.length % 2 ? "." : "…"} ${moveList[moveList.length - 1]}` : null;
 
   return (
@@ -318,91 +316,87 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
 
       {stage === "playing" && (
         <>
-          <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-black/70 to-transparent p-3 pb-8">
-            <div className="flex items-start gap-2">
-              <button
-                type="button"
-                onClick={() => setMenuOpen((o) => !o)}
-                aria-label="Game menu"
-                aria-expanded={menuOpen}
-                className={"pointer-events-auto flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-white/20 bg-black/45 text-white " + focusRing}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 10a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm7 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm7 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z" /></svg>
-              </button>
-              <div className="text-white">
-                <div className="text-[10px] uppercase tracking-wide text-white/60">vs {bot.label}</div>
-                <div className="text-sm font-bold" aria-live="polite">{inCheck ? "Check!" : thinking ? "Bot to move" : "Your move"}</div>
-                {lastMove && <div className="text-xs text-white/70" style={{ fontFamily: "var(--font-mono)" }}>{lastMove}</div>}
+          <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-black/80 to-transparent p-3 pb-10">
+            <div className="flex items-center gap-2.5">
+              <MenuButton open={menuOpen} onClick={() => setMenuOpen((o) => !o)} />
+              <div>
+                <div className="tc-label">vs {bot.label}</div>
+                <div className="tc-display text-[15px]" aria-live="polite">{inCheck ? "Check!" : thinking ? "Bot to move" : "Your move"}</div>
+                {lastMove && <div className="text-sm text-[var(--tc-cream-dim)]" style={{ fontFamily: "var(--font-mono)" }}>{lastMove}</div>}
               </div>
             </div>
-            <button
-              type="button"
-              onClick={toggleView}
-              aria-label={view === "board" ? "Back to the close view" : "Show the whole board"}
-              aria-pressed={view === "board"}
-              className={"pointer-events-auto shrink-0 cursor-pointer rounded-lg border-2 bg-black/40 p-1 " + (view === "board" ? "border-[var(--cyan)] " : "border-white/30 ") + focusRing}
-            >
-              <MiniBoard fen={eng.fen()} colors={SET_BOARD} pieceImgSrc={pieceImgSrc} size={64} flipped={side === -1} label="Map of the board" />
-            </button>
+            <MapButton
+              fen={eng.fen()}
+              pieceImgSrc={pieceImgSrc}
+              size={88}
+              flipped={side === -1}
+              view={view}
+              turn={turn}
+              onToggle={toggleView}
+              onSpin={(a) => sceneRef.current?.spinBy(a)}
+            />
           </div>
 
           {menuOpen && (
             <>
               <button type="button" aria-label="Close the menu" className="absolute inset-0 cursor-default border-0 bg-transparent" onClick={() => setMenuOpen(false)} />
-              <div className="absolute top-14 left-3 flex w-56 flex-col gap-3 rounded-xl border border-white/15 bg-black/80 p-3 text-white backdrop-blur-sm">
-                <PaceControl value={pace} onChange={setPace} />
-                <button type="button" className={"btn ghost " + focusRing} onClick={resign}>Resign</button>
-                <button type="button" className={"btn ghost " + focusRing} onClick={() => { gameIdRef.current++; onExit(); }}>Main menu</button>
+              <div className="tc-panel absolute top-16 left-3 flex w-56 flex-col gap-3 p-3">
+                <button type="button" className="tc-plank tc-center tc-small" onClick={() => setMenuOpen(false)}>Resume</button>
+                <button type="button" className="tc-plank tc-center tc-small" onClick={resign}>Resign</button>
+                <button type="button" className="tc-plank tc-center tc-small" onClick={() => { gameIdRef.current++; onExit(); }}>Back to the menu</button>
               </div>
             </>
           )}
 
-          <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/70 to-transparent px-3 pt-8 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-            <button type="button" className={iconBtn} onClick={() => cycle(-1)} disabled={busy} aria-label="Previous character">‹</button>
+          <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/80 to-transparent px-3 pt-10 pb-[calc(0.9rem+env(safe-area-inset-bottom))]">
+            <button type="button" className="tc-round" onClick={() => cycle(-1)} disabled={busy} aria-label="Previous character">‹</button>
             <div className="flex min-w-0 flex-1 flex-col items-center gap-0.5 text-center">
-              <span className="truncate text-sm font-bold text-white">{selected != null && view === "close" ? pieceName(selected) : `You play ${side === 1 ? "White" : "Black"}`}</span>
-              <span className={"truncate text-xs " + (isAttack ? "font-bold text-[var(--yellow)]" : "text-white/75")} aria-live="polite">{hint}</span>
+              <span className="tc-display truncate text-[15px]">{selected != null && view === "close" ? pieceName(selected) : `You play ${side === 1 ? "White" : "Black"}`}</span>
+              <span className={"truncate text-sm " + (isAttack ? "font-bold text-[var(--tc-gold-hi)]" : "text-[var(--tc-cream-dim)]")} aria-live="polite">{hint}</span>
             </div>
-            <button type="button" className={iconBtn} onClick={() => cycle(1)} disabled={busy} aria-label="Next character">›</button>
+            <button type="button" className="tc-round" onClick={() => cycle(1)} disabled={busy} aria-label="Next character">›</button>
           </div>
         </>
       )}
 
       {stage === "setup" && (
-        <div className="absolute inset-0 flex flex-col justify-center gap-3 overflow-y-auto bg-black/65 p-5 text-white">
-          <h2 className="m-0 text-center text-2xl" style={{ fontFamily: "var(--font-display)" }}>Play a bot</h2>
-          <p className="m-0 text-center text-sm text-white/80">A full game in the bin. Not rated.</p>
-          <fieldset className="m-0 flex flex-col gap-1.5 border-0 p-0">
-            <legend className="mb-1 text-[10px] uppercase tracking-wide text-white/60">Opponent</legend>
+        <div className="tc-scrim absolute inset-0 flex flex-col justify-center gap-4 overflow-y-auto p-5">
+          <div className="text-center">
+            <h2 className="tc-title m-0 text-[28px]">Regular Chess</h2>
+            <p className="m-0 mt-1 text-base text-[var(--tc-cream-dim)]">A full game in the bin. Not rated.</p>
+          </div>
+          <fieldset className="m-0 flex flex-col gap-2.5 border-0 p-0">
+            <legend className="tc-label mb-2">Opponent</legend>
             {BOTS.map((b, i) => (
-              <button key={b.label} type="button" aria-pressed={i === botIdx} className={option(i === botIdx)} onClick={() => setBotIdx(i)}>
-                {b.label}{b.ms ? " · strongest, thinks longer" : ""}
+              <button key={b.label} type="button" aria-pressed={i === botIdx} className="tc-plank tc-small" onClick={() => setBotIdx(i)}>
+                {b.label}{b.ms ? " · thinks longer" : ""}
               </button>
             ))}
           </fieldset>
-          <fieldset className="m-0 flex flex-col gap-1.5 border-0 p-0">
-            <legend className="mb-1 text-[10px] uppercase tracking-wide text-white/60">You play</legend>
-            <div className="flex gap-1.5">
+          <fieldset className="m-0 flex flex-col gap-2.5 border-0 p-0">
+            <legend className="tc-label mb-2">You play</legend>
+            <div className="flex gap-2.5">
               {[["white", "White"], ["black", "Black"], ["random", "Random"]].map(([id, name]) => (
-                <button key={id} type="button" aria-pressed={colourPick === id} className={option(colourPick === id) + " flex-1 text-center"} onClick={() => setColourPick(id)}>{name}</button>
+                <button key={id} type="button" aria-pressed={colourPick === id} className="tc-plank tc-small tc-center flex-1" onClick={() => setColourPick(id)}>{name}</button>
               ))}
             </div>
           </fieldset>
-          <PaceControl value={pace} onChange={setPace} />
-          <button type="button" className={"btn gold self-center " + focusRing} onClick={start}>Start the game</button>
-          <button type="button" className={"btn ghost self-center " + focusRing} onClick={onExit}>Menu</button>
+          <BrassButton className="self-center" onClick={start}>Start the game</BrassButton>
+          <button type="button" className="tc-link self-center" onClick={onExit}>Back to the menu</button>
         </div>
       )}
 
       {stage === "over" && result && (
-        <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 bg-gradient-to-t from-black/90 via-black/70 to-transparent px-5 pt-20 pb-[calc(1rem+env(safe-area-inset-bottom))] text-center text-white">
-          <h2 className="m-0 text-2xl" style={{ fontFamily: "var(--font-display)" }}>
+        <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 bg-gradient-to-t from-black/90 via-black/70 to-transparent px-5 pt-20 pb-[calc(1.25rem+env(safe-area-inset-bottom))] text-center">
+          <h2 className="tc-title m-0 text-[28px]">
             {result.resigned ? "You resigned" : result.winner === side ? "You win!" : result.winner ? `${bot.label} wins` : "Draw"}
           </h2>
-          <p className="m-0 text-sm text-white/80">{result.resigned ? `${result.text}` : `${resultSentence(result, side)} ${result.text}`} · {Math.ceil(moveList.length / 2)} moves</p>
-          <button type="button" className={"btn gold " + focusRing} onClick={start}>Play again</button>
-          <button type="button" className={"btn ghost " + focusRing} onClick={() => setStage("setup")}>Change bot</button>
-          <button type="button" className={"border-0 bg-transparent text-xs text-white/75 underline " + focusRing} onClick={onExit}>Main menu</button>
+          <p className="m-0 text-base text-[var(--tc-cream-dim)]">{result.resigned ? `${result.text}` : `${resultSentence(result, side)} ${result.text}`} · {Math.ceil(moveList.length / 2)} moves</p>
+          <BrassButton onClick={start}>Play again</BrassButton>
+          <div className="flex gap-4">
+            <button type="button" className="tc-link" onClick={() => setStage("setup")}>Change bot</button>
+            <button type="button" className="tc-link" onClick={onExit}>Back to the menu</button>
+          </div>
         </div>
       )}
     </div>

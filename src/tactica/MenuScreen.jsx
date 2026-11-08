@@ -1,17 +1,27 @@
 import { useEffect, useRef, useState } from "react";
+import * as THREE from "three";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
 import { BOND_KINDS, KIND_NAMES, LOOKS, MAX_LEVEL, loadBonds, levelsOf, progress } from "./bonds";
+import { Medal } from "./ui";
 
-/* Chess Tactica's front screen: the title and the modes, over the bin with
-   a full set standing on the board while the camera slowly circles it. Your
-   (white) characters wear their bond looks. The Bonds page lists how close
-   each kind of character has grown. */
-const START = [4, 2, 3, 5, 6, 3, 2, 4];
-const CIRCLE_SPEED = 0.06; // radians per second
-const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--cyan)]";
+/* Chess Tactica's front screen: the title and the modes over a standoff in
+   the bin. One of your pawns faces the enemy queen, king and knight,
+   huddled together; it swings at them every few seconds while the camera
+   slowly circles. The Bonds page lists how close each kind of character
+   has grown. */
+const PAWN = 28, QUEEN_SQ = 35, KING_SQ = 36, KNIGHT_SQ = 37; // e4 against d5, e5, f5
+const CIRCLE_SPEED = 0.08; // radians per second
+/* Bonds sits above the tutorial so Exit comes right after it, at the end. */
+const MODES = [
+  { id: "run", name: "Bin Run", piece: 4 },
+  { id: "blitz", name: "Blitz in the Bin", piece: 2 },
+  { id: "bot", name: "Regular Chess", piece: 6 },
+  { id: "bonds", name: "Bonds", piece: 5 },
+  { id: "tutorial", name: "Tutorial", piece: 1 },
+];
 
-export default function MenuScreen({ best, runBest, onPick, sweetheart }) {
+export default function MenuScreen({ onPick, onExit, blitzBest, sweetheart }) {
   const canvasRef = useRef(null);
   const [page, setPage] = useState("modes"); // modes | bonds
   const [bonds] = useState(loadBonds);
@@ -25,88 +35,88 @@ export default function MenuScreen({ best, runBest, onPick, sweetheart }) {
       },
     });
     scene.setBonds(levelsOf(bonds));
-    const pieces = [];
-    for (let f = 0; f < 8; f++) {
-      pieces.push({ sq: f, type: START[f], white: true }, { sq: 8 + f, type: 1, white: true });
-      pieces.push({ sq: 56 + f, type: START[f], white: false }, { sq: 48 + f, type: 1, white: false });
-    }
-    scene.setPieces(pieces);
+    scene.setPieces([
+      { sq: PAWN, type: 1, white: true },
+      { sq: QUEEN_SQ, type: 5, white: false },
+      { sq: KING_SQ, type: 6, white: false },
+      { sq: KNIGHT_SQ, type: 2, white: false },
+    ]);
     const bin = dressTrashBin(scene);
     scene.everyFrame.push((dt) => bin.update(dt));
-    scene.showBoard();
+    /* Low behind the pawn, looking a little below the group so the scene
+       sits in the top half of the screen, above the buttons. */
+    const middle = scene.worldOf(PAWN).lerp(scene.worldOf(KING_SQ), 0.5);
+    scene.pivot.copy(middle);
+    scene.moveCamera(middle.clone().add(new THREE.Vector3(1.4, 3.1, 4.6)), middle.clone().add(new THREE.Vector3(0, -1.6, 0.4)));
+    const stop = scene.showdown(PAWN, QUEEN_SQ, [QUEEN_SQ, KING_SQ, KNIGHT_SQ]);
     if (!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
       scene.everyFrame.push((dt) => scene.spinBy(dt * CIRCLE_SPEED));
     }
-    return () => scene.dispose();
+    return () => { stop(); scene.dispose(); };
   }, [sweetheart, bonds]);
-
-  const row = "flex w-full cursor-pointer flex-col items-start rounded-xl border border-white/15 bg-black/55 px-4 py-3 text-left text-white backdrop-blur-sm disabled:cursor-default disabled:opacity-50 " + focusRing;
 
   return (
     <div className="relative mx-auto w-full max-w-[480px] overflow-hidden" style={{ height: "calc(100dvh - var(--headerH))" }}>
       <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 block size-full" aria-hidden="true" />
-      <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/70 to-transparent px-5 pt-8 pb-16 text-center">
-        <h1 className="m-0 text-3xl text-white" style={{ fontFamily: "var(--font-display)" }}>Chess Tactica</h1>
-        <p className="m-0 mt-1 text-sm text-white/70">Real chess puzzles, played by living pieces.</p>
+      <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/70 to-transparent px-5 pt-7 pb-14 text-center">
+        <h1 className="tc-title m-0 text-[32px] leading-tight">Chess Tactica</h1>
       </div>
       {page === "modes" ? (
-        <nav aria-label="Tactica modes" className="absolute inset-x-0 bottom-0 flex flex-col gap-2 bg-gradient-to-t from-black/85 via-black/60 to-transparent px-4 pt-16 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-          <button type="button" className={"btn gold w-full " + focusRing} onClick={() => onPick("run")}>
-            Bin Run
-          </button>
-          <p className="m-0 -mt-1 mb-1 text-center text-xs text-white/70">Climb out floor by floor{runBest ? ` · Best ${runBest}` : ""}</p>
-          <button type="button" className={row} onClick={() => onPick("blitz")}>
-            <span className="font-bold">Blitz in the Bin</span>
-            <span className="text-xs text-white/70">3 minutes · solve as many as you can{best ? ` · Best ${best}` : ""}</span>
-          </button>
-          <button type="button" className={row} onClick={() => onPick("tutorial")}>
-            <span className="font-bold">Tutorial</span>
-            <span className="text-xs text-white/70">Learn the controls step by step</span>
-          </button>
-          <button type="button" className={row} onClick={() => setPage("bonds")}>
-            <span className="font-bold">Bonds</span>
-            <span className="text-xs text-white/70">How close each of your characters has grown</span>
-          </button>
-          <button type="button" className={row} onClick={() => onPick("bot")}>
-            <span className="font-bold">Play a bot</span>
-            <span className="text-xs text-white/70">A full game in the bin against the site&apos;s bots</span>
+        <nav aria-label="Tactica modes" className="absolute inset-x-0 bottom-0 flex flex-col gap-2.5 bg-gradient-to-t from-black/90 via-black/65 to-transparent px-4 pt-14 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+          {MODES.map((m) => (
+            <button key={m.id} type="button" className="tc-plank tc-menu" onClick={() => (m.id === "bonds" ? setPage("bonds") : onPick(m.id))}>
+              <Medal type={m.piece} />
+              <span className="flex flex-1 items-baseline justify-between gap-2">
+                {m.name}
+                {/* Blitz has one length (3 minutes) for now, so its best is just a number. */}
+                {m.id === "blitz" && blitzBest ? <span className="text-sm font-normal tracking-normal text-[var(--tc-cream-dim)]" style={{ fontFamily: "var(--tc-font-body)" }}>Best {blitzBest}</span> : null}
+              </span>
+            </button>
+          ))}
+          <button type="button" className="tc-plank tc-menu" onClick={onExit}>
+            <span className="tc-medal" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#3a1f08" d="M10 4h9a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-9v-2h8V6h-8zM9.6 7.6 11 9l-2 2h8v2H9l2 2-1.4 1.4L5.2 12z" /></svg>
+            </span>
+            Exit
           </button>
         </nav>
       ) : (
-        <section aria-labelledby="tacticaBondsTitle" className="absolute inset-x-0 bottom-0 flex max-h-[75%] flex-col gap-3 overflow-y-auto bg-gradient-to-t from-black/90 via-black/75 to-transparent px-4 pt-16 pb-[calc(1rem+env(safe-area-inset-bottom))] text-white">
+        <section aria-labelledby="tacticaBondsTitle" className="absolute inset-x-0 bottom-0 flex max-h-[78%] flex-col gap-3 overflow-y-auto bg-gradient-to-t from-black/95 via-black/80 to-transparent px-4 pt-16 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
           <div>
-            <h2 id="tacticaBondsTitle" className="m-0 text-xl" style={{ fontFamily: "var(--font-display)" }}>Bonds</h2>
-            <p className="m-0 text-xs text-white/70">Every correct move grows that character&apos;s bond; captures and finishing moves grow it more. More to unlock is coming.</p>
+            <h2 id="tacticaBondsTitle" className="tc-title m-0 text-2xl">Bonds</h2>
+            <p className="m-0 mt-1 text-sm text-[var(--tc-cream-dim)]">Every correct puzzle move grows that character&apos;s bond. Captures and finishing moves grow it more.</p>
           </div>
-          <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
-            {BOND_KINDS.map((kind) => {
-              const xp = bonds[kind] ?? 0;
-              const { level, into, need } = progress(xp);
+          <ul className="tc-panel m-0 flex list-none flex-col gap-3 p-4">
+            {BOND_KINDS.map((kind, i) => {
+              const { level, into, need } = progress(bonds[kind] ?? 0);
               const maxed = level >= MAX_LEVEL;
               return (
-                <li key={kind} className="flex flex-col gap-1">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-sm font-bold">{KIND_NAMES[kind]}</span>
-                    <span className="text-xs text-white/75">Bond {level}{maxed ? " · max" : ""}</span>
+                <li key={kind} className="flex items-center gap-3">
+                  <Medal type={i + 1} />
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="tc-display text-sm">{KIND_NAMES[kind]}</span>
+                      <span className="text-xs text-[var(--tc-cream-dim)]">Bond {level}{maxed ? " · max" : ""}</span>
+                    </div>
+                    <div
+                      className="tc-bar"
+                      role="progressbar"
+                      aria-label={`${KIND_NAMES[kind]} bond progress`}
+                      aria-valuemin={0}
+                      aria-valuemax={maxed ? 1 : need}
+                      aria-valuenow={maxed ? 1 : into}
+                    >
+                      <i style={{ width: maxed ? "100%" : `${(into / need) * 100}%`, background: "linear-gradient(var(--tc-gold-hi), var(--tc-gold))" }} />
+                    </div>
+                    <span className="text-xs text-[var(--tc-cream-dim)]">
+                      {maxed ? LOOKS[level - 1] : `${need - into} XP to bond ${level + 1}: ${LOOKS[level].toLowerCase()}`}
+                    </span>
                   </div>
-                  <div
-                    className="h-2 overflow-hidden rounded-full bg-white/15"
-                    role="progressbar"
-                    aria-label={`${KIND_NAMES[kind]} bond progress`}
-                    aria-valuemin={0}
-                    aria-valuemax={maxed ? 1 : need}
-                    aria-valuenow={maxed ? 1 : into}
-                  >
-                    <div className="h-full rounded-full bg-[var(--yellow)]" style={{ width: maxed ? "100%" : `${(into / need) * 100}%` }} />
-                  </div>
-                  <span className="text-[11px] text-white/65">
-                    {maxed ? LOOKS[level - 1] : `${need - into} XP to bond ${level + 1}: ${LOOKS[level].toLowerCase()}`}
-                  </span>
                 </li>
               );
             })}
           </ul>
-          <button type="button" className={"btn ghost self-center " + focusRing} onClick={() => setPage("modes")}>Back</button>
+          <button type="button" className="tc-plank tc-center tc-small" onClick={() => setPage("modes")}>Back</button>
         </section>
       )}
     </div>

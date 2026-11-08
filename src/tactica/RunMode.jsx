@@ -2,17 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import { createEngine, mFrom, mPromo, mTo, M120TO64, EMPTY } from "../engine/chessEngine";
 import { PUZZLES } from "../utils/puzzles";
 import { judgePuzzleMove } from "../utils/puzzleSession";
-import MiniBoard from "../components/MiniBoard";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin, placeEscapeProps } from "./sets/trashBin";
+import { BrassButton, MapButton, MenuButton } from "./ui";
 import { isEscapeFloor, makeEscape, movesOf, apply, escaped, strikerOf, piecesOf, fenOf, escapeSeconds } from "./escape";
 import {
   START_HEALTH, WRONG_MOVE_DAMAGE, phasesForFloor, isStoryFloor, timerSeconds, ratingFor,
   rushDamage, pickPuzzle, effectFloors, offer, choose, floorScore,
 } from "./binRun";
 import { loadBonds, levelsOf, recordMove, levelUpText } from "./bonds";
-import { loadPace, savePace } from "./pace";
-import PaceControl from "./PaceControl";
 
 /* The Bin Run: climb floor by floor. Each floor is a battle of a few real
    puzzles (phases), played as one colour, with one shared health bar for the
@@ -28,7 +26,6 @@ import PaceControl from "./PaceControl";
 const KNIGHT = 2, QUEEN = 5;
 const VALUE = [0, 1, 3, 3, 5, 9, 100];
 const sqOf = (sq120) => M120TO64[sq120];
-const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--cyan)]";
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function friendlySquares(eng, side) {
@@ -97,9 +94,11 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
      best is updated. */
   const [newBest, setNewBest] = useState(false);
   const [, setTick] = useState(0);
-  const [pace, setPaceState] = useState(() => loadPace("run"));
-  const setPace = (p) => { setPaceState(p); savePace("run", p); };
+  /* The Bin Run always plays the full attacks. */
+  const pace = "full";
   const [menuOpen, setMenuOpen] = useState(false);
+  /* How far the view is turned, so the map turns with it like a compass. */
+  const [turn, setTurn] = useState(0);
   /* An Escape floor in progress: { start, state, used } (moves used), or null
      on a puzzle floor. The garbage and light props live in propsRef. */
   const [escape, setEscape] = useState(null);
@@ -145,6 +144,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
       onSwipe: (dir) => cycleRef.current(dir),
       onDragStart: (sq) => dragStartRef.current(sq),
       onDrop: (sq) => dropRef.current(sq),
+      onTurn: setTurn,
     });
     sceneRef.current = scene;
     scene.setBonds(levelsOf(loadBonds()));
@@ -481,7 +481,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
         const reply = search.search(280)?.move;
         if (reply) {
           const r = await animate(eng.legalMoves().find((m) => m === reply) ?? reply);
-          if (r.captured == null && pace !== "off") {
+          if (r.captured == null) {
             const threat = threatenedBy(r.to);
             if (threat) await sceneRef.current?.scare(threat.from, threat.to);
           }
@@ -590,154 +590,149 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
   };
   const toggleView = () => { if (!busy && !mapLocked) setView((v) => (v === "board" ? "close" : "board")); };
   const squareName = (sq) => `${"abcdefgh"[sq % 8]}${((sq / 8) | 0) + 1}`;
-  const pieceName = (sq) => ["", "Pawn", "Knight", "Bishop", "Rook", "Queen", "King"][Math.abs(eng.pieceAt(sq))] + ` on ${squareName(sq)}`;
+  const pieceName = (sq) => ["", "Pawn", "Knight", "Bishop", "Rook", "Queen", "King"][escape ? escape.state.mine.get(sq) : Math.abs(eng.pieceAt(sq))] + ` on ${squareName(sq)}`;
   const isAttack = chosen != null && captures.includes(chosen);
   const hint = busy ? "…" : view === "board" ? (escape ? "Reach the glowing square. Don't stop where a guard strikes." : "Tap a character to take a closer look")
     : !targets.length ? "This one can't move"
     : chosen != null ? (isAttack ? `Tap ${squareName(chosen)} again to strike` : `Tap ${squareName(chosen)} again to move`)
     : "Tap a glowing square, or drag there";
-  const iconBtn = "flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full border border-white/20 bg-black/45 text-lg text-white disabled:opacity-35 " + focusRing;
   const low = timeLeft < 10000;
-  const healthColour = health > 50 ? "var(--cyan)" : health > 25 ? "var(--yellow)" : "var(--magenta)";
-  const card = "flex w-full cursor-pointer flex-col items-start gap-0.5 rounded-xl border px-4 py-3 text-left backdrop-blur-sm " + focusRing;
+  const healthFill = health > 50 ? "linear-gradient(#ffd77a, #e2a33a)" : health > 25 ? "linear-gradient(#f2a35a, #c96a24)" : "linear-gradient(#ef6a5c, #b8322a)";
+  const choiceText = "text-sm font-normal tracking-normal text-[var(--tc-cream-dim)]";
 
   return (
     <div className="relative mx-auto w-full max-w-[480px] overflow-hidden" style={{ height: "calc(100dvh - var(--headerH))" }}>
       <canvas ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
-      {hurt > 0 && <div key={hurt} className="tacticaNote fades pointer-events-none absolute inset-0 bg-[var(--magenta)]/25" />}
+      {hurt > 0 && <div key={hurt} className="tacticaNote fades pointer-events-none absolute inset-0 bg-[#b8322a]/30" />}
 
       {stage === "playing" && (
         <>
-          <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col gap-2 bg-gradient-to-b from-black/75 to-transparent p-3 pb-8">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-start gap-2">
-                <button
-                  type="button"
-                  onClick={() => setMenuOpen((o) => !o)}
-                  aria-label="Game menu"
-                  aria-expanded={menuOpen}
-                  className={"pointer-events-auto flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-white/20 bg-black/45 text-white " + focusRing}
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 10a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm7 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm7 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z" /></svg>
-                </button>
-                <div className="text-white">
-                  <div className="text-[10px] uppercase tracking-wide text-white/60">Floor {floor}</div>
-                  <div className="text-sm font-bold">{escape ? `Escape · ${escape.start.limit - escape.used} move${escape.start.limit - escape.used === 1 ? "" : "s"} left` : `Phase ${phase + 1} of ${phases}`}</div>
+          <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col gap-2.5 bg-gradient-to-b from-black/80 to-transparent p-3 pb-10">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <MenuButton open={menuOpen} onClick={() => setMenuOpen((o) => !o)} />
+                <div>
+                  <div className="tc-label">Floor {floor}</div>
+                  <div className="tc-display text-[15px]">{escape ? `Escape · ${escape.start.limit - escape.used} move${escape.start.limit - escape.used === 1 ? "" : "s"} left` : `Phase ${phase + 1} of ${phases}`}</div>
                 </div>
               </div>
-              <div role="timer" className={"text-3xl " + (low ? "text-[var(--magenta)]" : "text-white")} style={{ fontFamily: "var(--font-display)" }}>{clock(timeLeft)}</div>
-              <button
-                type="button"
-                onClick={toggleView}
-                disabled={mapLocked}
-                aria-label={mapLocked ? "Map locked by the No map challenge" : view === "board" ? "Back to the close view" : "Show the whole board"}
-                className={"pointer-events-auto shrink-0 cursor-pointer rounded-lg border-2 bg-black/40 p-1 disabled:cursor-not-allowed disabled:opacity-40 " + (view === "board" ? "border-[var(--cyan)] " : "border-white/30 ") + focusRing}
-              >
-                <MiniBoard fen={escape ? fenOf(escape.state) : eng.fen()} colors={SET_BOARD} pieceImgSrc={pieceImgSrc} size={64} flipped={side === -1} label="Map of the board" />
-              </button>
+              <div role="timer" className={"tc-plate text-[26px] " + (low ? "tc-low" : "")}>{clock(timeLeft)}</div>
             </div>
             <div className="flex items-center gap-2">
-              <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-white/15" role="meter" aria-label="Team health" aria-valuemin={0} aria-valuemax={100} aria-valuenow={health}>
-                <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${health}%`, background: healthColour }} />
+              <div className="tc-bar flex-1" role="meter" aria-label="Team health" aria-valuemin={0} aria-valuemax={100} aria-valuenow={health}>
+                <i style={{ width: `${health}%`, background: healthFill }} />
               </div>
-              <span className="w-10 text-right text-xs font-bold text-white">{health}%</span>
+              <span className="tc-display w-11 text-right text-sm">{health}%</span>
             </div>
-            {effect && (
-              <div className="self-start rounded-full border border-white/20 bg-black/55 px-2.5 py-0.5 text-[11px] text-white">
-                {effect.kind === "challenge" ? "Challenge" : "Reward"}: {effect.name}{effect.id === "shield" && effect.shieldUsed ? " (used)" : ""} · {effect.floorsLeft} floor{effect.floorsLeft === 1 ? "" : "s"} left
-              </div>
-            )}
+            {/* The map sits under the health bar: tap it to switch views, drag it to turn the view. */}
+            <div className="flex items-start justify-between gap-2">
+              {effect ? (
+                <div className="tc-panel px-3 py-1 text-xs">
+                  <span className="tc-display">{effect.kind === "challenge" ? "Challenge" : "Reward"}:</span> {effect.name}{effect.id === "shield" && effect.shieldUsed ? " (used)" : ""} · {effect.floorsLeft} floor{effect.floorsLeft === 1 ? "" : "s"} left
+                </div>
+              ) : <span />}
+              <MapButton
+                fen={escape ? fenOf(escape.state) : eng.fen()}
+                pieceImgSrc={pieceImgSrc}
+                size={96}
+                flipped={side === -1}
+                view={view}
+                turn={turn}
+                locked={mapLocked}
+                onToggle={toggleView}
+                onSpin={(a) => sceneRef.current?.spinBy(a)}
+              />
+            </div>
           </div>
 
           {menuOpen && (
             <>
               <button type="button" aria-label="Close the menu" className="absolute inset-0 cursor-default border-0 bg-transparent" onClick={() => setMenuOpen(false)} />
-              <div className="absolute top-14 left-3 flex w-56 flex-col gap-3 rounded-xl border border-white/15 bg-black/80 p-3 text-white backdrop-blur-sm">
-                <PaceControl value={pace} onChange={setPace} />
-                <button type="button" className={"btn ghost " + focusRing} onClick={() => { setMenuOpen(false); endRun(); }}>Quit run</button>
+              <div className="tc-panel absolute top-16 left-3 flex w-56 flex-col gap-3 p-3">
+                <button type="button" className="tc-plank tc-center tc-small" onClick={() => setMenuOpen(false)}>Resume</button>
+                <button type="button" className="tc-plank tc-center tc-small" onClick={() => { setMenuOpen(false); endRun(); }}>Quit run</button>
               </div>
             </>
           )}
 
           {banner && (
-            <p key={banner.id} role="status" className={"tacticaNote fades pointer-events-none absolute top-40 left-1/2 m-0 -translate-x-1/2 rounded-lg px-3 py-1.5 text-center text-sm font-bold whitespace-nowrap " + (banner.kind === "bad" ? "bg-[var(--magenta)]/90 text-white" : banner.kind === "good" ? "bg-[var(--cyan)]/90 text-black" : "bg-black/70 text-white")}>{banner.text}</p>
+            <p key={banner.id} role="status" className={"tacticaNote fades tc-note pointer-events-none absolute top-48 left-1/2 m-0 -translate-x-1/2 rounded-lg px-4 py-1.5 text-center text-sm whitespace-nowrap " + (banner.kind === "bad" ? "tc-bad" : banner.kind === "good" ? "tc-good" : "tc-info")}>{banner.text}</p>
           )}
 
-          <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/70 to-transparent px-3 pt-8 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-            <button type="button" className={iconBtn} onClick={() => cycle(-1)} disabled={busy} aria-label="Previous character">‹</button>
+          <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/80 to-transparent px-3 pt-10 pb-[calc(0.9rem+env(safe-area-inset-bottom))]">
+            <button type="button" className="tc-round" onClick={() => cycle(-1)} disabled={busy} aria-label="Previous character">‹</button>
             <div className="flex min-w-0 flex-1 flex-col items-center gap-0.5 text-center">
-              <span className="truncate text-sm font-bold text-white">{selected != null && view === "close" ? pieceName(selected) : `Score ${score}`}</span>
-              <span className={"truncate text-xs " + (isAttack ? "font-bold text-[var(--yellow)]" : "text-white/75")} aria-live="polite">{hint}</span>
+              <span className="tc-display truncate text-[15px]">{selected != null && view === "close" ? pieceName(selected) : `Score ${score}`}</span>
+              <span className={"truncate text-sm " + (isAttack ? "font-bold text-[var(--tc-gold-hi)]" : "text-[var(--tc-cream-dim)]")} aria-live="polite">{hint}</span>
             </div>
-            <button type="button" className={iconBtn} onClick={() => cycle(1)} disabled={busy} aria-label="Next character">›</button>
+            <button type="button" className="tc-round" onClick={() => cycle(1)} disabled={busy} aria-label="Next character">›</button>
           </div>
         </>
       )}
 
       {stage === "intro" && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/65 p-6 text-center text-white">
-          <h2 className="m-0 text-2xl" style={{ fontFamily: "var(--font-display)" }}>Bin Run</h2>
-          <p className="m-0 max-w-[32ch] text-sm text-white/85">Climb out floor by floor. Each floor is a battle of real puzzles. Your team shares one health bar for the whole run.</p>
-          <ul className="m-0 max-w-[32ch] list-none space-y-1 p-0 text-left text-xs text-white/75">
+        <div className="tc-scrim absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
+          <h2 className="tc-title m-0 text-[30px]">Bin Run</h2>
+          <p className="m-0 max-w-[32ch] text-base text-[var(--tc-cream-dim)]">Climb out floor by floor. Each floor is a battle of real puzzles, and your team shares one health bar for the whole run.</p>
+          <ul className="tc-panel m-0 max-w-[34ch] list-none space-y-2 p-4 text-left text-sm">
             <li>A wrong move gets punished and costs 25% health.</li>
             <li>If the timer runs out, the enemy rushes you for 50%.</li>
-            <li>Between floors, pick a reward or take on a challenge for double score.</li>
+            <li>Between floors, pick a reward, or take a challenge for double score.</li>
             <li>Some floors are escapes: reach the light past the garbage without stopping where a guard can strike.</li>
           </ul>
-          {best ? <p className="m-0 text-sm text-white/70">Your best: {best}</p> : null}
-          <div className="w-full max-w-[16rem]"><PaceControl value={pace} onChange={setPace} /></div>
-          <button type="button" className={"btn gold " + focusRing} onClick={startRun}>Start the run</button>
-          <button type="button" className={"btn ghost " + focusRing} onClick={onExit}>Menu</button>
+          {best ? <p className="tc-label m-0">Your best · {best}</p> : null}
+          <BrassButton onClick={startRun}>Start the run</BrassButton>
+          <button type="button" className="tc-link" onClick={onExit}>Back to the menu</button>
         </div>
       )}
 
       {stage === "story" && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/75 p-6 text-center text-white">
-          <p className="m-0 text-xs uppercase tracking-widest text-white/60">Floor {floor}</p>
-          <h2 className="m-0 text-2xl" style={{ fontFamily: "var(--font-display)" }}>Chapter {floor / 5}</h2>
-          <p className="m-0 text-sm text-white/70">Any reward or challenge ends here.</p>
-          <button type="button" className={"btn gold " + focusRing} onClick={() => startBattle(floor, null)}>Continue</button>
+        <div className="tc-scrim absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
+          <p className="tc-label m-0">Floor {floor}</p>
+          <h2 className="tc-title m-0 text-[30px]">Chapter {floor / 5}</h2>
+          <p className="m-0 text-base text-[var(--tc-cream-dim)]">Any reward or challenge ends here.</p>
+          <BrassButton onClick={() => startBattle(floor, null)}>Continue</BrassButton>
         </div>
       )}
 
       {stage === "choice" && choices && (
-        <div className="absolute inset-0 flex flex-col justify-center gap-3 overflow-y-auto bg-black/75 p-5 text-white">
-          <h2 className="m-0 text-center text-xl" style={{ fontFamily: "var(--font-display)" }}>Floor {floor} cleared</h2>
-          <p className="m-0 text-center text-sm text-white/75">Pick one. It lasts {effectFloors(floor)} floor{effectFloors(floor) === 1 ? "" : "s"}. Health {health}%.</p>
-          <p className="m-0 text-xs uppercase tracking-wide text-[var(--cyan)]">Rewards</p>
+        <div className="tc-scrim absolute inset-0 flex flex-col justify-center gap-3 overflow-y-auto p-5">
+          <h2 className="tc-title m-0 text-center text-[26px]">Floor {floor} cleared</h2>
+          <p className="m-0 text-center text-base text-[var(--tc-cream-dim)]">Pick one. It lasts {effectFloors(floor)} floor{effectFloors(floor) === 1 ? "" : "s"}. Health {health}%.</p>
+          <p className="tc-label m-0 mt-1">Rewards</p>
           {choices.rewards.map((r) => (
-            <button key={r.id} type="button" className={card + " border-[var(--cyan)]/50 bg-black/50 text-white"} onClick={() => pick(r, "reward")}>
-              <span className="font-bold">{r.name}</span>
-              <span className="text-xs text-white/75">{r.text}</span>
+            <button key={r.id} type="button" className="tc-plank tc-stack" onClick={() => pick(r, "reward")}>
+              <span>{r.name}</span>
+              <span className={choiceText} style={{ fontFamily: "var(--tc-font-body)" }}>{r.text}</span>
             </button>
           ))}
-          <p className="m-0 mt-1 text-xs uppercase tracking-wide text-[var(--magenta)]">Challenges · double score</p>
+          <p className="tc-label m-0 mt-2">Challenges · double score</p>
           {choices.challenges.map((c) => (
-            <button key={c.id} type="button" className={card + " border-[var(--magenta)]/50 bg-black/50 text-white"} onClick={() => pick(c, "challenge")}>
-              <span className="font-bold">{c.name}</span>
-              <span className="text-xs text-white/75">{c.text}</span>
+            <button key={c.id} type="button" className="tc-plank tc-stack tc-risk" onClick={() => pick(c, "challenge")}>
+              <span>{c.name}</span>
+              <span className={choiceText} style={{ fontFamily: "var(--tc-font-body)" }}>{c.text}</span>
             </button>
           ))}
-          <button type="button" className={"mt-1 self-center border-0 bg-transparent text-xs text-white/70 underline " + focusRing} onClick={skipChoice}>Skip</button>
+          <button type="button" className="tc-link mt-1 self-center" onClick={skipChoice}>Skip</button>
         </div>
       )}
 
       {stage === "cursed" && curse && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 p-6 text-center text-white">
+        <div className="tc-scrim absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
           <Cracks />
-          <h2 className="m-0 text-2xl text-[var(--magenta)]" style={{ fontFamily: "var(--font-display)" }}>Cursed!</h2>
-          <p className="m-0 max-w-[30ch] text-sm text-white/85">Your {curse.lost.name} melts away. A challenge takes its place: <strong>{curse.effect.name}</strong>. {curse.effect.text}</p>
-          <button type="button" className={"btn gold " + focusRing} onClick={() => beginFloor(floor + 1, curse.effect)}>Carry on</button>
+          <h2 className="tc-title m-0 text-[30px]" style={{ color: "var(--tc-danger)" }}>Cursed!</h2>
+          <p className="m-0 max-w-[30ch] text-base text-[var(--tc-cream-dim)]">Your {curse.lost.name} melts away. A challenge takes its place: <strong className="text-[var(--tc-cream)]">{curse.effect.name}</strong>. {curse.effect.text}</p>
+          <BrassButton onClick={() => beginFloor(floor + 1, curse.effect)}>Carry on</BrassButton>
         </div>
       )}
 
       {stage === "over" && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 p-6 text-center text-white">
-          <h2 className="m-0 text-2xl" style={{ fontFamily: "var(--font-display)" }}>{newBest ? "New best!" : "Run over"}</h2>
-          <p className="m-0 text-5xl" style={{ fontFamily: "var(--font-display)" }}>{score}</p>
-          <p className="m-0 text-sm text-white/80">score · reached floor {floor} · your best {Math.max(best || 0, score)}</p>
-          <button type="button" className={"btn gold " + focusRing} onClick={startRun}>Run again</button>
-          <button type="button" className={"btn ghost " + focusRing} onClick={onExit}>Menu</button>
+        <div className="tc-scrim absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
+          <h2 className="tc-title m-0 text-[30px]">{newBest ? "New best!" : "Run over"}</h2>
+          <p className="tc-title m-0 text-6xl">{score}</p>
+          <p className="m-0 text-base text-[var(--tc-cream-dim)]">score · reached floor {floor} · your best {Math.max(best || 0, score)}</p>
+          <BrassButton onClick={startRun}>Run again</BrassButton>
+          <button type="button" className="tc-link" onClick={onExit}>Back to the menu</button>
         </div>
       )}
     </div>

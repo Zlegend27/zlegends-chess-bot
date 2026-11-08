@@ -1,0 +1,143 @@
+/* Chess Tactica's own look: carved wood and brass, from the chess set the
+   characters are carved from and the warm light that falls through the
+   hole in the bin. Tactica is a game inside the site, so like the play
+   screen it has its own component language; this file is it. Every Tactica
+   control uses these classes, so the screens stay consistent.
+
+   Fonts (bundled, SIL Open Font License): Cinzel, a carved classical
+   serif, for names, titles, buttons and numbers; Alegreya Sans for
+   anything read at length. */
+@import "@fontsource/cinzel/700.css";
+@import "@fontsource/cinzel/900.css";
+@import "@fontsource/alegreya-sans/500.css";
+@import "@fontsource/alegreya-sans/700.css";
+
+.tactica {
+  /* The set's own wood (board squares #EED6B0 / #8A5229, frame #5C3317). */
+  --tc-wood: #6b3c1b;
+  --tc-wood-deep: #4a260f;
+  --tc-wood-edge: #26120a;
+  --tc-wood-line: #2a1406;
+  --tc-cream: #f6e2b8;
+  --tc-cream-dim: #d8c4a0;
+  /* Brass trim, and the gold of the light from the hole (#ffc864). */
+  --tc-brass: #c9a14a;
+  --tc-brass-deep: #8a5a1c;
+  --tc-gold-hi: #ffe6a8;
+  --tc-gold: #e9b552;
+  --tc-gold-lo: #b9822c;
+  --tc-ink: #3a1f08;
+  --tc-lacquer: #170b04;
+  --tc-danger: #e2584a;
+  --tc-font-display: "Cinzel", Georgia, "Times New Roman", serif;
+  --tc-font-body: "Alegreya Sans", "Trebuchet MS", sans-serif;
+  font-family: var(--tc-font-body);
+  color: var(--tc-cream);
+}
+
+.tactica .tc-display { font-family: var(--tc-font-display); font-weight: 900; letter-spacing: 0.04em; }
+.tactica .tc-title {
+  font-family: var(--tc-font-display); font-weight: 900; letter-spacing: 0.04em; color: var(--tc-cream);
+  text-shadow: 0 2px 0 #5c3317, 0 0 18px rgba(255, 200, 100, 0.35);
+}
+.tactica .tc-label { font-family: var(--tc-font-display); font-weight: 700; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--tc-cream-dim); }
+
+/* Every Tactica control: no native chrome, the site's cyan focus ring. */
+.tactica button { font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.tactica button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+.tactica button:disabled { cursor: default; opacity: 0.45; }
+
+/* Plank: the standard button, a polished wooden plank that sinks when
+   pressed (a short, about-two-frame press, slower rise). */
+.tactica .tc-plank {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px;
+  border: 0; border-radius: 10px; padding: 10px 14px; text-align: left; color: var(--tc-cream);
+  font-family: var(--tc-font-display); font-weight: 700; font-size: 16px; letter-spacing: 0.03em;
+  background:
+    repeating-linear-gradient(92deg, rgba(255, 255, 255, 0.035) 0 2px, transparent 2px 9px),
+    linear-gradient(var(--tc-wood), var(--tc-wood-deep));
+  box-shadow: inset 0 1px 0 rgba(255, 220, 170, 0.25), inset 0 0 0 1px var(--tc-wood-line), 0 4px 0 var(--tc-wood-edge), 0 6px 10px rgba(0, 0, 0, 0.4);
+  transition: transform 250ms cubic-bezier(0.3, 0.7, 0.4, 1), box-shadow 250ms cubic-bezier(0.3, 0.7, 0.4, 1);
+}
+.tactica .tc-plank:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: inset 0 1px 0 rgba(255, 220, 170, 0.2), inset 0 0 0 1px var(--tc-wood-line), 0 1px 0 var(--tc-wood-edge), 0 2px 4px rgba(0, 0, 0, 0.4);
+  transition-duration: 34ms;
+}
+.tactica .tc-plank.tc-center { justify-content: center; text-align: center; }
+.tactica .tc-plank.tc-small { min-height: 42px; font-size: 14px; padding: 8px 14px; }
+/* A plank that is the chosen one of a set (a bot, a colour). */
+.tactica .tc-plank[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--tc-brass), 0 4px 0 var(--tc-wood-edge), 0 6px 10px rgba(0, 0, 0, 0.4); color: #fff2d2; }
+
+/* Brass: the one primary action on a screen. Gold face over a dark edge;
+   the face drops onto the edge when pressed. */
+.tactica .tc-brass { position: relative; border: 0; padding: 0; background: transparent; border-radius: 12px; min-width: 200px; }
+.tactica .tc-brass > .tc-edge { position: absolute; inset: 0; border-radius: 12px; background: linear-gradient(#3b200e, #241106); }
+.tactica .tc-brass > .tc-face {
+  display: block; position: relative; border-radius: 12px; padding: 13px 24px; transform: translateY(-5px);
+  font-family: var(--tc-font-display); font-weight: 900; font-size: 18px; letter-spacing: 0.06em; color: var(--tc-ink);
+  background: radial-gradient(140% 120% at 30% 0%, var(--tc-gold-hi), var(--tc-gold) 45%, var(--tc-gold-lo));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 0 0 2px var(--tc-brass-deep), inset 0 -3px 0 rgba(0, 0, 0, 0.18);
+  transition: transform 600ms cubic-bezier(0.3, 0.7, 0.4, 1);
+}
+.tactica .tc-brass:active:not(:disabled) > .tc-face { transform: translateY(-1px); transition-duration: 34ms; }
+
+/* Medallion: a brass coin with a piece on it, for menu planks. */
+.tactica .tc-medal {
+  width: 34px; height: 34px; flex: none; border-radius: 50%; display: grid; place-items: center;
+  background: radial-gradient(circle at 35% 30%, #ffe9b0, #c9922f 70%);
+  box-shadow: inset 0 0 0 2px #7a4e16, 0 2px 0 var(--tc-wood-edge);
+}
+.tactica .tc-medal img { width: 24px; height: 24px; }
+
+/* Round: icon buttons (menu, previous and next character). */
+.tactica .tc-round {
+  width: 42px; height: 42px; flex: none; border: 0; border-radius: 50%; display: grid; place-items: center;
+  color: var(--tc-cream); font-family: var(--tc-font-display); font-weight: 900; font-size: 18px;
+  background: radial-gradient(circle at 35% 30%, var(--tc-wood), #3b200e);
+  box-shadow: inset 0 0 0 2px var(--tc-brass), 0 3px 0 #1a0b04, 0 4px 8px rgba(0, 0, 0, 0.4);
+  transition: transform 250ms cubic-bezier(0.3, 0.7, 0.4, 1);
+}
+.tactica .tc-round:active:not(:disabled) { transform: translateY(2px); box-shadow: inset 0 0 0 2px var(--tc-brass), 0 1px 0 #1a0b04; transition-duration: 34ms; }
+
+/* Text link: the quietest action (Skip, Keep practising). */
+.tactica .tc-link { border: 0; background: transparent; padding: 6px; color: var(--tc-cream-dim); font-family: var(--tc-font-body); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
+
+/* Panel: dark lacquer with a brass hairline, for pop-up menus and notes. */
+.tactica .tc-panel {
+  background: linear-gradient(rgba(42, 22, 8, 0.94), rgba(23, 11, 4, 0.94));
+  box-shadow: inset 0 0 0 1px var(--tc-brass), 0 10px 30px rgba(0, 0, 0, 0.5);
+  border-radius: 12px; color: var(--tc-cream);
+}
+/* A full-screen overlay: the bin darkened behind a centred card of content. */
+.tactica .tc-scrim { background: radial-gradient(120% 80% at 50% 40%, rgba(23, 11, 4, 0.72), rgba(6, 5, 7, 0.9)); }
+
+/* HUD pieces: the timer plate and the health bar. */
+.tactica .tc-plate {
+  font-family: var(--tc-font-display); font-weight: 900; color: var(--tc-cream); padding: 2px 14px; border-radius: 10px;
+  background: linear-gradient(#2a1608, var(--tc-lacquer)); box-shadow: inset 0 0 0 2px var(--tc-brass), 0 3px 0 #0d0603;
+  font-variant-numeric: tabular-nums;
+}
+.tactica .tc-plate.tc-low { color: var(--tc-danger); box-shadow: inset 0 0 0 2px var(--tc-danger), 0 3px 0 #0d0603; }
+.tactica .tc-bar { height: 14px; border-radius: 99px; background: #1a0d05; box-shadow: inset 0 0 0 2px var(--tc-brass); padding: 3px; }
+.tactica .tc-bar > i { display: block; height: 100%; border-radius: 99px; transition: width 500ms ease; }
+/* The map's frame. */
+.tactica .tc-frame { border: 0; border-radius: 10px; padding: 4px; background: linear-gradient(#2a1608, var(--tc-lacquer)); box-shadow: inset 0 0 0 2px var(--tc-brass), 0 3px 0 #0d0603; }
+.tactica .tc-frame[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--tc-gold-hi), 0 0 12px rgba(255, 200, 100, 0.5), 0 3px 0 #0d0603; }
+/* Notes that fade in at the top. */
+.tactica .tc-note { font-family: var(--tc-font-body); font-weight: 700; }
+.tactica .tc-note.tc-good { background: linear-gradient(var(--tc-gold-hi), var(--tc-gold)); color: var(--tc-ink); box-shadow: inset 0 0 0 1px var(--tc-brass-deep); }
+.tactica .tc-note.tc-bad { background: linear-gradient(#a8322a, #7a1f19); color: #fff1e6; box-shadow: inset 0 0 0 1px #3d0d0a; }
+.tactica .tc-note.tc-info { background: linear-gradient(rgba(42, 22, 8, 0.94), rgba(23, 11, 4, 0.94)); color: var(--tc-cream); box-shadow: inset 0 0 0 1px var(--tc-brass); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tactica .tc-plank, .tactica .tc-brass > .tc-face, .tactica .tc-round { transition: none; }
+}
+
+/* A plank with a name over a line of explanation (rewards, challenges). */
+.tactica .tc-plank.tc-stack { flex-direction: column; align-items: flex-start; gap: 2px; }
+/* A plank you take at your own risk (a challenge): a red rim. */
+.tactica .tc-plank.tc-risk { box-shadow: inset 0 0 0 2px #a8322a, 0 4px 0 var(--tc-wood-edge), 0 6px 10px rgba(0, 0, 0, 0.4); }
+
+/* Menu planks: a little shorter, so six fit under the scene on a small phone. */
+.tactica .tc-plank.tc-menu { min-height: 46px; padding-top: 6px; padding-bottom: 6px; }

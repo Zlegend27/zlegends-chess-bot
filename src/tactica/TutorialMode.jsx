@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { createEngine, mFrom, mPromo, mTo, M120TO64, EMPTY } from "../engine/chessEngine";
-import MiniBoard from "../components/MiniBoard";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
+import { BrassButton, MapButton, MenuButton } from "./ui";
 import { loadBonds, levelsOf } from "./bonds";
-import { loadPace, savePace } from "./pace";
-import PaceControl from "./PaceControl";
 
 /* Chess Tactica tutorial: the controls, one step at a time, on a practice
    board in the bin. No story (that comes with the opening cutscene, which
@@ -38,7 +36,6 @@ function friendlySquares(eng) {
   return squares.sort((a, b) => ((b / 8) | 0) - ((a / 8) | 0) || (a % 8) - (b % 8));
 }
 
-const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--cyan)]";
 
 export default function TutorialMode({ pieceImgSrc, sweetheart, onExit }) {
   const engRef = useRef(null);
@@ -62,9 +59,8 @@ export default function TutorialMode({ pieceImgSrc, sweetheart, onExit }) {
   const [practising, setPractising] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [turn, setTurn] = useState(0);
-  const mapDragRef = useRef(null);
-  const [pace, setPaceState] = useState(() => loadPace("tutorial"));
-  const setPace = (p) => { setPaceState(p); savePace("tutorial", p); };
+  /* The tutorial plays the full attacks. */
+  const pace = "full";
 
   const current = STEPS[step];
   /** Finishes the step `id` if it is the current one. */
@@ -229,7 +225,6 @@ export default function TutorialMode({ pieceImgSrc, sweetheart, onExit }) {
 
   const squareName = (sq) => `${"abcdefgh"[sq % 8]}${((sq / 8) | 0) + 1}`;
   const pieceName = (sq) => ["", "Pawn", "Knight", "Bishop", "Rook", "Queen", "King"][Math.abs(eng.pieceAt(sq))] + ` on ${squareName(sq)}`;
-  const iconBtn = "flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full border border-white/20 bg-black/45 text-lg text-white disabled:opacity-35 " + focusRing;
   const isAttack = chosen != null && captures.includes(chosen);
   const hint = busy ? "…"
     : view === "board" ? "Tap a character to take a closer look"
@@ -237,108 +232,81 @@ export default function TutorialMode({ pieceImgSrc, sweetheart, onExit }) {
     : chosen != null ? (isAttack ? `Tap ${squareName(chosen)} again to strike` : `Tap ${squareName(chosen)} again to move`)
     : "Tap a glowing square, or drag there";
   const toggleView = () => { if (!busy) setView((v) => (v === "board" ? "close" : "board")); };
-  const MAP_TURN_PER_PX = 0.012, MAP_DRAG_PX = 6;
-  const mapDown = (e) => {
-    mapDragRef.current = { id: e.pointerId, x: e.clientX, moved: false };
-    e.currentTarget.setPointerCapture?.(e.pointerId);
+  /* Only a turn the player makes with the map counts for the step; the
+     camera also turns itself. */
+  const turnedRef = useRef(0);
+  const spin = (angle) => {
+    sceneRef.current?.spinBy(angle);
+    turnedRef.current += Math.abs(angle);
+    if (turnedRef.current > 0.25) complete("turn");
   };
-  const mapMove = (e) => {
-    const drag = mapDragRef.current;
-    if (!drag || drag.id !== e.pointerId) return;
-    const dx = e.clientX - drag.x;
-    if (!drag.moved && Math.abs(dx) < MAP_DRAG_PX) return;
-    drag.moved = true;
-    drag.x = e.clientX;
-    if (view === "close") {
-      sceneRef.current?.spinBy(dx * MAP_TURN_PER_PX);
-      /* Only a turn the player makes counts; the camera also turns itself. */
-      drag.turned = (drag.turned ?? 0) + Math.abs(dx * MAP_TURN_PER_PX);
-      if (drag.turned > 0.25) complete("turn");
-    }
-  };
-  const mapUp = () => { setTimeout(() => { mapDragRef.current = null; }, 0); };
-  const mapClick = () => { if (!mapDragRef.current?.moved) toggleView(); };
   const finished = current.id === "done" && !practising;
+  const highlightMap = current.id === "turn" || current.id === "map";
 
   return (
     <div className="relative mx-auto w-full max-w-[480px] overflow-hidden" style={{ height: "calc(100dvh - var(--headerH))" }}>
       <canvas key={sceneKey} ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
 
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3">
-        <button
-          type="button"
-          onClick={() => setMenuOpen((o) => !o)}
-          aria-label="Game menu"
-          aria-expanded={menuOpen}
-          className={"pointer-events-auto flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-white/20 bg-black/45 text-white " + focusRing}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 10a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm7 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm7 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z" /></svg>
-        </button>
+        <MenuButton open={menuOpen} onClick={() => setMenuOpen((o) => !o)} />
         {current.id !== "done" && (
-          <div role="status" aria-live="polite" className="pointer-events-auto m-0 max-w-[62%] rounded-lg bg-black/65 px-3 py-2 text-white backdrop-blur-sm">
-            <p className="m-0 text-[10px] uppercase tracking-wide text-[var(--cyan)]">Step {step + 1} of {STEPS.length - 1} · {current.title}</p>
-            <p className="m-0 mt-0.5 text-sm">{current.text}</p>
+          <div role="status" aria-live="polite" className="tc-panel pointer-events-auto m-0 max-w-[60%] px-3 py-2.5">
+            <p className="tc-label m-0">Step {step + 1} of {STEPS.length - 1} · {current.title}</p>
+            <p className="m-0 mt-1 text-[15px] leading-snug">{current.text}</p>
             {current.id === "capture" && enemiesLeft === 0 && (
-              <button type="button" className={"mt-1 border-0 bg-transparent p-0 text-xs text-white/80 underline " + focusRing} onClick={restart}>No enemies left: reset the board</button>
+              <button type="button" className="tc-link mt-1 p-0 text-sm" onClick={restart}>No enemies left: reset the board</button>
             )}
           </div>
         )}
-        <button
-          type="button"
-          onClick={mapClick}
-          onPointerDown={mapDown}
-          onPointerMove={mapMove}
-          onPointerUp={mapUp}
-          onPointerCancel={mapUp}
-          aria-label={view === "board" ? "Back to the close view" : "Show the whole board"}
-          title={view === "close" ? "Tap to see the whole board, drag to turn the view" : "Tap to go back to the close view"}
-          aria-pressed={view === "board"}
-          className={"pointer-events-auto shrink-0 cursor-pointer touch-none rounded-lg border-2 bg-black/40 p-1 " + (view === "board" ? "border-[var(--cyan)] " : current.id === "turn" || current.id === "map" ? "border-[var(--yellow)] " : "border-white/30 ") + focusRing}
-        >
-          <div style={{ transform: `rotate(${turn}rad) scale(${1 / (Math.abs(Math.cos(turn)) + Math.abs(Math.sin(turn)))})`, transition: "transform .2s ease" }}>
-            <MiniBoard fen={eng.fen()} colors={SET_BOARD} pieceImgSrc={pieceImgSrc} size={80} flipped={false} label="Map of the board" />
-          </div>
-        </button>
+        <div className={highlightMap ? "rounded-xl shadow-[0_0_0_3px_var(--tc-gold-hi),0_0_18px_rgba(255,200,100,0.6)]" : ""}>
+          <MapButton
+            fen={eng.fen()}
+            pieceImgSrc={pieceImgSrc}
+            size={88}
+            flipped={false}
+            view={view}
+            turn={turn}
+            onToggle={toggleView}
+            onSpin={spin}
+          />
+        </div>
       </div>
 
       {menuOpen && (
         <>
           <button type="button" aria-label="Close the menu" className="absolute inset-0 cursor-default border-0 bg-transparent" onClick={() => setMenuOpen(false)} />
-          <div className="absolute top-14 left-3 flex w-56 flex-col gap-2 rounded-xl border border-white/15 bg-black/80 p-3 text-white backdrop-blur-sm">
-            <button type="button" className={"btn ghost " + focusRing} onClick={restart}>Reset the board</button>
-            <button type="button" className={"btn ghost " + focusRing} onClick={() => { startOver(); }}>Start the tutorial over</button>
-            <button type="button" className={"btn ghost " + focusRing} onClick={onExit}>Main menu</button>
-            <PaceControl value={pace} onChange={setPace} />
+          <div className="tc-panel absolute top-16 left-3 flex w-60 flex-col gap-3 p-3">
+            <button type="button" className="tc-plank tc-center tc-small" onClick={restart}>Reset the board</button>
+            <button type="button" className="tc-plank tc-center tc-small" onClick={startOver}>Start the tutorial over</button>
+            <button type="button" className="tc-plank tc-center tc-small" onClick={onExit}>Back to the menu</button>
           </div>
         </>
       )}
 
       {finished && (
-        <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 bg-gradient-to-t from-black/85 to-transparent px-5 pt-16 pb-[calc(1rem+env(safe-area-inset-bottom))] text-center text-white">
-          <h2 className="m-0 text-2xl" style={{ fontFamily: "var(--font-display)" }}>{current.title}</h2>
-          <p className="m-0 max-w-[32ch] text-sm text-white/85">{current.text}</p>
-          <button type="button" className={"btn gold " + focusRing} onClick={onExit}>Back to the menu</button>
-          <button type="button" className={"border-0 bg-transparent text-xs text-white/75 underline " + focusRing} onClick={() => setPractising(true)}>Keep practising here</button>
+        <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 bg-gradient-to-t from-black/90 via-black/70 to-transparent px-5 pt-20 pb-[calc(1.25rem+env(safe-area-inset-bottom))] text-center">
+          <h2 className="tc-title m-0 text-[28px]">{current.title}</h2>
+          <p className="m-0 max-w-[32ch] text-base text-[var(--tc-cream-dim)]">{current.text}</p>
+          <BrassButton onClick={onExit}>Back to the menu</BrassButton>
+          <button type="button" className="tc-link" onClick={() => setPractising(true)}>Keep practising here</button>
         </div>
       )}
 
       {!finished && (
-        <div className="absolute inset-x-0 bottom-0 flex items-center justify-center bg-gradient-to-t from-black/70 to-transparent px-3 pt-8 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-          <div className="flex w-full items-center justify-between gap-2">
-            <button type="button" className={iconBtn} onClick={() => cycleCharacter(-1)} disabled={busy} aria-label="Previous character">‹</button>
-            <div className="flex min-w-0 flex-1 flex-col items-center gap-0.5 text-center">
-              <span className="truncate text-sm font-bold text-white">{selected != null && view === "close" ? pieceName(selected) : ""}</span>
-              <span className={"truncate text-xs " + (isAttack ? "font-bold text-[var(--yellow)]" : "text-white/75")}>{hint}</span>
-            </div>
-            <button type="button" className={iconBtn} onClick={() => cycleCharacter(1)} disabled={busy} aria-label="Next character">›</button>
+        <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/80 to-transparent px-3 pt-10 pb-[calc(0.9rem+env(safe-area-inset-bottom))]">
+          <button type="button" className="tc-round" onClick={() => cycleCharacter(-1)} disabled={busy} aria-label="Previous character">‹</button>
+          <div className="flex min-w-0 flex-1 flex-col items-center gap-0.5 text-center">
+            <span className="tc-display truncate text-[15px]">{selected != null && view === "close" ? pieceName(selected) : ""}</span>
+            <span className={"truncate text-sm " + (isAttack ? "font-bold text-[var(--tc-gold-hi)]" : "text-[var(--tc-cream-dim)]")}>{hint}</span>
           </div>
+          <button type="button" className="tc-round" onClick={() => cycleCharacter(1)} disabled={busy} aria-label="Next character">›</button>
         </div>
       )}
 
       {lost && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 p-6 text-center text-white">
-          <p className="m-0">The 3D view was reset by the phone.</p>
-          <button type="button" className={"btn gold " + focusRing} onClick={() => { setLost(false); setSceneKey((k) => k + 1); }}>Restore it</button>
+        <div className="tc-scrim absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
+          <p className="m-0 text-base">The 3D view was reset by the phone.</p>
+          <BrassButton onClick={() => { setLost(false); setSceneKey((k) => k + 1); }}>Restore it</BrassButton>
         </div>
       )}
     </div>

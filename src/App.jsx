@@ -2551,7 +2551,7 @@ export default function ZlegendsBot() {
   if (siteView === "tactica") {
     return (
       <Suspense fallback={null}>
-        <TacticaPage pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} />
+        <TacticaPage pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={() => onSection("play")} />
       </Suspense>
     );
   }

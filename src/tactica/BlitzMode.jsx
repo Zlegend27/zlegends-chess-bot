@@ -4,15 +4,14 @@ import { PUZZLES } from "../utils/puzzles";
 import { judgePuzzleMove } from "../utils/puzzleSession";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
+import { BrassButton } from "./ui";
 import { loadBonds, levelsOf, recordMove, levelUpText } from "./bonds";
-import { loadPace, savePace } from "./pace";
-import PaceControl from "./PaceControl";
 
 /* Blitz in the Bin: three minutes to solve as many puzzles as you can.
    Puzzles start easy and climb. A wrong move costs time and ends the combo;
    every few in a row gives a little time back. The board is seen whole;
    moves are quick slides and captures play each piece's attack at triple
-   speed (or as the pace control sets), so the show stays without slowing
+   speed, so the show stays without slowing
    the chess. One tap on a glowing square plays it. Correct moves grow the
    piece's bond. */
 export const BLITZ_SECONDS = 180;
@@ -23,7 +22,6 @@ const REPLY_DELAY_MS = 120, NEXT_PUZZLE_MS = 250;
 const KNIGHT = 2, QUEEN = 5;
 
 const sqOf = (sq120) => M120TO64[sq120];
-const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--cyan)]";
 
 /** A puzzle near `rating` that hasn't been used yet, widening the search
  *  if the band runs dry. */
@@ -59,8 +57,8 @@ export default function BlitzMode({ sweetheart, best, onBest, onExit }) {
   const [timeLeft, setTimeLeft] = useState(BLITZ_SECONDS * 1000);
   const [flash, setFlash] = useState(null); // { kind: "good" | "bad", text, id }
   const [, setTick] = useState(0);
-  const [pace, setPaceState] = useState(() => loadPace("blitz"));
-  const setPace = (p) => { setPaceState(p); savePace("blitz", p); };
+  /* Blitz always plays attacks quick. */
+  const pace = "quick";
 
   const side = puzzle ? eng.getSide() : 1;
   const legal = puzzle && phase === "playing" ? eng.legalMoves() : [];
@@ -244,50 +242,49 @@ export default function BlitzMode({ sweetheart, best, onBest, onExit }) {
     <div className="relative mx-auto w-full max-w-[480px] overflow-hidden" style={{ height: "calc(100dvh - var(--headerH))" }}>
       <canvas ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-black/70 to-transparent p-3 pb-8">
-        <div className="text-white">
-          <div className="text-[10px] uppercase tracking-wide text-white/60">Solved</div>
-          <div className="text-2xl" style={{ fontFamily: "var(--font-display)" }}>{score}</div>
+      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-black/75 to-transparent p-3 pb-10">
+        <div>
+          <div className="tc-label">Solved</div>
+          <div className="tc-display text-[28px] leading-none">{score}</div>
         </div>
-        <div className="text-center">
-          <div role="timer" aria-live="off" className={"text-4xl " + (low ? "text-[var(--magenta)]" : "text-white")} style={{ fontFamily: "var(--font-display)" }}>{clock(timeLeft)}</div>
-          {phase === "playing" && puzzle && <div className="text-xs text-white/75">{toMove} to move</div>}
+        <div className="flex flex-col items-center gap-1">
+          <div role="timer" aria-live="off" className={"tc-plate text-[30px] " + (low ? "tc-low" : "")}>{clock(timeLeft)}</div>
+          {phase === "playing" && puzzle && <div className="text-sm text-[var(--tc-cream-dim)]">{toMove} to move</div>}
         </div>
-        <div className="text-right text-white">
-          <div className="text-[10px] uppercase tracking-wide text-white/60">Combo</div>
-          <div className="text-2xl" style={{ fontFamily: "var(--font-display)" }}>{combo}</div>
+        <div className="text-right">
+          <div className="tc-label">Combo</div>
+          <div className="tc-display text-[28px] leading-none">{combo}</div>
         </div>
       </div>
 
       {flash && (
-        <p key={flash.id} role="status" className={"tacticaNote fades pointer-events-none absolute top-24 left-1/2 m-0 -translate-x-1/2 rounded-lg px-3 py-1.5 text-sm font-bold " + (flash.kind === "good" ? "bg-[var(--cyan)]/90 text-black" : "bg-[var(--magenta)]/90 text-white")}>{flash.text}</p>
+        <p key={flash.id} role="status" className={"tacticaNote fades tc-note pointer-events-none absolute top-28 left-1/2 m-0 -translate-x-1/2 rounded-lg px-4 py-1.5 text-sm whitespace-nowrap " + (flash.kind === "good" ? "tc-good" : "tc-bad")}>{flash.text}</p>
       )}
 
       {phase === "playing" && (
-        <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/70 to-transparent px-3 pt-8 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-          <span className="text-xs text-white/75">{selected == null ? "Tap a piece, then a glowing square" : "Tap a glowing square to play it"}</span>
-          <button type="button" className={"border-0 bg-transparent p-1 text-xs text-white/75 underline " + focusRing} onClick={() => setPhase("done")}>End run</button>
+        <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/75 to-transparent px-4 pt-10 pb-[calc(0.9rem+env(safe-area-inset-bottom))]">
+          <span className="text-sm text-[var(--tc-cream-dim)]">{selected == null ? "Tap a piece, then a glowing square" : "Tap a glowing square to play it"}</span>
+          <button type="button" className="tc-link" onClick={() => setPhase("done")}>End run</button>
         </div>
       )}
 
       {phase !== "playing" && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60 p-6 text-center text-white">
+        <div className="tc-scrim absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
           {phase === "ready" ? (
             <>
-              <h2 className="m-0 text-2xl" style={{ fontFamily: "var(--font-display)" }}>Blitz in the Bin</h2>
-              <p className="m-0 max-w-[30ch] text-sm text-white/80">Three minutes. Puzzles get harder as you go. A wrong move costs {WRONG_PENALTY_S} seconds; every {COMBO_EVERY} in a row gives {COMBO_BONUS_S} back.</p>
-              {best ? <p className="m-0 text-sm text-white/70">Your best: {best}</p> : null}
+              <h2 className="tc-title m-0 text-[28px]">Blitz in the Bin</h2>
+              <p className="m-0 max-w-[30ch] text-base text-[var(--tc-cream-dim)]">Three minutes. Puzzles get harder as you go. A wrong move costs {WRONG_PENALTY_S} seconds; every {COMBO_EVERY} in a row gives {COMBO_BONUS_S} back.</p>
+              {best ? <p className="tc-label m-0">Your best · {best}</p> : null}
             </>
           ) : (
             <>
-              <h2 className="m-0 text-2xl" style={{ fontFamily: "var(--font-display)" }}>{score > (best || 0) || (score && score === best) ? "New best!" : "Time!"}</h2>
-              <p className="m-0 text-5xl" style={{ fontFamily: "var(--font-display)" }}>{score}</p>
-              <p className="m-0 text-sm text-white/80">solved · best combo {bestCombo} · your best {Math.max(best || 0, score)}</p>
+              <h2 className="tc-title m-0 text-[28px]">{score > (best || 0) || (score && score === best) ? "New best!" : "Time!"}</h2>
+              <p className="tc-title m-0 text-6xl">{score}</p>
+              <p className="m-0 text-base text-[var(--tc-cream-dim)]">solved · best combo {bestCombo} · your best {Math.max(best || 0, score)}</p>
             </>
           )}
-          <div className="w-full max-w-[16rem]"><PaceControl value={pace} onChange={setPace} /></div>
-          <button type="button" className={"btn gold " + focusRing} onClick={start}>{phase === "ready" ? "Start" : "Play again"}</button>
-          <button type="button" className={"btn ghost " + focusRing} onClick={onExit}>Menu</button>
+          <BrassButton onClick={start}>{phase === "ready" ? "Start" : "Play again"}</BrassButton>
+          <button type="button" className="tc-link" onClick={onExit}>Back to the menu</button>
         </div>
       )}
     </div>
