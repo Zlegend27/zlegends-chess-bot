@@ -955,3 +955,11 @@ select:hover{ border-color:var(--cyan); }
 .pvpClock.low{ color:#F05348; }
 .pvpTableTop{ width:70%; height:14px; border-radius:var(--r-2xs);
   background:repeating-conic-gradient(var(--boardDark, #8B2FC9) 0 25%, var(--boardLight, #C9C2E8) 0 50%) 0 0/14px 14px; opacity:.75; }
+
+/* Chess Tactica: the short note at the top of the board. A passing note
+   fades in and back out over the same time it is shown (TacticaPage NOTE_MS). */
+@keyframes tacticaNoteIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@keyframes tacticaNoteInOut { 0% { opacity: 0; transform: translateY(-4px); } 8%, 85% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+.tacticaNote { animation: tacticaNoteIn .2s ease both; }
+.tacticaNote.fades { animation: tacticaNoteInOut 3.2s ease both; }
+@media (prefers-reduced-motion: reduce) { .tacticaNote, .tacticaNote.fades { animation: none; } }

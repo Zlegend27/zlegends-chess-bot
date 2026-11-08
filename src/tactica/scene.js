@@ -16,7 +16,6 @@ export const SET_BOARD = { light: "#EED6B0", dark: "#8A5229", frame: "#5C3317" }
 const IDLE_FRAME_MS = 33;
 const SWIPE_PX = 50;
 const TAP_SLOP_PX = 10;
-const CAMERA_MS = 650;
 const MOVE_MS = 420;
 const CAPTURE_MS = 320;
 const KNIGHT_HOP = 1.1;
@@ -34,6 +33,25 @@ const HELD_OPACITY = 0.55;
 const EDGE_SPEED = 3.5;
 const PULSE_MS = 900;
 const EDGE_DWELL_MS = 350;
+
+/* How long the camera takes to settle on a new view, roughly. It chases its
+   goal with a critically damped spring, so a new goal mid-move bends the path
+   instead of restarting it. */
+const CAMERA_SMOOTH = 0.32;
+/* Unity-style SmoothDamp on one number; vel is carried between frames. */
+function damp(cur, goal, vel, key, smooth, dt) {
+  const omega = 2 / smooth, x = omega * dt;
+  const exp = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+  const change = cur - goal;
+  const temp = (vel[key] + omega * change) * dt;
+  vel[key] = (vel[key] - omega * temp) * exp;
+  return goal + (change + temp) * exp;
+}
+function dampVector(cur, goal, vel, smooth, dt) {
+  cur.x = damp(cur.x, goal.x, vel, "x", smooth, dt);
+  cur.y = damp(cur.y, goal.y, vel, "y", smooth, dt);
+  cur.z = damp(cur.z, goal.z, vel, "z", smooth, dt);
+}
 
 const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 const reducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -95,6 +113,11 @@ export class TacticaScene {
     this.camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
     this.camPos = new THREE.Vector3(0, 11, 8);
     this.camLook = new THREE.Vector3(0, 0, 0.6);
+    this.goalPos = this.camPos.clone();
+    this.goalLook = this.camLook.clone();
+    this.posVel = { x: 0, y: 0, z: 0 };
+    this.lookVel = { x: 0, y: 0, z: 0 };
+    this.moving = 0;
     this.camera.position.copy(this.camPos);
     this.camera.lookAt(this.camLook);
     this.tweens = [];
@@ -171,7 +194,16 @@ export class TacticaScene {
   setPieces(pieces) {
     for (const entry of this.pieces.values()) this.scene.remove(entry.group);
     this.pieces.clear();
-    for (const piece of pieces) {
+    for (const piece of pieces) this.addPiece(piece);
+    this.wake();
+    /* Warm up after the first frames are on screen, during the opening view. */
+    if (!this.warmTimer) this.warmTimer = setTimeout(() => this.prewarm(), 900);
+  }
+
+  /** One character standing on its square, facing the other side, breathing
+   *  and blinking on its own clock. */
+  addPiece(piece) {
+    {
       const kind = KINDS[piece.type], colour = piece.white ? "white" : "black";
       const group = new THREE.Group();
       const model = modelFor(kind, colour);
@@ -197,9 +229,6 @@ export class TacticaScene {
       idle.time = Math.random() * idle.getClip().duration;
       this.pieces.set(piece.sq, { group, holder, model, hit, kind, colour, mixer, idle });
     }
-    this.wake();
-    /* Warm up after the first frames are on screen, during the opening view. */
-    if (!this.warmTimer) this.warmTimer = setTimeout(() => this.prewarm(), 900);
   }
 
   /** Compiles, in the background, the shaders the attacks will need: the
@@ -241,7 +270,29 @@ export class TacticaScene {
     this.renderer.compileAsync(group, this.camera, this.scene).catch(() => {});
   }
 
-  /** See-through while held, so the squares behind it show. */
+  /** A still, see-through copy of a character, for the move preview. */
+  previewOf(entry) {
+    this.previewMats ??= new Map();
+    const model = modelFor(entry.kind, entry.colour);
+    model.scale.multiplyScalar(PIECE_SCALE);
+    model.traverse((o) => {
+      if (!o.isMesh) return;
+      if (!this.previewMats.has(o.material)) {
+        const m = o.material.clone();
+        m.transparent = true;
+        m.opacity = 0.42;
+        m.depthWrite = false;
+        this.previewMats.set(o.material, m);
+      }
+      o.material = this.previewMats.get(o.material);
+    });
+    const holder = new THREE.Group();
+    holder.rotation.y = entry.holder.rotation.y;
+    holder.add(model);
+    return holder;
+  }
+
+  /** See-through while dragged, so the squares under it show. */
   setGhost(entry, on) {
     if (!!entry.ghost === on) return;
     if (on) {
@@ -259,16 +310,18 @@ export class TacticaScene {
     }
   }
 
-  /** Highlights: a ring under the selected character. Once it is picked up
-   *  (`held`), it turns see-through so the squares behind it show, and every
-   *  square it can reach glows with a faint arrow; the chosen one is bold. */
-  setMarks({ selected = null, held = false, targets = [], chosen = null, captures = [] } = {}) {
+  /** Highlights: a ring under the selected character and, with `held`, a
+   *  glow on every square it can reach. A `chosen` square gets an arrow and
+   *  a see-through ghost of the character standing there, so the move can be
+   *  checked before it is played. With `ghost` (while dragging) the
+   *  character itself turns see-through so the squares under it show. */
+  setMarks({ selected = null, held = false, targets = [], chosen = null, captures = [], ghost = false } = {}) {
     this.marks.clear();
     this.pulse = [];
     this.held = held ? selected : null;
     this.targets = held ? targets : [];
     this.captures = captures;
-    for (const [sq, entry] of this.pieces) this.setGhost(entry, sq === this.held);
+    for (const [sq, entry] of this.pieces) this.setGhost(entry, ghost && sq === selected);
     const flat = (geometry, color, opacity, at, y, additive = false) => {
       const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
         color, transparent: true, opacity, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
@@ -312,11 +365,16 @@ export class TacticaScene {
       beam.position.copy(at).setY(BEAM_HEIGHT / 2);
       this.marks.add(beam);
       this.pulse.push({ material: glow.material, base: glow.material.opacity }, { material: beam.material, base: beam.material.opacity });
-      if (chosen == null && !this.dragging) this.addArrow(this.worldOf(selected), at, color, 0.35);
     }
     if (selected != null && chosen != null) {
       const color = captures.includes(chosen) ? this.colors.attack : this.colors.target;
       this.addArrow(this.worldOf(selected), this.worldOf(chosen), color, 0.85);
+      const entry = this.pieces.get(selected);
+      if (entry) {
+        const preview = this.previewOf(entry);
+        preview.position.copy(this.worldOf(chosen));
+        this.marks.add(preview);
+      }
     }
     this.wake();
   }
@@ -416,30 +474,65 @@ export class TacticaScene {
   /** While an attack plays, its camera stays put; the latest view asked
    *  for is applied once the attack is over. */
   holdCamera(view) {
-    if (!this.active.length) return false;
+    if (!this.active.length && !this.moving) return false;
     this.pendingView = view;
     return true;
   }
 
+  /** Points the camera at a new view. It glides there on its own; asking
+   *  again before it arrives just changes where it is heading. */
   moveCamera(position, look) {
-    const fromPos = this.camPos.clone(), fromLook = this.camLook.clone();
-    this.tween(reducedMotion() ? 0 : CAMERA_MS, (t) => {
-      const k = ease(t);
-      this.camPos.lerpVectors(fromPos, position, k);
-      this.camLook.lerpVectors(fromLook, look, k);
-    });
+    this.goalPos.copy(position);
+    this.goalLook.copy(look);
+    if (reducedMotion()) { this.camPos.copy(position); this.camLook.copy(look); }
+    this.wake();
   }
 
+  /** Whether the camera is still on its way. */
+  cameraMoving() {
+    const v = this.posVel, w = this.lookVel;
+    return this.camPos.distanceToSquared(this.goalPos) > 1e-5 || this.camLook.distanceToSquared(this.goalLook) > 1e-5
+      || Math.abs(v.x) + Math.abs(v.y) + Math.abs(v.z) + Math.abs(w.x) + Math.abs(w.y) + Math.abs(w.z) > 1e-3;
+  }
+
+  /** Is a square comfortably inside the current view? */
+  inView(sq) {
+    this.camera.updateMatrixWorld();
+    const p = this.worldOf(sq).setY(0.4).project(this.camera);
+    return Math.abs(p.x) < 0.8 && p.y > -0.75 && p.y < 0.8 && p.z < 1;
+  }
+
+  /** Pulls back to frame two squares and a leap's height, staying on the side
+   *  the camera is already looking from. */
+  frameMove(a, b) {
+    const mid = a.clone().lerp(b, 0.5).setY(0.9);
+    const away = this.goalPos.clone().sub(this.goalLook).setY(0);
+    if (away.lengthSq() < 1e-4) away.set(0, 0, 1);
+    away.normalize();
+    const reach = 3.2 + a.distanceTo(b) * 0.7;
+    this.moveCamera(mid.clone().addScaledVector(away, reach).setY(2.2 + reach * 0.45), mid);
+  }
+
+
   /** Moves a character; a knight leaps. A capture plays the attacker's own
-   *  attack on the victim (with reduced motion the victim just fades).
-   *  Resolves when done; TacticaPage then rebuilds the pieces in place. */
-  animateMove(from, to, { knight = false, captured = null } = {}) {
+   *  attack on the victim (with reduced motion the victim just fades). With
+   *  `follow`, or for any capture, the camera frames the move. Afterwards the
+   *  piece simply stays on its new square; nothing is rebuilt. */
+  animateMove(from, to, { knight = false, captured = null, follow = false } = {}) {
     const mover = this.pieces.get(from);
     const victim = captured != null ? this.pieces.get(captured) : null;
     if (!mover) return Promise.resolve();
-    if (victim && !reducedMotion()) return this.attack(mover, victim, from, to);
+    this.setGhost(mover, false);
+    this.moving++;
+    const finish = () => {
+      this.moving--;
+      this.settle(mover, from, to, captured);
+      if (!this.moving && !this.active.length) { const view = this.pendingView; this.pendingView = null; view?.(); }
+    };
+    if (victim && !reducedMotion()) return this.attack(mover, victim, from, to).then(finish);
     /* A dropped character lands from where it was let go, without a leap. */
     const a = mover.group.position.clone(), b = this.worldOf(to);
+    if (follow || !this.inView(to)) this.frameMove(this.worldOf(from), b);
     const leap = knight && a.y < 0.01;
     const fast = reducedMotion();
     return new Promise((resolve) => {
@@ -451,7 +544,60 @@ export class TacticaScene {
         if (!victim) { resolve(); return; }
         this.tween(fast ? 0 : CAPTURE_MS, (t) => victim.group.scale.setScalar(Math.max(0.001, 1 - t)), resolve);
       });
-    });
+    }).then(finish);
+  }
+
+  /** After a move: the piece is filed under its new square, standing at rest
+   *  where its attack left it, then turns back to face the other side. A
+   *  captured piece is taken off the board. */
+  settle(mover, from, to, captured) {
+    if (captured != null) {
+      const victim = this.pieces.get(captured);
+      if (victim && victim !== mover) { this.scene.remove(victim.group); this.pieces.delete(captured); }
+    }
+    if (this.pieces.get(from) === mover) this.pieces.delete(from);
+    this.pieces.set(to, mover);
+    mover.hit.userData.sq = to;
+    mover.group.position.copy(this.worldOf(to));
+    /* An attack leaves the body displaced and turned toward its target; fold
+       the turn into the holder and stand the body back up. */
+    const body = mover.model.getObjectByName("body");
+    if (body) {
+      const yaw = new THREE.Euler().setFromQuaternion(body.quaternion, "YXZ").y;
+      mover.mixer.stopAllAction();
+      body.position.set(0, 0, 0);
+      body.quaternion.identity();
+      body.scale.set(1, 1, 1);
+      mover.holder.rotation.y += yaw;
+      mover.idle.reset().play();
+    }
+    const facing = mover.colour === this.nearColour ? Math.PI : 0;
+    const start = mover.holder.rotation.y;
+    let turn = ((facing - start) % (Math.PI * 2) + Math.PI * 3) % (Math.PI * 2) - Math.PI;
+    if (Math.abs(turn) > 1e-3) this.tween(reducedMotion() ? 0 : 450, (t) => { mover.holder.rotation.y = start + turn * ease(t); });
+    this.wake();
+  }
+
+  /** Brings the board in line with `pieces` ([{ sq, type, white }]) without
+   *  rebuilding what is already right: pieces in place are kept (and put
+   *  back on their squares), anything else is added or removed. Covers
+   *  castling, en passant and promotion after a move. */
+  syncPieces(pieces) {
+    const want = new Map(pieces.map((p) => [p.sq, p]));
+    for (const [sq, entry] of [...this.pieces]) {
+      const p = want.get(sq);
+      if (p && KINDS[p.type] === entry.kind && (p.white ? "white" : "black") === entry.colour) {
+        entry.group.position.copy(this.worldOf(sq));
+        entry.group.scale.setScalar(1);
+        this.setGhost(entry, false);
+        want.delete(sq);
+      } else {
+        this.scene.remove(entry.group);
+        this.pieces.delete(sq);
+      }
+    }
+    for (const p of want.values()) this.addPiece(p);
+    this.wake();
   }
 
   /** The attacker plays its attack at the victim's square, the victim its
@@ -485,22 +631,12 @@ export class TacticaScene {
       scale: PIECE_SCALE, attackerColour: mover.colour, victimColour: victim.colour,
     });
     const end = mover.kind === "pawn" ? PAWN_ATTACK_END : clip.duration;
-    /* Pull back to frame both squares and the height of a leap, keeping the
-       camera on the side it was already looking from. */
-    const mid = a.clone().lerp(b, 0.5).setY(0.9);
-    const away = this.camPos.clone().sub(this.camLook).setY(0);
-    if (away.lengthSq() < 1e-4) away.set(0, 0, 1);
-    away.normalize();
-    const reach = 3.2 + a.distanceTo(b) * 0.7;
-    this.moveCamera(mid.clone().addScaledVector(away, reach).setY(2.2 + reach * 0.45), mid);
+    this.frameMove(a, b);
     return new Promise((resolve) => {
       this.active.push({
         act, fx, end,
         done: () => {
           fx.dispose();
-          const view = this.pendingView;
-          this.pendingView = null;
-          view?.();
           if (mover.kind !== "pawn") { resolve(); return; }
           /* The pawn steps onto the square once its slash is done. */
           const start = mover.group.position.clone();
@@ -556,6 +692,8 @@ export class TacticaScene {
       const shift = new THREE.Vector3(x - this.camLook.x, 0, z - this.camLook.z);
       this.camLook.add(shift);
       this.camPos.add(shift);
+      this.goalLook.add(shift);
+      this.goalPos.add(shift);
       this.camera.position.copy(this.camPos);
       this.camera.lookAt(this.camLook);
       this.camera.updateMatrixWorld();
@@ -659,7 +797,7 @@ export class TacticaScene {
   /* Draws only while something is changing, to spare phone batteries. */
   loop(now) {
     if (!this.running) return;
-    const busy = this.tweens.length > 0 || now < this.awakeUntil || this.dragging || this.pulse.length > 0 || this.active.length > 0;
+    const busy = this.tweens.length > 0 || now < this.awakeUntil || this.dragging || this.pulse.length > 0 || this.active.length > 0 || this.cameraMoving();
     /* With nothing else going on, the pieces' idle breathing is drawn at
        about 30 frames a second. */
     const idleDue = this.pieces.size > 0 && now - (this.lastDraw ?? 0) >= IDLE_FRAME_MS;
@@ -686,6 +824,11 @@ export class TacticaScene {
         return true;
       });
       finished.forEach((tw) => tw.done?.());
+      if (!this.dragging) {
+        const step = Math.min(0.05, Math.max(0.001, dt / 1000));
+        dampVector(this.camPos, this.goalPos, this.posVel, CAMERA_SMOOTH, step);
+        dampVector(this.camLook, this.goalLook, this.lookVel, CAMERA_SMOOTH, step);
+      }
       this.camera.position.copy(this.camPos);
       this.camera.lookAt(this.camLook);
       this.renderer.render(this.scene, this.camera);
