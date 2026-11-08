@@ -4,6 +4,7 @@ import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
 import { BOND_KINDS, KIND_NAMES, LOOKS, MAX_LEVEL, loadBonds, levelsOf, progress } from "./bonds";
 import { Medal } from "./ui";
+import { cburnettPieceSvgUrl } from "../utils/cburnettPieceSvg";
 
 /* Chess Tactica's front screen: the title and the modes over a standoff in
    the bin. One of your pawns faces the enemy queen, king and knight,
@@ -12,12 +13,11 @@ import { Medal } from "./ui";
    has grown. */
 const PAWN = 28, QUEEN_SQ = 35, KING_SQ = 36, KNIGHT_SQ = 37; // e4 against d5, e5, f5
 const CIRCLE_SPEED = 0.08; // radians per second
-/* Bonds sits above the tutorial so Exit comes right after it, at the end. */
+/* The modes, then Exit. Bonds is the round button in the top corner. */
 const MODES = [
   { id: "run", name: "Bin Run", piece: 4 },
   { id: "blitz", name: "Blitz in the Bin", piece: 2 },
   { id: "bot", name: "Regular Chess", piece: 6 },
-  { id: "bonds", name: "Bonds", piece: 5 },
   { id: "tutorial", name: "Tutorial", piece: 1 },
 ];
 
@@ -58,13 +58,25 @@ export default function MenuScreen({ onPick, onExit, blitzBest, sweetheart }) {
   return (
     <div className="relative mx-auto w-full max-w-[480px] overflow-hidden" style={{ height: "calc(100dvh - var(--headerH))" }}>
       <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 block size-full" aria-hidden="true" />
-      <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/70 to-transparent px-5 pt-7 pb-14 text-center">
-        <h1 className="tc-title m-0 text-[32px] leading-tight">Chess Tactica</h1>
+      {/* The title keeps clear of the Bonds button in the corner, shrinking a little on narrow phones. */}
+      <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/70 to-transparent px-16 pt-7 pb-14 text-center">
+        <h1 className="tc-title m-0 leading-tight whitespace-nowrap" style={{ fontSize: "clamp(22px, calc((100vw - 136px) / 10), 32px)" }}>Chess Tactica</h1>
       </div>
+      {/* Bonds: a round wood and brass button in the top corner. */}
+      <button
+        type="button"
+        className="tc-round absolute top-3 right-3"
+        onClick={() => setPage((p) => (p === "bonds" ? "modes" : "bonds"))}
+        aria-label="Bonds"
+        aria-pressed={page === "bonds"}
+        title="Bonds"
+      >
+        <img src={cburnettPieceSvgUrl(5, true)} alt="" width="26" height="26" />
+      </button>
       {page === "modes" ? (
         <nav aria-label="Tactica modes" className="absolute inset-x-0 bottom-0 flex flex-col gap-2.5 bg-gradient-to-t from-black/90 via-black/65 to-transparent px-4 pt-14 pb-[calc(1rem+env(safe-area-inset-bottom))]">
           {MODES.map((m) => (
-            <button key={m.id} type="button" className="tc-plank tc-menu" onClick={() => (m.id === "bonds" ? setPage("bonds") : onPick(m.id))}>
+            <button key={m.id} type="button" className="tc-plank tc-menu" onClick={() => onPick(m.id)}>
               <Medal type={m.piece} />
               <span className="flex flex-1 items-baseline justify-between gap-2">
                 {m.name}
