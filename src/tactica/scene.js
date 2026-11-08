@@ -131,6 +131,9 @@ export class TacticaScene {
     /* The solver's side is nearest the camera; each side faces the other. */
     this.nearColour = flipped ? "black" : "white";
     this.active = [];
+    /* Scenery that animates on its own (set dressing) gets called every
+       drawn frame with the seconds since the last one. */
+    this.everyFrame = [];
     this.camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
     this.camPos = new THREE.Vector3(0, 11, 8);
     this.camLook = new THREE.Vector3(0, 0, 0.6);
@@ -910,7 +913,7 @@ export class TacticaScene {
   /* Draws only while something is changing, to spare phone batteries. */
   loop(now) {
     if (!this.running) return;
-    const busy = this.tweens.length > 0 || now < this.awakeUntil || this.dragging || this.pulse.length > 0 || this.active.length > 0 || this.cameraMoving();
+    const busy = this.tweens.length > 0 || now < this.awakeUntil || this.dragging || this.pulse.length > 0 || this.active.length > 0 || this.everyFrame.length > 0 || this.cameraMoving();
     /* With nothing else going on, the pieces' idle breathing is drawn at
        about 30 frames a second. */
     const idleDue = this.pieces.size > 0 && now - (this.lastDraw ?? 0) >= IDLE_FRAME_MS;
@@ -919,6 +922,7 @@ export class TacticaScene {
       const since = Math.min(0.1, (now - (this.lastDraw ?? now)) / 1000);
       this.lastDraw = now;
       for (const entry of this.pieces.values()) entry.mixer.update(since);
+      for (const step of this.everyFrame) step(since);
       for (const run of this.active) run.fx.update(run.act.time);
       const ended = this.active.filter((run) => run.act.time >= run.end - 1e-3 || !run.act.isRunning());
       this.active = this.active.filter((run) => !ended.includes(run));

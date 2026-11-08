@@ -4,6 +4,7 @@ import { PUZZLES } from "../utils/puzzles";
 import { judgePuzzleMove } from "../utils/puzzleSession";
 import MiniBoard from "../components/MiniBoard";
 import { TacticaScene, SET_BOARD } from "./scene";
+import { dressTrashBin } from "./sets/trashBin";
 
 /* Chess Tactica technical test: one real puzzle on a 3D board, so the
    cameras, controls and speed can be tried on a phone before anything else is
@@ -109,6 +110,9 @@ export default function TacticaPage({ pieceImgSrc, sweetheart }) {
     });
     sceneRef.current = scene;
     scene.setPieces(piecesNow());
+    /* The tutorial set: the board sits inside a trash bin, lit through a hole. */
+    const bin = dressTrashBin(scene);
+    scene.everyFrame.push((dt) => bin.update(dt));
     const opening = setTimeout(() => { setView("close"); setBusy(false); }, sceneKey ? 0 : OPENING_PAUSE_MS);
     const readout = setInterval(() => setStats(scene.stats()), 1000);
     return () => { clearTimeout(opening); clearInterval(readout); scene.dispose(); sceneRef.current = null; };
