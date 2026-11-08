@@ -18,6 +18,10 @@ const SWIPE_PX = 50;
 const TAP_SLOP_PX = 10;
 const MOVE_MS = 420;
 const CAPTURE_MS = 320;
+/* Fast modes: a short slide and a quick pop for captures. */
+const QUICK_MOVE_MS = 170, QUICK_CAPTURE_MS = 120;
+/* Fast modes play the full attack cinematics this many times faster. */
+const QUICK_ATTACK_SPEED = 3;
 const KNIGHT_HOP = 1.1;
 const DOUBLE_TAP_MS = 400;
 const DOUBLE_TAP_PX = 40;
@@ -624,11 +628,28 @@ export class TacticaScene {
   }
 
 
+  /** Turns the board round so the given side is nearest the camera, for a
+   *  new puzzle where the solver plays the other colour. */
+  setFlipped(flipped) {
+    if (flipped === this.flipped) return;
+    this.flipped = flipped;
+    this.nearColour = flipped ? "black" : "white";
+    for (const tile of this.tiles) tile.position.copy(this.worldOf(tile.userData.sq));
+    for (const [sq, e] of this.pieces) {
+      e.group.position.copy(this.worldOf(sq));
+      e.holder.rotation.y = e.colour === this.nearColour ? Math.PI : 0;
+    }
+    this.wake();
+  }
+
   /** Moves a character; a knight leaps. A capture plays the attacker's own
    *  attack on the victim (with reduced motion the victim just fades). With
-   *  `follow`, or for any capture, the camera frames the move. Afterwards the
-   *  piece simply stays on its new square; nothing is rebuilt. */
-  animateMove(from, to, { knight = false, captured = null, follow = false } = {}) {
+   *  `follow`, or for any capture, the camera frames the move. With `quick`
+   *  (fast modes) the camera stays put, plain moves are a short slide and a
+   *  capture plays the same attack at QUICK_ATTACK_SPEED.
+   *  Afterwards the piece simply stays on its new square; nothing is
+   *  rebuilt. */
+  animateMove(from, to, { knight = false, captured = null, follow = false, quick = false } = {}) {
     const mover = this.pieces.get(from);
     const victim = captured != null ? this.pieces.get(captured) : null;
     if (!mover) return Promise.resolve();
@@ -639,20 +660,20 @@ export class TacticaScene {
       this.settle(mover, from, to, captured);
       if (!this.moving && !this.active.length) { const view = this.pendingView; this.pendingView = null; view?.(); }
     };
-    if (victim && !reducedMotion()) return this.attack(mover, victim, from, to).then(finish);
+    if (victim && !reducedMotion()) return this.attack(mover, victim, from, to, quick ? { speed: QUICK_ATTACK_SPEED, shot: false } : {}).then(finish);
     /* A dropped character lands from where it was let go, without a leap. */
     const a = mover.group.position.clone(), b = this.worldOf(to);
-    if (follow || !this.inView(to)) this.frameMove(this.worldOf(from), b);
+    if (!quick && (follow || !this.inView(to))) this.frameMove(this.worldOf(from), b);
     const leap = knight && a.y < 0.01;
     const fast = reducedMotion();
     return new Promise((resolve) => {
-      this.tween(fast ? 0 : MOVE_MS, (t) => {
+      this.tween(fast ? 0 : quick ? QUICK_MOVE_MS : MOVE_MS, (t) => {
         const k = ease(t);
         mover.group.position.lerpVectors(a, b, k);
-        if (leap) mover.group.position.y = Math.sin(Math.PI * k) * KNIGHT_HOP;
+        if (leap) mover.group.position.y = Math.sin(Math.PI * k) * KNIGHT_HOP * (quick ? 0.5 : 1);
       }, () => {
         if (!victim) { resolve(); return; }
-        this.tween(fast ? 0 : CAPTURE_MS, (t) => victim.group.scale.setScalar(Math.max(0.001, 1 - t)), resolve);
+        this.tween(fast ? 0 : quick ? QUICK_CAPTURE_MS : CAPTURE_MS, (t) => victim.group.scale.setScalar(Math.max(0.001, 1 - t)), resolve);
       });
     }).then(finish);
   }
@@ -712,7 +733,7 @@ export class TacticaScene {
 
   /** The attacker plays its attack at the victim's square, the victim its
    *  reaction, and the effects run on the attack's clock. */
-  attack(mover, victim, from, to) {
+  attack(mover, victim, from, to, { speed = 1, shot = true } = {}) {
     const a = this.worldOf(from), b = this.worldOf(to);
     /* A dragged character goes back to its square to make its attack. */
     mover.group.position.copy(a);
@@ -727,6 +748,7 @@ export class TacticaScene {
     const act = mover.mixer.clipAction(clip);
     act.setLoop(THREE.LoopOnce, 1);
     act.clampWhenFinished = true;
+    act.timeScale = speed;
     act.play();
     const reaction = reactionFor(mover.kind, victim.model);
     if (reaction) {
@@ -734,6 +756,7 @@ export class TacticaScene {
       const r = victim.mixer.clipAction(reaction);
       r.setLoop(THREE.LoopOnce, 1);
       r.clampWhenFinished = true;
+      r.timeScale = speed;
       r.play();
     }
     const fx = attackEffects(mover.kind, {
@@ -743,7 +766,7 @@ export class TacticaScene {
     const end = mover.kind === "pawn" ? PAWN_ATTACK_END : clip.duration;
     /* The knight leaps high, so his shot sits a little further back and higher. */
     const leapRoom = mover.kind === "knight" ? { back: 2.6, high: 2.3, lookY: 1.15 } : {};
-    this.attackShot(from, to, mover.colour === this.nearColour, leapRoom);
+    if (shot) this.attackShot(from, to, mover.colour === this.nearColour, leapRoom);
     return new Promise((resolve) => {
       this.active.push({
         act, fx, end,
@@ -752,7 +775,7 @@ export class TacticaScene {
           if (mover.kind !== "pawn") { resolve(); return; }
           /* The pawn steps onto the square once its slash is done. */
           const start = mover.group.position.clone();
-          this.tween(MOVE_MS, (t) => mover.group.position.lerpVectors(start, b, ease(t)), resolve);
+          this.tween(speed > 1 ? QUICK_MOVE_MS : MOVE_MS, (t) => mover.group.position.lerpVectors(start, b, ease(t)), resolve);
         },
       });
       this.wake();
