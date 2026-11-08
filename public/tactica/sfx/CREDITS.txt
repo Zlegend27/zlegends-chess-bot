@@ -1,0 +1,13 @@
+Chess Tactica sound effects
+
+All recorded sounds in this folder are from Kenney's free game asset packs
+(www.kenney.nl), released under Creative Commons Zero (CC0 1.0):
+https://creativecommons.org/publicdomain/zero/1.0/
+
+  Impact Sounds (1.0)     wood, plank, punch, plate, metal, soft, bell, glass impacts, wooden footstep
+  RPG Audio               knife slices, knife draw, chop, cloth, coins, creak, leather drop, metal click
+  Interface Sounds (1.0)  tick, error, confirmation, bong, maximize, scratch
+  Sci-Fi Sounds (1.0)     large laser, force field, explosion crunch, low-frequency explosion
+
+They were mixed to mono, resampled to 32 kHz and encoded as 64 kbps MP3.
+The fly buzz is synthesized in code (src/tactica/sound.js), not a recording.

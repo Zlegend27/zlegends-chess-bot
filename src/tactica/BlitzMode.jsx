@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { createEngine, mFrom, mPromo, mTo, M120TO64, EMPTY } from "../engine/chessEngine";
+import { pickPuzzle as pickFrom, rememberSeen } from "./binRun";
+import { loadSetting, saveSetting } from "../utils/storage";
 import { PUZZLES } from "../utils/puzzles";
 import { judgePuzzleMove } from "../utils/puzzleSession";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
 import { BrassButton } from "./ui";
+import { play as playSound } from "./sound";
 import { loadBonds, levelsOf, recordMove, levelUpText } from "./bonds";
 
 /* Blitz in the Bin: three minutes to solve as many puzzles as you can.
@@ -17,20 +20,20 @@ import { loadBonds, levelsOf, recordMove, levelUpText } from "./bonds";
 export const BLITZ_SECONDS = 180;
 const WRONG_PENALTY_S = 10;
 const COMBO_EVERY = 5, COMBO_BONUS_S = 3;
-const START_RATING = 650, RATING_STEP = 45, RATING_WINDOW = 110;
+const START_RATING = 650, RATING_STEP = 45;
 const REPLY_DELAY_MS = 120, NEXT_PUZZLE_MS = 250;
 const KNIGHT = 2, QUEEN = 5;
 
 const sqOf = (sq120) => M120TO64[sq120];
 
-/** A puzzle near `rating` that hasn't been used yet, widening the search
- *  if the band runs dry. */
+/** A puzzle near `rating` not used this game, preferring ones not seen in
+ *  recent Blitz games (remembered on this device), so games don't repeat. */
 function pickPuzzle(rating, used) {
-  for (let widen = 1; widen <= 8; widen *= 2) {
-    const pool = PUZZLES.filter((p) => !used.has(p.id) && Math.abs(p.rating - rating) <= RATING_WINDOW * widen);
-    if (pool.length) return pool[Math.floor(Math.random() * pool.length)];
-  }
-  return PUZZLES[Math.floor(Math.random() * PUZZLES.length)];
+  const saved = loadSetting("tacticaBlitzSeen", []);
+  const seen = Array.isArray(saved) ? saved : [];
+  const p = pickFrom(PUZZLES, rating, used, null, Math.random, { seen });
+  saveSetting("tacticaBlitzSeen", rememberSeen(seen, [p.id]));
+  return p;
 }
 
 const clock = (ms) => {
@@ -46,6 +49,8 @@ export default function BlitzMode({ sweetheart, best, onBest, onExit }) {
   const usedRef = useRef(new Set());
   const deadlineRef = useRef(0);
   const busyRef = useRef(false);
+  /* The second last ticked, so each of the final ten ticks once. */
+  const tickRef = useRef(null);
 
   const [phase, setPhase] = useState("ready"); // ready | playing | done
   const [puzzle, setPuzzle] = useState(null);
@@ -57,6 +62,9 @@ export default function BlitzMode({ sweetheart, best, onBest, onExit }) {
   const [timeLeft, setTimeLeft] = useState(BLITZ_SECONDS * 1000);
   const [flash, setFlash] = useState(null); // { kind: "good" | "bad", text, id }
   const [, setTick] = useState(0);
+  /* Whether this game beat the best, worked out before the best is updated. */
+  const [newBest, setNewBest] = useState(false);
+  const endedRef = useRef(false);
   /* Blitz always plays attacks quick. */
   const pace = "quick";
 
@@ -117,6 +125,9 @@ export default function BlitzMode({ sweetheart, best, onBest, onExit }) {
     usedRef.current = new Set();
     setScore(0); setCombo(0); setBestCombo(0);
     deadlineRef.current = performance.now() + BLITZ_SECONDS * 1000;
+    tickRef.current = null;
+    endedRef.current = false;
+    setNewBest(false);
     setTimeLeft(BLITZ_SECONDS * 1000);
     setPhase("playing");
     loadNext(0);
@@ -128,19 +139,35 @@ export default function BlitzMode({ sweetheart, best, onBest, onExit }) {
     const id = setInterval(() => {
       const left = deadlineRef.current - performance.now();
       setTimeLeft(left);
-      if (left <= 0) setPhase("done");
+      if (left > 0 && left < 10000) {
+        const sec = Math.ceil(left / 1000);
+        if (sec !== tickRef.current) { tickRef.current = sec; playSound("tick", { volume: 0.5 }); }
+      }
+      if (left <= 0 && !endedRef.current) { endedRef.current = true; playSound("chime", { volume: 0.9 }); setPhase("done"); }
     }, 100);
     return () => clearInterval(id);
   }, [phase]);
 
+  /* Leaving the game (another app, a call, locking the phone) stops the
+     clock until you come back. */
+  useEffect(() => {
+    if (phase !== "playing") return;
+    let leftWhenHidden = null;
+    const onVisibility = () => {
+      if (document.hidden) leftWhenHidden = deadlineRef.current - performance.now();
+      else if (leftWhenHidden != null) { deadlineRef.current = performance.now() + leftWhenHidden; leftWhenHidden = null; }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [phase]);
+
   /* At the end: record a new best. */
   useEffect(() => {
-    if (phase === "done") {
-      setSelected(null);
-      if (score > (best || 0)) onBest(score);
-    }
+    if (phase !== "done") return;
+    setSelected(null);
+    if (score > (best || 0)) { setNewBest(true); onBest(score); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
+  }, [phase, score]);
 
   /* Highlights. */
   useEffect(() => {
@@ -173,6 +200,7 @@ export default function BlitzMode({ sweetheart, best, onBest, onExit }) {
     setSelected(null);
     if (!verdict.ok) {
       deadlineRef.current -= WRONG_PENALTY_S * 1000;
+      playSound("error", { volume: 0.6 });
       setCombo(0);
       say("bad", `−${WRONG_PENALTY_S}s`);
       sceneRef.current?.syncPieces(piecesNow());
@@ -181,7 +209,7 @@ export default function BlitzMode({ sweetheart, best, onBest, onExit }) {
     busyRef.current = true;
     /* The piece that played it grows closer to you. */
     const bond = recordMove(eng.pieceAt(sqOf(mFrom(move))), { capture: eng.pieceAt(target) !== EMPTY, final: verdict.solved });
-    if (bond.levelUp) sceneRef.current?.setBonds(levelsOf(bond.bonds));
+    if (bond.levelUp) { sceneRef.current?.setBonds(levelsOf(bond.bonds)); playSound("shimmer", { volume: 0.8 }); }
     const bondNote = bond.levelUp ? levelUpText(bond.kind, bond.levelUp) : null;
     try {
       await moveQuick(move);
@@ -191,7 +219,9 @@ export default function BlitzMode({ sweetheart, best, onBest, onExit }) {
         setScore(newScore);
         setCombo(newCombo);
         setBestCombo((b) => Math.max(b, newCombo));
+        playSound("confirm", { volume: 0.6 });
         if (newCombo % COMBO_EVERY === 0) {
+          playSound("coins", { volume: 0.8 });
           deadlineRef.current += COMBO_BONUS_S * 1000;
           say("good", `Combo ${newCombo}! +${COMBO_BONUS_S}s` + (bondNote ? ` · ${bondNote}` : ""));
         }
@@ -232,7 +262,7 @@ export default function BlitzMode({ sweetheart, best, onBest, onExit }) {
   };
   const dropRef = useRef(null);
   dropRef.current = (sq) => {
-    if (sq != null && targets.includes(sq)) { play(sq); return true; }
+    if (sq != null && targets.includes(sq) && !busyRef.current) { play(sq); return true; }
     return false;
   };
 
@@ -278,7 +308,7 @@ export default function BlitzMode({ sweetheart, best, onBest, onExit }) {
             </>
           ) : (
             <>
-              <h2 className="tc-title m-0 text-[28px]">{score > (best || 0) || (score && score === best) ? "New best!" : "Time!"}</h2>
+              <h2 className="tc-title m-0 text-[28px]">{newBest ? "New best!" : "Time!"}</h2>
               <p className="tc-title m-0 text-6xl">{score}</p>
               <p className="m-0 text-base text-[var(--tc-cream-dim)]">solved · best combo {bestCombo} · your best {Math.max(best || 0, score)}</p>
             </>

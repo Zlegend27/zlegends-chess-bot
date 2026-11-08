@@ -3,6 +3,7 @@ import { createEngine, mFrom, mPromo, mTo, M120TO64, EMPTY } from "../engine/che
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
 import { BrassButton, MapButton, MenuButton } from "./ui";
+import { play as playSound } from "./sound";
 import { loadBonds, levelsOf } from "./bonds";
 
 /* Chess Tactica tutorial: the controls, one step at a time, on a practice
@@ -65,6 +66,8 @@ export default function TutorialMode({ pieceImgSrc, sweetheart, onExit }) {
   const current = STEPS[step];
   /** Finishes the step `id` if it is the current one. */
   const complete = (id) => setStep((s) => (STEPS[s].id === id ? s + 1 : s));
+  /* A chime for every step done. */
+  useEffect(() => { if (step > 0) playSound("chime", { volume: 0.7 }); }, [step]);
 
   const friends = friendlySquares(eng);
   const selected = friends[Math.min(selectedIdx, friends.length - 1)];
@@ -210,7 +213,7 @@ export default function TutorialMode({ pieceImgSrc, sweetheart, onExit }) {
   dropRef.current = (sq) => {
     draggingRef.current = false;
     setDragging(false);
-    if (sq != null && targets.includes(sq)) { play(sq, "drag"); return true; }
+    if (sq != null && targets.includes(sq) && !busy && !playingRef.current) { play(sq, "drag"); return true; }
     return false;
   };
   const swipeRef = useRef(null);

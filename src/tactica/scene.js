@@ -7,6 +7,7 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { woodTexture } from "./pieces/pawn.js";
 import { KINDS, BUILD, clipsFor, reactionFor, attackEffects, PAWN_ATTACK_END } from "./pieces/attacks.js";
+import { play as playSound, ATTACK_CUES } from "./sound.js";
 
 /* Pieces are modelled about one square wide; this leaves a gap around them. */
 const PIECE_SCALE = 0.78;
@@ -240,6 +241,9 @@ export class TacticaScene {
    *  1 pawn to 6 king. Each stands in its square facing the other side and
    *  breathes and blinks on its own clock. */
   setPieces(pieces) {
+    /* A new board: animations still finishing from the old one must not
+       put their pieces back on it (see animateMove). */
+    this.generation = (this.generation ?? 0) + 1;
     for (const entry of this.pieces.values()) this.scene.remove(entry.group);
     this.pieces.clear();
     for (const piece of pieces) this.addPiece(piece);
@@ -487,6 +491,10 @@ export class TacticaScene {
     this.held = held ? selected : null;
     this.targets = held ? targets : [];
     this.captures = captures;
+    /* A tap when a character is picked, a tick when a move is previewed. */
+    if (held && selected != null && selected !== this.soundSelected) playSound("tap", { volume: 0.55 });
+    if (held && chosen != null && chosen !== this.chosen) playSound("ghost", { volume: 0.7 });
+    this.soundSelected = held ? selected : null;
     this.chosen = held ? chosen : null;
     this.confirm = confirm;
     for (const [sq, entry] of this.pieces) this.setGhost(entry, ghost && sq === selected);
@@ -851,6 +859,22 @@ export class TacticaScene {
     });
   }
 
+  /** A character buried by garbage on a bonus floor: it sinks halfway in,
+   *  tilts, and its bond glow goes out. It stays like that. */
+  sink(sq) {
+    const entry = this.pieces.get(sq);
+    if (!entry || entry.sunk) return;
+    entry.sunk = true;
+    playSound("drop", { volume: 0.6 });
+    for (const part of entry.bondParts ?? []) part.visible = false;
+    const tilt = ((sq * 37) % 10) / 10 - 0.5;
+    this.tween(reducedMotion() ? 0 : 500, (t) => {
+      const k = ease(t);
+      entry.group.position.y = -0.42 * k;
+      entry.holder.rotation.z = 0.28 * tilt * k;
+    });
+  }
+
   /** A looping standoff for the menu: the character on `attackerSq` swings
    *  its attack at `targetSq` every few seconds (the motion only: no
    *  effects, nobody is taken), while the characters on `cowering` huddle
@@ -884,6 +908,7 @@ export class TacticaScene {
       if (stopped || reducedMotion()) return;
       attacker.idle.stop();
       act.reset().play();
+      playSound("swish", { volume: 0.3, delay: 0.3 });
       swingAt = performance.now();
     };
     const step = () => {
@@ -919,6 +944,7 @@ export class TacticaScene {
    *  charge, while the camera shakes. Nobody actually moves square: the
    *  position is unchanged when it ends. */
   rush() {
+    playSound("rumble", { volume: 0.9 });
     const enemies = [...this.pieces.values()].filter((e) => e.colour !== this.nearColour);
     const friends = [...this.pieces.values()].filter((e) => e.colour === this.nearColour);
     if (!enemies.length || reducedMotion()) return Promise.resolve();
@@ -955,6 +981,7 @@ export class TacticaScene {
   /** After a quiet punishing reply: the camera shows the threat, then closes
    *  in on the threatened character, which trembles, scared stiff. */
   scare(threatSq, victimSq) {
+    playSound("creak", { volume: 0.6, delay: 0.6 });
     const victim = this.pieces.get(victimSq);
     if (!victim || reducedMotion()) return Promise.resolve();
     this.frameMove(this.worldOf(threatSq), this.worldOf(victimSq));
@@ -1010,8 +1037,10 @@ export class TacticaScene {
     if (!mover) return Promise.resolve();
     this.setGhost(mover, false);
     this.moving++;
+    const generation = this.generation;
     const finish = () => {
       this.moving--;
+      if (generation !== this.generation) return;
       this.settle(mover, from, to, captured);
       if (!this.moving && !this.active.length) { const view = this.pendingView; this.pendingView = null; view?.(); }
     };
@@ -1030,7 +1059,8 @@ export class TacticaScene {
         mover.group.position.lerpVectors(a, b, k);
         if (leap) mover.group.position.y = Math.sin(Math.PI * k) * KNIGHT_HOP * (quick ? 0.5 : 1);
       }, () => {
-        if (!victim) { resolve(); return; }
+        if (!victim) { playSound(leap ? "landHeavy" : "land", { volume: quick ? 0.6 : 0.8 }); resolve(); return; }
+        playSound("poof", { volume: 0.7 });
         this.tween(fast ? 0 : quick ? QUICK_CAPTURE_MS : CAPTURE_MS, (t) => victim.group.scale.setScalar(Math.max(0.001, 1 - t)), resolve);
       });
     }).then(finish);
@@ -1129,6 +1159,8 @@ export class TacticaScene {
     return new Promise((resolve) => {
       this.active.push({
         act, fx, end,
+        /* Each attack's sounds, on the attack's own clock. */
+        cues: ATTACK_CUES[mover.kind] ?? [], cueAt: 0, loud: speed > 1 ? 0.8 : 1,
         done: () => {
           fx.dispose();
           if (mover.kind !== "pawn") { resolve(); return; }
@@ -1269,12 +1301,16 @@ export class TacticaScene {
     };
     this.onCancel = (e) => {
       if (down && e?.pointerId !== down.id) return;
+      const wasDragging = !!drag;
       if (drag?.piece) {
         drag.piece.group.position.copy(this.worldOf(drag.sq));
         this.setHover(null);
       }
       down = drag = null;
       this.dragging = false;
+      /* Tell the game the drag ended with no square, or it would go on
+         thinking a drag is in progress and stop moving the camera. */
+      if (wasDragging) this.onDrop?.(null);
     };
     this.canvas.addEventListener("pointerdown", this.onDown);
     this.canvas.addEventListener("pointermove", this.onMove);
@@ -1293,6 +1329,30 @@ export class TacticaScene {
     this.wake();
   }
 
+  /** Keeps motion smooth on slower phones: if frames while something moves
+   *  average slower than about 40 a second, the 3D view renders at a lower
+   *  resolution, a step at a time down to 1x; with plenty of headroom it
+   *  steps back up toward the screen's own. Checked every ~1.5 seconds of
+   *  motion, never more than once every 3 seconds. */
+  adaptResolution(dt, now) {
+    const a = (this.adapt ??= { sum: 0, n: 0, changedAt: 0, max: Math.min(window.devicePixelRatio || 1, 2) });
+    a.sum += dt;
+    a.n++;
+    if (a.n < 90) return;
+    const avg = a.sum / a.n;
+    a.sum = 0;
+    a.n = 0;
+    if (now - a.changedAt < 3000) return;
+    const ratio = this.renderer.getPixelRatio();
+    let next = ratio;
+    if (avg > 25 && ratio > 1) next = Math.max(1, ratio - 0.25);
+    else if (avg < 15 && ratio < a.max) next = Math.min(a.max, ratio + 0.25);
+    if (next === ratio) return;
+    a.changedAt = now;
+    this.renderer.setPixelRatio(next);
+    this.resize();
+  }
+
   /** Average frame time while something is moving, for the test readout. */
   stats() {
     const times = this.frameTimes;
@@ -1300,12 +1360,13 @@ export class TacticaScene {
     return { fps: avg ? Math.round(1000 / avg) : null, pixelRatio: this.renderer.getPixelRatio() };
   }
 
-  /* Draws only while something is changing, to spare phone batteries. */
+  /* Draws only while something is changing, to spare phone batteries. Set
+     dressing (dust, flies) doesn't count as change: with nothing else going
+     on, it and the pieces' idle breathing are drawn at about 30 frames a
+     second, unless the scene is `continuous` (the menu's circling camera). */
   loop(now) {
     if (!this.running) return;
-    const busy = this.tweens.length > 0 || now < this.awakeUntil || this.dragging || this.pulse.length > 0 || this.active.length > 0 || this.everyFrame.length > 0 || this.cameraMoving();
-    /* With nothing else going on, the pieces' idle breathing is drawn at
-       about 30 frames a second. */
+    const busy = this.tweens.length > 0 || now < this.awakeUntil || this.dragging || this.pulse.length > 0 || this.active.length > 0 || this.continuous || this.cameraMoving();
     const idleDue = this.pieces.size > 0 && now - (this.lastDraw ?? 0) >= IDLE_FRAME_MS;
     if (busy || idleDue) {
       const dt = now - this.lastFrame;
@@ -1313,7 +1374,13 @@ export class TacticaScene {
       this.lastDraw = now;
       for (const entry of this.pieces.values()) entry.mixer.update(since);
       for (const step of this.everyFrame) step(since);
-      for (const run of this.active) run.fx.update(run.act.time);
+      for (const run of this.active) {
+        run.fx.update(run.act.time);
+        while (run.cueAt < run.cues.length && run.act.time >= run.cues[run.cueAt][0]) {
+          const [, name, volume] = run.cues[run.cueAt++];
+          playSound(name, { volume: volume * run.loud });
+        }
+      }
       const ended = this.active.filter((run) => run.act.time >= run.end - 1e-3 || !run.act.isRunning());
       this.active = this.active.filter((run) => !ended.includes(run));
       ended.forEach((run) => run.done());
@@ -1343,6 +1410,7 @@ export class TacticaScene {
       }
       this.camera.lookAt(this.camLook);
       this.renderer.render(this.scene, this.camera);
+      if (busy && dt < 200) this.adaptResolution(dt, now);
     }
     this.lastFrame = now;
     requestAnimationFrame(this.loop);
@@ -1358,5 +1426,13 @@ export class TacticaScene {
     this.canvas.removeEventListener("pointercancel", this.onCancel);
     this.canvas.removeEventListener("webglcontextlost", this.onLostEvent);
     this.renderer.dispose();
+    /* Hand the WebGL context back now rather than whenever the browser gets
+       round to it: phones allow only a few at once, and every screen makes
+       a new one, so without this the oldest get killed after some menu
+       hopping and a later screen can go black. Only once the canvas has
+       left the page: a canvas that stays (a scene rebuilt in place) would
+       otherwise be left with a dead context. */
+    const renderer = this.renderer, canvas = this.canvas;
+    setTimeout(() => { if (!canvas.isConnected) renderer.forceContextLoss(); }, 0);
   }
 }

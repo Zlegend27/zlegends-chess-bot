@@ -24,9 +24,23 @@ export const CHALLENGES = [
   { id: "heavy", name: "Heavy rush", text: "Enemy rushes deal 75% instead of 50%." },
 ];
 
-/** Phases in a floor's battle: 2 to start, one more every 2 floors, up to 5. */
+/** Phases (puzzles) in a floor's battle: floors 1 to 3 are a two-puzzle
+ *  warm-up, then 3 puzzles on floors 4 to 6, 4 on floors 7 to 10, and 5
+ *  from floor 11. */
 export function phasesForFloor(floor) {
-  return Math.min(5, 2 + Math.floor((floor - 1) / 2));
+  if (floor <= 3) return 2;
+  if (floor <= 6) return 3;
+  if (floor <= 10) return 4;
+  return 5;
+}
+
+/** The longest puzzle (in plies, both sides' moves) a floor uses: the
+ *  warm-up floors keep to one or two moves of yours, the middle floors to
+ *  three, after that anything goes. */
+export function maxPliesFor(floor) {
+  if (floor <= 3) return 3;
+  if (floor <= 10) return 5;
+  return Infinity;
 }
 
 export function isStoryFloor(floor) {
@@ -48,25 +62,61 @@ export function timerSeconds(puzzle, effect) {
   return Math.max(10, s);
 }
 
-/** Target puzzle rating for a phase: climbs with floors and phases. */
+/* Target ratings: the warm-up starts at 550 and climbs 70 a floor; floors 4
+   to 15 climb 65 a floor (about 1470 by floor 15), then 45 a floor, never
+   above 2300 (about the 90th percentile of the puzzle set, so the pool
+   doesn't run dry). Each puzzle within a floor is a little harder. */
+const RATING_START = 550, RATING_CAP = 2300;
 export function ratingFor(floor, phase, effect) {
-  return 600 + (floor - 1) * 70 + phase * 20 + (effect?.id === "hard" ? 200 : 0);
+  const f = Math.max(1, floor);
+  let base = RATING_START + Math.min(f - 1, 2) * 70;
+  if (f > 3) base += Math.min(f - 3, 12) * 65;
+  if (f > 15) base += (f - 15) * 45;
+  return Math.min(RATING_CAP, base + phase * 15) + (effect?.id === "hard" ? 200 : 0);
 }
+
+/* How many puzzle ids the run remembers across runs, so new runs show new
+   puzzles first. */
+export const SEEN_MEMORY = 400;
 
 export const rushDamage = (effect) => (effect?.id === "heavy" ? HEAVY_RUSH_DAMAGE : RUSH_DAMAGE);
 
 const sideOf = (puzzle) => (puzzle.fen.split(" ")[1] === "b" ? -1 : 1);
 
-/** An unused puzzle near `rating`, for the given side if one is set (a
- *  floor's battle is all one colour). Widens the search if the band runs dry. */
-export function pickPuzzle(puzzles, rating, used, side = null, random = Math.random) {
-  for (let widen = 1; widen <= 16; widen *= 2) {
-    const pool = puzzles.filter((p) => !used.has(p.id) && (side == null || sideOf(p) === side) && Math.abs(p.rating - rating) <= 100 * widen);
-    if (pool.length) return pool[Math.floor(random() * pool.length)];
+/** A puzzle near `rating`, for the given side if one is set (a floor's
+ *  battle is all one colour), no longer than `maxPlies`. Never one already
+ *  used this run (`used`). Among the rest it prefers one you haven't seen
+ *  in recent runs (`seen`, oldest first); if every candidate has been seen,
+ *  the one seen longest ago. Widens the rating band, then drops the length
+ *  limit, if the pool runs dry. */
+export function pickPuzzle(puzzles, rating, used, side = null, random = Math.random, { seen = [], maxPlies = Infinity } = {}) {
+  const seenAt = new Map(seen.map((id, i) => [id, i]));
+  const choose = (pool) => {
+    const fresh = pool.filter((p) => !seenAt.has(p.id));
+    if (fresh.length) return fresh[Math.floor(random() * fresh.length)];
+    return pool.reduce((a, b) => (seenAt.get(b.id) < seenAt.get(a.id) ? b : a));
+  };
+  for (const limit of maxPlies === Infinity ? [Infinity] : [maxPlies, Infinity]) {
+    for (let widen = 1.5; widen <= 16; widen *= 2) {
+      const pool = puzzles.filter((p) => !used.has(p.id) && (side == null || sideOf(p) === side)
+        && p.moves.length <= limit && Math.abs(p.rating - rating) <= 100 * widen);
+      if (pool.length) return choose(pool);
+    }
   }
   const any = puzzles.filter((p) => side == null || sideOf(p) === side);
   return any[Math.floor(random() * any.length)];
 }
+
+/** The run's memory of seen puzzles with `ids` added, newest last, trimmed
+ *  to SEEN_MEMORY. */
+export function rememberSeen(seen, ids) {
+  const next = [...seen.filter((id) => !ids.includes(id)), ...ids];
+  return next.slice(Math.max(0, next.length - SEEN_MEMORY));
+}
+
+/** Bonus Escape floors come after clearing floors 3, 8, 13... (between 3
+ *  and 4, 8 and 9...). They don't count as floors. */
+export const isBonusAfter = (floor) => floor % STORY_EVERY === 3;
 
 /** How many floors an effect picked after `floor` lasts: 3, or fewer if a
  *  story floor comes first (it ends there). */

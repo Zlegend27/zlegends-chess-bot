@@ -5,6 +5,7 @@ import { dressTrashBin } from "./sets/trashBin";
 import { BOND_KINDS, KIND_NAMES, LOOKS, MAX_LEVEL, loadBonds, levelsOf, progress } from "./bonds";
 import { Medal } from "./ui";
 import { cburnettPieceSvgUrl } from "../utils/cburnettPieceSvg";
+import { soundOn, setSoundOn, onSoundChange } from "./sound";
 
 /* Chess Tactica's front screen: the title and the modes over a standoff in
    the bin. One of your pawns faces the enemy queen, king and knight,
@@ -25,6 +26,8 @@ export default function MenuScreen({ onPick, onExit, blitzBest, sweetheart }) {
   const canvasRef = useRef(null);
   const [page, setPage] = useState("modes"); // modes | bonds
   const [bonds] = useState(loadBonds);
+  const [sound, setSound] = useState(soundOn);
+  useEffect(() => onSoundChange(setSound), []);
 
   useEffect(() => {
     const scene = new TacticaScene(canvasRef.current, {
@@ -49,6 +52,8 @@ export default function MenuScreen({ onPick, onExit, blitzBest, sweetheart }) {
     scene.pivot.copy(middle);
     scene.moveCamera(middle.clone().add(new THREE.Vector3(1.4, 3.1, 4.6)), middle.clone().add(new THREE.Vector3(0, -1.6, 0.4)));
     const stop = scene.showdown(PAWN, QUEEN_SQ, [QUEEN_SQ, KING_SQ, KNIGHT_SQ]);
+    /* The camera never stops circling, so the menu draws every frame. */
+    scene.continuous = true;
     if (!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
       scene.everyFrame.push((dt) => scene.spinBy(dt * CIRCLE_SPEED));
     }
@@ -62,6 +67,22 @@ export default function MenuScreen({ onPick, onExit, blitzBest, sweetheart }) {
       <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/70 to-transparent px-16 pt-7 pb-14 text-center">
         <h1 className="tc-title m-0 leading-tight whitespace-nowrap" style={{ fontSize: "clamp(22px, calc((100vw - 136px) / 10), 32px)" }}>Chess Tactica</h1>
       </div>
+      {/* Sound on and off, in the other top corner. */}
+      <button
+        type="button"
+        className="tc-round absolute top-3 left-3"
+        onClick={() => setSoundOn(!sound)}
+        aria-label={sound ? "Turn sound off" : "Turn sound on"}
+        aria-pressed={sound}
+        title={sound ? "Sound on" : "Sound off"}
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="currentColor" d="M3 9h4l5-4v14l-5-4H3z" />
+          {sound
+            ? <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" />
+            : <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" d="M16 9l6 6M22 9l-6 6" />}
+        </svg>
+      </button>
       {/* Bonds: a round wood and brass button in the top corner. */}
       <button
         type="button"

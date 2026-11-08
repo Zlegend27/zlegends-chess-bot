@@ -1,15 +1,41 @@
 import { describe, test, expect } from "vitest";
-import { isEscapeFloor, guarded, movesOf, apply, escaped, solve, makeEscape, seeded, escapePar, fenOf, strikerOf } from "./escape";
-import { isStoryFloor } from "./binRun";
+import { guarded, movesOf, apply, escaped, solve, makeEscape, seeded, escapePar, fenOf, strikerOf, ringOf, outerRing, closeRing, allStuck, solveTimed, escapeClock } from "./escape";
+import { isStoryFloor, isBonusAfter } from "./binRun";
 
 const level = ({ mine = [], guards = [], junk = [], light = 63 }) => ({
   mine: new Map(mine), guards: new Map(guards), junk: new Set(junk), light, limit: 5,
 });
 
 describe("escape to the light", () => {
-  test("escape floors are 3, 8, 13... and never a story floor", () => {
-    expect([1, 2, 3, 4, 8, 13].map(isEscapeFloor)).toEqual([false, false, true, false, true, true]);
-    for (let f = 1; f <= 60; f++) if (isEscapeFloor(f)) expect(isStoryFloor(f)).toBe(false);
+  test("bonus escapes never come right after a story floor", () => {
+    for (let f = 1; f <= 60; f++) if (isBonusAfter(f)) expect(isStoryFloor(f)).toBe(false);
+  });
+
+  test("rings are counted in king steps from the light", () => {
+    const s = level({ light: 63 });
+    expect(ringOf(s, 63)).toBe(0);
+    expect(ringOf(s, 54)).toBe(1);
+    expect(ringOf(s, 0)).toBe(7);
+    expect(outerRing(s)).toBe(7);
+  });
+
+  test("a closing ring buries squares: your pieces there are stuck, guards are gone", () => {
+    const s = closeRing(level({ mine: [[0, 4], [9, 2]], guards: [[7, 3]], light: 63 }), 7);
+    expect(s.junk.has(0) && s.junk.has(7) && s.junk.has(56)).toBe(true);
+    expect(s.junk.has(9)).toBe(false);
+    expect([...s.stuck]).toEqual([0]);
+    expect(s.guards.size).toBe(0);
+    expect(movesOf(s).every((m) => m.from === 9)).toBe(true);
+    expect(allStuck(s)).toBe(false);
+    expect(allStuck(closeRing(s, 6))).toBe(true);
+  });
+
+  test("the timed solver fails when the garbage gets there first", () => {
+    /* A rook on a1 needs 2 moves to reach h8. */
+    const s = level({ mine: [[0, 4]], light: 63 });
+    expect(solveTimed(s, 1, 10)).toBe(2);
+    /* The outer ring (a1 included) closes before the first move. */
+    expect(solveTimed(s, 5, 2)).toBe(null);
   });
 
   test("garbage blocks a rook's line but a knight jumps it", () => {
@@ -72,6 +98,8 @@ describe("escape to the light", () => {
         expect(solve(s, par)).toBe(par);
         expect(s.limit).toBe(par + spare);
         expect(guarded(s).has(s.light)).toBe(false);
+        const { total, interval } = escapeClock(s);
+        expect(solveTimed(s, total / (par + 2), interval, par)).toBe(par);
         expect(s.junk.has(s.light)).toBe(false);
       }
     }

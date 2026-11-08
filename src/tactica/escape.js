@@ -1,17 +1,19 @@
-/* Escape to the light: a special Bin Run floor. One or two of your
-   characters must reach the square lit by the hole in the bin within a set
-   number of moves. Garbage sits on some squares and blocks moves like a wall
-   (a knight still jumps it). Enemy guards stand still, but any square they
+/* Escape to the light: the Bin Run's bonus floor, after floors 3, 8, 13...
+   One or two of your characters must reach the square lit by the hole in
+   the bin before the garbage closes in. Garbage sits on some squares and
+   blocks moves like a wall (a knight still jumps it). As the timer runs,
+   ring after ring of squares, furthest from the light first, fills with
+   garbage; a character caught under it is stuck. When the timer runs out
+   only the light is left. Enemy guards stand still, but any square they
    attack is deadly: end a move there and a guard strikes. A guard can be
-   taken if no other guard covers its square.
+   taken if no other guard covers its square; a guard buried by the garbage
+   is gone.
 
    Squares are 0..63 (a1 = 0, h8 = 63). Pieces use the engine's types:
    1 pawn, 2 knight, 3 bishop, 4 rook, 5 queen, 6 king. Your side is white,
    nearest the camera; guards are black. Kept apart from the 3D so it can be
    tested. */
 
-export const ESCAPE_EVERY = 5, ESCAPE_OFFSET = 3; // floors 3, 8, 13, ...
-export const isEscapeFloor = (floor) => floor % ESCAPE_EVERY === ESCAPE_OFFSET;
 
 const KNIGHT_STEPS = [[1, 2], [2, 1], [2, -1], [1, -2], [-1, -2], [-2, -1], [-2, 1], [-1, 2]];
 const KING_STEPS = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
@@ -52,6 +54,29 @@ function reach(type, sq, white, blocked, attacks = false) {
  *  junk: Set, light, limit }. States are never changed in place. */
 const occupied = (s) => (sq) => s.mine.has(sq) || s.guards.has(sq) || s.junk.has(sq);
 
+/** How far a square is from the light, in king steps: the closing rings. */
+export const ringOf = (state, sq) => Math.max(Math.abs(fileOf(sq) - fileOf(state.light)), Math.abs(rankOf(sq) - rankOf(state.light)));
+/** The furthest ring from the light (the first to close). */
+export const outerRing = (state) => Math.max(...[...Array(64).keys()].map((sq) => ringOf(state, sq)));
+/** The squares of ring `ring` still open (not garbage yet). */
+export const ringSquares = (state, ring) => [...Array(64).keys()].filter((sq) => ringOf(state, sq) === ring && !state.junk.has(sq));
+
+/** The state after ring `ring` fills with garbage: its squares become
+ *  garbage, characters of yours on it are stuck, guards on it are buried. */
+export function closeRing(state, ring) {
+  const junk = new Set(state.junk), stuck = new Set(state.stuck ?? []), guards = new Map(state.guards);
+  for (let sq = 0; sq < 64; sq++) {
+    if (ringOf(state, sq) !== ring || sq === state.light) continue;
+    junk.add(sq);
+    if (state.mine.has(sq)) stuck.add(sq);
+    guards.delete(sq);
+  }
+  return { ...state, junk, stuck, guards };
+}
+
+/** Every one of your characters is stuck under the garbage. */
+export const allStuck = (state) => [...state.mine.keys()].every((sq) => state.stuck?.has(sq));
+
 /** Every square the guards attack. `without` leaves one guard out (it has
  *  just been taken). */
 export function guarded(state, without = null) {
@@ -80,6 +105,7 @@ export function movesOf(state) {
   const blocked = occupied(state);
   const list = [];
   for (const [from, type] of state.mine) {
+    if (state.stuck?.has(from)) continue;
     for (const to of reach(type, from, true, blocked)) {
       if (state.junk.has(to) || state.mine.has(to)) continue;
       const capture = state.guards.has(to);
@@ -98,6 +124,7 @@ export function movesOf(state) {
 
 /** The state after a move. */
 export function apply(state, { from, to }) {
+  if (state.stuck?.has(from)) return state;
   const mine = new Map(state.mine);
   const type = mine.get(from);
   mine.delete(from);
@@ -109,7 +136,7 @@ export function apply(state, { from, to }) {
 
 export const escaped = (state) => state.mine.has(state.light);
 
-const keyOf = (s) => [...s.mine].sort((a, b) => a[0] - b[0]).join(";") + "|" + [...s.guards.keys()].sort((a, b) => a - b).join(",");
+const keyOf = (s) => [...s.mine].sort((a, b) => a[0] - b[0]).join(";") + "|" + [...s.guards.keys()].sort((a, b) => a - b).join(",") + "|" + [...(s.stuck ?? [])].sort((a, b) => a - b).join(",");
 
 /** Fewest safe moves to reach the light, or null if it can't be done within
  *  `cap` moves. */
@@ -132,6 +159,46 @@ export function solve(state, cap = 8) {
     frontier = next;
   }
   return null;
+}
+
+/** Fewest safe moves to reach the light while the garbage closes in, if
+ *  the player makes a move every `pace` seconds and a ring closes every
+ *  `interval` seconds (outermost first), or null. */
+export function solveTimed(state, pace, interval, cap = 8) {
+  if (escaped(state)) return 0;
+  const outer = outerRing(state);
+  const closedBy = (t) => Math.min(outer, Math.floor(t / interval));
+  /* Closes rings number from+1 .. to (ring 1 of the count is the outermost). */
+  const shut = (s, from, to) => { let x = s; for (let k = from + 1; k <= to; k++) x = closeRing(x, outer - k + 1); return x; };
+  let frontier = [state], closed = 0;
+  for (let depth = 1; depth <= cap; depth++) {
+    /* Move number `depth` is made at depth x pace seconds, after every
+       ring due by then has closed. */
+    const due = closedBy(depth * pace);
+    frontier = frontier.map((s) => shut(s, closed, due));
+    closed = due;
+    const next = new Map();
+    for (const s of frontier) {
+      for (const m of movesOf(s)) {
+        if (m.deadly) continue;
+        const after = apply(s, m);
+        if (escaped(after)) return depth;
+        const k = keyOf(after);
+        if (!next.has(k)) next.set(k, after);
+      }
+    }
+    if (!next.size) return null;
+    frontier = [...next.values()];
+  }
+  return null;
+}
+
+/** The bonus floor's clock: total seconds, the time between rings closing
+ *  (the last ring, next to the light, closes as time runs out), and how
+ *  long before each closing its squares are marked. */
+export function escapeClock(state) {
+  const total = escapeSeconds(state);
+  return { total, interval: total / outerRing(state), warn: 2.5 };
 }
 
 /** A small seeded random generator (mulberry32), so a level can be rebuilt
@@ -181,11 +248,16 @@ export function makeEscape(floor, random = Math.random) {
       guards.set(sq, pick([1, 1, 2, 3, 4, 5]));
       taken.add(sq);
     }
-    const state = { mine, guards, junk, light, limit: 0 };
+    const state = { mine, guards, junk, light, stuck: new Set(), limit: 0, par };
     const danger = guarded(state);
     if (danger.has(light) || [...mine.keys()].some((sq) => danger.has(sq))) continue;
     if (solve(state, par) !== par) continue;
-    return { ...state, limit: par + spare, par };
+    /* It must also be escapable before the garbage gets there, at a fair
+       pace: a move every so often, leaving a couple of moves' worth of
+       time to spare. */
+    const { total, interval } = escapeClock(state);
+    if (solveTimed(state, total / (par + 2), interval, par) !== par) continue;
+    return { ...state, limit: par + spare };
   }
   return null;
 }
@@ -217,5 +289,5 @@ export function fenOf(state) {
   return fen + " w - - 0 1";
 }
 
-/** Seconds on the clock for an escape floor: 20, plus 8 per allowed move. */
-export const escapeSeconds = (state) => 20 + 8 * state.limit;
+/** Seconds on the clock for an escape floor: 14, plus 10 per move it takes. */
+export const escapeSeconds = (state) => 14 + 10 * (state.par ?? state.limit ?? 3);

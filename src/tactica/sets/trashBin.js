@@ -811,9 +811,31 @@ function squareJunk(seed) {
   return g;
 }
 
+/* Bonus floors close in with heaps of garbage, a ring of squares at a time.
+   Each ring is two instanced meshes (a lumpy heap and a crumpled ball on
+   top), one draw call each however many squares it covers, so a fully
+   closed board stays cheap on a phone. */
+let heapKit = null;
+function heapAssets() {
+  if (heapKit) return heapKit;
+  heapKit = {
+    heap: crumple(new THREE.SphereGeometry(0.47, 12, 8), 0.28, 31).scale(1, 0.55, 1).translate(0, 0.16, 0),
+    ball: crumple(new THREE.IcosahedronGeometry(0.2, 1), 0.3, 47).translate(0, 0.42, 0),
+    material: new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: 0.75, metalness: 0.05, flatShading: true }),
+    warnGeometry: new THREE.PlaneGeometry(0.94, 0.94).rotateX(-Math.PI / 2),
+    warnMaterial: new THREE.MeshBasicMaterial({ color: "#ff3b2e", transparent: true, opacity: 0.4, depthWrite: false }),
+  };
+  return heapKit;
+}
+/* Bin bag black, newsprint grey, cardboard brown, a dirty cream. */
+const HEAP_COLOURS = ["#1b1a1c", "#232125", "#8d8a82", "#7a5a34", "#cfc7b4"].map((c) => new THREE.Color(c));
+const DROP_S = 0.45;
+
 /** Puts garbage on `squares` and marks `light`, the square the light from the
  *  hole falls on, with a warm column and a pulsing glow. Returns { update(t),
- *  dispose() }; call update from everyFrame. */
+ *  warn(squares), bury(squares), dispose() }; call update from everyFrame.
+ *  warn() marks squares about to be buried (pulsing red); bury() drops a
+ *  heap of garbage onto them. */
 export function placeEscapeProps(ts, squares, light) {
   const group = new THREE.Group();
   for (const sq of squares) {
@@ -863,12 +885,70 @@ export function placeEscapeProps(ts, squares, light) {
     };
   }
   ts.scene.add(group);
+  const kit = heapAssets();
+  let clock = 0;
+  let warning = null;
+  const drops = [];
+  const matrix = new THREE.Matrix4(), q = new THREE.Quaternion(), scale = new THREE.Vector3(), pos = new THREE.Vector3();
+  const place = (mesh, i, at, spin, size, y) => {
+    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), spin);
+    scale.setScalar(size);
+    pos.set(at.x, y, at.z);
+    mesh.setMatrixAt(i, matrix.compose(pos, q, scale));
+  };
   return {
-    update(t) { pulse?.(t); },
+    update(t) {
+      clock = t;
+      pulse?.(t);
+      if (warning) warning.material.opacity = 0.22 + 0.22 * (0.5 + 0.5 * Math.sin(t * 9));
+      /* Heaps fall in, staggered a little, then stay still. */
+      for (const d of drops) {
+        if (d.done) continue;
+        let all = true;
+        d.squares.forEach((sq, i) => {
+          const k = Math.min(1, Math.max(0, (t - d.start - i * 0.03) / DROP_S));
+          if (k < 1) all = false;
+          const fall = (1 - k) * (1 - k) * 3.2;
+          const at = ts.worldOf(sq);
+          place(d.heap, i, at, d.spin[i], d.size[i], fall);
+          place(d.ball, i, at, -d.spin[i], d.size[i], fall);
+        });
+        d.heap.instanceMatrix.needsUpdate = true;
+        d.ball.instanceMatrix.needsUpdate = true;
+        d.done = all;
+      }
+    },
+    warn(squares) {
+      if (warning) { group.remove(warning); warning.material.dispose(); warning.dispose(); warning = null; }
+      if (!squares.length) return;
+      warning = new THREE.InstancedMesh(kit.warnGeometry, kit.warnMaterial.clone(), squares.length);
+      squares.forEach((sq, i) => place(warning, i, ts.worldOf(sq), 0, 1, 0.03));
+      warning.renderOrder = 1;
+      group.add(warning);
+    },
+    bury(squares) {
+      this.warn([]);
+      if (!squares.length) return;
+      const heap = new THREE.InstancedMesh(kit.heap, kit.material, squares.length);
+      const ball = new THREE.InstancedMesh(kit.ball, kit.material, squares.length);
+      const spin = squares.map((sq) => (sq * 2.399) % (Math.PI * 2));
+      const size = squares.map((sq) => 0.85 + ((sq * 37) % 30) / 100);
+      squares.forEach((sq, i) => {
+        heap.setColorAt(i, HEAP_COLOURS[(sq * 7) % 2]);
+        ball.setColorAt(i, HEAP_COLOURS[2 + ((sq * 5) % 3)]);
+      });
+      heap.castShadow = ball.castShadow = true;
+      heap.receiveShadow = true;
+      group.add(heap, ball);
+      drops.push({ squares, heap, ball, spin, size, start: clock, done: false });
+    },
     dispose() {
       ts.scene.remove(group);
+      if (warning) warning.material.dispose();
       group.traverse((o) => {
         if (!o.isMesh) return;
+        /* The heap kit is shared between floors and stays. */
+        if (o.isInstancedMesh) { o.dispose(); return; }
         o.geometry.dispose();
         /* Shared garbage materials stay; the light's own ones go. */
         if (o.material.map && (o.material.blending === THREE.AdditiveBlending)) { o.material.map.dispose(); o.material.dispose(); }

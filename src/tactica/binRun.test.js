@@ -1,14 +1,51 @@
 import { describe, test, expect } from "vitest";
 import {
   phasesForFloor, isStoryFloor, timerSeconds, ratingFor, rushDamage, pickPuzzle,
-  effectFloors, offer, choose, floorScore, REWARDS, CHALLENGES,
+  effectFloors, offer, choose, floorScore, REWARDS, CHALLENGES, maxPliesFor, rememberSeen, isBonusAfter, SEEN_MEMORY,
 } from "./binRun";
 
 const puzzle = (moves, fen = "8/8/8/8/8/8/8/8 w - - 0 1", id = "x", rating = 800) => ({ id, rating, fen, moves: Array(moves).fill("e4") });
 
 describe("the Bin Run", () => {
-  test("floors start with 2 phases and add one every 2 floors, up to 5", () => {
-    expect([1, 2, 3, 4, 5, 6, 7, 20].map(phasesForFloor)).toEqual([2, 2, 3, 3, 4, 4, 5, 5]);
+  test("floors 1-3 are a 2-puzzle warm-up, then 3, 4 and 5 puzzles", () => {
+    expect([1, 2, 3, 4, 6, 7, 10, 11, 30].map(phasesForFloor)).toEqual([2, 2, 2, 3, 3, 4, 4, 5, 5]);
+  });
+
+  test("puzzles stay short early on", () => {
+    expect([1, 3, 4, 10, 11].map(maxPliesFor)).toEqual([3, 3, 5, 5, Infinity]);
+  });
+
+  test("difficulty climbs every floor, steadily, and is capped", () => {
+    const r = Array.from({ length: 40 }, (_, i) => ratingFor(i + 1, 0));
+    expect(r[0]).toBe(550);
+    for (let i = 1; i < r.length; i++) expect(r[i]).toBeGreaterThanOrEqual(r[i - 1]);
+    expect(r[14]).toBe(1470);
+    expect(Math.max(...r)).toBeLessThanOrEqual(2300);
+    expect(ratingFor(5, 2)).toBeGreaterThan(ratingFor(5, 0));
+  });
+
+  test("new puzzles come before ones seen in earlier runs", () => {
+    const pool = [puzzle(1, undefined, "a"), puzzle(1, undefined, "b"), puzzle(1, undefined, "c")];
+    for (let i = 0; i < 10; i++) expect(pickPuzzle(pool, 800, new Set(), null, Math.random, { seen: ["a", "b"] }).id).toBe("c");
+    /* All seen: the one seen longest ago. */
+    expect(pickPuzzle(pool, 800, new Set(), null, Math.random, { seen: ["b", "c", "a"] }).id).toBe("b");
+  });
+
+  test("a length limit is kept while possible", () => {
+    const pool = [puzzle(5, undefined, "long"), puzzle(1, undefined, "short")];
+    expect(pickPuzzle(pool, 800, new Set(), null, Math.random, { maxPlies: 3 }).id).toBe("short");
+    expect(pickPuzzle([pool[0]], 800, new Set(), null, Math.random, { maxPlies: 3 }).id).toBe("long");
+  });
+
+  test("the seen memory keeps the newest ids, once each", () => {
+    expect(rememberSeen(["a", "b"], ["a", "c"])).toEqual(["b", "a", "c"]);
+    const many = rememberSeen([], Array.from({ length: SEEN_MEMORY + 5 }, (_, i) => String(i)));
+    expect(many).toHaveLength(SEEN_MEMORY);
+    expect(many.at(-1)).toBe(String(SEEN_MEMORY + 4));
+  });
+
+  test("bonus escapes follow floors 3, 8, 13", () => {
+    expect([2, 3, 4, 8, 13, 5].map(isBonusAfter)).toEqual([false, true, false, true, true, false]);
   });
 
   test("every 5th floor is a story floor", () => {
@@ -28,6 +65,7 @@ describe("the Bin Run", () => {
 
   test("puzzles get harder by floor, and much harder under the challenge", () => {
     expect(ratingFor(2, 0)).toBeGreaterThan(ratingFor(1, 0));
+    expect(ratingFor(30, 4, { id: "hard" }) - ratingFor(30, 4)).toBe(200);
     expect(ratingFor(1, 0, { id: "hard" }) - ratingFor(1, 0)).toBe(200);
   });
 

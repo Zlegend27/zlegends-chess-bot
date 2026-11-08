@@ -7,6 +7,7 @@ import { loadSetting, saveSetting } from "../utils/storage";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
 import { BrassButton, MapButton, MenuButton } from "./ui";
+import { play as playSound } from "./sound";
 import { loadBonds, levelsOf } from "./bonds";
 
 /* Regular Chess in the bin: a full game on the 3D board against the site's own
@@ -48,6 +49,19 @@ function engineSearch(moveList, bot) {
 
 /** The bot's move in the engine's own form, or null. */
 async function botMove(eng, moveList, bot) {
+  try {
+    /* A stuck engine falls back too, after a fair wait. */
+    const limit = (bot.ms || bot.moveTimeMs || 1000) + 5000;
+    const move = await Promise.race([searchFor(eng, moveList, bot), wait(limit).then(() => null)]);
+    if (move) return move;
+  } catch { /* fall back below */ }
+  const local = createEngine();
+  local.loadFen(eng.fen());
+  const found = local.search(400, bot.blunderChance || 0)?.move;
+  return found ? eng.legalMoves().find((m) => m === found) ?? null : null;
+}
+
+async function searchFor(eng, moveList, bot) {
   if (bot.stockfishElo) {
     const { uci } = await stockfishBestMove(eng.fen(), bot.stockfishElo, bot.moveTimeMs || 1000);
     let move = uci ? eng.moveFromUci(uci) : null;
@@ -177,7 +191,11 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
   /** Ends the game if the rules say it's over. */
   const checkOver = () => {
     const res = gameResult(eng);
-    if (!res) return false;
+    if (!res) {
+      if (eng.inCheckNow()) playSound("metal", { volume: 0.7, delay: 0.1 });
+      return false;
+    }
+    playSound(res.winner === side ? "confirm" : res.winner ? "error" : "chime", { volume: 0.8 });
     setResult(res);
     setStage("over");
     sceneRef.current?.setMarks({});
@@ -235,9 +253,11 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
     busyRef.current = true;
     setBusy(true);
     setChosen(null);
+    const game = gameIdRef.current;
     let list;
     try {
       const san = await animate(move, false);
+      if (game !== gameIdRef.current) return;
       list = [...moveList, san];
       setMoveList(list);
       const stillHere = friendlySquares(eng, side).indexOf(target);
@@ -246,7 +266,7 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
       busyRef.current = false;
       setBusy(false);
     }
-    if (!checkOver()) botTurn(list);
+    if (game === gameIdRef.current && !checkOver()) botTurn(list);
   };
 
   const resign = () => {
@@ -254,6 +274,7 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
     setMenuOpen(false);
     setThinking(false);
     setResult({ text: side === 1 ? "0–1" : "1–0", reason: "Resigned", winner: -side, resigned: true });
+    playSound("error", { volume: 0.5 });
     setStage("over");
     sceneRef.current?.setMarks({});
   };
@@ -295,7 +316,7 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
   const dropRef = useRef(null);
   dropRef.current = (sq) => {
     draggingRef.current = false;
-    if (sq != null && targets.includes(sq)) { play(sq); return true; }
+    if (sq != null && targets.includes(sq) && !busyRef.current) { play(sq); return true; }
     return false;
   };
   const toggleView = () => { if (!busy) setView((v) => (v === "board" ? "close" : "board")); };

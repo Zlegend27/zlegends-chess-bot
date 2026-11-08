@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { createEngine, mFrom, mPromo, mTo, M120TO64, EMPTY } from "../engine/chessEngine";
+import { stockfishBestMove, warmUpStockfish } from "../engine/stockfishEngine";
 import { PUZZLES } from "../utils/puzzles";
 import { judgePuzzleMove } from "../utils/puzzleSession";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin, placeEscapeProps } from "./sets/trashBin";
 import { BrassButton, MapButton, MenuButton } from "./ui";
-import { isEscapeFloor, makeEscape, movesOf, apply, escaped, strikerOf, piecesOf, fenOf, escapeSeconds } from "./escape";
+import { play as playSound } from "./sound";
+import { makeEscape, movesOf, apply, escaped, strikerOf, piecesOf, fenOf, escapeClock, closeRing, outerRing, ringSquares, allStuck } from "./escape";
+import { loadSetting, saveSetting } from "../utils/storage";
 import {
   START_HEALTH, WRONG_MOVE_DAMAGE, phasesForFloor, isStoryFloor, timerSeconds, ratingFor,
-  rushDamage, pickPuzzle, effectFloors, offer, choose, floorScore,
+  rushDamage, pickPuzzle, effectFloors, offer, choose, floorScore, maxPliesFor, rememberSeen, isBonusAfter,
 } from "./binRun";
 import { loadBonds, levelsOf, recordMove, levelUpText } from "./bonds";
 
@@ -18,12 +21,16 @@ import { loadBonds, levelsOf, recordMove, levelUpText } from "./bonds";
    while anything is animating. A wrong move gets punished by the enemy's
    best reply and costs a quarter of your health; a timer running out brings
    an enemy rush. Between floors, pick one reward or one challenge.
-   Floors 3, 8, 13... are Escape floors instead (escape.js): reach the square
-   the light falls on within a few moves, past garbage that blocks squares
-   and guards that strike anyone ending a move where they attack.
+   After floors 3, 8, 13... comes a bonus Escape (escape.js): reach the
+   square the light falls on before the garbage closes in, ring by ring,
+   past guards that strike anyone ending a move where they attack. Escaping
+   heals 25%; not escaping costs nothing but the heal. Puzzles you've seen
+   in recent runs come last, so runs don't repeat.
    Same controls as the tutorial: tap a character, tap a glowing square to
    see the move, tap it again to play it; dragging plays at once. */
 const KNIGHT = 2, QUEEN = 5;
+/* Escaping a bonus floor heals this much. */
+const BONUS_HEAL = 25;
 const VALUE = [0, 1, 3, 3, 5, 9, 100];
 const sqOf = (sq120) => M120TO64[sq120];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -63,6 +70,12 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
   const draggingRef = useRef(false);
   /* The phase timer: time left while paused, or the moment it runs out. */
   const timerRef = useRef({ running: false, left: 0, deadline: 0 });
+  /* The second last ticked, so each of the final ten ticks once. */
+  const tickRef = useRef(null);
+  /* Bumped when a run starts or ends. Moves, timers and bonus floors still
+     finishing from an earlier run check it and stop, so quitting mid-move
+     can't open a reward screen over "Run over". */
+  const runIdRef = useRef(0);
 
   const [stage, setStage] = useState("intro"); // intro | story | playing | choice | cursed | over
   const [floor, setFloor] = useState(1);
@@ -101,8 +114,17 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
   const [turn, setTurn] = useState(0);
   /* An Escape floor in progress: { start, state, used } (moves used), or null
      on a puzzle floor. The garbage and light props live in propsRef. */
-  const [escape, setEscape] = useState(null);
+  const [escape, setEscapeState] = useState(null);
+  const escapeRef = useRef(null);
+  const setEscape = (v) => {
+    const next = typeof v === "function" ? v(escapeRef.current) : v;
+    escapeRef.current = next;
+    setEscapeState(next);
+  };
   const propsRef = useRef(null);
+  /* Puzzle ids seen in recent runs, oldest first. */
+  const seenRef = useRef(null);
+  if (seenRef.current == null) { const saved = loadSetting("tacticaRunSeen", []); seenRef.current = Array.isArray(saved) ? saved : []; }
 
   const escapeFriends = escape ? [...escape.state.mine.keys()].sort((a, b) => ((b / 8) | 0) - ((a / 8) | 0) || (a % 8) - (b % 8)) : [];
   const friends = escape ? escapeFriends : puzzle ? friendlySquares(eng, side) : [];
@@ -168,14 +190,17 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
   const resumeTimer = () => {
     const t = timerRef.current;
     if (t.running) return;
+    /* Hidden (another app is in front): start again when the game is back. */
+    if (document.hidden) { t.waitVisible = true; return; }
     t.deadline = performance.now() + t.left;
     t.running = true;
   };
   /** A fresh timer for puzzle `p`, or for an Escape floor's `level`. */
   const resetTimer = (p, eff, level = null) => {
     const adjust = eff?.id === "time" ? 10 : eff?.id === "fuse" ? -10 : 0;
-    const seconds = level ? Math.max(10, escapeSeconds(level) + adjust) : timerSeconds(p, eff);
+    const seconds = level ? Math.max(10, escapeClock(level).total + adjust) : timerSeconds(p, eff);
     timerRef.current = { running: false, left: seconds * 1000, deadline: 0 };
+    tickRef.current = null;
     setTimeLeft(timerRef.current.left);
   };
   useEffect(() => {
@@ -184,6 +209,11 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
       const t = timerRef.current;
       const left = t.running ? t.deadline - performance.now() : t.left;
       setTimeLeft(left);
+      if ((t.running ? left : 0) > 0 && (t.running ? left : 0) < 10000) {
+        const sec = Math.ceil((t.running ? left : 0) / 1000);
+        if (sec !== tickRef.current) { tickRef.current = sec; playSound("tick", { volume: 0.5 }); }
+      }
+      if (escapeRef.current) ringTickRef.current(left);
       if (t.running && left <= 0) timeUpRef.current();
     }, 100);
     return () => clearInterval(id);
@@ -203,6 +233,25 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, selected, chosen, played, stage, puzzle, busy, escape]);
 
+  useEffect(() => { warmUpStockfish(); }, []);
+
+  /* Leaving the game (another app, a call, locking the phone) pauses the
+     clock; it carries on when you come back, unless something was already
+     paused for an animation. */
+  useEffect(() => {
+    const onVisibility = () => {
+      const t = timerRef.current;
+      if (document.hidden) {
+        if (t.running) { t.left = Math.max(0, t.deadline - performance.now()); t.running = false; t.waitVisible = true; }
+      } else if (t.waitVisible) {
+        t.waitVisible = false;
+        if (!busyRef.current) { t.deadline = performance.now() + t.left; t.running = true; }
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
+
   useEffect(() => {
     if (!menuOpen) return;
     const onKey = (e) => { if (e.key === "Escape") setMenuOpen(false); };
@@ -212,6 +261,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
 
   /* ---- Run flow ---- */
   const startRun = () => {
+    runIdRef.current++;
     usedRef.current = new Set();
     setHealth(START_HEALTH);
     setEffect(null);
@@ -237,10 +287,11 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
     setEscape(null);
   };
 
-  /** An Escape floor: a fresh level, always played from the near side. */
-  const startEscape = async (f, eff) => {
+  /** The bonus escape after floor `f`: a fresh level, always played from
+   *  the near side. `onDone` carries on with the run afterwards. */
+  const startEscape = async (f, eff, onDone) => {
     const level = makeEscape(f);
-    if (!level) { clearEscape(); return startPuzzleBattle(f, eff); }
+    if (!level) { onDone(); return; }
     const scene = sceneRef.current;
     busyRef.current = true;
     setBusy(true);
@@ -251,10 +302,12 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
     setPlayed([]);
     setChosen(null);
     setSelectedIdx(0);
-    setEscape({ start: level, state: level, used: 0 });
     const startView = eff?.id === "nomap" ? "close" : "board";
     setView(startView);
     resetTimer(null, eff, level);
+    /* The rings close evenly over the clock actually given (a reward or
+       challenge can change it), the last one as it runs out. */
+    setEscape({ start: level, state: level, closed: 0, warned: 0, onDone, total: timerRef.current.left / 1000 });
     setStage("playing");
     if (scene) {
       propsRef.current?.dispose();
@@ -263,22 +316,30 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
       propsRef.current = placeEscapeProps(scene, [...level.junk], level.light);
       if (startView === "board") scene.showBoard();
     }
-    say(`Floor ${f} · Escape to the light`, "info");
+    say("Bonus · reach the light before the garbage closes in", "info");
     busyRef.current = false;
     setBusy(false);
     resumeTimer();
   };
 
   const startBattle = (f, eff) => {
-    if (isEscapeFloor(f)) return startEscape(f, eff);
     clearEscape();
     return startPuzzleBattle(f, eff);
+  };
+
+  /** The next puzzle: near the floor's rating, short enough for the floor,
+   *  new to you if possible. It's remembered so later runs show others. */
+  const pickFor = (f, phaseIndex, eff, s = null) => {
+    const p = pickPuzzle(PUZZLES, ratingFor(f, phaseIndex, eff), usedRef.current, s, Math.random, { seen: seenRef.current, maxPlies: maxPliesFor(f) });
+    seenRef.current = rememberSeen(seenRef.current, [p.id]);
+    saveSetting("tacticaRunSeen", seenRef.current);
+    return p;
   };
 
   const startPuzzleBattle = async (f, eff) => {
     const total = phasesForFloor(f);
     setPhases(total);
-    const first = pickPuzzle(PUZZLES, ratingFor(f, 0, eff), usedRef.current);
+    const first = pickFor(f, 0, eff);
     const s = first.fen.split(" ")[1] === "b" ? -1 : 1;
     setSide(s);
     await loadPhase(first, 0, eff, true, f);
@@ -307,7 +368,9 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
         scene.setFlipped(eng.getSide() === -1);
         scene.setPieces(piecesNow());
       } else {
+        const run = runIdRef.current;
         await scene.regroupTo(piecesNow());
+        if (run !== runIdRef.current) return;
       }
       if (startView === "board") scene.showBoard();
     }
@@ -319,9 +382,12 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
 
   const nextAfterPhase = async () => {
     if (phase + 1 < phases) {
+      playSound("chime", { volume: 0.8 });
       say("Phase cleared", "good");
+      const run = runIdRef.current;
       await wait(500);
-      const p = pickPuzzle(PUZZLES, ratingFor(floor, phase + 1, effect), usedRef.current, side);
+      if (run !== runIdRef.current) return;
+      const p = pickFor(floor, phase + 1, effect, side);
       await loadPhase(p, phase + 1, effect, false);
       return;
     }
@@ -329,6 +395,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
     const gained = floorScore(effect);
     const newScore = score + gained;
     setScore(newScore);
+    playSound("confirm", { volume: 0.8 });
     say(gained > 1 ? "Floor cleared · double score" : "Floor cleared", "good");
     let eff = effect;
     if (eff) {
@@ -336,13 +403,19 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
       if (eff.floorsLeft <= 0) eff = null;
       setEffect(eff);
     }
+    const run = runIdRef.current;
     await wait(900);
-    if (!eff && effectFloors(floor) > 0) {
-      setChoices(offer());
-      setStage("choice");
-      return;
-    }
-    beginFloor(floor + 1, eff);
+    if (run !== runIdRef.current) return;
+    const proceed = () => {
+      if (!eff && effectFloors(floor) > 0) {
+        setChoices(offer());
+        setStage("choice");
+        return;
+      }
+      beginFloor(floor + 1, eff);
+    };
+    if (isBonusAfter(floor)) { startEscape(floor, eff, proceed); return; }
+    proceed();
   };
 
   const pick = (option, kind) => {
@@ -351,6 +424,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
     setEffect(res.effect);
     setChoices(null);
     if (res.cursed) {
+      playSound("crack", { volume: 1 });
       setCurse(res);
       setStage("cursed");
       return;
@@ -360,6 +434,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
   const skipChoice = () => { setChoices(null); beginFloor(floor + 1, null); };
 
   const takeDamage = (amount) => {
+    playSound("punchHeavy", { volume: 0.9 });
     const left = Math.max(0, healthRef.current - amount);
     setHealth(left);
     setHurt((n) => n + 1);
@@ -367,6 +442,9 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
   };
 
   const endRun = () => {
+    runIdRef.current++;
+    busyRef.current = false;
+    setBusy(false);
     pauseTimer();
     setStage("over");
     sceneRef.current?.setMarks({});
@@ -390,6 +468,23 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
     return { from, to, captured };
   };
 
+  /** The enemy's best answer to a wrong move, searched by Stockfish in its
+   *  worker so the game keeps running smoothly; the built-in engine is the
+   *  fallback if Stockfish can't answer. */
+  const punishingReply = async () => {
+    const fen = eng.fen();
+    try {
+      /* Never wait on it for long: a stuck engine falls back too. */
+      const { uci } = await Promise.race([stockfishBestMove(fen, 2600, 300), wait(2500).then(() => ({ uci: null }))]);
+      const move = uci ? eng.moveFromUci(uci) : null;
+      if (move) return move;
+    } catch { /* fall back below */ }
+    const search = createEngine();
+    search.loadFen(fen);
+    const found = search.search(280)?.move;
+    return found ? eng.legalMoves().find((m) => m === found) ?? null : null;
+  };
+
   /** The most valuable of the player's pieces the enemy now threatens,
    *  preferring ones the piece that just moved attacks. */
   const threatenedBy = (fromSq) => {
@@ -408,9 +503,63 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
     return best;
   };
 
-  /** A move on an Escape floor. Ending where a guard attacks: it strikes,
-   *  −25%, and the floor starts over. Running out of moves does the same
-   *  damage. Reaching the light clears the floor. */
+  /** Ends the bonus escape: a heal if you made it, nothing lost if not. */
+  const finishBonus = async (won, text) => {
+    const done = escapeRef.current?.onDone;
+    const run = runIdRef.current;
+    pauseTimer();
+    busyRef.current = true;
+    setBusy(true);
+    setChosen(null);
+    if (won) { setHealth((h) => Math.min(START_HEALTH, h + BONUS_HEAL)); playSound("shimmer", { volume: 0.9 }); playSound("confirm", { volume: 0.8, delay: 0.2 }); }
+    else playSound("error", { volume: 0.4 });
+    say(text, won ? "good" : "info");
+    await wait(1400);
+    if (run !== runIdRef.current) return;
+    clearEscape();
+    busyRef.current = false;
+    setBusy(false);
+    done?.();
+  };
+
+  /** Called with the time left on every timer tick of a bonus floor: marks
+   *  the next ring shortly before it closes, then buries it. Pieces caught
+   *  under it are stuck; if all of yours are, the bonus is over. */
+  const ringTickRef = useRef(null);
+  ringTickRef.current = (left) => {
+    const e = escapeRef.current;
+    if (!e || !timerRef.current.running) return;
+    const { warn } = escapeClock(e.start);
+    const outer = outerRing(e.start);
+    const total = e.total, interval = total / outer;
+    const elapsed = total - left / 1000;
+    const due = Math.min(outer, Math.floor(elapsed / interval));
+    const nextRing = outer - e.closed;
+    if (e.warned <= e.closed && e.closed < outer && elapsed >= (e.closed + 1) * interval - warn) {
+      propsRef.current?.warn(ringSquares(e.state, nextRing).filter((sq) => sq !== e.start.light));
+      playSound("scrape", { volume: 0.7 });
+      setEscape({ ...e, warned: e.closed + 1 });
+      return;
+    }
+    if (due <= e.closed) return;
+    let state = e.state;
+    const buried = [];
+    for (let k = e.closed + 1; k <= due; k++) {
+      const ring = outer - k + 1;
+      buried.push(...ringSquares(state, ring).filter((sq) => sq !== e.start.light));
+      state = closeRing(state, ring);
+    }
+    propsRef.current?.bury(buried);
+    playSound("drop", { volume: 0.8 });
+    playSound("poof", { volume: 0.5, delay: 0.25 });
+    for (const sq of state.stuck ?? []) sceneRef.current?.sink(sq);
+    for (const sq of buried) if (e.state.guards.has(sq)) sceneRef.current?.sink(sq);
+    setEscape({ ...e, state, closed: due, warned: Math.max(e.warned, due) });
+    if (allStuck(state)) finishBonus(false, "Buried by the garbage · no bonus");
+  };
+
+  /** A move on a bonus escape. Ending where a guard attacks: it strikes,
+   *  −25%, and the bonus is over. Reaching the light heals. */
   const playEscape = async (target) => {
     const move = escapeMoves.find((m) => m.to === target);
     if (!move) return;
@@ -419,44 +568,33 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
     setBusy(true);
     setChosen(null);
     pauseTimer();
-    const restartFloor = async (text) => {
-      say(text, "bad");
-      const left = takeDamage(WRONG_MOVE_DAMAGE);
-      if (left <= 0) { await wait(700); endRun(); return; }
-      await wait(500);
-      await scene?.regroupTo(piecesOf(escape.start));
-      setEscape((e) => ({ ...e, state: e.start, used: 0 }));
-      setSelectedIdx(0);
-      setView(effect?.id === "nomap" ? "close" : "board");
-      resumeTimer();
-    };
+    let ending = null;
+    const run = runIdRef.current;
     try {
-      const type = escape.state.mine.get(move.from);
+      const now = escapeRef.current.state;
+      const type = now.mine.get(move.from);
       await scene?.animateMove(move.from, move.to, { knight: type === KNIGHT, captured: move.capture ? move.to : null, pace });
-      const after = apply(escape.state, move);
-      const used = escape.used + 1;
+      if (run !== runIdRef.current) return;
+      const after = apply(now, move);
       if (move.deadly) {
         const striker = strikerOf(after, move.to);
         if (striker != null) {
           await scene?.animateMove(striker, move.to, { knight: after.guards.get(striker) === KNIGHT, captured: move.to, follow: true, pace });
         }
-        await restartFloor("A guard struck · −" + WRONG_MOVE_DAMAGE + "%");
+        const left = takeDamage(WRONG_MOVE_DAMAGE);
+        if (left <= 0) { say("A guard struck · −" + WRONG_MOVE_DAMAGE + "%", "bad"); await wait(700); endRun(); return; }
+        ending = [false, "A guard struck · −" + WRONG_MOVE_DAMAGE + "% · no bonus"];
         return;
       }
-      setEscape((e) => ({ ...e, state: after, used }));
+      setEscape((e) => ({ ...e, state: after }));
       const stillHere = [...after.mine.keys()].sort((a, b) => ((b / 8) | 0) - ((a / 8) | 0) || (a % 8) - (b % 8)).indexOf(move.to);
       if (stillHere >= 0) setSelectedIdx(stillHere);
-      if (escaped(after)) {
-        say("Into the light!", "good");
-        await wait(700);
-        await nextAfterPhase();
-        return;
-      }
-      if (used >= escape.start.limit) { await restartFloor("Out of moves · −" + WRONG_MOVE_DAMAGE + "%"); return; }
+      if (escaped(after)) { ending = [true, `Into the light! +${BONUS_HEAL}% health`]; return; }
       resumeTimer();
     } finally {
       busyRef.current = false;
       setBusy(false);
+      if (ending && run === runIdRef.current) finishBonus(...ending);
     }
   };
 
@@ -470,28 +608,34 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
     setBusy(true);
     setChosen(null);
     pauseTimer();
+    const run = runIdRef.current;
+    const gone = () => run !== runIdRef.current;
     try {
       if (!verdict.ok) {
         /* Wrong: the move is played, the enemy punishes it with its best
            reply, then everything goes back for another try. */
         const before = eng.fen();
         await animate(move);
-        const search = createEngine();
-        search.loadFen(eng.fen());
-        const reply = search.search(280)?.move;
+        if (gone()) return;
+        const reply = await punishingReply();
+        if (gone()) return;
         if (reply) {
-          const r = await animate(eng.legalMoves().find((m) => m === reply) ?? reply);
+          const r = await animate(reply);
+          if (gone()) return;
           if (r.captured == null) {
             const threat = threatenedBy(r.to);
             if (threat) await sceneRef.current?.scare(threat.from, threat.to);
           }
         }
+        playSound("error", { volume: 0.6 });
         say(`${verdict.san} was punished · −${WRONG_MOVE_DAMAGE}%`, "bad");
         const left = takeDamage(WRONG_MOVE_DAMAGE);
-        if (left <= 0) { await wait(700); endRun(); return; }
+        if (left <= 0) { await wait(700); if (!gone()) endRun(); return; }
         await wait(500);
+        if (gone()) return;
         eng.loadFen(before);
         await sceneRef.current?.regroupTo(piecesNow());
+        if (gone()) return;
         setTick((t) => t + 1);
         setView(effect?.id === "nomap" ? "close" : "board");
         resumeTimer();
@@ -499,8 +643,9 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
       }
       /* The piece that played it grows closer to you. */
       const bond = recordMove(eng.pieceAt(sqOf(mFrom(move))), { capture: eng.pieceAt(target) !== EMPTY, final: verdict.solved });
-      if (bond.levelUp) { sceneRef.current?.setBonds(levelsOf(bond.bonds)); say(levelUpText(bond.kind, bond.levelUp), "good"); }
+      if (bond.levelUp) { sceneRef.current?.setBonds(levelsOf(bond.bonds)); playSound("shimmer", { volume: 0.8 }); say(levelUpText(bond.kind, bond.levelUp), "good"); }
       await animate(move);
+      if (gone()) return;
       const afterMine = [...played, verdict.san];
       if (verdict.solved) {
         setPlayed(afterMine);
@@ -508,8 +653,10 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
         return;
       }
       await wait(350);
+      if (gone()) return;
       const reply = eng.legalMoves().find((m) => eng.sanOf(m) === verdict.reply);
       if (reply) await animate(reply);
+      if (gone()) return;
       setPlayed([...afterMine, verdict.reply]);
       const stillHere = friendlySquares(eng, side).indexOf(sqOf(mTo(move)));
       setSelectedIdx((i) => (stillHere >= 0 ? stillHere : Math.min(i, friendlySquares(eng, side).length - 1)));
@@ -525,15 +672,19 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
   const timeUpRef = useRef(null);
   timeUpRef.current = async () => {
     if (busyRef.current) return;
+    if (escapeRef.current) { finishBonus(false, "The garbage closed in · no bonus"); return; }
     busyRef.current = true;
     setBusy(true);
     pauseTimer();
     setChosen(null);
     setView("board");
     sceneRef.current?.showBoard();
+    const run = runIdRef.current;
     await wait(400);
+    if (run !== runIdRef.current) return;
     say("Time's up · the enemy rushes!", "bad");
     await sceneRef.current?.rush();
+    if (run !== runIdRef.current) return;
     let left = healthRef.current;
     if (effect?.id === "shield" && !effect.shieldUsed) {
       setEffect({ ...effect, shieldUsed: true });
@@ -585,14 +736,14 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
   const dropRef = useRef(null);
   dropRef.current = (sq) => {
     draggingRef.current = false;
-    if (sq != null && targets.includes(sq)) { play(sq); return true; }
+    if (sq != null && targets.includes(sq) && !busyRef.current) { play(sq); return true; }
     return false;
   };
   const toggleView = () => { if (!busy && !mapLocked) setView((v) => (v === "board" ? "close" : "board")); };
   const squareName = (sq) => `${"abcdefgh"[sq % 8]}${((sq / 8) | 0) + 1}`;
   const pieceName = (sq) => ["", "Pawn", "Knight", "Bishop", "Rook", "Queen", "King"][escape ? escape.state.mine.get(sq) : Math.abs(eng.pieceAt(sq))] + ` on ${squareName(sq)}`;
   const isAttack = chosen != null && captures.includes(chosen);
-  const hint = busy ? "…" : view === "board" ? (escape ? "Reach the glowing square. Don't stop where a guard strikes." : "Tap a character to take a closer look")
+  const hint = busy ? "…" : view === "board" ? (escape ? "Reach the light. Don't stop where a guard strikes." : "Tap a character to take a closer look")
     : !targets.length ? "This one can't move"
     : chosen != null ? (isAttack ? `Tap ${squareName(chosen)} again to strike` : `Tap ${squareName(chosen)} again to move`)
     : "Tap a glowing square, or drag there";
@@ -612,8 +763,8 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
               <div className="flex items-center gap-2.5">
                 <MenuButton open={menuOpen} onClick={() => setMenuOpen((o) => !o)} />
                 <div>
-                  <div className="tc-label">Floor {floor}</div>
-                  <div className="tc-display text-[15px]">{escape ? `Escape · ${escape.start.limit - escape.used} move${escape.start.limit - escape.used === 1 ? "" : "s"} left` : `Phase ${phase + 1} of ${phases}`}</div>
+                  <div className="tc-label">{escape ? "Bonus" : `Floor ${floor}`}</div>
+                  <div className="tc-display text-[15px]">{escape ? "Escape to the light" : `Phase ${phase + 1} of ${phases}`}</div>
                 </div>
               </div>
               <div role="timer" className={"tc-plate text-[26px] " + (low ? "tc-low" : "")}>{clock(timeLeft)}</div>
@@ -678,7 +829,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
             <li>A wrong move gets punished and costs 25% health.</li>
             <li>If the timer runs out, the enemy rushes you for 50%.</li>
             <li>Between floors, pick a reward, or take a challenge for double score.</li>
-            <li>Some floors are escapes: reach the light past the garbage without stopping where a guard can strike.</li>
+            <li>After floors 3, 8 and 13, a bonus escape: reach the light before the garbage closes in to heal 25%.</li>
           </ul>
           {best ? <p className="tc-label m-0">Your best · {best}</p> : null}
           <BrassButton onClick={startRun}>Start the run</BrassButton>
