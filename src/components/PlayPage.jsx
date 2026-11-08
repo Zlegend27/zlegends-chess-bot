@@ -1,6 +1,6 @@
 import { useState } from "react";
 import StarField from "./StarField";
-import PixelAvatar, { ZPAL, ZPIX } from "./PixelAvatar";
+import PixelAvatar, { ZPAL, ZPIX, TPAL, TPIX } from "./PixelAvatar";
 import { getUiTheme } from "../utils/uiTheme";
 
 const OTHER_MODES = [
@@ -10,7 +10,7 @@ const OTHER_MODES = [
 
 /** Where a new game starts. `levels` are the bots in the order to offer them,
  *  each with its index in DIFFICULTIES. Picking one starts a game. */
-export default function PlayPage({ levels, hasLiveGame, onPick, onResume, onMode, onLobby, sweetheart }) {
+export default function PlayPage({ levels, hasLiveGame, onPick, onResume, onMode, onLobby, onTactica, sweetheart }) {
   const T = getUiTheme(sweetheart);
   const [open, setOpen] = useState(false);
   const card = `rounded-2xl border ${T.cardBorder} ${T.panelBg} backdrop-blur-sm`;
@@ -59,6 +59,16 @@ export default function PlayPage({ levels, hasLiveGame, onPick, onResume, onMode
             </div>
           )}
         </div>
+
+        {/* Chess Tactica: the game played by the living wooden pieces. */}
+        <button
+          type="button"
+          onClick={onTactica}
+          className={`${card} flex w-full cursor-pointer items-center gap-3 p-4 text-left transition hover:-translate-y-0.5 ${focus}`}
+        >
+          <PixelAvatar rows={TPIX} pal={TPAL} size={40} />
+          <span className={"flex-1 text-base font-bold " + T.ink}>Chess Tactica</span>
+        </button>
 
         <button type="button" onClick={onLobby} className={`${card} cursor-pointer p-4 text-left`}>
           <span className="flex items-center justify-between gap-2">

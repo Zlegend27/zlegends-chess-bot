@@ -2518,6 +2518,7 @@ export default function ZlegendsBot() {
         onResume={() => setSiteView("play")}
         onMode={enterMode}
         onLobby={() => setSiteView("lobby")}
+        onTactica={() => setSiteView("tactica")}
         sweetheart={sweetheart}
       />
     );

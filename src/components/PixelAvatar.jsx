@@ -34,6 +34,33 @@ export const ZPIX = [
   "...........pssp..pssp...........",
   "............pp....pp............",
 ];
+/* The Chess Tactica pawn: the white wooden pawn with its big eyes, sword
+   raised and shield up, in the chess set's colours. */
+export const TPAL = { o: "#2a1406", w: "#FDF3E7", s: "#DECDBC", e: "#ffffff", k: "#0c0806", m: "#c9cdd3", n: "#f4f6f8", h: "#5b3a1e", r: "#3b2414", b: "#a8733d", y: "#c9a14a", f: "#1d4a2c" };
+export const TPIX = [
+  "....................o...",
+  "........oooooo.....ono..",
+  "........owwwso.....omo..",
+  ".......owwwwwso....omo..",
+  "......owkkwwkkso...omo..",
+  "......oweewweeso...omo..",
+  "......owekwwekso...omo..",
+  "......owwwwwwwso...omo..",
+  ".......owwwwwso....omo..",
+  "........oooooo.....omo..",
+  ".........owwo.....ohhho.",
+  ".ooooo.owwwwwso....oho..",
+  "orrrrro.owwwsoooooooooo.",
+  "orbbbro.owwwswwwwwwwwwo.",
+  "orbybroowwwwwsooooooooo.",
+  "orbybrowwwwwwwso........",
+  "orbbbrowwwwwwwwso.......",
+  ".orrrowwwwwwwwwso.......",
+  "..ooosssssssssssso......",
+  "...owwwwwwwwwwwwwso.....",
+  "...offffffffffffffo.....",
+  "...oooooooooooooooo.....",
+];
 export const JPAL = { o: "#150C24", p: "#8B2FC9", c: "#3EE7F5", s: "#F5D93E", w: "#E9B8FF" };
 export const JPIX = [
   ".........so.",
