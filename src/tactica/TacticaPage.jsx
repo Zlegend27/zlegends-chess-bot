@@ -266,8 +266,9 @@ export default function TacticaPage({ pieceImgSrc, sweetheart }) {
     : chosen != null ? (isAttack ? `Tap ${squareName(chosen)} again to strike` : `Tap ${squareName(chosen)} again to move`)
     : "Tap a glowing square, or drag there";
   const toggleView = () => { if (!busy || played.length) setView((v) => (v === "board" ? "close" : "board")); };
-  /* Dragging across the map turns the view; a tap still switches views. */
-  const MAP_TURN_PER_PX = 0.03, MAP_DRAG_PX = 6;
+  /* Dragging across the map turns the view from a character's close view
+     (the whole-board view always faces front); a tap still switches views. */
+  const MAP_TURN_PER_PX = 0.012, MAP_DRAG_PX = 6;
   const mapDown = (e) => {
     mapDragRef.current = { id: e.pointerId, x: e.clientX, moved: false };
     e.currentTarget.setPointerCapture?.(e.pointerId);
@@ -279,7 +280,7 @@ export default function TacticaPage({ pieceImgSrc, sweetheart }) {
     if (!drag.moved && Math.abs(dx) < MAP_DRAG_PX) return;
     drag.moved = true;
     drag.x = e.clientX;
-    sceneRef.current?.spinBy(dx * MAP_TURN_PER_PX);
+    if (view === "close") sceneRef.current?.spinBy(dx * MAP_TURN_PER_PX);
   };
   const mapUp = () => { setTimeout(() => { mapDragRef.current = null; }, 0); };
   const mapClick = () => { if (!mapDragRef.current?.moved) toggleView(); };
@@ -310,7 +311,7 @@ export default function TacticaPage({ pieceImgSrc, sweetheart }) {
           onPointerUp={mapUp}
           onPointerCancel={mapUp}
           aria-label={view === "board" ? "Back to the close view" : "Show the whole board"}
-          title="Tap to switch views, drag to turn the view"
+          title={view === "close" ? "Tap to see the whole board, drag to turn the view" : "Tap to go back to the close view"}
           aria-pressed={view === "board"}
           className={"pointer-events-auto shrink-0 cursor-pointer touch-none rounded-lg border-2 bg-black/40 p-1 " + (view === "board" ? "border-[var(--cyan)] " : "border-white/30 ") + focusRing}
         >

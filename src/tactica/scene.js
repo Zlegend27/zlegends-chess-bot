@@ -445,9 +445,11 @@ export class TacticaScene {
   /** Strategic view: the whole board. */
   showBoard() {
     if (this.holdCamera(() => this.showBoard())) return;
+    /* The whole-board view always faces the board from the player's side. */
     this.lastSq = null;
     this.pivot.set(0, 0, 0);
-    if (!this.manualTurn) this.setTurn(0);
+    this.manualTurn = false;
+    this.setTurn(0);
     this.moveCamera(turnAround(this.pivot, new THREE.Vector3(0, 11, 8), this.turn), turnAround(this.pivot, new THREE.Vector3(0, 0, 0.6), this.turn));
   }
 
