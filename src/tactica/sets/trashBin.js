@@ -743,3 +743,136 @@ export function dressTrashBin(ts) {
     },
   };
 }
+
+/* ---- Escape floors: garbage on squares and the square the light falls on ---- */
+
+/* Small things that really are about a square across at this scale (one
+   unit is about 4.5 cm): a crumpled receipt, a ball of foil, bottle caps and
+   an eggshell. Each sits on a dark stain so the square reads as blocked. */
+let junkMats = null;
+function junkMaterials() {
+  if (junkMats) return junkMats;
+  junkMats = {
+    paper: new THREE.MeshStandardMaterial({ map: newsprintTexture(), roughness: 0.92, flatShading: true }),
+    receipt: new THREE.MeshStandardMaterial({ color: "#f1ede2", roughness: 0.95, flatShading: true }),
+    foil: new THREE.MeshStandardMaterial({ color: "#d5d9de", metalness: 1, roughness: 0.32, flatShading: true }),
+    caps: ["#c0262e", "#1d5fb0", "#c9a14a"].map((color) => new THREE.MeshStandardMaterial({ color, metalness: 0.75, roughness: 0.35 })),
+    capInside: new THREE.MeshStandardMaterial({ color: "#9aa0a6", metalness: 0.8, roughness: 0.4 }),
+    eggshell: new THREE.MeshStandardMaterial({ color: "#efe6d8", roughness: 0.7, side: THREE.DoubleSide }),
+    stain: new THREE.MeshBasicMaterial({ color: "#1a0e05", transparent: true, opacity: 0.55, depthWrite: false }),
+  };
+  return junkMats;
+}
+
+/** One piece of square-sized garbage, seeded so a level always looks the same. */
+function squareJunk(seed) {
+  const M = junkMaterials();
+  const r = rng(seed);
+  const g = new THREE.Group();
+  const stain = new THREE.Mesh(new THREE.CircleGeometry(0.46, 20), M.stain);
+  stain.rotation.x = -Math.PI / 2;
+  stain.position.y = 0.006;
+  stain.scale.set(1, 0.8 + r() * 0.3, 1);
+  g.add(stain);
+  const kind = Math.floor(r() * 4);
+  if (kind === 0 || kind === 1) {
+    /* A crumpled receipt or a ball of foil. */
+    const ball = new THREE.Mesh(crumple(new THREE.IcosahedronGeometry(0.4, 2), 0.3, seed), kind === 0 ? (r() < 0.5 ? M.paper : M.receipt) : M.foil);
+    ball.position.y = 0.33;
+    ball.rotation.set(r() * 6, r() * 6, r() * 6);
+    g.add(ball);
+  } else if (kind === 2) {
+    /* Two or three bottle caps, one on its back. */
+    const n = 2 + Math.floor(r() * 2);
+    for (let i = 0; i < n; i++) {
+      const cap = new THREE.Group();
+      const shell = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.32, 0.14, 21, 1, true), M.caps[Math.floor(r() * M.caps.length)]);
+      const top = new THREE.Mesh(new THREE.CircleGeometry(0.3, 21), M.capInside);
+      top.rotation.x = -Math.PI / 2;
+      top.position.y = 0.07;
+      cap.add(shell, top);
+      if (i === 0) cap.rotation.x = Math.PI;
+      const a = (i / n) * Math.PI * 2 + r();
+      cap.position.set(Math.cos(a) * 0.2, 0.07 + (i === n - 1 && n === 3 ? 0.14 : 0), Math.sin(a) * 0.2);
+      cap.rotation.y = r() * 6;
+      g.add(cap);
+    }
+  } else {
+    /* A broken eggshell. */
+    for (const x of [-0.18, 0.2]) {
+      const half = new THREE.Mesh(new THREE.SphereGeometry(0.26, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), M.eggshell);
+      half.position.set(x, 0.2, (r() - 0.5) * 0.2);
+      half.rotation.set(Math.PI + (r() - 0.5) * 1.2, r() * 6, (r() - 0.5) * 0.8);
+      g.add(half);
+    }
+  }
+  g.rotation.y = r() * Math.PI * 2;
+  g.traverse((o) => { if (o.isMesh && o.material !== M.stain) { o.castShadow = true; o.receiveShadow = true; } });
+  return g;
+}
+
+/** Puts garbage on `squares` and marks `light`, the square the light from the
+ *  hole falls on, with a warm column and a pulsing glow. Returns { update(t),
+ *  dispose() }; call update from everyFrame. */
+export function placeEscapeProps(ts, squares, light) {
+  const group = new THREE.Group();
+  for (const sq of squares) {
+    const junk = squareJunk(sq * 131 + 7);
+    junk.position.copy(ts.worldOf(sq));
+    group.add(junk);
+  }
+  let pulse = null;
+  if (light != null) {
+    const at = ts.worldOf(light);
+    const glowCanvas = document.createElement("canvas");
+    glowCanvas.width = glowCanvas.height = 128;
+    const c = glowCanvas.getContext("2d");
+    const grad = c.createRadialGradient(64, 64, 0, 64, 64, 64);
+    grad.addColorStop(0, "rgba(255,240,200,1)");
+    grad.addColorStop(0.5, "rgba(255,210,130,0.5)");
+    grad.addColorStop(1, "rgba(255,200,120,0)");
+    c.fillStyle = grad;
+    c.fillRect(0, 0, 128, 128);
+    const glowTex = new THREE.CanvasTexture(glowCanvas);
+    glowTex.colorSpace = THREE.SRGBColorSpace;
+    const disc = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.5, 1.5).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.9 }),
+    );
+    disc.position.set(at.x, 0.02, at.z);
+    const colCanvas = document.createElement("canvas");
+    colCanvas.width = 4; colCanvas.height = 128;
+    const cc = colCanvas.getContext("2d");
+    const vg = cc.createLinearGradient(0, 128, 0, 0);
+    vg.addColorStop(0, "rgba(255,230,180,0.85)");
+    vg.addColorStop(1, "rgba(255,230,180,0)");
+    cc.fillStyle = vg;
+    cc.fillRect(0, 0, 4, 128);
+    const colTex = new THREE.CanvasTexture(colCanvas);
+    colTex.colorSpace = THREE.SRGBColorSpace;
+    const column = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.42, 0.5, 4.5, 24, 1, true).translate(0, 2.25, 0),
+      new THREE.MeshBasicMaterial({ map: colTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, opacity: 0.4 }),
+    );
+    column.position.set(at.x, 0, at.z);
+    group.add(disc, column);
+    pulse = (t) => {
+      const k = 0.5 + 0.5 * Math.sin(t * 2.4);
+      disc.material.opacity = 0.65 + 0.35 * k;
+      column.material.opacity = 0.3 + 0.15 * k;
+    };
+  }
+  ts.scene.add(group);
+  return {
+    update(t) { pulse?.(t); },
+    dispose() {
+      ts.scene.remove(group);
+      group.traverse((o) => {
+        if (!o.isMesh) return;
+        o.geometry.dispose();
+        /* Shared garbage materials stay; the light's own ones go. */
+        if (o.material.map && (o.material.blending === THREE.AdditiveBlending)) { o.material.map.dispose(); o.material.dispose(); }
+      });
+    },
+  };
+}

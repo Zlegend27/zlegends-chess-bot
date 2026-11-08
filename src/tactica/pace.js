@@ -9,7 +9,7 @@ export const PACES = [
   { id: "quick", name: "Quick" },
   { id: "off", name: "Off" },
 ];
-export const DEFAULT_PACE = { practice: "full", run: "full", blitz: "quick" };
+export const DEFAULT_PACE = { tutorial: "full", run: "full", blitz: "quick", bot: "full" };
 
 const key = (mode) => "tacticaPace." + mode;
 

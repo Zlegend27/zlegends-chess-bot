@@ -59,17 +59,17 @@ export default function MenuScreen({ best, runBest, onPick, sweetheart }) {
             <span className="font-bold">Blitz in the Bin</span>
             <span className="text-xs text-white/70">3 minutes · solve as many as you can{best ? ` · Best ${best}` : ""}</span>
           </button>
-          <button type="button" className={row} onClick={() => onPick("practice")}>
-            <span className="font-bold">Practice</span>
-            <span className="text-xs text-white/70">One puzzle at your own pace, with every attack played out</span>
+          <button type="button" className={row} onClick={() => onPick("tutorial")}>
+            <span className="font-bold">Tutorial</span>
+            <span className="text-xs text-white/70">Learn the controls step by step</span>
           </button>
           <button type="button" className={row} onClick={() => setPage("bonds")}>
             <span className="font-bold">Bonds</span>
             <span className="text-xs text-white/70">How close each of your characters has grown</span>
           </button>
-          <button type="button" className={row} disabled>
+          <button type="button" className={row} onClick={() => onPick("bot")}>
             <span className="font-bold">Play a bot</span>
-            <span className="text-xs text-white/70">Coming soon: a full game in the bin</span>
+            <span className="text-xs text-white/70">A full game in the bin against the site&apos;s bots</span>
           </button>
         </nav>
       ) : (

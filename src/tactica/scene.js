@@ -450,16 +450,24 @@ export class TacticaScene {
    *  behind them: the selected character itself (a pawn hides its own
    *  square ahead; a rook can stand in front of the enemy it takes) and
    *  enemies it can't take. A friend stops the search, so tapping one still
-   *  switches to it. */
+   *  switches to it, except over the square already chosen (its ghost is
+   *  showing): tapping it again means play it, even through a friend's
+   *  body standing in front. */
   throughTo(hits, tile) {
     if (!hits.length) return tile;
     if (this.held == null) return hits[0];
+    if (this.chosen != null && (hits.includes(this.chosen) || tile === this.chosen)) return this.chosen;
     const mine = this.pieces.get(this.held);
-    for (const sq of hits) {
+    for (const [i, sq] of hits.entries()) {
       if (this.targets.includes(sq)) return sq;
       const there = this.pieces.get(sq);
       const inTheWay = sq === this.held || (mine && there && there.colour !== mine.colour);
-      if (!inTheWay) return sq;
+      if (inTheWay) continue;
+      /* A friend in front of a glowing square: where a first tap only shows
+         a ghost (`confirm`), the glowing square wins, since nothing is
+         played yet; where one tap plays, the friend wins. */
+      const behind = this.confirm ? hits.slice(i + 1).find((s) => this.targets.includes(s)) : undefined;
+      return behind ?? sq;
     }
     return tile != null && this.targets.includes(tile) ? tile : hits[0];
   }
@@ -468,13 +476,17 @@ export class TacticaScene {
    *  glow on every square it can reach. A `chosen` square gets an arrow and
    *  a see-through ghost of the character standing there, so the move can be
    *  checked before it is played. With `ghost` (while dragging) the
-   *  character itself turns see-through so the squares under it show. */
-  setMarks({ selected = null, held = false, targets = [], chosen = null, captures = [], ghost = false } = {}) {
+   *  character itself turns see-through so the squares under it show.
+   *  `confirm` tells the tap logic that a first tap only previews a move
+   *  (see throughTo). */
+  setMarks({ selected = null, held = false, targets = [], chosen = null, captures = [], ghost = false, confirm = false } = {}) {
     this.marks.clear();
     this.pulse = [];
     this.held = held ? selected : null;
     this.targets = held ? targets : [];
     this.captures = captures;
+    this.chosen = held ? chosen : null;
+    this.confirm = confirm;
     for (const [sq, entry] of this.pieces) this.setGhost(entry, ghost && sq === selected);
     const flat = (geometry, color, opacity, at, y, additive = false) => {
       const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({

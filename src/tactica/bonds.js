@@ -76,14 +76,5 @@ export function recordMove(type, { capture = false, final = false } = {}) {
   return { bonds: res.bonds, kind, levelUp: res.levelUp };
 }
 
-/* Practice puzzles can be replayed at will, so each one gives bond XP only
-   until it has been solved once. */
-const PRACTICE_KEY = "tacticaBondPractice";
-export const practiceGivesXp = (id) => !(loadSetting(PRACTICE_KEY, []) ?? []).includes(id);
-export function markPracticeSolved(id) {
-  const done = loadSetting(PRACTICE_KEY, []) ?? [];
-  if (!done.includes(id)) saveSetting(PRACTICE_KEY, [...done, id]);
-}
-
 /** The note shown when a bond grows. */
 export const levelUpText = (kind, level) => `${KIND_NAMES[kind]} bond ${level}: ${LOOKS[level - 1].toLowerCase()}`;

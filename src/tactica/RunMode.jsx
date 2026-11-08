@@ -4,7 +4,8 @@ import { PUZZLES } from "../utils/puzzles";
 import { judgePuzzleMove } from "../utils/puzzleSession";
 import MiniBoard from "../components/MiniBoard";
 import { TacticaScene, SET_BOARD } from "./scene";
-import { dressTrashBin } from "./sets/trashBin";
+import { dressTrashBin, placeEscapeProps } from "./sets/trashBin";
+import { isEscapeFloor, makeEscape, movesOf, apply, escaped, strikerOf, piecesOf, fenOf, escapeSeconds } from "./escape";
 import {
   START_HEALTH, WRONG_MOVE_DAMAGE, phasesForFloor, isStoryFloor, timerSeconds, ratingFor,
   rushDamage, pickPuzzle, effectFloors, offer, choose, floorScore,
@@ -19,8 +20,11 @@ import PaceControl from "./PaceControl";
    while anything is animating. A wrong move gets punished by the enemy's
    best reply and costs a quarter of your health; a timer running out brings
    an enemy rush. Between floors, pick one reward or one challenge.
-   Same controls as Practice: tap a character, tap a glowing square to see
-   the move, tap it again to play it; dragging plays at once. */
+   Floors 3, 8, 13... are Escape floors instead (escape.js): reach the square
+   the light falls on within a few moves, past garbage that blocks squares
+   and guards that strike anyone ending a move where they attack.
+   Same controls as the tutorial: tap a character, tap a glowing square to
+   see the move, tap it again to play it; dragging plays at once. */
 const KNIGHT = 2, QUEEN = 5;
 const VALUE = [0, 1, 3, 3, 5, 9, 100];
 const sqOf = (sq120) => M120TO64[sq120];
@@ -96,13 +100,19 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
   const [pace, setPaceState] = useState(() => loadPace("run"));
   const setPace = (p) => { setPaceState(p); savePace("run", p); };
   const [menuOpen, setMenuOpen] = useState(false);
+  /* An Escape floor in progress: { start, state, used } (moves used), or null
+     on a puzzle floor. The garbage and light props live in propsRef. */
+  const [escape, setEscape] = useState(null);
+  const propsRef = useRef(null);
 
-  const friends = puzzle ? friendlySquares(eng, side) : [];
+  const escapeFriends = escape ? [...escape.state.mine.keys()].sort((a, b) => ((b / 8) | 0) - ((a / 8) | 0) || (a % 8) - (b % 8)) : [];
+  const friends = escape ? escapeFriends : puzzle ? friendlySquares(eng, side) : [];
   const selected = friends[Math.min(selectedIdx, friends.length - 1)];
-  const legal = puzzle && stage === "playing" ? eng.legalMoves() : [];
+  const legal = !escape && puzzle && stage === "playing" ? eng.legalMoves() : [];
   const movesFrom = legal.filter((m) => sqOf(mFrom(m)) === selected);
-  const targets = [...new Set(movesFrom.map((m) => sqOf(mTo(m))))];
-  const captures = targets.filter((sq) => eng.pieceAt(sq) !== EMPTY);
+  const escapeMoves = escape && stage === "playing" ? movesOf(escape.state).filter((m) => m.from === selected) : [];
+  const targets = escape ? escapeMoves.map((m) => m.to) : [...new Set(movesFrom.map((m) => sqOf(mTo(m))))];
+  const captures = escape ? escapeMoves.filter((m) => m.capture).map((m) => m.to) : targets.filter((sq) => eng.pieceAt(sq) !== EMPTY);
   const canMove = stage === "playing" && view === "close" && !busy;
   const mapLocked = effect?.id === "nomap";
 
@@ -140,9 +150,12 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
     scene.setBonds(levelsOf(loadBonds()));
     const bin = dressTrashBin(scene);
     scene.everyFrame.push((dt) => bin.update(dt));
+    /* The light on an Escape floor pulses. */
+    let clockT = 0;
+    scene.everyFrame.push((dt) => { clockT += dt; propsRef.current?.update(clockT); });
     scene.setPieces([]);
     scene.showBoard();
-    return () => { scene.dispose(); sceneRef.current = null; };
+    return () => { propsRef.current = null; scene.dispose(); sceneRef.current = null; };
   }, [sweetheart]);
 
   /* ---- The timer: runs only while playing and nothing is animating ---- */
@@ -158,8 +171,11 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
     t.deadline = performance.now() + t.left;
     t.running = true;
   };
-  const resetTimer = (p, eff) => {
-    timerRef.current = { running: false, left: timerSeconds(p, eff) * 1000, deadline: 0 };
+  /** A fresh timer for puzzle `p`, or for an Escape floor's `level`. */
+  const resetTimer = (p, eff, level = null) => {
+    const adjust = eff?.id === "time" ? 10 : eff?.id === "fuse" ? -10 : 0;
+    const seconds = level ? Math.max(10, escapeSeconds(level) + adjust) : timerSeconds(p, eff);
+    timerRef.current = { running: false, left: seconds * 1000, deadline: 0 };
     setTimeLeft(timerRef.current.left);
   };
   useEffect(() => {
@@ -180,12 +196,12 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
     if (view === "board") scene.showBoard();
     else scene.showReach(selected, targets);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, selected, played, stage, puzzle, busy]);
+  }, [view, selected, played, stage, puzzle, busy, escape]);
   useEffect(() => {
     const show = stage === "playing" && view === "close" && !busy;
-    sceneRef.current?.setMarks(show ? { selected, held: true, ghost: draggingRef.current, targets, chosen, captures } : {});
+    sceneRef.current?.setMarks(show ? { selected, held: true, ghost: draggingRef.current, targets, chosen, captures, confirm: true } : {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, selected, chosen, played, stage, puzzle, busy]);
+  }, [view, selected, chosen, played, stage, puzzle, busy, escape]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -214,7 +230,52 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
     startBattle(f, eff);
   };
 
-  const startBattle = async (f, eff) => {
+  /** Takes an Escape floor's garbage and light off the board. */
+  const clearEscape = () => {
+    propsRef.current?.dispose();
+    propsRef.current = null;
+    setEscape(null);
+  };
+
+  /** An Escape floor: a fresh level, always played from the near side. */
+  const startEscape = async (f, eff) => {
+    const level = makeEscape(f);
+    if (!level) { clearEscape(); return startPuzzleBattle(f, eff); }
+    const scene = sceneRef.current;
+    busyRef.current = true;
+    setBusy(true);
+    setPhases(1);
+    setPhase(0);
+    setSide(1);
+    setPuzzle(null);
+    setPlayed([]);
+    setChosen(null);
+    setSelectedIdx(0);
+    setEscape({ start: level, state: level, used: 0 });
+    const startView = eff?.id === "nomap" ? "close" : "board";
+    setView(startView);
+    resetTimer(null, eff, level);
+    setStage("playing");
+    if (scene) {
+      propsRef.current?.dispose();
+      scene.setFlipped(false);
+      scene.setPieces(piecesOf(level));
+      propsRef.current = placeEscapeProps(scene, [...level.junk], level.light);
+      if (startView === "board") scene.showBoard();
+    }
+    say(`Floor ${f} · Escape to the light`, "info");
+    busyRef.current = false;
+    setBusy(false);
+    resumeTimer();
+  };
+
+  const startBattle = (f, eff) => {
+    if (isEscapeFloor(f)) return startEscape(f, eff);
+    clearEscape();
+    return startPuzzleBattle(f, eff);
+  };
+
+  const startPuzzleBattle = async (f, eff) => {
     const total = phasesForFloor(f);
     setPhases(total);
     const first = pickPuzzle(PUZZLES, ratingFor(f, 0, eff), usedRef.current);
@@ -347,8 +408,61 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
     return best;
   };
 
+  /** A move on an Escape floor. Ending where a guard attacks: it strikes,
+   *  −25%, and the floor starts over. Running out of moves does the same
+   *  damage. Reaching the light clears the floor. */
+  const playEscape = async (target) => {
+    const move = escapeMoves.find((m) => m.to === target);
+    if (!move) return;
+    const scene = sceneRef.current;
+    busyRef.current = true;
+    setBusy(true);
+    setChosen(null);
+    pauseTimer();
+    const restartFloor = async (text) => {
+      say(text, "bad");
+      const left = takeDamage(WRONG_MOVE_DAMAGE);
+      if (left <= 0) { await wait(700); endRun(); return; }
+      await wait(500);
+      await scene?.regroupTo(piecesOf(escape.start));
+      setEscape((e) => ({ ...e, state: e.start, used: 0 }));
+      setSelectedIdx(0);
+      setView(effect?.id === "nomap" ? "close" : "board");
+      resumeTimer();
+    };
+    try {
+      const type = escape.state.mine.get(move.from);
+      await scene?.animateMove(move.from, move.to, { knight: type === KNIGHT, captured: move.capture ? move.to : null, pace });
+      const after = apply(escape.state, move);
+      const used = escape.used + 1;
+      if (move.deadly) {
+        const striker = strikerOf(after, move.to);
+        if (striker != null) {
+          await scene?.animateMove(striker, move.to, { knight: after.guards.get(striker) === KNIGHT, captured: move.to, follow: true, pace });
+        }
+        await restartFloor("A guard struck · −" + WRONG_MOVE_DAMAGE + "%");
+        return;
+      }
+      setEscape((e) => ({ ...e, state: after, used }));
+      const stillHere = [...after.mine.keys()].sort((a, b) => ((b / 8) | 0) - ((a / 8) | 0) || (a % 8) - (b % 8)).indexOf(move.to);
+      if (stillHere >= 0) setSelectedIdx(stillHere);
+      if (escaped(after)) {
+        say("Into the light!", "good");
+        await wait(700);
+        await nextAfterPhase();
+        return;
+      }
+      if (used >= escape.start.limit) { await restartFloor("Out of moves · −" + WRONG_MOVE_DAMAGE + "%"); return; }
+      resumeTimer();
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  };
+
   const play = async (target) => {
     if (busyRef.current || stage !== "playing") return;
+    if (escape) { await playEscape(target); return; }
     const move = movesFrom.find((m) => sqOf(mTo(m)) === target && (!mPromo(m) || mPromo(m) === QUEEN));
     if (!move) return;
     const verdict = judgePuzzleMove(eng, puzzle, played, move);
@@ -430,7 +544,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
     busyRef.current = false;
     setBusy(false);
     if (left <= 0) { await wait(700); endRun(); return; }
-    resetTimer(puzzle, effect);
+    resetTimer(puzzle, effect, escape?.start);
     resumeTimer();
   };
 
@@ -475,11 +589,10 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
     return false;
   };
   const toggleView = () => { if (!busy && !mapLocked) setView((v) => (v === "board" ? "close" : "board")); };
-
   const squareName = (sq) => `${"abcdefgh"[sq % 8]}${((sq / 8) | 0) + 1}`;
   const pieceName = (sq) => ["", "Pawn", "Knight", "Bishop", "Rook", "Queen", "King"][Math.abs(eng.pieceAt(sq))] + ` on ${squareName(sq)}`;
   const isAttack = chosen != null && captures.includes(chosen);
-  const hint = busy ? "…" : view === "board" ? "Tap a character to take a closer look"
+  const hint = busy ? "…" : view === "board" ? (escape ? "Reach the glowing square. Don't stop where a guard strikes." : "Tap a character to take a closer look")
     : !targets.length ? "This one can't move"
     : chosen != null ? (isAttack ? `Tap ${squareName(chosen)} again to strike` : `Tap ${squareName(chosen)} again to move`)
     : "Tap a glowing square, or drag there";
@@ -509,7 +622,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
                 </button>
                 <div className="text-white">
                   <div className="text-[10px] uppercase tracking-wide text-white/60">Floor {floor}</div>
-                  <div className="text-sm font-bold">Phase {phase + 1} of {phases}</div>
+                  <div className="text-sm font-bold">{escape ? `Escape · ${escape.start.limit - escape.used} move${escape.start.limit - escape.used === 1 ? "" : "s"} left` : `Phase ${phase + 1} of ${phases}`}</div>
                 </div>
               </div>
               <div role="timer" className={"text-3xl " + (low ? "text-[var(--magenta)]" : "text-white")} style={{ fontFamily: "var(--font-display)" }}>{clock(timeLeft)}</div>
@@ -520,7 +633,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
                 aria-label={mapLocked ? "Map locked by the No map challenge" : view === "board" ? "Back to the close view" : "Show the whole board"}
                 className={"pointer-events-auto shrink-0 cursor-pointer rounded-lg border-2 bg-black/40 p-1 disabled:cursor-not-allowed disabled:opacity-40 " + (view === "board" ? "border-[var(--cyan)] " : "border-white/30 ") + focusRing}
               >
-                <MiniBoard fen={eng.fen()} colors={SET_BOARD} pieceImgSrc={pieceImgSrc} size={64} flipped={side === -1} label="Map of the board" />
+                <MiniBoard fen={escape ? fenOf(escape.state) : eng.fen()} colors={SET_BOARD} pieceImgSrc={pieceImgSrc} size={64} flipped={side === -1} label="Map of the board" />
               </button>
             </div>
             <div className="flex items-center gap-2">
@@ -569,6 +682,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
             <li>A wrong move gets punished and costs 25% health.</li>
             <li>If the timer runs out, the enemy rushes you for 50%.</li>
             <li>Between floors, pick a reward or take on a challenge for double score.</li>
+            <li>Some floors are escapes: reach the light past the garbage without stopping where a guard can strike.</li>
           </ul>
           {best ? <p className="m-0 text-sm text-white/70">Your best: {best}</p> : null}
           <div className="w-full max-w-[16rem]"><PaceControl value={pace} onChange={setPace} /></div>
