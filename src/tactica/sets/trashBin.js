@@ -4,6 +4,7 @@
    dressTrashBin(tacticaScene) and add the returned update to its everyFrame
    list. */
 import * as THREE from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 const BIN_R = 10.5, BIN_BOTTOM = -4.2, BIN_TOP = 12;
 const HOLE = new THREE.Vector3(-1.4, 5.4, -BIN_R + 0.45);
@@ -102,15 +103,16 @@ function buildMound() {
   const p = geo.getAttribute("position");
   for (let i = 0; i < p.count; i++) p.setY(i, moundHeight(p.getX(i), p.getZ(i)) - 0.15);
   geo.computeVertexNormals();
-  /* Black bin-bag plastic: dark, with a soft sheen. */
-  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: "#16171b", roughness: 0.32, metalness: 0.05 }));
+  /* Compacted junk: dark with flecks of paper and plastic, and wet patches. */
+  const debris = debrisTexture();
+  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: debris, bumpMap: debris, bumpScale: 1.5, roughness: 0.7 }));
   mesh.receiveShadow = true;
   return mesh;
 }
 
 /* A full bin bag: a lumpy, glossy black blob with its tied neck. */
-function binBag(r, s) {
-  const geo = new THREE.SphereGeometry(1, 28, 20);
+function binBag(r, s, mat) {
+  const geo = new THREE.SphereGeometry(1, 32, 24);
   const p = geo.getAttribute("position");
   for (let i = 0; i < p.count; i++) {
     const v = new THREE.Vector3().fromBufferAttribute(p, i);
@@ -120,7 +122,6 @@ function binBag(r, s) {
     p.setXYZ(i, v.x, v.y, v.z);
   }
   geo.computeVertexNormals();
-  const mat = new THREE.MeshStandardMaterial({ color: "#121316", roughness: 0.28, metalness: 0.08 });
   const bag = new THREE.Group();
   const body = new THREE.Mesh(geo, mat);
   body.castShadow = body.receiveShadow = true;
@@ -133,109 +134,358 @@ function binBag(r, s) {
   return bag;
 }
 
-/* Small pieces of rubbish, each centred on the ground point it sits on. */
-const PAPER = new THREE.MeshStandardMaterial({ color: "#e8e2d2", roughness: 0.95 });
-const CARD = new THREE.MeshStandardMaterial({ color: "#9b7448", roughness: 0.9 });
-const TIN = new THREE.MeshStandardMaterial({ color: "#c7ccd1", metalness: 0.9, roughness: 0.35 });
-const GLASS = new THREE.MeshStandardMaterial({ color: "#2f6b3d", roughness: 0.1, metalness: 0.1, transparent: true, opacity: 0.75 });
-const PEEL = new THREE.MeshStandardMaterial({ color: "#d9b43a", roughness: 0.7 });
-const BRUISE = new THREE.MeshStandardMaterial({ color: "#5a4420", roughness: 0.8 });
-const LABELS = ["#c0392b", "#2e86c1", "#27ae60", "#f39c12", "#8e44ad"].map((c) => new THREE.MeshStandardMaterial({ color: c, metalness: 0.5, roughness: 0.4 }));
+/* ---------- The garbage ----------
+   Sizes are real-world, against the chess set: a pawn is about 5 cm and 1.1
+   units tall, so 1 unit is about 4.5 cm. A soda can is 2.7 units tall, a
+   crumpled sheet of paper about 1.6 across. Everything small is baked into a
+   few merged meshes (one per material) so a phone draws it cheaply. */
 
-function crumpledPaper(r) {
-  const geo = new THREE.IcosahedronGeometry(0.28, 1);
+const tex = (w, h, paint, repeat) => canvasTexture(w, h, paint, repeat);
+
+/* Newsprint: columns of grey "text" lines, a headline bar, a coffee ring. */
+function newsprintTexture() {
+  const r = rng(5);
+  return tex(512, 512, (g, w, h) => {
+    g.fillStyle = "#e7e1d2"; g.fillRect(0, 0, w, h);
+    g.fillStyle = "#2b2b2b"; g.globalAlpha = 0.85; g.fillRect(24, 22, w - 48, 26);
+    for (let col = 0; col < 4; col++) {
+      const x0 = 24 + col * ((w - 48) / 4);
+      for (let y = 64; y < h - 20; y += 9) {
+        g.globalAlpha = 0.35 + r() * 0.25;
+        g.fillRect(x0 + 4, y, ((w - 48) / 4 - 14) * (0.6 + r() * 0.4), 3);
+      }
+    }
+    g.globalAlpha = 0.25; g.strokeStyle = "#7a5530"; g.lineWidth = 10;
+    g.beginPath(); g.arc(w * 0.7, h * 0.6, 60, 0, Math.PI * 2); g.stroke();
+    g.globalAlpha = 0.18; g.fillStyle = "#8a6a3a";
+    for (let i = 0; i < 6; i++) { g.beginPath(); g.ellipse(r() * w, r() * h, 30 + r() * 50, 20 + r() * 40, r() * 3, 0, Math.PI * 2); g.fill(); }
+    g.globalAlpha = 1;
+  });
+}
+
+/* Corrugated cardboard: ruled flutes, packing tape and a printed box icon. */
+function cardboardTexture() {
+  const r = rng(8);
+  return tex(512, 512, (g, w, h) => {
+    g.fillStyle = "#a57b4b"; g.fillRect(0, 0, w, h);
+    g.globalAlpha = 0.12; g.fillStyle = "#6e4e2a";
+    for (let x = 0; x < w; x += 8) g.fillRect(x, 0, 3, h);
+    g.globalAlpha = 0.55; g.fillStyle = "#c9a56c"; g.fillRect(0, h * 0.45, w, 46);
+    g.globalAlpha = 0.6; g.strokeStyle = "#3a2a18"; g.lineWidth = 6;
+    g.strokeRect(w * 0.12, h * 0.12, 90, 70);
+    g.beginPath(); g.moveTo(w * 0.12, h * 0.12); g.lineTo(w * 0.12 + 45, h * 0.12 - 30); g.lineTo(w * 0.12 + 90, h * 0.12); g.stroke();
+    for (let i = 0; i < 8; i++) {
+      g.globalAlpha = 0.2 + r() * 0.2; g.fillStyle = "#5a3e1f";
+      g.beginPath(); g.ellipse(r() * w, r() * h, 20 + r() * 60, 10 + r() * 40, r() * 3, 0, Math.PI * 2); g.fill();
+    }
+    g.globalAlpha = 1;
+  });
+}
+
+/* A can label: two-tone body, a bold stripe, a round logo and a white band. */
+function canTexture(base, stripe, seed) {
+  const r = rng(seed);
+  return tex(512, 256, (g, w, h) => {
+    g.fillStyle = base; g.fillRect(0, 0, w, h);
+    g.fillStyle = stripe; g.beginPath(); g.moveTo(0, h * 0.62); g.bezierCurveTo(w * 0.3, h * 0.35, w * 0.6, h * 0.9, w, h * 0.55); g.lineTo(w, h * 0.75); g.bezierCurveTo(w * 0.6, h, w * 0.3, h * 0.5, 0, h * 0.8); g.fill();
+    g.fillStyle = "#f4f1ea"; g.beginPath(); g.arc(w * 0.3, h * 0.38, 46, 0, Math.PI * 2); g.fill();
+    g.fillStyle = base; g.beginPath(); g.arc(w * 0.3, h * 0.38, 30, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "rgba(255,255,255,0.85)"; g.fillRect(w * 0.55, h * 0.2, 150, 18); g.fillRect(w * 0.55, h * 0.3, 100, 10);
+    g.globalAlpha = 0.25; g.fillStyle = "#000";
+    for (let i = 0; i < 30; i++) g.fillRect(r() * w, r() * h, 1 + r() * 3, 1 + r() * 6);
+    g.globalAlpha = 1;
+  });
+}
+
+/* Spotty banana skin. */
+function peelTexture() {
+  const r = rng(12);
+  return tex(256, 256, (g, w, h) => {
+    g.fillStyle = "#d8b236"; g.fillRect(0, 0, w, h);
+    g.fillStyle = "#4a3416";
+    for (let i = 0; i < 90; i++) { g.globalAlpha = 0.4 + r() * 0.5; g.beginPath(); g.arc(r() * w, r() * h, 1 + r() * 6, 0, Math.PI * 2); g.fill(); }
+    g.globalAlpha = 0.35; g.fillStyle = "#7a5a1e"; g.fillRect(0, 0, w, h * 0.15);
+    g.globalAlpha = 1;
+  });
+}
+
+/* Wrinkles for plastic: streaks of light and dark used as a bump map. */
+function wrinkleTexture(seed) {
+  const r = rng(seed);
+  return tex(512, 512, (g, w, h) => {
+    g.fillStyle = "#808080"; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 220; i++) {
+      g.globalAlpha = 0.15 + r() * 0.35;
+      g.strokeStyle = r() < 0.5 ? "#ffffff" : "#000000";
+      g.lineWidth = 1 + r() * 4;
+      const x = r() * w, y = r() * h, a = r() * Math.PI, len = 30 + r() * 140;
+      g.beginPath(); g.moveTo(x, y);
+      g.quadraticCurveTo(x + Math.cos(a) * len * 0.5 + (r() - 0.5) * 30, y + Math.sin(a) * len * 0.5 + (r() - 0.5) * 30, x + Math.cos(a) * len, y + Math.sin(a) * len);
+      g.stroke();
+    }
+    g.globalAlpha = 1;
+  }, [2, 2]);
+}
+
+/* Compacted junk for the pile's surface: dark, with flecks of paper and
+   plastic, and darker wet patches. */
+function debrisTexture() {
+  const r = rng(31);
+  return tex(1024, 1024, (g, w, h) => {
+    g.fillStyle = "#1a1714"; g.fillRect(0, 0, w, h);
+    const flecks = ["#d8d1c0", "#9b7448", "#3a5f8a", "#a83a2c", "#c9c2b0", "#2d2a26", "#55606a"];
+    for (let i = 0; i < 2200; i++) {
+      g.globalAlpha = 0.25 + r() * 0.5;
+      g.fillStyle = flecks[Math.floor(r() * flecks.length)];
+      g.save(); g.translate(r() * w, r() * h); g.rotate(r() * 3);
+      g.fillRect(-2, -1, 3 + r() * 14, 2 + r() * 8);
+      g.restore();
+    }
+    for (let i = 0; i < 40; i++) {
+      g.globalAlpha = 0.35; g.fillStyle = "#0a0806";
+      g.beginPath(); g.ellipse(r() * w, r() * h, 30 + r() * 90, 20 + r() * 60, r() * 3, 0, Math.PI * 2); g.fill();
+    }
+    g.globalAlpha = 1;
+  }, [5, 5]);
+}
+
+function rubbishMaterials() {
+  const flat = { flatShading: true };
+  return {
+    paper: new THREE.MeshStandardMaterial({ map: newsprintTexture(), roughness: 0.92, ...flat }),
+    plainPaper: new THREE.MeshStandardMaterial({ color: "#efeadf", roughness: 0.95, ...flat }),
+    card: new THREE.MeshStandardMaterial({ map: cardboardTexture(), roughness: 0.95 }),
+    cans: [["#b3141e", "#f2f2f2"], ["#1d4f9c", "#9fd0ff"], ["#1f7a3a", "#e6d34a"], ["#2a2a2a", "#e0592a"]].map(([b, s], i) =>
+      new THREE.MeshStandardMaterial({ map: canTexture(b, s, 40 + i), metalness: 0.75, roughness: 0.38 })),
+    tin: new THREE.MeshStandardMaterial({ color: "#c9ced3", metalness: 0.9, roughness: 0.3 }),
+    glassGreen: new THREE.MeshStandardMaterial({ color: "#2e6a3a", roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.72 }),
+    glassBrown: new THREE.MeshStandardMaterial({ color: "#5a3414", roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.78 }),
+    label: new THREE.MeshStandardMaterial({ color: "#e8d9a8", roughness: 0.8 }),
+    cap: new THREE.MeshStandardMaterial({ color: "#c9a14a", metalness: 0.8, roughness: 0.35 }),
+    styro: new THREE.MeshStandardMaterial({ color: "#f1efe9", roughness: 0.85 }),
+    cupRed: new THREE.MeshStandardMaterial({ color: "#c94f3b", roughness: 0.7, side: THREE.DoubleSide }),
+    lid: new THREE.MeshStandardMaterial({ color: "#f3f1ec", roughness: 0.5 }),
+    sleeve: new THREE.MeshStandardMaterial({ color: "#8a6440", roughness: 0.9 }),
+    peel: new THREE.MeshStandardMaterial({ map: peelTexture(), roughness: 0.75 }),
+    crust: new THREE.MeshStandardMaterial({ color: "#b8823f", roughness: 0.85 }),
+    eggshell: new THREE.MeshStandardMaterial({ color: "#efe6d8", roughness: 0.7, side: THREE.DoubleSide }),
+    core: new THREE.MeshStandardMaterial({ color: "#e9d8a6", roughness: 0.8 }),
+    rot: new THREE.MeshStandardMaterial({ color: "#6b4a22", roughness: 0.8 }),
+    foilPacket: new THREE.MeshStandardMaterial({ color: "#d63a8a", metalness: 0.6, roughness: 0.3, ...flat }),
+    foilPacket2: new THREE.MeshStandardMaterial({ color: "#f0b21f", metalness: 0.6, roughness: 0.3, ...flat }),
+    shopBag: new THREE.MeshStandardMaterial({ color: "#f4f4f4", roughness: 0.35, transparent: true, opacity: 0.82, side: THREE.DoubleSide, ...flat }),
+    spill: new THREE.MeshStandardMaterial({ color: "#2a1608", roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.85 }),
+  };
+}
+
+/* Bends a shape's vertices with random waves so it reads as crumpled. */
+function crumple(geo, amount, seed) {
+  const r = rng(seed);
   const p = geo.getAttribute("position");
+  const fx = 2 + r() * 4, fy = 2 + r() * 4, fz = 2 + r() * 4, ph = r() * 6;
   for (let i = 0; i < p.count; i++) {
-    const v = new THREE.Vector3().fromBufferAttribute(p, i).multiplyScalar(0.75 + r() * 0.45);
-    p.setXYZ(i, v.x, v.y, v.z);
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const n = Math.sin(x * fx + ph) * Math.cos(y * fy) * Math.sin(z * fz + ph * 0.7);
+    const k = 1 + amount * (n + (r() - 0.5) * 0.6);
+    p.setXYZ(i, x * k, y * k, z * k);
   }
   geo.computeVertexNormals();
-  const m = new THREE.Mesh(geo, PAPER);
-  m.position.y = 0.18;
-  return m;
-}
-function can(r) {
-  const g = new THREE.Group();
-  const crushed = r() < 0.5;
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.48, 18), TIN);
-  const label = new THREE.Mesh(new THREE.CylinderGeometry(0.163, 0.163, 0.3, 18, 1, true), LABELS[Math.floor(r() * LABELS.length)]);
-  g.add(body, label);
-  if (crushed) g.scale.set(1.15, 0.45, 1.15);
-  g.rotation.set(Math.PI / 2 * (r() < 0.6 ? 1 : 0), r() * 6, 0);
-  g.position.y = 0.16;
-  return g;
-}
-function cardboard(r) {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(0.9 + r() * 0.8, 0.04, 0.6 + r() * 0.6), CARD);
-  m.rotation.set((r() - 0.5) * 0.6, r() * 6, (r() - 0.5) * 0.6);
-  m.position.y = 0.08;
-  return m;
-}
-function bottle() {
-  const pts = [[0, 0], [0.13, 0], [0.14, 0.05], [0.14, 0.42], [0.11, 0.52], [0.05, 0.6], [0.05, 0.72], [0.06, 0.74], [0, 0.74]].map(([x, y]) => new THREE.Vector2(x, y));
-  const m = new THREE.Mesh(new THREE.LatheGeometry(pts, 20), GLASS);
-  m.rotation.z = Math.PI / 2;
-  m.position.y = 0.14;
-  return m;
-}
-function bananaPeel(r) {
-  const g = new THREE.Group();
-  for (let i = 0; i < 4; i++) {
-    const strip = new THREE.Mesh(new THREE.CapsuleGeometry(0.05, 0.28, 4, 8), PEEL);
-    strip.scale.set(1.6, 1, 0.5);
-    strip.rotation.set(Math.PI / 2 - 0.3, (i / 4) * Math.PI * 2 + r(), 0);
-    strip.position.set(Math.sin((i / 4) * Math.PI * 2) * 0.14, 0.05, Math.cos((i / 4) * Math.PI * 2) * 0.14);
-    g.add(strip);
-  }
-  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 0.12, 8), BRUISE);
-  stem.position.y = 0.08;
-  g.add(stem);
-  return g;
-}
-function appleCore() {
-  const pts = [[0, 0], [0.13, 0.02], [0.07, 0.12], [0.06, 0.2], [0.13, 0.3], [0, 0.32]].map(([x, y]) => new THREE.Vector2(x, y));
-  const m = new THREE.Mesh(new THREE.LatheGeometry(pts, 14), new THREE.MeshStandardMaterial({ color: "#efe0b5", roughness: 0.8 }));
-  m.rotation.z = 1.3;
-  m.position.y = 0.14;
-  return m;
-}
-function cup(r) {
-  const m = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.12, 0.42, 16, 1, true), new THREE.MeshStandardMaterial({ color: r() < 0.5 ? "#f2efe9" : "#c94f3b", roughness: 0.7, side: THREE.DoubleSide }));
-  m.rotation.z = Math.PI / 2;
-  m.position.y = 0.15;
-  return m;
+  return geo;
 }
 
-function scatterRubbish(group) {
-  const r = rng(7);
-  const makers = [[crumpledPaper, 0.32], [can, 0.18], [cardboard, 0.14], [bottle, 0.1], [cup, 0.1], [bananaPeel, 0.08], [appleCore, 0.08]];
-  let placed = 0, tries = 0;
-  while (placed < 95 && tries < 2000) {
-    tries++;
-    const a = r() * Math.PI * 2, d = 4.9 + r() * (BIN_R - 5.4);
-    const x = Math.sin(a) * d, z = Math.cos(a) * d;
-    if (Math.abs(x) < BOARD_HALF && Math.abs(z) < BOARD_HALF) continue;
-    let pick = r(), make = makers[0][0];
-    for (const [fn, w] of makers) { if (pick < w) { make = fn; break; } pick -= w; }
-    const item = new THREE.Group();
-    const thing = make(r);
-    item.add(thing);
-    item.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-    item.position.set(x, moundHeight(x, z) - 0.12, z);
-    item.rotation.y = r() * Math.PI * 2;
-    item.scale.setScalar(0.9 + r() * 0.5);
-    group.add(item);
-    placed++;
+/* Each maker returns [mesh, height above the ground it rests on], built at
+   real size. "flat" items are low enough to sit between camera and board. */
+function makeRubbish(M) {
+  const mesh = (g, m) => new THREE.Mesh(g, m);
+  const group = (...ms) => { const gr = new THREE.Group(); gr.add(...ms); return gr; };
+  return {
+    paperBall: (r, s) => [mesh(crumple(new THREE.IcosahedronGeometry(0.8, 2), 0.32, s), r() < 0.6 ? M.paper : M.plainPaper), 0.6],
+    paperSheet: (r, s) => {
+      const g = new THREE.PlaneGeometry(2.6, 3.4, 10, 12); g.rotateX(-Math.PI / 2);
+      const p = g.getAttribute("position");
+      for (let i = 0; i < p.count; i++) p.setY(i, Math.sin(p.getX(i) * 2.3 + s) * 0.18 + Math.cos(p.getZ(i) * 3.1) * 0.12 + Math.abs(Math.sin(p.getX(i) * 5 + p.getZ(i) * 4)) * 0.08);
+      g.computeVertexNormals();
+      const m = mesh(g, M.paper); m.material = M.paper; return [m, 0.2];
+    },
+    canStanding: (r) => {
+      const label = mesh(new THREE.CylinderGeometry(0.74, 0.74, 2.3, 28, 1, true), M.cans[Math.floor(r() * M.cans.length)]);
+      const top = mesh(new THREE.CylinderGeometry(0.62, 0.74, 0.2, 28), M.tin); top.position.y = 1.25;
+      const bottom = mesh(new THREE.CylinderGeometry(0.74, 0.6, 0.2, 28), M.tin); bottom.position.y = -1.25;
+      return [group(label, top, bottom), 1.35];
+    },
+    canLying: (r) => {
+      const label = mesh(new THREE.CylinderGeometry(0.74, 0.74, 2.3, 28, 1, true), M.cans[Math.floor(r() * M.cans.length)]);
+      const top = mesh(new THREE.CylinderGeometry(0.62, 0.74, 0.2, 28), M.tin); top.position.y = 1.25;
+      const bottom = mesh(new THREE.CylinderGeometry(0.74, 0.6, 0.2, 28), M.tin); bottom.position.y = -1.25;
+      const g = group(label, top, bottom); g.rotation.z = Math.PI / 2; return [g, 0.72];
+    },
+    canCrushed: (r, s) => {
+      const geo = new THREE.CylinderGeometry(0.8, 0.8, 1.0, 28, 8, true);
+      const p = geo.getAttribute("position");
+      for (let i = 0; i < p.count; i++) {
+        const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+        const fold = 1 + 0.18 * Math.sin(y * 9 + s) * Math.cos(Math.atan2(x, z) * 3);
+        p.setXYZ(i, x * fold, y, z * fold * 0.75);
+      }
+      geo.computeVertexNormals();
+      const body = mesh(geo, M.cans[Math.floor(r() * M.cans.length)]);
+      const lid = mesh(new THREE.CylinderGeometry(0.66, 0.66, 0.1, 24), M.tin); lid.position.y = 0.52; lid.rotation.z = 0.25;
+      const g = group(body, lid); g.rotation.z = Math.PI / 2; return [g, 0.55];
+    },
+    bottle: (r) => {
+      const pts = [[0, 0], [0.7, 0], [0.74, 0.15], [0.74, 2.6], [0.6, 3.2], [0.28, 3.7], [0.26, 4.2], [0, 4.2]].map(([x, y]) => new THREE.Vector2(x, y));
+      const glass = mesh(new THREE.LatheGeometry(pts, 24), r() < 0.5 ? M.glassGreen : M.glassBrown);
+      const label = mesh(new THREE.CylinderGeometry(0.76, 0.76, 1.3, 24, 1, true), M.label); label.position.y = 1.4;
+      const cap = mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.22, 16), M.cap); cap.position.y = 4.3;
+      const g = group(glass, label, cap); g.rotation.z = Math.PI / 2; g.position.x = -2.1; return [group(g), 0.75];
+    },
+    cardboard: (r, s, flatOnly) => {
+      const w = 3.2 + r() * 2.4, d = 2.6 + r() * 1.8;
+      const a = mesh(new THREE.BoxGeometry(w, 0.14, d), M.card);
+      const b = mesh(new THREE.BoxGeometry(w, 0.14, d * 0.6), M.card);
+      b.position.set(0, d * 0.25, d / 2 + 0.05); b.rotation.x = -0.9 - r() * 0.5;
+      /* Only some get a folded-up flap; the caller keeps those off the
+         player's side. */
+      return [s % 3 === 0 && !flatOnly ? group(a, b) : a, 0.12];
+    },
+    cup: (r) => {
+      const body = mesh(new THREE.CylinderGeometry(0.95, 0.68, 2.6, 24, 1, true), r() < 0.5 ? M.cupRed : M.styro);
+      const lid = mesh(new THREE.CylinderGeometry(1.0, 1.0, 0.18, 24), M.lid); lid.position.y = 1.35;
+      const sleeve = mesh(new THREE.CylinderGeometry(0.9, 0.82, 0.9, 24, 1, true), M.sleeve); sleeve.position.y = 0.1;
+      const g = group(body, lid, sleeve); g.rotation.z = Math.PI / 2 + 0.1; return [g, 0.9];
+    },
+    takeout: (r) => {
+      const base = mesh(new THREE.BoxGeometry(3, 1.1, 3), M.styro);
+      const lid = mesh(new THREE.BoxGeometry(3, 0.25, 3), M.styro);
+      lid.position.set(0, 0.9, -1.6); lid.rotation.x = 1.2 + r() * 0.4;
+      return [group(base, lid), 0.55];
+    },
+    packet: (r, s) => {
+      const g = crumple(new THREE.SphereGeometry(1, 14, 10), 0.22, s); g.scale(1.5, 0.28, 2.0);
+      return [mesh(g, r() < 0.5 ? M.foilPacket : M.foilPacket2), 0.25];
+    },
+    shoppingBag: (r, s) => {
+      const g = crumple(new THREE.SphereGeometry(1, 18, 12), 0.35, s); g.scale(2.0, 0.9, 1.7);
+      return [mesh(g, M.shopBag), 0.6];
+    },
+    peel: (r) => {
+      const parts = [];
+      for (let i = 0; i < 4; i++) {
+        const strip = mesh(new THREE.CapsuleGeometry(0.28, 1.6, 4, 10), M.peel);
+        strip.scale.set(1.6, 1, 0.35);
+        const a = (i / 4) * Math.PI * 2 + r() * 0.3;
+        strip.rotation.set(Math.PI / 2 - 0.25, a, 0);
+        strip.position.set(Math.sin(a) * 0.9, 0.12, Math.cos(a) * 0.9);
+        parts.push(strip);
+      }
+      const stem = mesh(new THREE.CylinderGeometry(0.16, 0.22, 0.6, 8), M.rot); stem.position.y = 0.3;
+      return [group(...parts, stem), 0.15];
+    },
+    crust: (r) => {
+      const g = new THREE.TorusGeometry(1.9, 0.26, 8, 20, 1.2 + r() * 0.8); g.rotateX(Math.PI / 2);
+      return [mesh(g, M.crust), 0.24];
+    },
+    eggshell: (r) => {
+      const half = (x) => { const m = mesh(new THREE.SphereGeometry(0.48, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), M.eggshell); m.position.x = x; m.rotation.x = Math.PI + r() * 0.6; return m; };
+      return [group(half(-0.5), half(0.55)), 0.35];
+    },
+    appleCore: () => {
+      const pts = [[0, 0], [0.55, 0.1], [0.32, 0.6], [0.28, 1.0], [0.55, 1.5], [0, 1.6]].map(([x, y]) => new THREE.Vector2(x, y));
+      const core = mesh(new THREE.LatheGeometry(pts, 16), M.core);
+      const g = group(core); g.rotation.z = 1.4; return [g, 0.55];
+    },
+  };
+}
+
+/* Everything that may sit between the camera and the board is flat. */
+const FLAT = ["paperSheet", "cardboard", "canCrushed", "packet", "peel", "crust", "eggshell"];
+const TALL = ["paperBall", "canStanding", "canLying", "bottle", "cup", "takeout", "shoppingBag", "appleCore"];
+
+/* Builds the heaps, then bakes every small piece into one mesh per
+   material. */
+function fillWithRubbish(set) {
+  const M = rubbishMaterials();
+  const make = makeRubbish(M);
+  const r = rng(77);
+  const loose = new THREE.Group();
+  const placed = [];
+  /* Heaps: a handful of clusters round the board, plus some strays. */
+  const centres = [];
+  for (let i = 0; i < 11; i++) {
+    const a = (i / 11) * Math.PI * 2 + r() * 0.3, d = 6.2 + r() * 2.8;
+    centres.push([Math.sin(a) * d, Math.cos(a) * d]);
   }
-  /* Bin bags piled against the wall. */
-  for (let i = 0; i < 9; i++) {
-    const a = (i / 9) * Math.PI * 2 + r() * 0.4, d = BIN_R - 2.2 - r() * 1.2;
-    const bag = binBag(1.4 + r() * 1.1, i);
+  for (let i = 0; i < 120; i++) {
+    let x, z;
+    if (i < 95) {
+      const [cx, cz] = centres[i % centres.length];
+      x = cx + (r() - 0.5) * 3.4; z = cz + (r() - 0.5) * 3.4;
+    } else {
+      const a = r() * Math.PI * 2, d = 5 + r() * 4.8;
+      x = Math.sin(a) * d; z = Math.cos(a) * d;
+    }
+    const dist = Math.hypot(x, z);
+    /* Real-size items are big, so their centres keep well clear of the board. */
+    if (dist > BIN_R - 0.9 || (Math.abs(x) < BOARD_HALF + 1.4 && Math.abs(z) < BOARD_HALF + 1.4)) continue;
+    /* On the player's side only flat things; tall things go behind the
+       board or out to the far sides. */
+    const front = z > 0;
+    const tallOk = z < -BOARD_HALF - 1 || Math.abs(x) > BOARD_HALF + 2.5;
+    const pool = front || !tallOk ? FLAT : r() < 0.6 ? TALL : FLAT;
+    const kind = pool[Math.floor(r() * pool.length)];
+    const [obj, lift] = make[kind](r, i, front);
+    const holder = new THREE.Group();
+    holder.add(obj);
+    /* Pile up: each item rests a little higher where others already lie. */
+    const under = placed.filter(([px, pz]) => Math.hypot(px - x, pz - z) < 1.6).length;
+    holder.position.set(x, moundHeight(x, z) + lift + Math.min(under, 4) * 0.22 - 0.1, z);
+    holder.rotation.set((r() - 0.5) * 0.5, r() * Math.PI * 2, (r() - 0.5) * 0.5);
+    holder.scale.setScalar(0.85 + r() * 0.3);
+    loose.add(holder);
+    placed.push([x, z]);
+  }
+  /* Spilled soda by the board's edge. */
+  for (const [x, z, s] of [[5.6, 1.2, 1.6], [-5.4, -2.6, 1.2], [3.2, -5.6, 1.4]]) {
+    const g = new THREE.CircleGeometry(s, 24);
+    const p = g.getAttribute("position");
+    for (let i = 1; i < p.count; i++) { const k = 0.75 + Math.sin(i * 1.7) * 0.2; p.setX(i, p.getX(i) * k); p.setY(i, p.getY(i) * k * 0.8); }
+    const m = new THREE.Mesh(g, M.spill);
+    m.rotation.x = -Math.PI / 2;
+    m.position.set(x, moundHeight(x, z) + 0.02, z);
+    loose.add(m);
+  }
+  /* Bake: merge everything by material. */
+  loose.updateMatrixWorld(true);
+  const byMaterial = new Map();
+  loose.traverse((o) => {
+    if (!o.isMesh) return;
+    let g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+    g.applyMatrix4(o.matrixWorld);
+    for (const name of Object.keys(g.attributes)) if (!["position", "normal", "uv"].includes(name)) g.deleteAttribute(name);
+    if (!g.getAttribute("uv")) g.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(g.getAttribute("position").count * 2), 2));
+    if (!byMaterial.has(o.material)) byMaterial.set(o.material, []);
+    byMaterial.get(o.material).push(g);
+  });
+  for (const [material, geos] of byMaterial) {
+    const merged = mergeGeometries(geos, false);
+    if (!merged) continue;
+    const m = new THREE.Mesh(merged, material);
+    m.castShadow = !material.transparent;
+    m.receiveShadow = true;
+    set.add(m);
+  }
+  /* Bin bags against the back and sides, real size, wrinkled and glossy. */
+  const bagMat = new THREE.MeshStandardMaterial({ color: "#111216", roughness: 0.22, metalness: 0.1, bumpMap: wrinkleTexture(61), bumpScale: 2.2 });
+  [-1.75, -1.05, -0.35, 0.35, 1.05, 1.75].forEach((a0, i) => {
+    const a = a0 + Math.PI;
+    const size = 2.5 + r() * 0.7;
+    const d = BIN_R - size * 0.8;
+    const bag = binBag(size, i, bagMat);
     const x = Math.sin(a) * d, z = Math.cos(a) * d;
-    bag.position.set(x, moundHeight(x, z) + 0.2, z);
+    bag.position.set(x, moundHeight(x, z) + 1.2, z);
     bag.rotation.y = r() * 6;
-    group.add(bag);
-  }
+    set.add(bag);
+  });
 }
 
 /* The flattened pizza box the board rests on, grease stains and all. */
@@ -451,7 +701,7 @@ export function dressTrashBin(ts) {
 
   const set = new THREE.Group();
   set.add(buildWall(), buildMound(), pizzaBox());
-  scatterRubbish(set);
+  fillWithRubbish(set);
   scene.add(set);
   const hole = buildHole(scene, new THREE.Vector3(0.3, 0, 0.8));
   const flies = buildFlies(scene);
