@@ -14,7 +14,11 @@ const PIECE_SCALE = 0.78;
 export const SET_BOARD = { light: "#EED6B0", dark: "#8A5229", frame: "#5C3317" };
 /* Idle breathing only needs about 30 frames a second. */
 const IDLE_FRAME_MS = 33;
-const SWIPE_PX = 50;
+/* Turning the camera by dragging: radians per pixel across and up/down. */
+const TURN_PER_PX = 0.0065, TILT_PER_PX = 0.004;
+/* How far the camera may tilt, from the vertical: never straight down, never
+   below a low over-the-shoulder look. And how far it may zoom. */
+const TILT_MIN = 0.5, TILT_MAX = 1.35, ZOOM_MIN = 0.6, ZOOM_MAX = 1.8;
 const TAP_SLOP_PX = 10;
 const MOVE_MS = 420;
 const CAPTURE_MS = 320;
@@ -38,6 +42,12 @@ const EDGE_DWELL_MS = 350;
    goal with a critically damped spring, so a new goal mid-move bends the path
    instead of restarting it. */
 const CAMERA_SMOOTH = 0.32;
+/* The attack shot settles faster, so it is in place before the hit. */
+const ATTACK_SMOOTH = 0.2;
+/* The attack shot: how far behind and above the player's piece the camera
+   sits, how far to the side so that piece doesn't hide the other, and how far
+   along the line it looks. */
+const SHOT_BACK = 2.1, SHOT_HIGH = 1.9, SHOT_SIDE = 0.45, SHOT_LOOK = 0.55;
 /* Unity-style SmoothDamp on one number; vel is carried between frames. */
 function damp(cur, goal, vel, key, smooth, dt) {
   const omega = 2 / smooth, x = omega * dt;
@@ -76,12 +86,16 @@ export class TacticaScene {
   /** `onDragStart(sq)` returns whether that character may be dragged;
    *  `onDrop(sq)` gets the square it was let go over, or null, and returns
    *  whether it took the move; if not, the character slides home. */
-  constructor(canvas, { colors, flipped, onTap, onDoubleTap, onSwipe, onDragStart, onDrop, onLost }) {
+  /** `onTurned(turned)` reports whether the player has turned, tilted or
+   *  zoomed the camera away from the standard view. */
+  constructor(canvas, { colors, flipped, onTap, onDoubleTap, onDragStart, onDrop, onLost, onTurned }) {
     this.canvas = canvas;
     this.flipped = flipped;
     this.onTap = onTap;
     this.onDoubleTap = onDoubleTap;
-    this.onSwipe = onSwipe;
+    this.onTurned = onTurned;
+    /* What the player has done to the camera; every standard view keeps it. */
+    this.user = { yaw: 0, pitch: 0, zoom: 1 };
     this.onDragStart = onDragStart;
     this.onDrop = onDrop;
     this.held = null;
@@ -424,7 +438,61 @@ export class TacticaScene {
   /** Strategic view: the whole board. */
   showBoard() {
     if (this.holdCamera(() => this.showBoard())) return;
-    this.moveCamera(new THREE.Vector3(0, 11, 8), new THREE.Vector3(0, 0, 0.6));
+    this.lastView = () => this.showBoard();
+    const look = new THREE.Vector3(0, 0, 0.6);
+    this.moveCamera(this.withUserAngle(new THREE.Vector3(0, 11, 8), look), look);
+  }
+
+  /** A standard camera spot, turned, tilted and zoomed the way the player
+   *  left the camera. */
+  withUserAngle(position, look) {
+    const s = new THREE.Spherical().setFromVector3(position.clone().sub(look));
+    s.theta += this.user.yaw;
+    s.phi = Math.min(TILT_MAX, Math.max(TILT_MIN, s.phi + this.user.pitch));
+    s.radius *= this.user.zoom;
+    return look.clone().add(new THREE.Vector3().setFromSpherical(s));
+  }
+
+  /** Turns (and tilts) the camera around the point it is looking at, at once,
+   *  and remembers it for every later view. */
+  turnBy(yaw, pitch) {
+    let applied = 0;
+    for (const [pos, look, isGoal] of [[this.goalPos, this.goalLook, true], [this.camPos, this.camLook, false]]) {
+      const s = new THREE.Spherical().setFromVector3(pos.clone().sub(look));
+      const before = s.phi;
+      s.theta += yaw;
+      s.phi = Math.min(TILT_MAX, Math.max(TILT_MIN, s.phi + pitch));
+      if (isGoal) applied = s.phi - before;
+      pos.copy(look).add(new THREE.Vector3().setFromSpherical(s));
+    }
+    this.user.yaw += yaw;
+    this.user.pitch += applied;
+    this.reportTurned();
+    this.wake();
+  }
+
+  /** Zooms in (factor below 1) or out, within limits. */
+  zoomBy(factor) {
+    const zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, this.user.zoom * factor));
+    const f = zoom / this.user.zoom;
+    if (Math.abs(f - 1) < 1e-4) return;
+    this.user.zoom = zoom;
+    for (const [pos, look] of [[this.goalPos, this.goalLook], [this.camPos, this.camLook]]) pos.copy(look).add(pos.clone().sub(look).multiplyScalar(f));
+    this.reportTurned();
+    this.wake();
+  }
+
+  /** Back to the standard view from the player's side. */
+  resetTurn() {
+    this.user = { yaw: 0, pitch: 0, zoom: 1 };
+    this.reportTurned();
+    this.lastView?.();
+  }
+
+  reportTurned() {
+    const yaw = Math.atan2(Math.sin(this.user.yaw), Math.cos(this.user.yaw));
+    const turned = Math.abs(yaw) > 0.05 || Math.abs(this.user.pitch) > 0.03 || Math.abs(this.user.zoom - 1) > 0.03;
+    if (turned !== this.turned) { this.turned = turned; this.onTurned?.(turned); }
   }
 
   /** Tactical view: low over the character's shoulder, looking out across
@@ -432,13 +500,14 @@ export class TacticaScene {
    *  Switching characters swings the camera from one to the next. */
   showCloseUp(sq, destination = null, widen = 1) {
     if (this.holdCamera(() => this.showCloseUp(sq, destination, widen))) return;
+    this.lastView = () => this.showCloseUp(sq, destination, widen);
     const at = this.worldOf(sq);
     const toward = destination != null ? this.worldOf(destination) : at.clone().add(new THREE.Vector3(0, 0, -3.5));
     const reach = destination != null ? at.distanceTo(toward) : 3.5;
     const pull = (1 + Math.max(0, reach - 2.5) * 0.2) * widen;
     const look = new THREE.Vector3().addVectors(at, toward).multiplyScalar(0.5).setY(0.35);
     const position = at.clone().add(new THREE.Vector3(0.7, 2.2 * pull, 3.1 * pull));
-    this.moveCamera(position, look);
+    this.moveCamera(this.withUserAngle(position, look), look);
   }
 
   /** View of a picked-up character that rises and pulls back until every
@@ -481,9 +550,10 @@ export class TacticaScene {
 
   /** Points the camera at a new view. It glides there on its own; asking
    *  again before it arrives just changes where it is heading. */
-  moveCamera(position, look) {
+  moveCamera(position, look, smooth = CAMERA_SMOOTH) {
     this.goalPos.copy(position);
     this.goalLook.copy(look);
+    this.smooth = smooth;
     if (reducedMotion()) { this.camPos.copy(position); this.camLook.copy(look); }
     this.wake();
   }
@@ -500,6 +570,22 @@ export class TacticaScene {
     this.camera.updateMatrixWorld();
     const p = this.worldOf(sq).setY(0.4).project(this.camera);
     return Math.abs(p.x) < 0.8 && p.y > -0.75 && p.y < 0.8 && p.z < 1;
+  }
+
+  /** The attack shot: close behind the player's own piece in the fight (the
+   *  attacker on their turn, the victim on the opponent's), looking straight
+   *  down the line at the other one, so the hit lands head-on in the middle
+   *  of an upright screen with room above for a leap. */
+  attackShot(attackerSq, victimSq, attackerIsMine, { back = SHOT_BACK, high = SHOT_HIGH, lookY = 0.75 } = {}) {
+    const mine = this.worldOf(attackerIsMine ? attackerSq : victimSq);
+    const other = this.worldOf(attackerIsMine ? victimSq : attackerSq);
+    const along = other.clone().sub(mine).setY(0).normalize();
+    const side = new THREE.Vector3(-along.z, 0, along.x);
+    /* Lean to whichever side keeps the camera nearer the board's middle. */
+    if (mine.clone().addScaledVector(side, SHOT_SIDE).lengthSq() > mine.clone().addScaledVector(side, -SHOT_SIDE).lengthSq()) side.negate();
+    const position = mine.clone().addScaledVector(along, -back).addScaledVector(side, SHOT_SIDE).setY(high);
+    const look = mine.clone().lerp(other, SHOT_LOOK).setY(lookY);
+    this.moveCamera(position, look, ATTACK_SMOOTH);
   }
 
   /** Pulls back to frame two squares and a leap's height, staying on the side
@@ -631,7 +717,9 @@ export class TacticaScene {
       scale: PIECE_SCALE, attackerColour: mover.colour, victimColour: victim.colour,
     });
     const end = mover.kind === "pawn" ? PAWN_ATTACK_END : clip.duration;
-    this.frameMove(a, b);
+    /* The knight leaps high, so his shot sits a little further back and higher. */
+    const leapRoom = mover.kind === "knight" ? { back: 2.6, high: 2.3, lookY: 1.15 } : {};
+    this.attackShot(from, to, mover.colour === this.nearColour, leapRoom);
     return new Promise((resolve) => {
       this.active.push({
         act, fx, end,
@@ -667,6 +755,16 @@ export class TacticaScene {
     };
     const pieceHit = () => raycaster.intersectObjects([...this.pieces.values()].map((v) => v.hit))[0]?.object.userData.sq ?? null;
     let down = null, drag = null, lastTap = null;
+    /* Every finger on the board, a turn in progress, and a pinch. */
+    const fingers = new Map();
+    let turning = null, pinch = null;
+    const spread = () => { const [a, b] = [...fingers.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
+    const turnWith = (e) => {
+      this.turnBy(-(e.clientX - turning.x) * TURN_PER_PX, -(e.clientY - turning.y) * TILT_PER_PX);
+      turning.x = e.clientX;
+      turning.y = e.clientY;
+      if (drag?.pointer) follow(drag.pointer);
+    };
     const follow = (e) => {
       aim(e);
       const hit = groundSquare();
@@ -688,7 +786,11 @@ export class TacticaScene {
       const step = (EDGE_SPEED * Math.min(dt, 50)) / 1000;
       /* Stops at the board edge, but never pulls back a camera already past it. */
       const clamp = (v, cur, lo, hi) => Math.max(Math.min(lo, cur), Math.min(Math.max(hi, cur), v));
-      const x = clamp(this.camLook.x + fx * step, this.camLook.x, -3.5, 3.5), z = clamp(this.camLook.z + fz * step, this.camLook.z, -4.5, 3.5);
+      /* Screen right and screen up, on the board, for however the camera is turned. */
+      const ahead = this.camLook.clone().sub(this.camPos).setY(0).normalize();
+      const right = new THREE.Vector3(-ahead.z, 0, ahead.x);
+      const move = right.multiplyScalar(fx * step).addScaledVector(ahead, -fz * step);
+      const x = clamp(this.camLook.x + move.x, this.camLook.x, -4, 4), z = clamp(this.camLook.z + move.z, this.camLook.z, -4.5, 4.5);
       const shift = new THREE.Vector3(x - this.camLook.x, 0, z - this.camLook.z);
       this.camLook.add(shift);
       this.camPos.add(shift);
@@ -700,22 +802,47 @@ export class TacticaScene {
       follow(drag.pointer);
     };
 
-    /* One finger at a time: a second finger can't hijack a drag. */
+    /* One finger picks or turns. While a character is held, a second finger
+       turns the camera; with nothing held, two fingers pinch to zoom. */
     this.onDown = (e) => {
-      if (down && drag) return;
+      fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (drag) { turning = { id: e.pointerId, x: e.clientX, y: e.clientY }; return; }
+      if (fingers.size === 2) {
+        pinch = { dist: spread() };
+        turning = null;
+        down = null;
+        return;
+      }
+      if (down) return;
       aim(e);
       down = { id: e.pointerId, x: e.clientX, y: e.clientY, sq: pieceHit() };
     };
     this.onMove = (e) => {
+      if (fingers.has(e.pointerId)) fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pinch && fingers.size >= 2) {
+        const d = spread();
+        if (d > 0) this.zoomBy(pinch.dist / d);
+        pinch.dist = d;
+        return;
+      }
+      if (turning && e.pointerId === turning.id) { turnWith(e); return; }
       if (!down || e.pointerId !== down.id) return;
       /* A mouse released outside the page never sends pointerup here. */
       if (e.pointerType === "mouse" && e.buttons === 0 && !drag) { down = null; return; }
-      if (!drag && down.sq != null && Math.hypot(e.clientX - down.x, e.clientY - down.y) > TAP_SLOP_PX) {
-        this.dragging = true;
-        if (this.onDragStart?.(down.sq)) {
+      if (!drag && Math.hypot(e.clientX - down.x, e.clientY - down.y) > TAP_SLOP_PX) {
+        /* Dragging a character that may move picks it up; dragging anything
+           else (empty board, an enemy) turns the camera. */
+        if (down.sq != null && this.onDragStart?.(down.sq)) {
+          this.dragging = true;
           drag = { sq: down.sq, piece: this.pieces.get(down.sq) };
           this.canvas.setPointerCapture?.(e.pointerId);
-        } else { down.sq = null; this.dragging = false; }
+        } else {
+          turning = { id: e.pointerId, x: down.x, y: down.y };
+          down.turned = true;
+          this.canvas.setPointerCapture?.(e.pointerId);
+          turnWith(e);
+          return;
+        }
       }
       if (!drag?.piece) return;
       drag.pointer = { clientX: e.clientX, clientY: e.clientY };
@@ -723,6 +850,13 @@ export class TacticaScene {
       this.wake();
     };
     this.onUp = (e) => {
+      fingers.delete(e.pointerId);
+      if (pinch) { if (fingers.size < 2) pinch = null; down = null; return; }
+      if (turning && e.pointerId === turning.id) {
+        turning = null;
+        if (down?.id === e.pointerId) down = null;
+        return;
+      }
       if (!down || e.pointerId !== down.id) return;
       const dx = e.clientX - down.x, dy = e.clientY - down.y;
       const pressed = down;
@@ -741,7 +875,6 @@ export class TacticaScene {
         }
         return;
       }
-      if (Math.abs(dx) > SWIPE_PX && Math.abs(dx) > Math.abs(dy)) { this.onSwipe?.(dx < 0 ? 1 : -1); return; }
       if (Math.hypot(dx, dy) > TAP_SLOP_PX) return;
       aim(e);
       /* While a character is held, a square it can reach wins over whatever
@@ -762,6 +895,9 @@ export class TacticaScene {
       this.onTap?.(sq);
     };
     this.onCancel = (e) => {
+      fingers.delete(e?.pointerId);
+      pinch = null;
+      if (turning?.id === e?.pointerId) turning = null;
       if (down && e?.pointerId !== down.id) return;
       if (drag?.piece) {
         drag.piece.group.position.copy(this.worldOf(drag.sq));
@@ -774,6 +910,9 @@ export class TacticaScene {
     this.canvas.addEventListener("pointermove", this.onMove);
     this.canvas.addEventListener("pointerup", this.onUp);
     this.canvas.addEventListener("pointercancel", this.onCancel);
+    /* A mouse wheel zooms, for testing on a computer. */
+    this.onWheel = (e) => { e.preventDefault(); this.zoomBy(Math.exp(e.deltaY * 0.001)); };
+    this.canvas.addEventListener("wheel", this.onWheel, { passive: false });
   }
 
   resize() {
@@ -826,8 +965,8 @@ export class TacticaScene {
       finished.forEach((tw) => tw.done?.());
       if (!this.dragging) {
         const step = Math.min(0.05, Math.max(0.001, dt / 1000));
-        dampVector(this.camPos, this.goalPos, this.posVel, CAMERA_SMOOTH, step);
-        dampVector(this.camLook, this.goalLook, this.lookVel, CAMERA_SMOOTH, step);
+        dampVector(this.camPos, this.goalPos, this.posVel, this.smooth ?? CAMERA_SMOOTH, step);
+        dampVector(this.camLook, this.goalLook, this.lookVel, this.smooth ?? CAMERA_SMOOTH, step);
       }
       this.camera.position.copy(this.camPos);
       this.camera.lookAt(this.camLook);
@@ -845,6 +984,7 @@ export class TacticaScene {
     this.canvas.removeEventListener("pointerup", this.onUp);
     this.canvas.removeEventListener("pointermove", this.onMove);
     this.canvas.removeEventListener("pointercancel", this.onCancel);
+    this.canvas.removeEventListener("wheel", this.onWheel);
     this.canvas.removeEventListener("webglcontextlost", this.onLostEvent);
     this.renderer.dispose();
   }
