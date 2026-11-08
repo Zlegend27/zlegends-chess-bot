@@ -38,6 +38,13 @@ const EDGE_DWELL_MS = 350;
    goal with a critically damped spring, so a new goal mid-move bends the path
    instead of restarting it. */
 const CAMERA_SMOOTH = 0.32;
+/* Angles the close view may swing to, around the selected character, so it
+   can see past whatever is in the way. Zero is the view from the player's
+   side; it never swings further than side-on, so the player never ends up
+   looking from the enemy's side. */
+const AUTO_TURNS = [0, 0.45, -0.45, 0.9, -0.9, 1.4, -1.4];
+const Y_AXIS = new THREE.Vector3(0, 1, 0);
+const turnAround = (pivot, point, angle) => point.clone().sub(pivot).applyAxisAngle(Y_AXIS, angle).add(pivot);
 /* The attack shot settles faster, so it is in place before the hit. */
 const ATTACK_SMOOTH = 0.2;
 /* The attack shot: how far behind and above the player's piece the camera
@@ -79,15 +86,23 @@ function idleFor(kind) {
 export class TacticaScene {
   /** `colors` is { light, dark, background, highlight, target, select }. The
    *  solver's side is always nearest the camera. */
+  /** `onTurn(angle)` reports how far the view is turned from the player's
+   *  side, so the map can turn with it. */
   /** `onDragStart(sq)` returns whether that character may be dragged;
    *  `onDrop(sq)` gets the square it was let go over, or null, and returns
    *  whether it took the move; if not, the character slides home. */
-  constructor(canvas, { colors, flipped, onTap, onDoubleTap, onSwipe, onDragStart, onDrop, onLost }) {
+  constructor(canvas, { colors, flipped, onTap, onDoubleTap, onSwipe, onDragStart, onDrop, onLost, onTurn }) {
     this.canvas = canvas;
     this.flipped = flipped;
     this.onTap = onTap;
     this.onDoubleTap = onDoubleTap;
     this.onSwipe = onSwipe;
+    this.onTurn = onTurn;
+    /* How far the view is turned from the player's side, the point it turns
+       around, and whether the player turned it with the map. */
+    this.turn = 0;
+    this.pivot = new THREE.Vector3();
+    this.manualTurn = false;
     this.onDragStart = onDragStart;
     this.onDrop = onDrop;
     this.held = null;
@@ -430,27 +445,94 @@ export class TacticaScene {
   /** Strategic view: the whole board. */
   showBoard() {
     if (this.holdCamera(() => this.showBoard())) return;
-    this.moveCamera(new THREE.Vector3(0, 11, 8), new THREE.Vector3(0, 0, 0.6));
+    this.lastSq = null;
+    this.pivot.set(0, 0, 0);
+    if (!this.manualTurn) this.setTurn(0);
+    this.moveCamera(turnAround(this.pivot, new THREE.Vector3(0, 11, 8), this.turn), turnAround(this.pivot, new THREE.Vector3(0, 0, 0.6), this.turn));
+  }
+
+  setTurn(angle) {
+    this.turn = Math.atan2(Math.sin(angle), Math.cos(angle));
+    this.onTurn?.(this.turn);
+  }
+
+  /** Turns the view by `angle` around the selected character (or the
+   *  board's middle), at once; used when the player drags the map. The turn
+   *  holds until another character is chosen. */
+  spinBy(angle) {
+    this.manualTurn = true;
+    for (const p of [this.goalPos, this.goalLook, this.camPos, this.camLook]) p.copy(turnAround(this.pivot, p, angle));
+    this.setTurn(this.turn + angle);
+    this.wake();
+  }
+
+  /** The turn that shows a character and the squares it can reach best:
+   *  fewest of them hidden behind other pieces or off screen, then the one
+   *  closest to the view from the player's side, then the one closest to
+   *  where the camera already is. */
+  bestTurn(sq, basePos, baseLook, targets) {
+    /* Pieces placed since the last frame have no world position yet. */
+    this.scene.updateMatrixWorld();
+    const at = this.worldOf(sq);
+    const self = this.pieces.get(sq);
+    const blockers = [...this.pieces.values()].filter((e) => e !== self).map((e) => e.hit);
+    const probe = this.probe ??= new THREE.PerspectiveCamera();
+    probe.fov = this.camera.fov; probe.aspect = this.camera.aspect; probe.near = 0.1; probe.far = 100;
+    probe.updateProjectionMatrix();
+    const ray = new THREE.Raycaster();
+    const hidden = (from, point, except) => {
+      const dir = point.clone().sub(from);
+      const dist = dir.length();
+      ray.set(from, dir.normalize());
+      ray.far = dist - 0.35;
+      return ray.intersectObjects(blockers).some((h) => h.object !== except);
+    };
+    let best = null;
+    for (const turn of AUTO_TURNS) {
+      const pos = turnAround(at, basePos, turn), look = turnAround(at, baseLook, turn);
+      probe.position.copy(pos);
+      probe.lookAt(look);
+      probe.updateMatrixWorld();
+      /* The character itself hidden matters most; then the share of its
+         squares that are off screen or hidden; then how far the view turns. */
+      let cost = hidden(pos, at.clone().setY(0.55), null) ? 6 : 0;
+      let lost = 0;
+      for (const t of targets) {
+        const p = this.worldOf(t).setY(0.2);
+        const ndc = p.clone().project(probe);
+        if (Math.abs(ndc.x) > 0.92 || Math.abs(ndc.y) > 0.85 || ndc.z > 1 || hidden(pos, p, this.pieces.get(t)?.hit)) lost++;
+      }
+      if (targets.length) cost += 2.5 * lost / targets.length;
+      cost += Math.abs(turn) * 1.1 + Math.abs(Math.atan2(Math.sin(turn - this.turn), Math.cos(turn - this.turn))) * 0.25;
+      if (!best || cost < best.cost) best = { cost, turn };
+    }
+    return best.turn;
   }
 
   /** Tactical view: low over the character's shoulder, looking out across
    *  the board. A far destination pulls the camera back so it stays in sight.
    *  Switching characters swings the camera from one to the next. */
-  showCloseUp(sq, destination = null, widen = 1) {
-    if (this.holdCamera(() => this.showCloseUp(sq, destination, widen))) return;
+  showCloseUp(sq, destination = null, widen = 1, targets = []) {
+    if (this.holdCamera(() => this.showCloseUp(sq, destination, widen, targets))) return;
     const at = this.worldOf(sq);
     const toward = destination != null ? this.worldOf(destination) : at.clone().add(new THREE.Vector3(0, 0, -3.5));
     const reach = destination != null ? at.distanceTo(toward) : 3.5;
     const pull = (1 + Math.max(0, reach - 2.5) * 0.2) * widen;
     const look = new THREE.Vector3().addVectors(at, toward).multiplyScalar(0.5).setY(0.35);
     const position = at.clone().add(new THREE.Vector3(0.7, 2.2 * pull, 3.1 * pull));
-    this.moveCamera(position, look);
+    /* A new character gets the clearest angle; the same one keeps a turn
+       the player made with the map. */
+    if (sq !== this.lastSq) this.manualTurn = false;
+    this.lastSq = sq;
+    this.pivot.copy(at);
+    this.setTurn(this.manualTurn ? this.turn : this.bestTurn(sq, position, look, targets));
+    this.moveCamera(turnAround(at, position, this.turn), turnAround(at, look, this.turn));
   }
 
-  /** View of a picked-up character that rises and pulls back until every
-   *  square it can reach is in sight, including ones behind it. */
-  showReach(sq) {
-    this.showCloseUp(sq, null, HELD_WIDEN);
+  /** View of a character with every square it can reach in sight, from
+   *  whichever side shows them best. */
+  showReach(sq, targets = []) {
+    this.showCloseUp(sq, null, HELD_WIDEN, targets);
   }
 
   /** Outlines the square a dragged character is over: gold for a legal
@@ -713,7 +795,11 @@ export class TacticaScene {
       const step = (EDGE_SPEED * Math.min(dt, 50)) / 1000;
       /* Stops at the board edge, but never pulls back a camera already past it. */
       const clamp = (v, cur, lo, hi) => Math.max(Math.min(lo, cur), Math.min(Math.max(hi, cur), v));
-      const x = clamp(this.camLook.x + fx * step, this.camLook.x, -3.5, 3.5), z = clamp(this.camLook.z + fz * step, this.camLook.z, -4.5, 3.5);
+      /* Screen right and screen up, on the board, for however the view is turned. */
+      const ahead = this.camLook.clone().sub(this.camPos).setY(0).normalize();
+      const right = new THREE.Vector3(-ahead.z, 0, ahead.x);
+      const move = right.multiplyScalar(fx * step).addScaledVector(ahead, -fz * step);
+      const x = clamp(this.camLook.x + move.x, this.camLook.x, -4, 4), z = clamp(this.camLook.z + move.z, this.camLook.z, -4.5, 4.5);
       const shift = new THREE.Vector3(x - this.camLook.x, 0, z - this.camLook.z);
       this.camLook.add(shift);
       this.camPos.add(shift);

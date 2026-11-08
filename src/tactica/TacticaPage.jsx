@@ -19,7 +19,7 @@ const KNIGHT = 2, QUEEN = 5;
 const REPLY_DELAY_MS = 550;
 const OPENING_PAUSE_MS = 1100;
 const NOTE_MS = 3200;
-const STUDY_HINT = "Tap the map to study the whole board.";
+const STUDY_HINT = "Swipe to change character. Drag the map to turn the view.";
 
 const sqOf = (sq120) => M120TO64[sq120];
 
@@ -62,6 +62,9 @@ export default function TacticaPage({ pieceImgSrc, sweetheart }) {
   const [solved, setSolved] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [stats, setStats] = useState(null);
+  /* How far the view is turned, so the map turns with it like a compass. */
+  const [turn, setTurn] = useState(0);
+  const mapDragRef = useRef(null);
 
   const friends = friendlySquares(eng, side);
   const selected = friends[Math.min(selectedIdx, friends.length - 1)];
@@ -102,6 +105,7 @@ export default function TacticaPage({ pieceImgSrc, sweetheart }) {
       onDragStart: (sq) => dragStartRef.current(sq),
       onDrop: (sq) => dropRef.current(sq),
       onLost: () => setLost(true),
+      onTurn: setTurn,
     });
     sceneRef.current = scene;
     scene.setPieces(piecesNow());
@@ -119,7 +123,8 @@ export default function TacticaPage({ pieceImgSrc, sweetheart }) {
     const scene = sceneRef.current;
     if (!scene || draggingRef.current) return;
     if (view === "board") scene.showBoard();
-    else scene.showReach(selected);
+    else scene.showReach(selected, targets);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, selected, played, solved, sceneKey]);
   /* Highlights: the selected character's squares glow, and a chosen square
      shows a ghost of the move. */
@@ -261,6 +266,23 @@ export default function TacticaPage({ pieceImgSrc, sweetheart }) {
     : chosen != null ? (isAttack ? `Tap ${squareName(chosen)} again to strike` : `Tap ${squareName(chosen)} again to move`)
     : "Tap a glowing square, or drag there";
   const toggleView = () => { if (!busy || played.length) setView((v) => (v === "board" ? "close" : "board")); };
+  /* Dragging across the map turns the view; a tap still switches views. */
+  const MAP_TURN_PER_PX = 0.03, MAP_DRAG_PX = 6;
+  const mapDown = (e) => {
+    mapDragRef.current = { id: e.pointerId, x: e.clientX, moved: false };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  };
+  const mapMove = (e) => {
+    const drag = mapDragRef.current;
+    if (!drag || drag.id !== e.pointerId) return;
+    const dx = e.clientX - drag.x;
+    if (!drag.moved && Math.abs(dx) < MAP_DRAG_PX) return;
+    drag.moved = true;
+    drag.x = e.clientX;
+    sceneRef.current?.spinBy(dx * MAP_TURN_PER_PX);
+  };
+  const mapUp = () => { setTimeout(() => { mapDragRef.current = null; }, 0); };
+  const mapClick = () => { if (!mapDragRef.current?.moved) toggleView(); };
 
   /* A phone-shaped column, even on a wide screen: the game is played upright. */
   return (
@@ -282,12 +304,20 @@ export default function TacticaPage({ pieceImgSrc, sweetheart }) {
         )}
         <button
           type="button"
-          onClick={toggleView}
+          onClick={mapClick}
+          onPointerDown={mapDown}
+          onPointerMove={mapMove}
+          onPointerUp={mapUp}
+          onPointerCancel={mapUp}
           aria-label={view === "board" ? "Back to the close view" : "Show the whole board"}
+          title="Tap to switch views, drag to turn the view"
           aria-pressed={view === "board"}
-          className={"pointer-events-auto shrink-0 cursor-pointer rounded-lg border-2 bg-black/40 p-1 " + (view === "board" ? "border-[var(--cyan)] " : "border-white/30 ") + focusRing}
+          className={"pointer-events-auto shrink-0 cursor-pointer touch-none rounded-lg border-2 bg-black/40 p-1 " + (view === "board" ? "border-[var(--cyan)] " : "border-white/30 ") + focusRing}
         >
+          {/* Turned like a compass, and shrunk while at an angle so its corners stay inside the frame. */}
+          <div style={{ transform: `rotate(${turn}rad) scale(${1 / (Math.abs(Math.cos(turn)) + Math.abs(Math.sin(turn)))})`, transition: "transform .2s ease" }}>
           <MiniBoard fen={eng.fen()} colors={board} pieceImgSrc={pieceImgSrc} size={80} flipped={side === -1} label="Map of the board" />
+          </div>
         </button>
       </div>
 
