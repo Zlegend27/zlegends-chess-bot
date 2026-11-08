@@ -19,7 +19,7 @@ const KNIGHT = 2, QUEEN = 5;
 const REPLY_DELAY_MS = 550;
 const OPENING_PAUSE_MS = 1100;
 const NOTE_MS = 3200;
-const STUDY_HINT = "Drag the board to look around. Pinch to zoom.";
+const STUDY_HINT = "Tap the map to study the whole board.";
 
 const sqOf = (sq120) => M120TO64[sq120];
 
@@ -62,8 +62,6 @@ export default function TacticaPage({ pieceImgSrc, sweetheart }) {
   const [solved, setSolved] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [stats, setStats] = useState(null);
-  /* Whether the camera has been turned, tilted or zoomed by the player. */
-  const [turned, setTurned] = useState(false);
 
   const friends = friendlySquares(eng, side);
   const selected = friends[Math.min(selectedIdx, friends.length - 1)];
@@ -100,10 +98,10 @@ export default function TacticaPage({ pieceImgSrc, sweetheart }) {
       },
       onTap: (sq) => tapRef.current(sq),
       onDoubleTap: (sq) => doubleTapRef.current(sq),
+      onSwipe: (dir) => swipeRef.current(dir),
       onDragStart: (sq) => dragStartRef.current(sq),
       onDrop: (sq) => dropRef.current(sq),
       onLost: () => setLost(true),
-      onTurned: setTurned,
     });
     sceneRef.current = scene;
     scene.setPieces(piecesNow());
@@ -243,6 +241,8 @@ export default function TacticaPage({ pieceImgSrc, sweetheart }) {
     if (sq != null && targets.includes(sq)) { play(sq); return true; }
     return false;
   };
+  const swipeRef = useRef(null);
+  swipeRef.current = cycleCharacter;
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -268,28 +268,15 @@ export default function TacticaPage({ pieceImgSrc, sweetheart }) {
       <canvas key={sceneKey} ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
 
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3">
-        <div className="flex shrink-0 flex-col gap-2">
-          <button
-            type="button"
-            onClick={() => setMenuOpen((o) => !o)}
-            aria-label="Game menu"
-            aria-expanded={menuOpen}
-            className={"pointer-events-auto flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-white/20 bg-black/45 text-white " + focusRing}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 10a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm7 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm7 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z" /></svg>
-          </button>
-          {turned && (
-            <button
-              type="button"
-              onClick={() => sceneRef.current?.resetTurn()}
-              aria-label="Face the board from your side again"
-              title="Face the board from your side again"
-              className={"pointer-events-auto flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-[var(--cyan)] bg-black/45 text-[var(--cyan)] " + focusRing}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20Zm0 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm0 2 3 7h-6l3-7Zm-3 8h6l-3 4-3-4Z" /></svg>
-            </button>
-          )}
-        </div>
+        <button
+          type="button"
+          onClick={() => setMenuOpen((o) => !o)}
+          aria-label="Game menu"
+          aria-expanded={menuOpen}
+          className={"pointer-events-auto flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-white/20 bg-black/45 text-white " + focusRing}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 10a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm7 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm7 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z" /></svg>
+        </button>
         {note.text && (
           <p key={note.id} role="status" className={"tacticaNote " + (note.sticky ? "" : "fades ") + "m-0 max-w-[60%] rounded-lg bg-black/55 px-3 py-2 text-center text-sm text-white"}>{note.text}</p>
         )}
