@@ -8,7 +8,7 @@ const START = [4, 2, 3, 5, 6, 3, 2, 4];
 const CIRCLE_SPEED = 0.06; // radians per second
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--cyan)]";
 
-export default function MenuScreen({ best, onPick, sweetheart }) {
+export default function MenuScreen({ best, runBest, onPick, sweetheart }) {
   const canvasRef = useRef(null);
 
   useEffect(() => {
@@ -44,17 +44,17 @@ export default function MenuScreen({ best, onPick, sweetheart }) {
         <p className="m-0 mt-1 text-sm text-white/70">Real chess puzzles, played by living pieces.</p>
       </div>
       <nav aria-label="Tactica modes" className="absolute inset-x-0 bottom-0 flex flex-col gap-2 bg-gradient-to-t from-black/85 via-black/60 to-transparent px-4 pt-16 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-        <button type="button" className={"btn gold w-full " + focusRing} onClick={() => onPick("blitz")}>
-          Blitz in the Bin
+        <button type="button" className={"btn gold w-full " + focusRing} onClick={() => onPick("run")}>
+          Bin Run
         </button>
-        <p className="m-0 -mt-1 mb-1 text-center text-xs text-white/70">3 minutes · solve as many as you can{best ? ` · Best ${best}` : ""}</p>
+        <p className="m-0 -mt-1 mb-1 text-center text-xs text-white/70">Climb out floor by floor{runBest ? ` · Best ${runBest}` : ""}</p>
+        <button type="button" className={row} onClick={() => onPick("blitz")}>
+          <span className="font-bold">Blitz in the Bin</span>
+          <span className="text-xs text-white/70">3 minutes · solve as many as you can{best ? ` · Best ${best}` : ""}</span>
+        </button>
         <button type="button" className={row} onClick={() => onPick("practice")}>
           <span className="font-bold">Practice</span>
           <span className="text-xs text-white/70">One puzzle at your own pace, with every attack played out</span>
-        </button>
-        <button type="button" className={row} disabled>
-          <span className="font-bold">Bin Run</span>
-          <span className="text-xs text-white/70">Coming soon: climb out of the bin floor by floor</span>
         </button>
         <button type="button" className={row} disabled>
           <span className="font-bold">Play a bot</span>

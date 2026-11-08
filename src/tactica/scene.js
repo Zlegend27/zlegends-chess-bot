@@ -18,11 +18,16 @@ export const SET_BOARD = { light: "#EED6B0", dark: "#8A5229", frame: "#5C3317" }
 /* Idle breathing only needs about 30 frames a second. */
 const IDLE_FRAME_MS = 33;
 const SWIPE_PX = 50;
-const TAP_SLOP_PX = 10;
+/* How far a finger may drift and still count as a tap. A quick tap on a
+   phone drifts more, so a short press is allowed more. */
+const TAP_SLOP_PX = 16, QUICK_TAP_SLOP_PX = 32, QUICK_TAP_MS = 250;
 const MOVE_MS = 420;
 const CAPTURE_MS = 320;
 /* Fast modes: a short slide and a quick pop for captures. */
 const QUICK_MOVE_MS = 170, QUICK_CAPTURE_MS = 120;
+/* Battle animations: armies regrouping between phases, an enemy rush, and a
+   scared character after a quiet punishing reply. */
+const REGROUP_MS = 700, RUSH_MS = 900, SCARE_MS = 1300;
 /* Fast modes play the full attack cinematics this many times faster. */
 const QUICK_ATTACK_SPEED = 3;
 const KNIGHT_HOP = 1.1;
@@ -141,6 +146,8 @@ export class TacticaScene {
     /* Scenery that animates on its own (set dressing) gets called every
        drawn frame with the seconds since the last one. */
     this.everyFrame = [];
+    /* Camera shake strength (board units), set during an enemy rush. */
+    this.shake = 0;
     this.camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
     this.camPos = new THREE.Vector3(0, 11, 8);
     this.camLook = new THREE.Vector3(0, 0, 0.6);
@@ -341,6 +348,27 @@ export class TacticaScene {
       for (const [o, m] of entry.ghost) o.material = m;
       entry.ghost = null;
     }
+  }
+
+  /** Which square a tap means, given the character bodies under the finger,
+   *  nearest first (`hits`), and the board square under it (`tile`). The
+   *  nearest body wins, except that while a character is selected the tap
+   *  looks past bodies that only stand in the way, to a glowing square
+   *  behind them: the selected character itself (a pawn hides its own
+   *  square ahead; a rook can stand in front of the enemy it takes) and
+   *  enemies it can't take. A friend stops the search, so tapping one still
+   *  switches to it. */
+  throughTo(hits, tile) {
+    if (!hits.length) return tile;
+    if (this.held == null) return hits[0];
+    const mine = this.pieces.get(this.held);
+    for (const sq of hits) {
+      if (this.targets.includes(sq)) return sq;
+      const there = this.pieces.get(sq);
+      const inTheWay = sq === this.held || (mine && there && there.colour !== mine.colour);
+      if (!inTheWay) return sq;
+    }
+    return tile != null && this.targets.includes(tile) ? tile : hits[0];
   }
 
   /** Highlights: a ring under the selected character and, with `held`, a
@@ -633,6 +661,118 @@ export class TacticaScene {
   }
 
 
+  /** Between battle phases both armies regroup into the next position:
+   *  each character walks (with a little hop) to the nearest square its kind
+   *  and colour needs in the new position; any left over shrink away and any
+   *  new ones grow in. Resolves when they have settled. */
+  regroupTo(pieces) {
+    const fast = reducedMotion();
+    const moves = [], added = [];
+    const free = [...this.pieces.entries()].map(([sq, e]) => ({ sq, e, used: false }));
+    for (const p of pieces) {
+      const kind = KINDS[p.type], colour = p.white ? "white" : "black";
+      const target = this.worldOf(p.sq);
+      let best = null;
+      for (const f of free) {
+        if (f.used || f.e.kind !== kind || f.e.colour !== colour) continue;
+        const d = this.worldOf(f.sq).distanceTo(target);
+        if (!best || d < best.d) best = { f, d };
+      }
+      if (best) { best.f.used = true; moves.push({ e: best.f.e, from: best.f.e.group.position.clone(), to: target, sq: p.sq }); }
+      else added.push(p);
+    }
+    const leaving = free.filter((f) => !f.used).map((f) => f.e);
+    this.pieces.clear();
+    for (const m of moves) {
+      this.pieces.set(m.sq, m.e);
+      m.e.hit.userData.sq = m.sq;
+      m.e.holder.rotation.y = m.e.colour === this.nearColour ? Math.PI : 0;
+      this.setGhost(m.e, false);
+    }
+    const grown = added.map((p) => { this.addPiece(p); const e = this.pieces.get(p.sq); e.group.scale.setScalar(0.001); return e; });
+    return new Promise((resolve) => {
+      this.tween(fast ? 0 : REGROUP_MS, (t) => {
+        const k = ease(t);
+        for (const m of moves) {
+          m.e.group.position.lerpVectors(m.from, m.to, k);
+          if (m.from.distanceToSquared(m.to) > 1e-4) m.e.group.position.y = Math.sin(Math.PI * k) * 0.35;
+        }
+        for (const e of leaving) e.group.scale.setScalar(Math.max(0.001, 1 - k));
+        for (const e of grown) e.group.scale.setScalar(Math.max(0.001, k));
+      }, () => {
+        for (const e of leaving) this.scene.remove(e.group);
+        for (const e of grown) e.group.scale.setScalar(1);
+        for (const m of moves) m.e.group.position.copy(m.to);
+        resolve();
+      });
+    });
+  }
+
+  /** The enemy rush when a phase's timer runs out: every enemy piece winds
+   *  back and lunges at the nearest of the player's pieces, staggered like a
+   *  charge, while the camera shakes. Nobody actually moves square: the
+   *  position is unchanged when it ends. */
+  rush() {
+    const enemies = [...this.pieces.values()].filter((e) => e.colour !== this.nearColour);
+    const friends = [...this.pieces.values()].filter((e) => e.colour === this.nearColour);
+    if (!enemies.length || reducedMotion()) return Promise.resolve();
+    const plans = enemies.map((e, i) => {
+      const home = e.group.position.clone();
+      let target = home.clone().add(new THREE.Vector3(0, 0, 1));
+      let bestD = Infinity;
+      for (const f of friends) { const d = f.group.position.distanceTo(home); if (d < bestD) { bestD = d; target = f.group.position.clone(); } }
+      const dir = target.sub(home).setY(0);
+      const reach = Math.min(0.85, dir.length() * 0.6);
+      dir.normalize();
+      return { e, home, dir, reach, delay: i * 70 };
+    });
+    const total = RUSH_MS + plans.length * 70;
+    return new Promise((resolve) => {
+      this.tween(total, (t) => {
+        const now = t * total;
+        this.shake = 0.18 * Math.sin(Math.PI * t);
+        for (const p of plans) {
+          const u = Math.min(1, Math.max(0, (now - p.delay) / RUSH_MS));
+          /* Wind back, lunge, recoil home. */
+          const off = u < 0.25 ? -0.2 * (u / 0.25) : u < 0.55 ? -0.2 + (p.reach + 0.2) * ((u - 0.25) / 0.3) : p.reach * (1 - (u - 0.55) / 0.45);
+          p.e.group.position.copy(p.home).addScaledVector(p.dir, off);
+          p.e.group.position.y = u > 0.25 && u < 0.7 ? Math.sin(Math.PI * (u - 0.25) / 0.45) * 0.3 : 0;
+        }
+      }, () => {
+        this.shake = 0;
+        for (const p of plans) p.e.group.position.copy(p.home);
+        resolve();
+      });
+    });
+  }
+
+  /** After a quiet punishing reply: the camera shows the threat, then closes
+   *  in on the threatened character, which trembles, scared stiff. */
+  scare(threatSq, victimSq) {
+    const victim = this.pieces.get(victimSq);
+    if (!victim || reducedMotion()) return Promise.resolve();
+    this.frameMove(this.worldOf(threatSq), this.worldOf(victimSq));
+    const at = this.worldOf(victimSq);
+    const toward = this.worldOf(threatSq).sub(at).setY(0).normalize();
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        this.moveCamera(at.clone().addScaledVector(toward, -1.9).add(new THREE.Vector3(0.4, 1.3, 0)), at.clone().setY(0.6), 0.25);
+        const baseY = victim.holder.rotation.y, baseScale = victim.model.scale.x;
+        this.tween(SCARE_MS, (t) => {
+          const shiver = Math.sin(t * 90) * 0.06 * (1 - t * 0.3);
+          victim.holder.rotation.z = shiver;
+          victim.holder.rotation.y = baseY + shiver * 0.5;
+          victim.model.scale.setScalar(baseScale * (1 - 0.06 * Math.sin(Math.PI * Math.min(1, t * 3))));
+        }, () => {
+          victim.holder.rotation.z = 0;
+          victim.holder.rotation.y = baseY;
+          victim.model.scale.setScalar(baseScale);
+          resolve();
+        });
+      }, 650);
+    });
+  }
+
   /** Turns the board round so the given side is nearest the camera, for a
    *  new puzzle where the solver plays the other colour. */
   setFlipped(flipped) {
@@ -805,7 +945,8 @@ export class TacticaScene {
       const point = raycaster.ray.intersectPlane(ground, new THREE.Vector3());
       return point ? { point, sq: this.squareAt(point) } : null;
     };
-    const pieceHit = () => raycaster.intersectObjects([...this.pieces.values()].map((v) => v.hit))[0]?.object.userData.sq ?? null;
+    /* Every character body under the finger, nearest first. */
+    const pieceHits = () => [...new Set(raycaster.intersectObjects([...this.pieces.values()].map((v) => v.hit)).map((h) => h.object.userData.sq))];
     let down = null, drag = null, lastTap = null;
     const follow = (e) => {
       aim(e);
@@ -848,7 +989,11 @@ export class TacticaScene {
     this.onDown = (e) => {
       if (down && drag) return;
       aim(e);
-      down = { id: e.pointerId, x: e.clientX, y: e.clientY, sq: pieceHit() };
+      /* What a tap means is fixed where the finger lands, not where it lifts:
+         a fast tap drifts, sometimes onto the next square or off the board. */
+      const tile = raycaster.intersectObjects(this.tiles)[0]?.object.userData.sq ?? null;
+      const hits = pieceHits();
+      down = { id: e.pointerId, x: e.clientX, y: e.clientY, sq: hits[0] ?? null, hits, tile, at: performance.now() };
     };
     this.onMove = (e) => {
       if (!down || e.pointerId !== down.id) return;
@@ -886,18 +1031,20 @@ export class TacticaScene {
         return;
       }
       if (Math.abs(dx) > SWIPE_PX && Math.abs(dx) > Math.abs(dy)) { this.onSwipe?.(dx < 0 ? 1 : -1); return; }
-      if (Math.hypot(dx, dy) > TAP_SLOP_PX) return;
-      aim(e);
-      /* A tap on a character always means that character (an enemy on a
-         glowing square is that square anyway); otherwise the square under
-         the finger. A tap never lands on a square hidden behind a piece. */
-      const tile = raycaster.intersectObjects(this.tiles)[0]?.object.userData.sq ?? null;
-      const sq = pressed.sq ?? pieceHit() ?? tile;
+      const quick = performance.now() - pressed.at < QUICK_TAP_MS;
+      if (Math.hypot(dx, dy) > (quick ? QUICK_TAP_SLOP_PX : TAP_SLOP_PX)) return;
+      /* A tap on a character means that character (an enemy on a glowing
+         square is that square anyway); otherwise the square the finger landed
+         on. While a character is selected, a glowing square under the finger
+         wins over a body that only stands in front of it: the selected
+         character itself (a pawn hides its own square ahead) or an enemy it
+         can't take. A friend still wins, so you can switch characters. */
+      const sq = this.throughTo(pressed.hits, pressed.tile);
       if (sq == null) return;
-      /* A double-tap is matched by where the finger landed, not by square, so
-         it still counts while the camera is swinging after the first tap. */
       const now = performance.now();
-      if (lastTap && now - lastTap.at < DOUBLE_TAP_MS && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < DOUBLE_TAP_PX) {
+      /* A double-tap is two quick taps on the same square: tapping a piece and
+         then a square next to it, fast, must count as two taps. */
+      if (lastTap && lastTap.sq === sq && now - lastTap.at < DOUBLE_TAP_MS && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < DOUBLE_TAP_PX) {
         const first = lastTap.sq;
         lastTap = null;
         this.onDoubleTap?.(first);
@@ -976,6 +1123,10 @@ export class TacticaScene {
         dampVector(this.camLook, this.goalLook, this.lookVel, this.smooth ?? CAMERA_SMOOTH, step);
       }
       this.camera.position.copy(this.camPos);
+      if (this.shake > 0) {
+        this.camera.position.x += (Math.random() - 0.5) * this.shake;
+        this.camera.position.y += (Math.random() - 0.5) * this.shake;
+      }
       this.camera.lookAt(this.camLook);
       this.renderer.render(this.scene, this.camera);
     }

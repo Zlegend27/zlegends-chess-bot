@@ -15,7 +15,7 @@ export const BLITZ_SECONDS = 180;
 const WRONG_PENALTY_S = 10;
 const COMBO_EVERY = 5, COMBO_BONUS_S = 3;
 const START_RATING = 650, RATING_STEP = 45, RATING_WINDOW = 110;
-const REPLY_DELAY_MS = 220, NEXT_PUZZLE_MS = 380;
+const REPLY_DELAY_MS = 120, NEXT_PUZZLE_MS = 250;
 const KNIGHT = 2, QUEEN = 5;
 
 const sqOf = (sq120) => M120TO64[sq120];
@@ -198,10 +198,16 @@ export default function BlitzMode({ sweetheart, best, onBest, onExit }) {
     }
   };
 
-  const friendAt = (sq) => puzzle && Math.sign(eng.pieceAt(sq)) === side;
+  /* The player's colour comes from the puzzle, not the engine: while the
+     reply is animating it is the engine's other side to move, and a piece
+     picked early must still count as yours. */
+  const mySide = puzzle?.fen.split(" ")[1] === "b" ? -1 : 1;
+  const friendAt = (sq) => puzzle && Math.sign(eng.pieceAt(sq)) === mySide;
   const tapRef = useRef(null);
   tapRef.current = (sq) => {
-    if (phase !== "playing" || busyRef.current) return;
+    if (phase !== "playing") return;
+    /* While a move is still animating you can already pick your next piece. */
+    if (busyRef.current) { if (friendAt(sq)) setSelected(sq); return; }
     if (selected != null && targets.includes(sq)) { play(sq); return; }
     setSelected(friendAt(sq) ? sq : null);
   };
