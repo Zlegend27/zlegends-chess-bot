@@ -4,13 +4,17 @@ import { PUZZLES } from "../utils/puzzles";
 import { judgePuzzleMove } from "../utils/puzzleSession";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
+import { loadBonds, levelsOf, recordMove, levelUpText } from "./bonds";
+import { loadPace, savePace } from "./pace";
+import PaceControl from "./PaceControl";
 
 /* Blitz in the Bin: three minutes to solve as many puzzles as you can.
    Puzzles start easy and climb. A wrong move costs time and ends the combo;
    every few in a row gives a little time back. The board is seen whole;
    moves are quick slides and captures play each piece's attack at triple
-   speed, so the show stays without slowing the chess. One tap on a glowing
-   square plays it. */
+   speed (or as the pace control sets), so the show stays without slowing
+   the chess. One tap on a glowing square plays it. Correct moves grow the
+   piece's bond. */
 export const BLITZ_SECONDS = 180;
 const WRONG_PENALTY_S = 10;
 const COMBO_EVERY = 5, COMBO_BONUS_S = 3;
@@ -55,6 +59,8 @@ export default function BlitzMode({ sweetheart, best, onBest, onExit }) {
   const [timeLeft, setTimeLeft] = useState(BLITZ_SECONDS * 1000);
   const [flash, setFlash] = useState(null); // { kind: "good" | "bad", text, id }
   const [, setTick] = useState(0);
+  const [pace, setPaceState] = useState(() => loadPace("blitz"));
+  const setPace = (p) => { setPaceState(p); savePace("blitz", p); };
 
   const side = puzzle ? eng.getSide() : 1;
   const legal = puzzle && phase === "playing" ? eng.legalMoves() : [];
@@ -85,6 +91,7 @@ export default function BlitzMode({ sweetheart, best, onBest, onExit }) {
       onDrop: (sq) => dropRef.current(sq),
     });
     sceneRef.current = scene;
+    scene.setBonds(levelsOf(loadBonds()));
     const bin = dressTrashBin(scene);
     scene.everyFrame.push((dt) => bin.update(dt));
     scene.setPieces([]);
@@ -155,7 +162,7 @@ export default function BlitzMode({ sweetheart, best, onBest, onExit }) {
     const from = sqOf(mFrom(move)), to = sqOf(mTo(move));
     const captured = eng.pieceAt(to) !== EMPTY ? to : null;
     const knight = Math.abs(eng.pieceAt(from)) === KNIGHT;
-    await scene?.animateMove(from, to, { knight, captured, quick: true });
+    await scene?.animateMove(from, to, { knight, captured, pace, camera: false });
     eng.make(move);
     scene?.syncPieces(piecesNow());
   };
@@ -174,6 +181,10 @@ export default function BlitzMode({ sweetheart, best, onBest, onExit }) {
       return;
     }
     busyRef.current = true;
+    /* The piece that played it grows closer to you. */
+    const bond = recordMove(eng.pieceAt(sqOf(mFrom(move))), { capture: eng.pieceAt(target) !== EMPTY, final: verdict.solved });
+    if (bond.levelUp) sceneRef.current?.setBonds(levelsOf(bond.bonds));
+    const bondNote = bond.levelUp ? levelUpText(bond.kind, bond.levelUp) : null;
     try {
       await moveQuick(move);
       const afterMine = [...played, verdict.san];
@@ -182,14 +193,18 @@ export default function BlitzMode({ sweetheart, best, onBest, onExit }) {
         setScore(newScore);
         setCombo(newCombo);
         setBestCombo((b) => Math.max(b, newCombo));
-        if (newCombo % COMBO_EVERY === 0) { deadlineRef.current += COMBO_BONUS_S * 1000; say("good", `Combo ${newCombo}! +${COMBO_BONUS_S}s`); }
-        else say("good", "Solved");
+        if (newCombo % COMBO_EVERY === 0) {
+          deadlineRef.current += COMBO_BONUS_S * 1000;
+          say("good", `Combo ${newCombo}! +${COMBO_BONUS_S}s` + (bondNote ? ` · ${bondNote}` : ""));
+        }
+        else say("good", bondNote ?? "Solved");
         await new Promise((r) => setTimeout(r, NEXT_PUZZLE_MS));
         if (deadlineRef.current - performance.now() > 0) loadNext(newScore);
         return;
       }
       await new Promise((r) => setTimeout(r, REPLY_DELAY_MS));
       const reply = eng.legalMoves().find((m) => eng.sanOf(m) === verdict.reply);
+      if (bondNote) say("good", bondNote);
       if (reply) await moveQuick(reply);
       setPlayed([...afterMine, verdict.reply]);
       setTick((t) => t + 1);
@@ -270,6 +285,7 @@ export default function BlitzMode({ sweetheart, best, onBest, onExit }) {
               <p className="m-0 text-sm text-white/80">solved · best combo {bestCombo} · your best {Math.max(best || 0, score)}</p>
             </>
           )}
+          <div className="w-full max-w-[16rem]"><PaceControl value={pace} onChange={setPace} /></div>
           <button type="button" className={"btn gold " + focusRing} onClick={start}>{phase === "ready" ? "Start" : "Play again"}</button>
           <button type="button" className={"btn ghost " + focusRing} onClick={onExit}>Menu</button>
         </div>

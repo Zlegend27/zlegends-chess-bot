@@ -9,6 +9,9 @@ import {
   START_HEALTH, WRONG_MOVE_DAMAGE, phasesForFloor, isStoryFloor, timerSeconds, ratingFor,
   rushDamage, pickPuzzle, effectFloors, offer, choose, floorScore,
 } from "./binRun";
+import { loadBonds, levelsOf, recordMove, levelUpText } from "./bonds";
+import { loadPace, savePace } from "./pace";
+import PaceControl from "./PaceControl";
 
 /* The Bin Run: climb floor by floor. Each floor is a battle of a few real
    puzzles (phases), played as one colour, with one shared health bar for the
@@ -90,6 +93,9 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
      best is updated. */
   const [newBest, setNewBest] = useState(false);
   const [, setTick] = useState(0);
+  const [pace, setPaceState] = useState(() => loadPace("run"));
+  const setPace = (p) => { setPaceState(p); savePace("run", p); };
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const friends = puzzle ? friendlySquares(eng, side) : [];
   const selected = friends[Math.min(selectedIdx, friends.length - 1)];
@@ -131,6 +137,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
       onDrop: (sq) => dropRef.current(sq),
     });
     sceneRef.current = scene;
+    scene.setBonds(levelsOf(loadBonds()));
     const bin = dressTrashBin(scene);
     scene.everyFrame.push((dt) => bin.update(dt));
     scene.setPieces([]);
@@ -179,6 +186,13 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
     sceneRef.current?.setMarks(show ? { selected, held: true, ghost: draggingRef.current, targets, chosen, captures } : {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, selected, chosen, played, stage, puzzle, busy]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e) => { if (e.key === "Escape") setMenuOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
 
   /* ---- Run flow ---- */
   const startRun = () => {
@@ -309,7 +323,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
     const from = sqOf(mFrom(move)), to = sqOf(mTo(move));
     const captured = eng.pieceAt(to) !== EMPTY ? to : null;
     const knight = Math.abs(eng.pieceAt(from)) === KNIGHT;
-    await scene?.animateMove(from, to, { knight, captured, follow: Math.sign(eng.pieceAt(from)) !== side });
+    await scene?.animateMove(from, to, { knight, captured, follow: Math.sign(eng.pieceAt(from)) !== side, pace });
     eng.make(move);
     scene?.syncPieces(piecesNow());
     return { from, to, captured };
@@ -353,7 +367,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
         const reply = search.search(280)?.move;
         if (reply) {
           const r = await animate(eng.legalMoves().find((m) => m === reply) ?? reply);
-          if (r.captured == null) {
+          if (r.captured == null && pace !== "off") {
             const threat = threatenedBy(r.to);
             if (threat) await sceneRef.current?.scare(threat.from, threat.to);
           }
@@ -369,6 +383,9 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
         resumeTimer();
         return;
       }
+      /* The piece that played it grows closer to you. */
+      const bond = recordMove(eng.pieceAt(sqOf(mFrom(move))), { capture: eng.pieceAt(target) !== EMPTY, final: verdict.solved });
+      if (bond.levelUp) { sceneRef.current?.setBonds(levelsOf(bond.bonds)); say(levelUpText(bond.kind, bond.levelUp), "good"); }
       await animate(move);
       const afterMine = [...played, verdict.san];
       if (verdict.solved) {
@@ -480,9 +497,20 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
         <>
           <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col gap-2 bg-gradient-to-b from-black/75 to-transparent p-3 pb-8">
             <div className="flex items-start justify-between gap-3">
-              <div className="text-white">
-                <div className="text-[10px] uppercase tracking-wide text-white/60">Floor {floor}</div>
-                <div className="text-sm font-bold">Phase {phase + 1} of {phases}</div>
+              <div className="flex items-start gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMenuOpen((o) => !o)}
+                  aria-label="Game menu"
+                  aria-expanded={menuOpen}
+                  className={"pointer-events-auto flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-white/20 bg-black/45 text-white " + focusRing}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 10a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm7 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm7 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z" /></svg>
+                </button>
+                <div className="text-white">
+                  <div className="text-[10px] uppercase tracking-wide text-white/60">Floor {floor}</div>
+                  <div className="text-sm font-bold">Phase {phase + 1} of {phases}</div>
+                </div>
               </div>
               <div role="timer" className={"text-3xl " + (low ? "text-[var(--magenta)]" : "text-white")} style={{ fontFamily: "var(--font-display)" }}>{clock(timeLeft)}</div>
               <button
@@ -507,6 +535,16 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
               </div>
             )}
           </div>
+
+          {menuOpen && (
+            <>
+              <button type="button" aria-label="Close the menu" className="absolute inset-0 cursor-default border-0 bg-transparent" onClick={() => setMenuOpen(false)} />
+              <div className="absolute top-14 left-3 flex w-56 flex-col gap-3 rounded-xl border border-white/15 bg-black/80 p-3 text-white backdrop-blur-sm">
+                <PaceControl value={pace} onChange={setPace} />
+                <button type="button" className={"btn ghost " + focusRing} onClick={() => { setMenuOpen(false); endRun(); }}>Quit run</button>
+              </div>
+            </>
+          )}
 
           {banner && (
             <p key={banner.id} role="status" className={"tacticaNote fades pointer-events-none absolute top-40 left-1/2 m-0 -translate-x-1/2 rounded-lg px-3 py-1.5 text-center text-sm font-bold whitespace-nowrap " + (banner.kind === "bad" ? "bg-[var(--magenta)]/90 text-white" : banner.kind === "good" ? "bg-[var(--cyan)]/90 text-black" : "bg-black/70 text-white")}>{banner.text}</p>
@@ -533,6 +571,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
             <li>Between floors, pick a reward or take on a challenge for double score.</li>
           </ul>
           {best ? <p className="m-0 text-sm text-white/70">Your best: {best}</p> : null}
+          <div className="w-full max-w-[16rem]"><PaceControl value={pace} onChange={setPace} /></div>
           <button type="button" className={"btn gold " + focusRing} onClick={startRun}>Start the run</button>
           <button type="button" className={"btn ghost " + focusRing} onClick={onExit}>Menu</button>
         </div>

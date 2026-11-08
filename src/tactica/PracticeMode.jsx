@@ -5,6 +5,9 @@ import { judgePuzzleMove } from "../utils/puzzleSession";
 import MiniBoard from "../components/MiniBoard";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
+import { loadBonds, levelsOf, recordMove, levelUpText, practiceGivesXp, markPracticeSolved } from "./bonds";
+import { loadPace, savePace } from "./pace";
+import PaceControl from "./PaceControl";
 
 /* Chess Tactica practice: one real puzzle on a 3D board, so the
    cameras, controls and speed can be tried on a phone before anything else is
@@ -23,6 +26,7 @@ const NOTE_MS = 3200;
 const STUDY_HINT = "Swipe to change character. Drag the map to turn the view.";
 
 const sqOf = (sq120) => M120TO64[sq120];
+const from64 = (move) => sqOf(mFrom(move));
 
 /** The solver's characters, ordered left to right from their side, front row
  *  first, so swiping moves across the board predictably. */
@@ -66,6 +70,8 @@ export default function PracticeMode({ pieceImgSrc, sweetheart, onExit }) {
   /* How far the view is turned, so the map turns with it like a compass. */
   const [turn, setTurn] = useState(0);
   const mapDragRef = useRef(null);
+  const [pace, setPaceState] = useState(() => loadPace("practice"));
+  const setPace = (p) => { setPaceState(p); savePace("practice", p); };
 
   const friends = friendlySquares(eng, side);
   const selected = friends[Math.min(selectedIdx, friends.length - 1)];
@@ -109,6 +115,7 @@ export default function PracticeMode({ pieceImgSrc, sweetheart, onExit }) {
       onTurn: setTurn,
     });
     sceneRef.current = scene;
+    scene.setBonds(levelsOf(loadBonds()));
     scene.setPieces(piecesNow());
     /* The tutorial set: the board sits inside a trash bin, lit through a hole. */
     const bin = dressTrashBin(scene);
@@ -146,7 +153,7 @@ export default function PracticeMode({ pieceImgSrc, sweetheart, onExit }) {
     const from = sqOf(mFrom(move)), to = sqOf(mTo(move));
     const captured = eng.pieceAt(to) !== EMPTY ? to : null;
     const knight = Math.abs(eng.pieceAt(from)) === KNIGHT;
-    await scene.animateMove(from, to, { knight, captured, follow });
+    await scene.animateMove(from, to, { knight, captured, follow, pace });
     eng.make(move);
     scene.syncPieces(piecesNow());
   };
@@ -166,19 +173,26 @@ export default function PracticeMode({ pieceImgSrc, sweetheart, onExit }) {
     setBusy(true);
     playingRef.current = true;
     setNote((n) => ({ ...n, text: null }));
+    /* Until this puzzle has been solved once, its correct moves grow bonds. */
+    let bondNote = null;
+    if (practiceGivesXp(puzzle.id)) {
+      const bond = recordMove(eng.pieceAt(from64(move)), { capture: eng.pieceAt(target) !== EMPTY, final: verdict.solved });
+      if (bond.levelUp) { sceneRef.current?.setBonds(levelsOf(bond.bonds)); bondNote = levelUpText(bond.kind, bond.levelUp); }
+      if (verdict.solved) markPracticeSolved(puzzle.id);
+    }
     try {
       await playMove(move);
       const afterMine = [...played, verdict.san];
       if (verdict.solved) {
         setPlayed(afterMine);
         setSolved(true);
-        say("Puzzle solved!", true);
+        say(bondNote ? `Puzzle solved! ${bondNote}` : "Puzzle solved!", true);
         return;
       }
       await new Promise((r) => setTimeout(r, REPLY_DELAY_MS));
       const reply = eng.legalMoves().find((m) => eng.sanOf(m) === verdict.reply);
       if (reply) await playMove(reply, { follow: true });
-      say(`Opponent played ${verdict.reply}.`);
+      say(bondNote ? `${bondNote}. Opponent played ${verdict.reply}.` : `Opponent played ${verdict.reply}.`);
       setPlayed([...afterMine, verdict.reply]);
       /* The character that just moved stays selected for the next move. */
       const stillHere = friendlySquares(eng, side).indexOf(sqOf(mTo(move)));
@@ -332,6 +346,7 @@ export default function PracticeMode({ pieceImgSrc, sweetheart, onExit }) {
           <div className="absolute top-14 left-3 flex flex-col gap-2 rounded-xl border border-white/15 bg-black/80 p-3 text-white backdrop-blur-sm">
             {!solved && <button type="button" className={"btn ghost " + focusRing} onClick={restart}>Restart</button>}
             <button type="button" className={"btn ghost " + focusRing} onClick={onExit}>Main menu</button>
+            <PaceControl value={pace} onChange={setPace} />
             <span className="text-[10px] text-white/60">Test build · {stats?.fps ? `${stats.fps} fps` : "measuring…"} · {stats?.pixelRatio ?? "-"}x</span>
           </div>
         </>

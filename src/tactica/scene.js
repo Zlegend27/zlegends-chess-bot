@@ -31,6 +31,12 @@ const REGROUP_MS = 700, RUSH_MS = 900, SCARE_MS = 1300;
 /* Fast modes play the full attack cinematics this many times faster. */
 const QUICK_ATTACK_SPEED = 3;
 const KNIGHT_HOP = 1.1;
+/* Bond looks: the warm glow's colour, its strength by level (index = level),
+   and the collar ring that sits in the base groove every piece shares
+   (model units, before PIECE_SCALE). */
+const BOND_GLOW = "#ffc864";
+const BOND_GLOW_OPACITY = [0, 0, 0.32, 0.38, 0.55, 0.7];
+const BOND_TRIM = { r: 0.462, tube: 0.026, y: 0.128 };
 const DOUBLE_TAP_MS = 400;
 const DOUBLE_TAP_PX = 40;
 /* A picked-up character's view is the close view pulled back this much. */
@@ -121,6 +127,8 @@ export class TacticaScene {
     this.targets = [];
     this.captures = [];
     this.pulse = [];
+    /* Bond levels by kind, shown on the player's characters. */
+    this.bonds = {};
     this.dragging = false;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "low-power" });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -267,7 +275,89 @@ export class TacticaScene {
       const idle = mixer.clipAction(idleFor(kind));
       idle.play();
       idle.time = Math.random() * idle.getClip().duration;
-      this.pieces.set(piece.sq, { group, holder, model, hit, kind, colour, mixer, idle });
+      const entry = { group, holder, model, hit, kind, colour, mixer, idle };
+      this.pieces.set(piece.sq, entry);
+      this.decorate(entry);
+    }
+  }
+
+  /** Bond levels by kind ({ pawn: 1..5, ... }). They show on the player's
+   *  own characters (the side nearest the camera) as a glow at the feet from
+   *  level 2, a silver collar in the base groove at 3, gold with a brighter
+   *  glow at 4 and a soft aura at 5. */
+  setBonds(levels) {
+    this.bonds = levels ?? {};
+    for (const entry of this.pieces.values()) this.decorate(entry);
+    this.wake();
+  }
+
+  /** Shared meshes' geometry and materials for the bond looks, made once. */
+  bondAssets() {
+    if (this.bondKit) return this.bondKit;
+    const radial = document.createElement("canvas");
+    radial.width = radial.height = 128;
+    const rg = radial.getContext("2d");
+    const g = rg.createRadialGradient(64, 64, 0, 64, 64, 64);
+    g.addColorStop(0, "rgba(255,255,255,1)");
+    g.addColorStop(0.35, "rgba(255,255,255,0.55)");
+    g.addColorStop(1, "rgba(255,255,255,0)");
+    rg.fillStyle = g;
+    rg.fillRect(0, 0, 128, 128);
+    const rising = document.createElement("canvas");
+    rising.width = 4;
+    rising.height = 128;
+    const vg = rising.getContext("2d");
+    const v = vg.createLinearGradient(0, 128, 0, 0);
+    v.addColorStop(0, "rgba(255,255,255,0.9)");
+    v.addColorStop(0.5, "rgba(255,255,255,0.3)");
+    v.addColorStop(1, "rgba(255,255,255,0)");
+    vg.fillStyle = v;
+    vg.fillRect(0, 0, 4, 128);
+    const glowMap = new THREE.CanvasTexture(radial), auraMap = new THREE.CanvasTexture(rising);
+    glowMap.colorSpace = auraMap.colorSpace = THREE.SRGBColorSpace;
+    const additive = { transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, color: BOND_GLOW };
+    this.bondKit = {
+      glowGeometry: new THREE.PlaneGeometry(1.7, 1.7).rotateX(-Math.PI / 2),
+      /* One glow material per strength, so a level-2 glow and a level-4 glow
+         can sit on the board together. */
+      glow: BOND_GLOW_OPACITY.map((opacity) => new THREE.MeshBasicMaterial({ ...additive, map: glowMap, opacity })),
+      trimGeometry: new THREE.TorusGeometry(BOND_TRIM.r, BOND_TRIM.tube, 10, 64).rotateX(Math.PI / 2),
+      silver: new THREE.MeshStandardMaterial({ color: "#dfe3ea", metalness: 1, roughness: 0.22 }),
+      gold: new THREE.MeshStandardMaterial({ color: "#f2c45a", metalness: 1, roughness: 0.25 }),
+      auraGeometry: new THREE.CylinderGeometry(0.42, 0.5, 1.7, 32, 1, true).translate(0, 0.85, 0),
+      aura: new THREE.MeshBasicMaterial({ ...additive, map: auraMap, opacity: 0.32, side: THREE.DoubleSide }),
+    };
+    return this.bondKit;
+  }
+
+  /** Puts a character's bond look on it, or takes it off: only the player's
+   *  side shows bonds, so this runs again when the board turns. */
+  decorate(entry) {
+    for (const part of entry.bondParts ?? []) part.removeFromParent();
+    entry.bondParts = [];
+    const level = entry.colour === this.nearColour ? this.bonds?.[entry.kind] ?? 1 : 1;
+    if (level < 2) return;
+    const kit = this.bondAssets();
+    const glow = new THREE.Mesh(kit.glowGeometry, kit.glow[level]);
+    glow.position.y = 0.025;
+    glow.renderOrder = 1;
+    entry.group.add(glow);
+    entry.bondParts.push(glow);
+    if (level >= 3) {
+      /* The collar sits in the groove of the base, on the body, so it rides
+         along with every attack. */
+      const trim = new THREE.Mesh(kit.trimGeometry, level >= 4 ? kit.gold : kit.silver);
+      trim.position.y = BOND_TRIM.y;
+      const body = entry.model.getObjectByName("body") ?? entry.model;
+      body.add(trim);
+      entry.bondParts.push(trim);
+    }
+    if (level >= 5) {
+      const aura = new THREE.Mesh(kit.auraGeometry, kit.aura);
+      aura.scale.y = (TAP_HEIGHT[entry.kind] ?? 1.4) / 1.4;
+      aura.renderOrder = 2;
+      entry.group.add(aura);
+      entry.bondParts.push(aura);
     }
   }
 
@@ -303,6 +393,9 @@ export class TacticaScene {
     add(new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
     add(new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
     add(new THREE.MeshStandardMaterial({ roughness: 1, transparent: true, depthWrite: false }));
+    /* The bond looks: glows, the aura and the metal collars. */
+    const kit = this.bondAssets();
+    [...kit.glow.slice(2), kit.aura, kit.silver, kit.gold].forEach(add);
     group.position.copy(this.camLook);
     /* The warm-up materials are kept, not disposed: disposing them would
        also throw away the compiled shaders. */
@@ -783,18 +876,22 @@ export class TacticaScene {
     for (const [sq, e] of this.pieces) {
       e.group.position.copy(this.worldOf(sq));
       e.holder.rotation.y = e.colour === this.nearColour ? Math.PI : 0;
+      this.decorate(e);
     }
     this.wake();
   }
 
-  /** Moves a character; a knight leaps. A capture plays the attacker's own
-   *  attack on the victim (with reduced motion the victim just fades). With
-   *  `follow`, or for any capture, the camera frames the move. With `quick`
-   *  (fast modes) the camera stays put, plain moves are a short slide and a
-   *  capture plays the same attack at QUICK_ATTACK_SPEED.
+  /** Moves a character; a knight leaps. `pace` sets how much of a capture
+   *  plays: "full" plays the attacker's own attack on the victim, "quick"
+   *  the same attack at QUICK_ATTACK_SPEED with short slides, "off" just a
+   *  short slide and the victim pops away (as with reduced motion). With
+   *  `camera` (the default) the camera may frame the move: at full pace it
+   *  follows with `follow` and gives captures a head-on shot; otherwise it
+   *  only moves for a square out of view. Modes that keep the whole board in
+   *  view pass `camera: false`.
    *  Afterwards the piece simply stays on its new square; nothing is
    *  rebuilt. */
-  animateMove(from, to, { knight = false, captured = null, follow = false, quick = false } = {}) {
+  animateMove(from, to, { knight = false, captured = null, follow = false, pace = "full", camera = true } = {}) {
     const mover = this.pieces.get(from);
     const victim = captured != null ? this.pieces.get(captured) : null;
     if (!mover) return Promise.resolve();
@@ -805,10 +902,13 @@ export class TacticaScene {
       this.settle(mover, from, to, captured);
       if (!this.moving && !this.active.length) { const view = this.pendingView; this.pendingView = null; view?.(); }
     };
-    if (victim && !reducedMotion()) return this.attack(mover, victim, from, to, quick ? { speed: QUICK_ATTACK_SPEED, shot: false } : {}).then(finish);
+    const full = pace === "full", quick = !full;
+    if (victim && pace !== "off" && !reducedMotion()) {
+      return this.attack(mover, victim, from, to, { speed: full ? 1 : QUICK_ATTACK_SPEED, shot: camera && full }).then(finish);
+    }
     /* A dropped character lands from where it was let go, without a leap. */
     const a = mover.group.position.clone(), b = this.worldOf(to);
-    if (!quick && (follow || !this.inView(to))) this.frameMove(this.worldOf(from), b);
+    if (camera && (full ? follow || !this.inView(to) : !this.inView(to))) this.frameMove(this.worldOf(from), b);
     const leap = knight && a.y < 0.01;
     const fast = reducedMotion();
     return new Promise((resolve) => {
@@ -887,8 +987,9 @@ export class TacticaScene {
     if (mover.kind === "pawn") mover.holder.rotation.y = Math.atan2(delta.x, delta.z);
     const local = delta.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), -mover.holder.rotation.y).divideScalar(PIECE_SCALE);
     const clip = clipsFor(mover.kind, [local.x, local.z]).attack;
-    /* The victim turns to face what is coming for it. */
+    /* The victim turns to face what is coming for it, and loses its bond glow. */
     victim.holder.rotation.y = Math.atan2(-delta.x, -delta.z);
+    for (const part of victim.bondParts ?? []) part.visible = false;
     mover.idle.stop();
     const act = mover.mixer.clipAction(clip);
     act.setLoop(THREE.LoopOnce, 1);
