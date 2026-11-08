@@ -2642,10 +2642,13 @@ export default function ZlegendsBot() {
   focusedRef.current = focused;
   const section = sectionForView({ siteView, rushMode, activePuzzle, pastedGame });
   const darkNav = siteView === "puzzlesHome" && !sweetheart;
+  /* Chess Tactica is a game of its own: no site header at all (its menu has
+     an Exit back to Play). */
+  const immersive = siteView === "tactica";
 
   return (
-    <div className={"appShell" + (focused ? "" : " hasBottomBar")}>
-      <AppHeader
+    <div className={"appShell" + (focused ? "" : " hasBottomBar") + (immersive ? " noHeader" : "")}>
+      {!immersive && <AppHeader
         section={section}
         onSection={onSection}
         profile={profile}
@@ -2659,7 +2662,7 @@ export default function ZlegendsBot() {
         onYourGames={() => enterMode("review")}
         onSettings={openSettings}
         onMusic={() => setMusicOpen(true)}
-      />
+      />}
       <div key={siteView} className="pageIn">
         <Suspense fallback={null}>{renderPage()}</Suspense>
       </div>

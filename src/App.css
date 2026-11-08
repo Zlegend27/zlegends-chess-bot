@@ -17,6 +17,9 @@
 /* The app frame around every page: the sticky header, then the page. On a
    phone the page also has to clear the fixed bottom bar. */
 .appShell{ --headerH:calc(57px + env(safe-area-inset-top)); background:var(--void); min-height:100dvh; }
+/* A full-screen game (Chess Tactica) has no header: the page starts below
+   the phone's notch instead. */
+.appShell.noHeader{ --headerH:env(safe-area-inset-top); padding-top:env(safe-area-inset-top); }
 /* Each screen eases in when you move to it. index.css turns this off for
    players who ask for reduced motion. */
 .pageIn{ animation:pageIn .2s ease-out; }
