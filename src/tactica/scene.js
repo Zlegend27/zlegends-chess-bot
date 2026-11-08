@@ -62,6 +62,9 @@ const CAMERA_SMOOTH = 0.32;
    side; it never swings further than side-on, so the player never ends up
    looking from the enemy's side. */
 const AUTO_TURNS = [0, 0.45, -0.45, 0.9, -0.9, 1.4, -1.4];
+/* Half the board's width including its frame, and the furthest the
+   whole-board view pulls back to fit it on a narrow screen. */
+const BOARD_EDGE = 4.6, MAX_BOARD_PULL = 2.2;
 /* The furthest the close view pulls back to fit every glowing square. */
 const MAX_FIT_PULL = 2;
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
@@ -461,7 +464,9 @@ export class TacticaScene {
    *  body standing in front. */
   throughTo(hits, tile) {
     if (!hits.length) return tile;
-    if (this.held == null) return hits[0];
+    /* Nothing picked yet: you can only pick your own characters, so the tap
+       looks past enemy bodies standing in front of one of yours. */
+    if (this.held == null) return hits.find((sq) => this.pieces.get(sq)?.colour === this.nearColour) ?? hits[0];
     if (this.chosen != null && (hits.includes(this.chosen) || tile === this.chosen)) return this.chosen;
     const mine = this.pieces.get(this.held);
     for (const [i, sq] of hits.entries()) {
@@ -602,10 +607,37 @@ export class TacticaScene {
     if (this.holdCamera(() => this.showBoard())) return;
     /* The whole-board view always faces the board from the player's side. */
     this.lastSq = null;
+    this.inBoardView = true;
     this.pivot.set(0, 0, 0);
     this.manualTurn = false;
     this.setTurn(0);
-    this.moveCamera(turnAround(this.pivot, new THREE.Vector3(0, 11, 8), this.turn), turnAround(this.pivot, new THREE.Vector3(0, 0, 0.6), this.turn));
+    const { position, look } = this.boardFit();
+    this.moveCamera(position, look);
+  }
+
+  /** The whole-board view, pulled back until all four corners of the board
+   *  (frame included) fit across the screen and between the bars at the top
+   *  and bottom, so a narrow phone doesn't cut the near corners off. */
+  boardFit() {
+    const look = new THREE.Vector3(0, 0, 0.6);
+    const away = new THREE.Vector3(0, 11, 8).sub(look);
+    const probe = this.probe ??= new THREE.PerspectiveCamera();
+    probe.fov = this.camera.fov; probe.aspect = this.camera.aspect; probe.near = 0.1; probe.far = 100;
+    probe.updateProjectionMatrix();
+    const edge = BOARD_EDGE;
+    const corners = [[-edge, -edge], [edge, -edge], [-edge, edge], [edge, edge]].map(([x, z]) => new THREE.Vector3(x, 0, z));
+    let pull = 1;
+    for (; pull < MAX_BOARD_PULL; pull += 0.04) {
+      probe.position.copy(look).addScaledVector(away, pull);
+      probe.lookAt(look);
+      probe.updateMatrixWorld();
+      const fits = corners.every((c) => {
+        const p = c.clone().project(probe);
+        return Math.abs(p.x) <= 0.95 && p.y >= -0.8 && p.y <= 0.74;
+      });
+      if (fits) break;
+    }
+    return { position: look.clone().addScaledVector(away, pull), look };
   }
 
   setTurn(angle) {
@@ -704,6 +736,7 @@ export class TacticaScene {
    *  Switching characters swings the camera from one to the next. */
   showCloseUp(sq, destination = null, widen = 1, targets = []) {
     if (this.holdCamera(() => this.showCloseUp(sq, destination, widen, targets))) return;
+    this.inBoardView = false;
     const at = this.worldOf(sq);
     const toward = destination != null ? this.worldOf(destination) : at.clone().add(new THREE.Vector3(0, 0, -3.5));
     const reach = destination != null ? at.distanceTo(toward) : 3.5;
@@ -1326,6 +1359,8 @@ export class TacticaScene {
     this.camera.aspect = w / h;
     this.camera.fov = w < h ? 62 : 45;
     this.camera.updateProjectionMatrix();
+    /* A new screen shape needs a new fit for the whole-board view. */
+    if (this.inBoardView) this.showBoard();
     this.wake();
   }
 
