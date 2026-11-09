@@ -12,6 +12,7 @@ chessboard-bible/.obsidian/workspace.json
 # Review calibration data: collected games, engine cache and engine copy.
 scripts/review-lab/data/
 scripts/vienna/data/
+scripts/openings/data/
 
 # Private notes for the physical board. Kept on this computer only.
 BOARD_BUILD.md

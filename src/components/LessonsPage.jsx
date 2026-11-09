@@ -1,9 +1,8 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import StarField from "./StarField";
 import LessonPlayer from "./LessonPlayer";
-import TheoryTrainer from "./TheoryTrainer";
-/* Lazy: it carries the Vienna book, which only the trainer needs. */
-const ViennaTrainer = lazy(() => import("./ViennaTrainer"));
+/* Lazy: the Opening Trainer and its move trees load only when opened. */
+const OpeningTrainer = lazy(() => import("./openings/OpeningTrainer"));
 import { LESSONS } from "../data/lessons";
 import { loadSetting } from "../utils/storage";
 import { warmUpStockfish } from "../engine/stockfishEngine";
@@ -17,7 +16,6 @@ export default function LessonsPage({ onOpenings, sweetheart }) {
   const [lessonId, setLessonId] = useState(null);
   const [chapterNumber, setChapterNumber] = useState(null);
   const [trainerOpen, setTrainerOpen] = useState(false);
-  const [viennaOpen, setViennaOpen] = useState(false);
   const pieceSetId = loadSetting("pieceSet", "classic");
   const T = getUiTheme(sweetheart);
   const cardHoverBorder = sweetheart ? "hover:border-sh-lteal/50" : "hover:border-cyan/40";
@@ -27,9 +25,9 @@ export default function LessonsPage({ onOpenings, sweetheart }) {
   const featureGradientFrom = sweetheart ? "from-sh-lcard/90" : "from-panel/80";
   const featureGradientTo = sweetheart ? "to-[#FFF3D9]" : "to-[#2A1F0EE6]";
 
-  /* Both the lesson player's "Analyze" and the trainer's out-of-book
-     White lean on the Stockfish worker -- start the WASM download the
-     moment someone lands on Lessons, same pattern the Play view uses. */
+  /* The lesson player's "Analyze" and the Opening Trainer's punishments
+     lean on the Stockfish worker -- start the WASM download the moment
+     someone lands on Learn, same pattern the Play view uses. */
   useEffect(() => { warmUpStockfish(); }, []);
 
   const lesson = LESSONS.find(l => l.id === lessonId) || null;
@@ -45,28 +43,13 @@ export default function LessonsPage({ onOpenings, sweetheart }) {
     </button>
   );
 
-  if (viennaOpen) {
+  if (trainerOpen) {
     return (
       <div className="root">
         <StarField sweetheart={sweetheart} />
-        {backLink("Learn", () => setViennaOpen(false))}
         <Suspense fallback={null}>
-          <ViennaTrainer pieceSetId={pieceSetId} onExit={() => setViennaOpen(false)} />
+          <OpeningTrainer sweetheart={sweetheart} pieceSetId={pieceSetId} back={backLink("Learn", () => setTrainerOpen(false))} />
         </Suspense>
-      </div>
-    );
-  }
-
-  if (lesson && trainerOpen) {
-    return (
-      <div className="root">
-        <StarField sweetheart={sweetheart} />
-        {backLink(lesson.title, () => setTrainerOpen(false))}
-        <div className="hdr" style={{ marginBottom: 12 }}>
-          <h1 style={{ fontSize: 26 }}>Theory Trainer</h1>
-          <div className="sub" style={{ fontSize: 12 }}>{lesson.title}</div>
-        </div>
-        <TheoryTrainer lesson={lesson} pieceSetId={pieceSetId} onExit={() => setTrainerOpen(false)} />
       </div>
     );
   }
@@ -114,12 +97,12 @@ export default function LessonsPage({ onOpenings, sweetheart }) {
       <div className="mt-4 flex w-full max-w-md flex-col gap-3">
         {!lesson && (
           <button
-            onClick={() => setViennaOpen(true)}
+            onClick={() => setTrainerOpen(true)}
             className={`rounded-2xl border ${featureBorder} bg-gradient-to-br ${featureGradientFrom} ${featureGradientTo} px-4 py-3 text-left backdrop-blur-sm transition hover:-translate-y-0.5 ${featureBorderHover} focus-visible:outline-none focus-visible:ring-2 ${T.ring}`}
           >
-            <div className={"text-[11px] font-bold uppercase tracking-[0.14em] " + T.accentText}>Opening trainer</div>
-            <div className={"mt-1 font-bold " + T.ink}>Vienna Trainer</div>
-            <div className={"mt-1 text-xs " + T.dimText}>Drill the Vienna Gambit as White against the replies real players make at your level.</div>
+            <div className={"text-[11px] font-bold uppercase tracking-[0.14em] " + T.accentText}>New</div>
+            <div className={"mt-1 font-bold " + T.ink}>Opening Trainer</div>
+            <div className={"mt-1 text-xs " + T.dimText}>Learn 12 openings the right way: the ideas, the replies players at your level make, and how to punish their mistakes.</div>
           </button>
         )}
         {!lesson && (
@@ -177,24 +160,6 @@ export default function LessonsPage({ onOpenings, sweetheart }) {
                 </button>
               )
             ))}
-
-            {lesson.repertoire?.length > 0 && (
-              <button
-                onClick={() => setTrainerOpen(true)}
-                className={`flex items-center gap-3 rounded-2xl border ${featureBorder} bg-gradient-to-br ${featureGradientFrom} ${featureGradientTo} px-4 py-3 text-left backdrop-blur-sm transition hover:-translate-y-0.5 ${featureBorderHover} focus-visible:outline-none focus-visible:ring-2 ${T.ring}`}
-              >
-                {lesson.cover && (
-                  <img src={lesson.cover} alt="" className={`h-14 w-14 flex-none rounded-xl border ${featureBorder} object-cover`} />
-                )}
-                <div className="min-w-0">
-                  <div className={"text-[11px] font-bold uppercase tracking-[0.14em] " + T.accentText}>Theory Trainer</div>
-                  <div className={"mt-1 font-bold " + T.ink}>Play the repertoire vs the Accelerated Dragon</div>
-                  <div className={"mt-1 text-xs " + T.dimText}>
-                    It plays White straight from the lesson's lines — leave the book and it tells you what the repertoire move was. Engine takes over once theory runs out.
-                  </div>
-                </div>
-              </button>
-            )}
 
             {lesson.resources?.length > 0 && (
               <div className={`rounded-2xl border ${T.cardBorder} ${T.panelBg} px-4 py-3 backdrop-blur-sm`}>

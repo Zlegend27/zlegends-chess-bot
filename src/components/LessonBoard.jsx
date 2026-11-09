@@ -1,5 +1,5 @@
 /* Shared presentational board for the Lessons feature (LessonPlayer +
-   TheoryTrainer) -- renders any engine instance's position using the
+   the Opening Trainer) -- renders any engine instance's position using the
    exact .board/.sq/.pc classes the main Play board owns, so lesson
    boards automatically match the player's board-color theme and piece
    design. Click-to-move only (no drag) -- lessons are a slower,
