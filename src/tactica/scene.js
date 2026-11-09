@@ -13,7 +13,7 @@ import { play as playSound, ATTACK_CUES } from "./sound.js";
 const PIECE_SCALE = 0.78;
 /* How tall each character's invisible tap area is, so a short pawn doesn't
    cover the squares behind it. Roughly the height of the model on the board. */
-const TAP_HEIGHT = { pawn: 1.1, knight: 1.4, bishop: 1.5, rook: 1.25, queen: 1.65, king: 1.75 };
+const TAP_HEIGHT = { pawn: 1.1, knight: 1.4, bishop: 1.55, rook: 1.25, queen: 1.65, king: 1.75 };
 /* The chess set's colours (Dubrovnik II): squares and the board frame. */
 export const SET_BOARD = { light: "#EED6B0", dark: "#8A5229", frame: "#5C3317" };
 /* Idle breathing only needs about 30 frames a second. */
@@ -491,6 +491,9 @@ export class TacticaScene {
    *  `confirm` tells the tap logic that a first tap only previews a move
    *  (see throughTo). */
   setMarks({ selected = null, held = false, targets = [], chosen = null, captures = [], ghost = false, confirm = false } = {}) {
+    /* Free the old highlights' materials (the geometry is shared), or every
+       tap would leave a few more behind on the graphics card. */
+    for (const m of this.marks.children) { m.material?.dispose(); if (m.userData.ownGeometry) m.geometry.dispose(); }
     this.marks.clear();
     this.pulse = [];
     this.held = held ? selected : null;
@@ -527,6 +530,19 @@ export class TacticaScene {
       this.ringGeometry ??= new THREE.RingGeometry(0.36, 0.46, 48);
       flat(this.glowCircle, this.colors.select, held ? 0.35 : 0.2, at, 0.015, true);
       flat(this.ringGeometry, this.colors.select, 0.95, at, 0.02);
+      /* The ring at its feet hides behind its own body from a low camera,
+         so a small marker also floats above its head, drawn over
+         everything, gently bobbing: you can always tell who is picked. */
+      const entry = this.pieces.get(selected);
+      this.markerGeometry ??= new THREE.ConeGeometry(0.11, 0.2, 4).rotateX(Math.PI);
+      const marker = new THREE.Mesh(this.markerGeometry, new THREE.MeshBasicMaterial({ color: this.colors.select, depthTest: false, depthWrite: false, transparent: true, opacity: 0.95 }));
+      marker.renderOrder = 10;
+      const baseY = (entry ? TAP_HEIGHT[entry.kind] ?? 1.4 : 1.4) + 0.28;
+      marker.position.copy(at).setY(baseY);
+      this.marks.add(marker);
+      this.selMarker = { mesh: marker, baseY };
+    } else {
+      this.selMarker = null;
     }
     for (const sq of this.targets) {
       const at = this.worldOf(sq);
@@ -545,6 +561,14 @@ export class TacticaScene {
       }));
       beam.position.copy(at).setY(BEAM_HEIGHT / 2);
       this.marks.add(beam);
+      /* The same outline, faint, drawn through anything in front of it, so
+         a square hidden behind a tall piece still shows where it is. */
+      const xray = new THREE.Mesh(this.outlineGeometry, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.35, depthTest: false, depthWrite: false }));
+      xray.rotation.x = -Math.PI / 2;
+      xray.position.copy(at).setY(0.03);
+      xray.scale.setScalar(1.06);
+      xray.renderOrder = 9;
+      this.marks.add(xray);
       this.pulse.push({ material: glow.material, base: glow.material.opacity }, { material: beam.material, base: beam.material.opacity });
     }
     if (selected != null && chosen != null) {
@@ -594,6 +618,7 @@ export class TacticaScene {
     shape.moveTo(-w, 0); shape.lineTo(w, 0); shape.lineTo(w, length - head); shape.lineTo(head * 0.8, length - head);
     shape.lineTo(0, length); shape.lineTo(-head * 0.8, length - head); shape.lineTo(-w, length - head); shape.closePath();
     const mesh = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide }));
+    mesh.userData.ownGeometry = true;
     mesh.rotation.x = -Math.PI / 2;
     mesh.rotation.z = Math.atan2(-dir.x, -dir.z) + Math.PI;
     mesh.position.copy(from).setY(0.025);
@@ -1422,6 +1447,10 @@ export class TacticaScene {
       if (this.dragging) this.dragFollow?.(dt);
       const beat = 0.7 + 0.45 * (0.5 + 0.5 * Math.sin((now / PULSE_MS) * Math.PI * 2));
       for (const { material, base } of this.pulse) material.opacity = Math.min(1, base * beat);
+      if (this.selMarker) {
+        this.selMarker.mesh.position.y = this.selMarker.baseY + 0.07 * Math.sin(now / 280);
+        this.selMarker.mesh.rotation.y = now / 900;
+      }
       if (dt < 200 && this.tweens.length) { this.frameTimes.push(dt); if (this.frameTimes.length > 120) this.frameTimes.shift(); }
       /* Finished tweens run their callbacks only after the list is rebuilt,
          since a callback often starts the next tween. */

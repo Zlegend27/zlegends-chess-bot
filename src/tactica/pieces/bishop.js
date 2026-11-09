@@ -1,7 +1,10 @@
-/* Chess Tactica bishop: the set's turned wooden base, a double collar and a
-   tall smooth capsule head with a small ball finial in the same wood (the
-   contrasting finial is kept for the queen). He carries a big katana in
-   both hands. Same axes as the pawn: front +Z, up +Y. */
+/* Chess Tactica bishop: the set's turned wooden base and double collar
+   under a tall pointed mitre, the bishop's own shape, with the classic
+   slit cut diagonally across it and a ball finial on top (in the same
+   wood; the contrasting finial is kept for the queen). His eyes sit low on
+   the mitre. He carries a big katana in both hands: a long bright blade
+   with a polished edge line, a red silk grip and a gold guard, so it reads
+   from across the board. Same axes as the pawn: front +Z, up +Y. */
 import * as THREE from "three";
 import { buildArm, chaikin, holdAt, makeEye, makeMats, shadowed } from "./pawn.js";
 
@@ -13,14 +16,20 @@ const BODY_PROFILE = [
   [0.13, 0.88], [0.22, 0.9], [0.25, 0.92], [0.24, 0.945], [0.17, 0.955],
   [0.15, 0.97], [0.2, 0.985], [0.215, 1.0], [0.2, 1.02], [0.13, 1.03], [0.09, 1.045],
 ];
-/* The head, turned separately so it can nod: narrow at the collar, swelling
-   to a rounded capsule top. */
+/* The head, turned separately so it can nod: the mitre, narrow at the
+   collar, swelling low and drawing up to a point, like a teardrop. */
 const HEAD_PROFILE = [
-  [0.0, 0.0], [0.1, 0.0], [0.105, 0.03], [0.11, 0.1], [0.13, 0.2], [0.165, 0.32],
-  [0.195, 0.44], [0.205, 0.54], [0.195, 0.63], [0.16, 0.7], [0.1, 0.745], [0.04, 0.76], [0.0, 0.762],
+  [0.0, 0.0], [0.1, 0.0], [0.105, 0.03], [0.13, 0.1], [0.19, 0.2], [0.225, 0.3],
+  [0.235, 0.38], [0.226, 0.47], [0.198, 0.56], [0.155, 0.65], [0.105, 0.73], [0.052, 0.8], [0.016, 0.84], [0.0, 0.845],
 ];
+/* The mitre's slit: a band cut diagonally across the upper mitre, rising
+   toward his left. Plane normal and its height on the centre line. */
+const SLIT = { normal: new THREE.Vector3(-0.62, 1, 0).normalize(), y: 0.56, half: 0.022 };
+/* Slit colour by piece colour: darker grain on the light wood, lighter on
+   the dark, so it shows on both. */
+const SLIT_COLOUR = { white: "#6b4426", black: "#9a6c44" };
 const HEAD_Y = 1.03;
-export const KATANA_SCALE = 1.35;
+export const KATANA_SCALE = 1.5;
 export const ARM = { upper: 0.2, fore: 0.21, x: 0.175, y: 0.86 };
 
 /* Two-handed poses, solved offline: right hand and blade placed, the left
@@ -42,7 +51,7 @@ function wrapTexture() {
   cv.width = S; cv.height = S;
   const g = cv.getContext("2d");
   g.fillStyle = "#ece3cf"; g.fillRect(0, 0, S, S);
-  g.fillStyle = "#1b1820";
+  g.fillStyle = "#9b1b22";
   /* Crossed silk wrap leaving ivory diamonds. */
   for (const flip of [1, -1]) {
     g.save();
@@ -65,10 +74,12 @@ function buildKatana() {
   const k = new THREE.Group();
   k.name = "katana";
   const iron = new THREE.MeshStandardMaterial({ color: "#2c2b2f", metalness: 0.8, roughness: 0.45 });
-  const brass = new THREE.MeshStandardMaterial({ color: "#c9a14a", metalness: 1, roughness: 0.3 });
-  const blade = new THREE.MeshStandardMaterial({ color: "#eef2f6", metalness: 0.75, roughness: 0.22, emissive: "#3a4048", emissiveIntensity: 0.35 });
+  const brass = new THREE.MeshStandardMaterial({ color: "#d9ad4f", metalness: 1, roughness: 0.25 });
+  /* A bright steel blade that glows a little, so it reads in the dark bin. */
+  const blade = new THREE.MeshStandardMaterial({ color: "#f4f7fb", metalness: 0.7, roughness: 0.18, emissive: "#6b7682", emissiveIntensity: 0.55 });
+  const edgeLine = new THREE.MeshBasicMaterial({ color: "#ffffff" });
 
-  const tsuka = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.021, 0.245, 20), new THREE.MeshStandardMaterial({ map: wrapTexture(), roughness: 0.7 })));
+  const tsuka = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.021, 0.022, 0.245, 20), new THREE.MeshStandardMaterial({ map: wrapTexture(), roughness: 0.7 })));
   tsuka.scale.set(1, 1, 0.8);
   tsuka.position.y = -0.08;
   k.add(tsuka);
@@ -76,7 +87,7 @@ function buildKatana() {
   kashira.scale.set(1, 1, 0.8);
   kashira.position.y = -0.21;
   k.add(kashira);
-  const tsuba = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.048, 0.009, 32), iron));
+  const tsuba = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.052, 0.011, 32), brass));
   tsuba.scale.set(1, 1, 0.85);
   tsuba.position.y = 0.05;
   k.add(tsuba);
@@ -88,7 +99,7 @@ function buildKatana() {
   /* Curved blade: edge on +X, back on -X, bending back toward the spine. */
   const L = 0.8, base = 0.072, N = 28;
   const centre = (t) => -0.05 * t * t;
-  const width = (t) => 0.033 - 0.007 * t;
+  const width = (t) => 0.042 - 0.008 * t;
   const shape = new THREE.Shape();
   const edge = [], back = [];
   for (let i = 0; i <= N; i++) {
@@ -108,7 +119,60 @@ function buildKatana() {
   const g = new THREE.ExtrudeGeometry(shape, { depth, curveSegments: 12, bevelEnabled: true, bevelThickness: 0.0025, bevelSize: 0.002, bevelSegments: 2 });
   g.translate(0, 0, -depth / 2);
   k.add(shadowed(new THREE.Mesh(g, blade)));
+  /* The polished edge (hamon): a thin bright line along the cutting edge on
+     both faces, which catches the eye even when the blade is edge-on. */
+  const line = [];
+  for (let i = 0; i <= N; i++) {
+    const t = (i / N) * 0.93;
+    line.push(new THREE.Vector3(centre(t) + width(t) * 0.32, base + t * L, 0));
+  }
+  const path = new THREE.CatmullRomCurve3(line);
+  for (const z of [-1, 1]) {
+    const hamon = new THREE.Mesh(new THREE.TubeGeometry(path, 40, 0.0028, 5, false), edgeLine);
+    hamon.position.z = z * (depth / 2 + 0.0026);
+    k.add(hamon);
+  }
   return k;
+}
+
+/** The mitre's slit: a smooth ribbon on the mitre's surface between two
+ *  parallel planes cut diagonally across it, lifted a hair off the wood in
+ *  a darker colour, so it reads as a groove carved across the mitre from
+ *  any side. `profile` is the turned head's (radius, height) outline. */
+function slitStrip(profile, colour) {
+  /* Radius of the mitre at height y, from its outline. */
+  const radiusAt = (y) => {
+    for (let i = 1; i < profile.length; i++) {
+      const [r0, y0] = profile[i - 1], [r1, y1] = profile[i];
+      if (y >= y0 && y <= y1) return y1 === y0 ? Math.max(r0, r1) : r0 + (r1 - r0) * (y - y0) / (y1 - y0);
+    }
+    return 0;
+  };
+  const top = profile[profile.length - 1][1];
+  const n = SLIT.normal;
+  /* Where the plane offset by `off` crosses the surface going round at
+     angle `th`: bisect on height between the bottom and the tip. */
+  const cross = (th, off) => {
+    const f = (y) => { const r = radiusAt(y) + 0.003; return n.x * r * Math.sin(th) + n.y * y + n.z * r * Math.cos(th) - (n.y * SLIT.y + off); };
+    let lo = 0.12, hi = top - 0.01;
+    if (f(lo) * f(hi) > 0) return null;
+    for (let k = 0; k < 30; k++) { const mid = (lo + hi) / 2; if (f(lo) * f(mid) <= 0) hi = mid; else lo = mid; }
+    const y = (lo + hi) / 2, r = radiusAt(y) + 0.003;
+    return new THREE.Vector3(r * Math.sin(th), y, r * Math.cos(th));
+  };
+  const steps = 160, pos = [];
+  for (let i = 0; i < steps; i++) {
+    const t0 = (i / steps) * Math.PI * 2, t1 = ((i + 1) / steps) * Math.PI * 2;
+    const a0 = cross(t0, -SLIT.half), b0 = cross(t0, SLIT.half), a1 = cross(t1, -SLIT.half), b1 = cross(t1, SLIT.half);
+    if (!a0 || !b0 || !a1 || !b1) continue;
+    pos.push(...a0.toArray(), ...a1.toArray(), ...b1.toArray(), ...a0.toArray(), ...b1.toArray(), ...b0.toArray());
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.computeVertexNormals();
+  const strip = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: SLIT_COLOUR[colour] ?? SLIT_COLOUR.white, roughness: 0.85, side: THREE.DoubleSide }));
+  strip.name = "slit";
+  return strip;
 }
 
 export function buildBishop(colour = "white") {
@@ -131,15 +195,16 @@ export function buildBishop(colour = "white") {
   const cap = shadowed(new THREE.Mesh(new THREE.LatheGeometry(turned(HEAD_PROFILE), 96), mats.wood));
   cap.rotation.y = Math.PI;
   head.add(cap);
-  const finial = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.055, 32, 20), mats.wood));
-  finial.position.y = 0.8;
+  head.add(slitStrip(chaikin(HEAD_PROFILE, 2), colour));
+  const finial = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.058, 32, 20), mats.wood));
+  finial.position.y = 0.885;
   head.add(finial);
   for (const s of [-1, 1]) {
-    const th = s * 0.34, ey = 0.47;
+    const th = s * 0.36, ey = 0.32;
     const dir = new THREE.Vector3(Math.sin(th), 0.04, Math.cos(th)).normalize();
     const eye = new THREE.Group();
     eye.name = s < 0 ? "eyeR" : "eyeL";
-    eye.position.set(Math.sin(th) * 0.195, ey, Math.cos(th) * 0.195);
+    eye.position.set(Math.sin(th) * 0.226, ey, Math.cos(th) * 0.226);
     eye.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
     makeEye(eye, mats);
     head.add(eye);
