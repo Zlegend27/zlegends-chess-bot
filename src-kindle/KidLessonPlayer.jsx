@@ -29,7 +29,7 @@ const ARROW_AFTER_WRONG = 6;
 /* How long the wrong square stays lit red / Owl stays sad. */
 const WRONG_FLASH_MS = 800;
 
-export default function KidLessonPlayer({ chapter, renderPiece, boardVars, audio, onExit, onComplete }) {
+export default function KidLessonPlayer({ chapter, renderPiece, boardVars, audio, onExit, onComplete, onMiss }) {
   const engRef = useRef(null);
   if (!engRef.current) engRef.current = createEngine();
   const eng = engRef.current;
@@ -178,6 +178,7 @@ export default function KidLessonPlayer({ chapter, renderPiece, boardVars, audio
              the sound is muted: the buzz, the board shake, the square
              she dropped on flashing red, and Owl pulling a sad face. */
           audio?.sfxWrong();
+          onMiss?.();
           setBoardShake(true);
           setTimeout(() => setBoardShake(false), 400);
           setWrongSquare(i64);
@@ -205,6 +206,7 @@ export default function KidLessonPlayer({ chapter, renderPiece, boardVars, audio
       if (opt.move) setupPosition([opt.move]);
     } else {
       audio?.sfxWrong();
+      onMiss?.();
     }
   };
 

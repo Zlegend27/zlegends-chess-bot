@@ -18,6 +18,24 @@ import Confetti from "../src/components/Confetti";
 import { AnimalIcon } from "./AnimalIcon";
 import { KID_LESSON_CHAPTERS } from "./kidLessons";
 import KidLessonPlayer from "./KidLessonPlayer";
+import KidHome from "./KidHome";
+import GameRoom from "./GameRoom";
+import AdventureMap from "./AdventureMap";
+import KidLevel from "./KidLevel";
+import OpeningCamp from "./OpeningCamp";
+import KidReplay, { PiecePals } from "./KidReplay";
+import {
+  loadProgress, saveProgress, record as recordProgress, questsFor, liveStreak, chestReady, openChest,
+  dayKey, prevDayKey, dayOf, reportCode, CHEST_COINS, setStars, addPalXp, palLevel, PAL_KINDS,
+} from "./kidProgress";
+import { ISLANDS, currentIsland, totalStars } from "./kidAdventure";
+import { KID_COURSES } from "./kidOpeningCourses";
+import { CAMP_TREES, kidScenarios, loadCamp, saveCamp, dueMoves } from "./kidCamp";
+import { VALUE } from "./kidRules";
+
+/* How many What If? cards each Opening Camp course has (for its stars). */
+const CAMP_CARDS = Object.fromEntries(KID_COURSES.map((c) => [c.id, kidScenarios(CAMP_TREES[c.id], c.root.split(" ")).length]));
+const MAX_STARS = ISLANDS.reduce((sum, i) => sum + i.levels.length * 3, 0);
 
 /* Search runs in the same shared Worker the main bot uses (see
    src/engine/engineWorker.js) — the hardest tier ("Lion", 8s of search)
@@ -177,8 +195,23 @@ export default function KindleApp() {
   const audio = audioRef.current;
   const [musicOn, setMusicOn] = useState(false);
 
-  const [view, setView] = useState("play");
+  /* home | room (Game Room) | play (the board) | puzzle | adventure (Learn) | level | camp | lesson | lessons (How the pieces move) */
+  const [view, setView] = useState("home");
   const [lessonChapterId, setLessonChapterId] = useState(null);
+  /* The Adventure level being played, and the Opening Camp ({ course, mode }). */
+  const [activeLevel, setActiveLevel] = useState(null);
+  const [mapIsland, setMapIsland] = useState(null);
+  const [campOpen, setCampOpen] = useState(null);
+  const [camp, setCampState] = useState(() => loadCamp());
+  const setCamp = (fn) => setCampState((c) => saveCamp(fn(c)));
+  const [replayOpen, setReplayOpen] = useState(false);
+  /* "Your knight is now level 3!", shown for a moment. */
+  const [palNote, setPalNote] = useState(null);
+  useEffect(() => {
+    if (!palNote) return;
+    const t = setTimeout(() => setPalNote(null), 3200);
+    return () => clearTimeout(t);
+  }, [palNote]);
   const [winBurst, setWinBurst] = useState(0);
   const [playerColor, setPlayerColor] = useState(1);
   /* Mirrored onto a ref because announceResult reads it, and
@@ -237,6 +270,39 @@ export default function KindleApp() {
   const boardTheme = BOARDS.find(b => b.id === shop.equippedBoard) || BOARDS[0];
   const boardVars = { "--kBoardLight": boardTheme.light, "--kBoardDark": boardTheme.dark };
   const [trophyOpen, setTrophyOpen] = useState(false);
+
+  /* The progress log behind Today's Quests and the grown-up's progress
+     code (kidProgress.js). */
+  const [progress, setProgress] = useState(() => loadProgress());
+  const log = (event) => setProgress((p) => saveProgress(recordProgress(p, event)));
+  const progressRef = useRef(progress);
+  progressRef.current = progress;
+  /** Piece Pals: XP for the kind of piece (1 pawn .. 6 king) she used well. */
+  const givePal = (type, xp) => {
+    const before = progressRef.current.pals?.[PAL_KINDS[type - 1]] ?? 0;
+    if (PAL_KINDS[type - 1] && palLevel(before + xp) > palLevel(before)) setPalNote({ type, level: palLevel(before + xp), id: Math.random() });
+    setProgress((p) => saveProgress(addPalXp(p, type, xp).state));
+  };
+  const palClass = (p) => {
+    if (Math.sign(p) !== playerColorRef.current) return "";
+    const lvl = palLevel(progress.pals?.[PAL_KINDS[Math.abs(p) - 1]] ?? 0);
+    return lvl >= 5 ? "kPalGold" : lvl >= 3 ? "kPalGlow" : "";
+  };
+  const [chestBurst, setChestBurst] = useState(0);
+  /* Time played: counted in 15-second steps while the app is on screen
+     and she has touched it in the last minute and a half. */
+  const lastTouchRef = useRef(Date.now());
+  useEffect(() => {
+    const touch = () => { lastTouchRef.current = Date.now(); };
+    window.addEventListener("pointerdown", touch);
+    window.addEventListener("keydown", touch);
+    const id = setInterval(() => {
+      if (!document.hidden && Date.now() - lastTouchRef.current < 90000) {
+        setProgress((p) => saveProgress(recordProgress(p, { type: "time", seconds: 15 })));
+      }
+    }, 15000);
+    return () => { clearInterval(id); window.removeEventListener("pointerdown", touch); window.removeEventListener("keydown", touch); };
+  }, []);
 
   /* A stored streak of 5 means nothing if the last solve was a fortnight
      ago -- it's only alive if the last solve was today or yesterday.
@@ -305,6 +371,10 @@ export default function KindleApp() {
 
   const announceResult = (over) => {
     if (!over) return;
+    log({
+      type: "game", opponent: DIFFICULTIES[difficultyIdx].id, moves: eng.plyCount(),
+      result: over.winner === 0 ? "draw" : over.winner === playerColorRef.current ? "win" : "loss",
+    });
     if (over.winner === playerColorRef.current) {
       audio.sfxWin();
       /* Coins AND a trophy-shelf tally in one update -- two separate
@@ -354,7 +424,10 @@ export default function KindleApp() {
   const playMove = (m) => {
     const cap = isCaptureMove(m);
     const san = eng.sanOf(m);
+    const moverType = Math.abs(eng.pieceAt(M120TO64[mFrom(m)]));
+    const takenType = Math.abs(eng.pieceAt(M120TO64[mTo(m)])) || (cap ? 1 : 0);
     eng.make(m);
+    if (cap) givePal(moverType, 4 + 2 * VALUE[takenType]);
     cap ? audio.sfxCapture() : audio.sfxMove();
     moveListRef.current = [...moveListRef.current, san];
     setMoveList(moveListRef.current);
@@ -362,6 +435,7 @@ export default function KindleApp() {
     setHintMove(null);
     setSelected(-1); setTargets([]);
     const over = checkGameOver();
+    if (over && over.winner === playerColor) givePal(moverType, 15);
     setResult(over);
     announceResult(over);
     rerender();
@@ -412,6 +486,7 @@ export default function KindleApp() {
   };
 
   const newGame = (color) => {
+    setReplayOpen(false);
     setNewGameConfirm(false);
     setColorPick(false);
     setThinking(false);
@@ -524,6 +599,7 @@ export default function KindleApp() {
   };
 
   const finishRush = (reason) => {
+    log({ type: "rush", seconds: rushDuration, solved: rushSolvedRef.current });
     const prevBest = shop.bestRushStreak[String(rushDuration)] || 0;
     setRushResult({ reason, solved: rushSolvedRef.current, newBest: rushSolvedRef.current > prevBest });
     setShop(s => recordRushResult(s, rushDuration, rushSolvedRef.current));
@@ -563,6 +639,7 @@ export default function KindleApp() {
         const expected = activePuzzle.moves[idx];
         if (san !== expected) {
           audio.sfxWrong();
+          log({ type: "puzzle", solved: false, rating: activePuzzle.rating, themes: activePuzzle.themes, rush: rushMode });
           setSelected(-1); setTargets([]);
           if (rushMode) {
             rushMistakesRef.current += 1;
@@ -584,6 +661,7 @@ export default function KindleApp() {
           return "deselected";
         }
         const cap = isCaptureMove(move);
+        givePal(Math.abs(eng.pieceAt(M120TO64[mFrom(move)])), 3);
         eng.make(move);
         cap ? audio.sfxCapture() : audio.sfxMove();
         setBotLastMove({ from: mFrom(move), to: mTo(move) });
@@ -593,6 +671,8 @@ export default function KindleApp() {
         if (puzzleProgressRef.current.length === activePuzzle.moves.length) {
           setPuzzleSolved(true);
           audio.sfxWin();
+          log({ type: "puzzle", solved: true, rating: activePuzzle.rating, themes: activePuzzle.themes, rush: rushMode });
+          if (!rushMode && isDailyPuzzle) log({ type: "daily" });
           if (rushMode) {
             rushSolvedRef.current += 1;
             setRushSolved(rushSolvedRef.current);
@@ -647,7 +727,7 @@ export default function KindleApp() {
     setActivePuzzle(null); setPuzzleBand(null); setIsDailyPuzzle(false); setPuzzleFeedback(null); setPuzzleSolved(false);
     setSelected(-1); setTargets([]); setBotLastMove(null);
     setPlayerColor(prevPlayerColorRef.current);
-    setView("play");
+    setView("room");
     rerender();
   };
 
@@ -720,7 +800,7 @@ export default function KindleApp() {
             onPointerUp={onPointerUpSq}
             onPointerCancel={onPointerCancelSq}
             className={"kSq " + (light ? "kLight" : "kDark") + (isSel ? " kSel" : "") + (isBotLast ? " kLast" : "") + (kingInCheck ? " kChk" : "") + (isDragOver ? " kDragOver" : "") + (isHintFrom || isHintTo ? " kHint" : "")}>
-            {p !== EMPTY && !isDragFrom && renderPiece(p)}
+            {p !== EMPTY && !isDragFrom && renderPiece(p, palClass(p))}
             {isTarget && <span className="kDot" />}
             {vf === 0 && <span className="kCoord kRk">{r + 1}</span>}
             {vr === 7 && <span className="kCoord kFl">{FILES[f]}</span>}
@@ -732,305 +812,9 @@ export default function KindleApp() {
     return rows;
   };
 
-  if (view === "puzzle") {
-    const band = KID_PUZZLE_BANDS.find(b => b.id === puzzleBand);
-    const sideLabel = activePuzzle ? (eng.getSide() === 1 ? "White" : "Black") : "";
-    return (
-      <div className="kRoot">
-        <Critters />
-        <div className="kHdr">
-          <AnimalIcon kind={DIFFICULTIES[difficultyIdx].label} hat={equippedHat} />
-          <h1>Kinnda Chess</h1>
-          <span className="kCoinBadge">🪙 {shop.coins}</span>
-        </div>
-        {!activePuzzle ? (
-          <>
-            <div className="kStatus">Pick a puzzle level!</div>
-            <div className="kCtrls">
-              <button onClick={startDailyPuzzle}>
-                📅 Daily Puzzle{dailyDoneToday ? " ✓" : ""}
-                {liveDailyStreak > 0 && ` · 🔥 ${liveDailyStreak}`}
-              </button>
-            </div>
-            <div className="kCtrls">
-              {KID_PUZZLE_BANDS.map(b => (
-                <button key={b.id} onClick={() => startPuzzle(b.id)}>{b.label} ({kidPuzzlesInBand(b.id).length})</button>
-              ))}
-            </div>
-            <div className="kCtrls">
-              <button onClick={() => setRushOpen(true)}>⚡ Puzzle Rush</button>
-              <button onClick={exitPuzzle}>Back to the Game</button>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="kStatus">
-              {rushMode
-                ? `Puzzle Rush · ${KID_PUZZLE_BANDS[rushBandIdx].label} · ${formatKidClock(rushTimeLeft)} left · Solved ${rushSolved} · Misses ${rushMistakes}/3`
-                : puzzleSolved ? `You got it! Great puzzle solving! (+${puzzleCoinReward(activePuzzle.rating)} coins)`
-                : puzzleFeedback === "wrong" ? "Not quite - give it another try!"
-                : isDailyPuzzle ? `Daily Puzzle (rated ${activePuzzle.rating}) - find the best move for ${sideLabel}!`
-                : `${band ? band.label : ""} puzzle (rated ${activePuzzle.rating}) - find the best move for ${sideLabel}!`}
-            </div>
-            {!puzzleFeedback && !puzzleSolved && <div className="kMoves">{activePuzzle.hint}</div>}
-            <div className="kBoardWrap">
-              <div className={"kBoard" + (puzzleFeedback === "wrong" ? " kWrongShake" : "")} style={boardVars} role="grid" aria-label="Chess board" ref={boardRef}>{buildBoardRows(false, onPuzzleSquare)}</div>
-              {renderDragGhost()}
-            </div>
-            <div className="kCtrls">
-              {!rushMode && puzzleSolved && <button onClick={nextPuzzle}>Next Puzzle</button>}
-              {rushMode ? <button onClick={exitRush}>End Rush</button> : <button onClick={exitPuzzle}>Back to the Game</button>}
-            </div>
-          </>
-        )}
-
-        {rushOpen && (
-          <div className="kShopOv" onClick={e => { if (e.target === e.currentTarget) setRushOpen(false); }}>
-            <button className="kCloseX" onClick={() => setRushOpen(false)} aria-label="Close Puzzle Rush">✕</button>
-            <h2 className="kLessonTitle" style={{ textAlign: "center" }}>Puzzle Rush</h2>
-            <div className="kMoves" style={{ width: "min(92vw, 380px)" }}>
-              Solve as many puzzles as you can! Three wrong answers or running out of time ends the rush.
-            </div>
-            <div className="kCtrls" style={{ flexDirection: "column", width: "min(92vw, 380px)" }}>
-              {RUSH_DURATIONS.map(d => {
-                const best = shop.bestRushStreak[String(d.seconds)] || 0;
-                return (
-                  <button key={d.seconds} onClick={() => startRush(d.seconds)}>
-                    {d.label}{best > 0 ? ` — best ${best} 🏆` : ""}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {rushMode && rushResult && (
-          <div className="kShopOv" onClick={e => { if (e.target === e.currentTarget) exitRush(); }}>
-            {rushResult.newBest && <Confetti key={rushResult.solved} />}
-            <button className="kCloseX" onClick={exitRush} aria-label="Exit Puzzle Rush">✕</button>
-            <h2 className="kLessonTitle" style={{ textAlign: "center" }}>
-              {rushResult.reason === "time" ? "Time's up!" : "3 misses — rush over!"}
-            </h2>
-            <div className="kMoves" style={{ width: "min(92vw, 380px)", textAlign: "center", fontSize: 16 }}>
-              You solved <b>{rushResult.solved}</b> puzzle{rushResult.solved === 1 ? "" : "s"}!
-              {rushResult.newBest && <><br /><b className="kNewBest">🏆 New personal best!</b></>}
-            </div>
-            <div className="kCtrls">
-              <button onClick={retryRush}>Try Again</button>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  if (view === "lessons") {
-    return (
-      <div className="kRoot" onClick={e => { if (e.target === e.currentTarget) setView("play"); }}>
-        <button className="kCloseX" onClick={() => setView("play")} aria-label="Close How to Play">✕</button>
-        <Critters />
-        <div className="kHdr">
-          <AnimalIcon kind={DIFFICULTIES[difficultyIdx].label} hat={equippedHat} />
-          <h1>Kinnda Chess</h1>
-        </div>
-        <h2 className="kLessonTitle">How the Pieces Move</h2>
-        <div className="kLessons">
-          {LESSONS.map(l => (
-            <div className="kLessonCard" key={l.name}>
-              <span className="kPc kPcB kLessonPc">{GLYPH[l.piece]}</span>
-              <div>
-                <div className="kLessonName">{l.name}</div>
-                <div className="kLessonText">{l.text}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-        <h2 className="kLessonTitle">A Few Tips</h2>
-        <ul className="kTips">
-          {TIPS.map((t, i) => <li key={i}>{t}</li>)}
-        </ul>
-      </div>
-    );
-  }
-
-  /* Lessons hub -- a chapter picker distinct from "How to Play" above:
-     that one covers piece movement, this one covers the concepts (why
-     you play the moves you play), same split the main site draws
-     between the rules a player already knows and the Lessons feature. */
-  if (view === "lessonsHub") {
-    if (lessonChapterId) {
-      const chapter = KID_LESSON_CHAPTERS.find(c => c.id === lessonChapterId);
-      return (
-        <KidLessonPlayer
-          chapter={chapter}
-          renderPiece={renderPiece}
-          boardVars={boardVars}
-          audio={audio}
-          onExit={() => setLessonChapterId(null)}
-          onComplete={() => setShop(s => markLessonComplete(s, chapter.id))}
-        />
-      );
-    }
-    return (
-      <div className="kRoot" onClick={e => { if (e.target === e.currentTarget) setView("play"); }}>
-        <button className="kCloseX" onClick={() => setView("play")} aria-label="Close Lessons">✕</button>
-        <Critters />
-        <div className="kHdr">
-          <AnimalIcon kind="Owl" />
-          <h1>Kinnda Chess</h1>
-        </div>
-        <h2 className="kLessonTitle">Lessons</h2>
-        <div className="kLessons">
-          {KID_LESSON_CHAPTERS.map(c => (
-            c.comingSoon ? (
-              <div className="kLessonCard kLessonLocked" key={c.id}>
-                <span className="kLessonLockIcon">🔒</span>
-                <div>
-                  <div className="kLessonName">{c.title}</div>
-                  <div className="kLessonText">{c.subtitle} — coming soon!</div>
-                </div>
-              </div>
-            ) : (
-              <button className="kLessonCard kLessonPickable" key={c.id} onClick={() => setLessonChapterId(c.id)}>
-                <AnimalIcon kind={c.teacher} size={40} />
-                <div>
-                  <div className="kLessonName">
-                    {c.title}{shop.completedLessons.includes(c.id) ? " ✓" : ""}
-                  </div>
-                  <div className="kLessonText">{c.subtitle}</div>
-                </div>
-              </button>
-            )
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  const flipped = playerColor === -1;
-  const rows = buildBoardRows(flipped, onSquare);
-
-  const pairs = [];
-  for (let i = 0; i < moveList.length; i += 2) pairs.push([i / 2 + 1, moveList[i], moveList[i + 1]]);
-  const moveText = pairs.map(([n, w, b]) => `${n}.${w}${b ? " " + b : ""}`).join("  ");
-
-  const mat = materialState(eng);
-  const youCaptured = playerColor === 1 ? mat.capturedBlack : mat.capturedWhite;
-  const opponentCaptured = playerColor === 1 ? mat.capturedWhite : mat.capturedBlack;
-
-  const opponentName = DIFFICULTIES[difficultyIdx].label;
-  const status = result
-    ? (result.winner === 0
-        ? "It's a tie - great game!"
-        : result.winner === playerColor
-          ? "Good job, you win!"
-          : "Nice try! Better luck next time!")
-    : thinking ? `${opponentName} is thinking...`
-    : eng.getSide() === playerColor ? "Your move!" : `${opponentName}'s move`;
-  const mood = !result ? undefined : result.winner === 0 ? undefined : result.winner === playerColor ? "happy" : "sad";
-
-  const Tray = ({ pieces }) => (
-    <div className="kTray">
-      {pieces.length === 0
-        ? <span className="kTrayEmpty">no captures yet</span>
-        : pieces.map((t, i) => <span key={i} className="kTrayPc">{GLYPH[t]}</span>)}
-    </div>
-  );
-
-  return (
-    <div className="kRoot">
-      <Critters />
-      {result && result.winner === playerColor && <Confetti key={winBurst} />}
-      <div className="kHdr">
-        <div className="kHdrLeft">
-          <AnimalIcon kind={opponentName} hat={equippedHat} mood={mood} />
-          <h1>Kinnda Chess</h1>
-        </div>
-        <div className="kHdrRight">
-          <span className="kCoinBadge">🪙 {shop.coins}</span>
-          {liveDailyStreak > 0 && (
-            <span className="kStreakBadge" title={`${liveDailyStreak}-day daily puzzle streak`}>🔥 {liveDailyStreak}</span>
-          )}
-          <button className="kIconBtn kTrophyBtn" onClick={() => setTrophyOpen(true)} title="Trophies">🏆</button>
-          <button className="kIconBtn kLessonBtn" onClick={() => setView("lessonsHub")} title="Lessons">🎓</button>
-          <button className="kIconBtn kShopBtn" onClick={() => setShopOpen(true)} title="Shop">🛍️</button>
-          <button className="kIconBtn kMusicBtn" onClick={() => setMusicOn(audio.toggle())} title={musicOn ? "Pause music" : "Play music"}>
-            {musicOn ? "♪⏸" : "♪▶"}
-          </button>
-          <input type="range" className="kVolume" min="0" max="100" value={shop.musicVolume}
-            onChange={e => setShop(s => setMusicVolume(s, Number(e.target.value)))}
-            title="Music volume" aria-label="Music volume" />
-        </div>
-      </div>
-      <div className="kStatus">{status}</div>
-
-      {/* Shown only in the moment after a win, rather than as a standing
-          banner -- that's when "want a harder one?" is a reward instead
-          of nagging, and it disappears by itself on the next move. */}
-      {result && result.winner === playerColor && winsVsCurrent >= WINS_BEFORE_NUDGE && nextOpponentIdx >= 0 && (
-        <div className="kStepUp">
-          <AnimalIcon kind={DIFFICULTIES[nextOpponentIdx].label} size={36} />
-          <span>
-            That&apos;s <b>{winsVsCurrent} wins</b> against {opponentName}! Ready for{" "}
-            <b>{DIFFICULTIES[nextOpponentIdx].label}</b> {starLabel(DIFFICULTIES[nextOpponentIdx].stars)}?
-          </span>
-          <button onClick={() => { setDifficultyIdx(nextOpponentIdx); newGame(playerColor); }}>Let&apos;s try!</button>
-        </div>
-      )}
-
-      <div className="kCaptureRow">
-        <span className="kCaptureLabel">{opponentName}'s captures:</span>
-        <Tray pieces={opponentCaptured} />
-      </div>
-
-      <div className="kBoardWrap">
-        <div className="kBoard" style={boardVars} role="grid" aria-label="Chess board" ref={boardRef}>{rows}</div>
-        {renderDragGhost()}
-        {promo && (
-          <div className="kPromoOv">
-            {[WQ, WR, WB, WN].map(pp => (
-              <button key={pp} onClick={() => {
-                const m = promo.moves.find(x => mPromo(x) === pp);
-                setPromo(null);
-                if (m) playMove(m);
-              }}>{renderPiece(eng.getSide() === 1 ? pp : -pp)}</button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="kCaptureRow">
-        <span className="kCaptureLabel">Your captures:</span>
-        <Tray pieces={youCaptured} />
-      </div>
-
-      <div className="kMoves">{moveText || "No moves yet - good luck!"}</div>
-
-      {/* Split in two: things you do to THIS game on top, places you can
-          go underneath. It was previously one undifferentiated row of
-          nine buttons, which a kid reads as noise -- and "Lessons"
-          appeared twice, since the header already has its own 🎓 button. */}
-      <div className="kCtrls">
-        {result && <button className="kBtnPink" onClick={() => newGame(playerColor)}>Play Again!</button>}
-        <button className="kBtnGreen" onClick={startNewGame}>New Game</button>
-        <button className="kBtnGhost" onClick={undo} disabled={thinking || !!result || eng.plyCount() === 0}>Undo</button>
-        <button className="kBtnGold" onClick={onHint} disabled={thinking || !!result || !!promo || hinting || eng.getSide() !== playerColor || shop.coins < HINT_COST}
-          title={`Costs ${HINT_COST} coin`}>
-          {hinting ? "Thinking…" : `💡 Hint (${HINT_COST}🪙)`}
-        </button>
-      </div>
-      <div className="kCtrls kCtrlsNav">
-        <label className="kOpponentPick">
-          <span>Playing against</span>
-          <select value={difficultyIdx} onChange={e => setDifficultyIdx(Number(e.target.value))}>
-            {DIFFICULTIES.map((d, i) => (!d.unlockable || shop.ownedAnimals.includes(d.id)) &&
-              <option key={i} value={i}>{d.label} {starLabel(d.stars)}</option>)}
-          </select>
-        </label>
-        <button className="kBtnPurple" onClick={() => setView("puzzle")} disabled={thinking}>🧩 Puzzles</button>
-        <button className="kBtnPurple" onClick={() => setView("lessons")}>❓ How to Play</button>
-      </div>
-
+  /* Trophies and the shop open from the Game Room. */
+  const trophyOverlay = (
+    <>
       {trophyOpen && (
         <div className="kShopOv" onClick={e => { if (e.target === e.currentTarget) setTrophyOpen(false); }}>
           <button className="kCloseX" onClick={() => setTrophyOpen(false)} aria-label="Close Trophies">✕</button>
@@ -1061,43 +845,26 @@ export default function KindleApp() {
           <div className="kMoves" style={{ width: "min(92vw, 430px)", textAlign: "center", fontSize: 14 }}>
             🥉 1 win &nbsp;·&nbsp; 🥈 5 wins &nbsp;·&nbsp; 🥇 15 wins
           </div>
-        </div>
-      )}
-
-      {newGameConfirm && (
-        <div className="kShopOv" onClick={e => { if (e.target === e.currentTarget) setNewGameConfirm(false); }}>
-          <h2 className="kLessonTitle" style={{ textAlign: "center" }}>Start a new game?</h2>
-          <div className="kMoves" style={{ width: "min(92vw, 380px)", textAlign: "center", fontSize: 16 }}>
-            This game will disappear and you can&apos;t get it back.
-          </div>
-          <div className="kCtrls">
-            <button className="kBtnGreen" onClick={() => { setNewGameConfirm(false); setColorPick(true); }}>Yes, new game</button>
-            <button className="kBtnGhost" onClick={() => setNewGameConfirm(false)}>Keep playing</button>
+          <h2 className="kLessonTitle" style={{ textAlign: "center" }}>Piece Pals</h2>
+          <div style={{ width: "min(92vw, 430px)" }}><PiecePals pals={progress.pals} /></div>
+          <div className="kMoves" style={{ width: "min(92vw, 430px)", textAlign: "center", fontSize: 14 }}>
+            Your pieces grow when you use them well: captures, checkmates and puzzles. Level 3 sparkles on the board!
           </div>
         </div>
       )}
-
-      {colorPick && (
-        <div className="kShopOv" onClick={e => { if (e.target === e.currentTarget) setColorPick(false); }}>
-          <button className="kCloseX" onClick={() => setColorPick(false)} aria-label="Close">✕</button>
-          <h2 className="kLessonTitle" style={{ textAlign: "center" }}>Which side do you want?</h2>
-          {/* Shows the actual pieces, not just the words -- "white" and
-              "black" are the labels, but the piece is what she picks. */}
-          <div className="kCtrls">
-            <button className="kBtnGreen kSidePick" onClick={() => newGame(1)}>
-              {renderPiece(1)}<span>Play White</span>
-            </button>
-            <button className="kBtnBlue kSidePick" onClick={() => newGame(-1)}>
-              {renderPiece(-1)}<span>Play Black</span>
-            </button>
-          </div>
-        </div>
-      )}
-
+    </>
+  );
+  const shopOverlay = (
+    <>
       {shopOpen && (
         <div className="kShopOv" onClick={e => { if (e.target === e.currentTarget) setShopOpen(false); }}>
           <button className="kCloseX" onClick={() => setShopOpen(false)} aria-label="Close Shop">✕</button>
           <h2 className="kLessonTitle" style={{ textAlign: "center" }}>Shop - 🪙 {shop.coins}</h2>
+          <label className="kOpponentPick" style={{ margin: "0 0 10px" }}>
+            <span>🎵 Music volume</span>
+            <input type="range" className="kVolume" min="0" max="100" value={shop.musicVolume}
+              onChange={e => setShop(s => setMusicVolume(s, Number(e.target.value)))} aria-label="Music volume" />
+          </label>
           <div className="kShopGrid">
             {HATS.map(h => {
               const owned = shop.ownedHats.includes(h.id);
@@ -1188,6 +955,428 @@ export default function KindleApp() {
           </div>
         </div>
       )}
+    </>
+  );
+
+  /* What the Adventure needs to count stars. */
+  const adventureCtx = { stars: progress.stars, completedLessons: shop.completedLessons, camp, campCards: CAMP_CARDS };
+  const openLevel = (l) => {
+    if (l.type === "how") {
+      setProgress(p => saveProgress(setStars(p, l.id, 3)));
+      log({ type: "level", id: l.id, stars: 3 });
+      setView("lessons");
+    } else if (l.type === "lesson") { setLessonChapterId(l.chapter); setView("lesson"); }
+    else if (l.type === "camp") { setCampOpen({ course: l.course, mode: "hub" }); setView("camp"); }
+    else { setActiveLevel(l); setView("level"); }
+  };
+
+  /* ---------------- Learn: the Adventure, its levels, lessons and camp ---------------- */
+  if (view === "adventure") {
+    return (
+      <div className="kRoot">
+        <Critters />
+        <AdventureMap ctx={adventureCtx} openId={mapIsland} onOpen={setMapIsland} onLevel={openLevel} onBack={() => setView("home")} />
+      </div>
+    );
+  }
+  if (view === "level" && activeLevel) {
+    return (
+      <div className="kRoot">
+        <KidLevel
+          level={activeLevel}
+          renderPiece={renderPiece}
+          boardVars={boardVars}
+          audio={audio}
+          onFinish={(got) => {
+            if (got) {
+              setProgress(p => saveProgress(setStars(p, activeLevel.id, got)));
+              log({ type: "level", id: activeLevel.id, stars: got });
+            }
+            setView("adventure");
+          }}
+          onExit={() => setView("adventure")}
+        />
+      </div>
+    );
+  }
+  if (view === "camp" && campOpen) {
+    return (
+      <div className="kRoot">
+        <OpeningCamp
+          courseId={campOpen.course}
+          startMode={campOpen.mode}
+          camp={camp}
+          setCamp={setCamp}
+          renderPiece={renderPiece}
+          boardVars={boardVars}
+          audio={audio}
+          log={log}
+          onExit={() => setView(campOpen.mode === "memory" ? "home" : "adventure")}
+        />
+      </div>
+    );
+  }
+  if (view === "lesson" && lessonChapterId) {
+    const chapter = KID_LESSON_CHAPTERS.find(c => c.id === lessonChapterId);
+    return (
+      <KidLessonPlayer
+        chapter={chapter}
+        renderPiece={renderPiece}
+        boardVars={boardVars}
+        audio={audio}
+        onExit={() => { setLessonChapterId(null); setView("adventure"); }}
+        onComplete={() => { setShop(s => markLessonComplete(s, chapter.id)); log({ type: "lesson", id: chapter.id }); }}
+        onMiss={() => log({ type: "lessonMiss", id: chapter.id })}
+      />
+    );
+  }
+
+  /* ---------------- Home ---------------- */
+  if (view === "home") {
+    const today = dayKey();
+    const quests = questsFor(progress, today);
+    const week = [];
+    let k = today;
+    for (let i = 0; i < 7; i++) {
+      const [y, m, d] = k.split("-").map(Number);
+      week.unshift({ key: k, weekday: new Date(y, m - 1, d).getDay(), today: i === 0, lit: questsFor(progress, k).some(q => q.complete) });
+      k = prevDayKey(k);
+    }
+    const here = currentIsland(adventureCtx);
+    const stars = totalStars(adventureCtx);
+    const goTo = (where) => {
+      if (where === "learn") setView("adventure");
+      else if (where === "memory") { setCampOpen({ course: null, mode: "memory" }); setView("camp"); }
+      else if (where === "room" || where === "play") setView("room");
+      else if (where === "puzzles") setView("puzzle");
+      else if (where === "daily") { setView("puzzle"); startDailyPuzzle(); }
+      else if (where === "rush") { setView("puzzle"); setRushOpen(true); }
+    };
+    const openTodaysChest = () => {
+      if (!chestReady(progress, today)) return;
+      setProgress(p => saveProgress(openChest(p, today)));
+      setShop(s => addCoins(s, CHEST_COINS));
+      audio.sfxWin();
+      setChestBurst(n => n + 1);
+    };
+    return (
+      <div className="kRoot">
+        <Critters />
+        {chestBurst > 0 && <Confetti key={chestBurst} />}
+        <KidHome
+          shop={shop}
+          quests={quests}
+          streak={liveStreak(progress, today)}
+          week={week}
+          yesterday={progress.days[prevDayKey(today)] ? dayOf(progress, prevDayKey(today)) : null}
+          learnText={`${here.emoji} ${here.name} · ⭐ ${stars}`}
+          learnPct={stars / MAX_STARS}
+          memoryDue={dueMoves(camp).length}
+          chestReady={chestReady(progress, today)}
+          chestOpened={dayOf(progress, today).chest}
+          onOpenChest={openTodaysChest}
+          onGo={goTo}
+          musicOn={musicOn}
+          onMusic={() => setMusicOn(audio.toggle())}
+          reportCode={() => reportCode(progress, shop, today)}
+        />
+      </div>
+    );
+  }
+
+  /* ---------------- Game Room ---------------- */
+  if (view === "room") {
+    const gameUnderway = !result && eng.plyCount() > 0;
+    const rushBests = Object.values(shop.bestRushStreak || {});
+    return (
+      <div className="kRoot">
+        <Critters />
+        <GameRoom
+          opponents={DIFFICULTIES}
+          current={difficultyIdx}
+          shop={shop}
+          medalFor={medalFor}
+          gameUnderway={gameUnderway}
+          dailyStreak={liveDailyStreak}
+          dailyDone={dailyDoneToday}
+          bestRush={rushBests.length ? Math.max(...rushBests) : 0}
+          onPick={setDifficultyIdx}
+          onPlay={() => { setView("play"); if (!gameUnderway) setColorPick(true); }}
+          onNewGame={() => { setView("play"); startNewGame(); }}
+          onDaily={() => { setView("puzzle"); startDailyPuzzle(); }}
+          onPuzzles={() => setView("puzzle")}
+          onRush={() => { setView("puzzle"); setRushOpen(true); }}
+          onTrophies={() => setTrophyOpen(true)}
+          onShop={() => setShopOpen(true)}
+          onBack={() => setView("home")}
+        />
+        {trophyOverlay}
+        {shopOverlay}
+      </div>
+    );
+  }
+
+  if (view === "puzzle") {
+    const band = KID_PUZZLE_BANDS.find(b => b.id === puzzleBand);
+    const sideLabel = activePuzzle ? (eng.getSide() === 1 ? "White" : "Black") : "";
+    return (
+      <div className="kRoot">
+        <Critters />
+        <div className="kHdr">
+          <AnimalIcon kind={DIFFICULTIES[difficultyIdx].label} hat={equippedHat} />
+          <h1>Kinnda Chess</h1>
+          <span className="kCoinBadge">🪙 {shop.coins}</span>
+        </div>
+        {!activePuzzle ? (
+          <>
+            <div className="kStatus">Pick a puzzle level!</div>
+            <div className="kCtrls">
+              <button onClick={startDailyPuzzle}>
+                📅 Daily Puzzle{dailyDoneToday ? " ✓" : ""}
+                {liveDailyStreak > 0 && ` · 🔥 ${liveDailyStreak}`}
+              </button>
+            </div>
+            <div className="kCtrls">
+              {KID_PUZZLE_BANDS.map(b => (
+                <button key={b.id} onClick={() => startPuzzle(b.id)}>{b.label} ({kidPuzzlesInBand(b.id).length})</button>
+              ))}
+            </div>
+            <div className="kCtrls">
+              <button onClick={() => setRushOpen(true)}>⚡ Puzzle Rush</button>
+              <button onClick={exitPuzzle}>← Game Room</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="kStatus">
+              {rushMode
+                ? `Puzzle Rush · ${KID_PUZZLE_BANDS[rushBandIdx].label} · ${formatKidClock(rushTimeLeft)} left · Solved ${rushSolved} · Misses ${rushMistakes}/3`
+                : puzzleSolved ? `You got it! Great puzzle solving! (+${puzzleCoinReward(activePuzzle.rating)} coins)`
+                : puzzleFeedback === "wrong" ? "Not quite - give it another try!"
+                : isDailyPuzzle ? `Daily Puzzle (rated ${activePuzzle.rating}) - find the best move for ${sideLabel}!`
+                : `${band ? band.label : ""} puzzle (rated ${activePuzzle.rating}) - find the best move for ${sideLabel}!`}
+            </div>
+            {palNote && <div className="kPalNote" role="status">✨ Your {PIECE_NAME[palNote.type]} pal is now level {palNote.level}!</div>}
+            {!puzzleFeedback && !puzzleSolved && <div className="kMoves">{activePuzzle.hint}</div>}
+            <div className="kBoardWrap">
+              <div className={"kBoard" + (puzzleFeedback === "wrong" ? " kWrongShake" : "")} style={boardVars} role="grid" aria-label="Chess board" ref={boardRef}>{buildBoardRows(false, onPuzzleSquare)}</div>
+              {renderDragGhost()}
+            </div>
+            <div className="kCtrls">
+              {!rushMode && puzzleSolved && <button onClick={nextPuzzle}>Next Puzzle</button>}
+              {rushMode ? <button onClick={exitRush}>End Rush</button> : <button onClick={exitPuzzle}>← Game Room</button>}
+            </div>
+          </>
+        )}
+
+        {rushOpen && (
+          <div className="kShopOv" onClick={e => { if (e.target === e.currentTarget) setRushOpen(false); }}>
+            <button className="kCloseX" onClick={() => setRushOpen(false)} aria-label="Close Puzzle Rush">✕</button>
+            <h2 className="kLessonTitle" style={{ textAlign: "center" }}>Puzzle Rush</h2>
+            <div className="kMoves" style={{ width: "min(92vw, 380px)" }}>
+              Solve as many puzzles as you can! Three wrong answers or running out of time ends the rush.
+            </div>
+            <div className="kCtrls" style={{ flexDirection: "column", width: "min(92vw, 380px)" }}>
+              {RUSH_DURATIONS.map(d => {
+                const best = shop.bestRushStreak[String(d.seconds)] || 0;
+                return (
+                  <button key={d.seconds} onClick={() => startRush(d.seconds)}>
+                    {d.label}{best > 0 ? ` — best ${best} 🏆` : ""}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {rushMode && rushResult && (
+          <div className="kShopOv" onClick={e => { if (e.target === e.currentTarget) exitRush(); }}>
+            {rushResult.newBest && <Confetti key={rushResult.solved} />}
+            <button className="kCloseX" onClick={exitRush} aria-label="Exit Puzzle Rush">✕</button>
+            <h2 className="kLessonTitle" style={{ textAlign: "center" }}>
+              {rushResult.reason === "time" ? "Time's up!" : "3 misses — rush over!"}
+            </h2>
+            <div className="kMoves" style={{ width: "min(92vw, 380px)", textAlign: "center", fontSize: 16 }}>
+              You solved <b>{rushResult.solved}</b> puzzle{rushResult.solved === 1 ? "" : "s"}!
+              {rushResult.newBest && <><br /><b className="kNewBest">🏆 New personal best!</b></>}
+            </div>
+            <div className="kCtrls">
+              <button onClick={retryRush}>Try Again</button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (view === "lessons") {
+    return (
+      <div className="kRoot" onClick={e => { if (e.target === e.currentTarget) setView("adventure"); }}>
+        <button className="kCloseX" onClick={() => setView("adventure")} aria-label="Close How the pieces move">✕</button>
+        <Critters />
+        <div className="kHdr">
+          <AnimalIcon kind={DIFFICULTIES[difficultyIdx].label} hat={equippedHat} />
+          <h1>Kinnda Chess</h1>
+        </div>
+        <h2 className="kLessonTitle">How the Pieces Move</h2>
+        <div className="kLessons">
+          {LESSONS.map(l => (
+            <div className="kLessonCard" key={l.name}>
+              <span className="kPc kPcB kLessonPc">{GLYPH[l.piece]}</span>
+              <div>
+                <div className="kLessonName">{l.name}</div>
+                <div className="kLessonText">{l.text}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <h2 className="kLessonTitle">A Few Tips</h2>
+        <ul className="kTips">
+          {TIPS.map((t, i) => <li key={i}>{t}</li>)}
+        </ul>
+      </div>
+    );
+  }
+
+  const flipped = playerColor === -1;
+  const rows = buildBoardRows(flipped, onSquare);
+
+  const pairs = [];
+  for (let i = 0; i < moveList.length; i += 2) pairs.push([i / 2 + 1, moveList[i], moveList[i + 1]]);
+  const moveText = pairs.map(([n, w, b]) => `${n}.${w}${b ? " " + b : ""}`).join("  ");
+
+  const mat = materialState(eng);
+  const youCaptured = playerColor === 1 ? mat.capturedBlack : mat.capturedWhite;
+  const opponentCaptured = playerColor === 1 ? mat.capturedWhite : mat.capturedBlack;
+
+  const opponentName = DIFFICULTIES[difficultyIdx].label;
+  const status = result
+    ? (result.winner === 0
+        ? "It's a tie - great game!"
+        : result.winner === playerColor
+          ? "Good job, you win!"
+          : "Nice try! Better luck next time!")
+    : thinking ? `${opponentName} is thinking...`
+    : eng.getSide() === playerColor ? "Your move!" : `${opponentName}'s move`;
+  const mood = !result ? undefined : result.winner === 0 ? undefined : result.winner === playerColor ? "happy" : "sad";
+
+  const Tray = ({ pieces }) => (
+    <div className="kTray">
+      {pieces.length === 0
+        ? <span className="kTrayEmpty">no captures yet</span>
+        : pieces.map((t, i) => <span key={i} className="kTrayPc">{GLYPH[t]}</span>)}
+    </div>
+  );
+
+  return (
+    <div className="kRoot">
+      <Critters />
+      {result && result.winner === playerColor && <Confetti key={winBurst} />}
+      <div className="kHdr">
+        <div className="kHdrLeft">
+          <AnimalIcon kind={opponentName} hat={equippedHat} mood={mood} />
+          <h1>Kinnda Chess</h1>
+        </div>
+        <div className="kHdrRight">
+          <span className="kCoinBadge">🪙 {shop.coins}</span>
+          <button className="khBack" onClick={() => setView("room")}>← Game Room</button>
+        </div>
+      </div>
+      <div className="kStatus">{status}</div>
+      {palNote && <div className="kPalNote" role="status">✨ Your {PIECE_NAME[palNote.type]} pal is now level {palNote.level}!</div>}
+
+      {/* Shown only in the moment after a win, rather than as a standing
+          banner -- that's when "want a harder one?" is a reward instead
+          of nagging, and it disappears by itself on the next move. */}
+      {result && result.winner === playerColor && winsVsCurrent >= WINS_BEFORE_NUDGE && nextOpponentIdx >= 0 && (
+        <div className="kStepUp">
+          <AnimalIcon kind={DIFFICULTIES[nextOpponentIdx].label} size={36} />
+          <span>
+            That&apos;s <b>{winsVsCurrent} wins</b> against {opponentName}! Ready for{" "}
+            <b>{DIFFICULTIES[nextOpponentIdx].label}</b> {starLabel(DIFFICULTIES[nextOpponentIdx].stars)}?
+          </span>
+          <button onClick={() => { setDifficultyIdx(nextOpponentIdx); newGame(playerColor); }}>Let&apos;s try!</button>
+        </div>
+      )}
+
+      <div className="kCaptureRow">
+        <span className="kCaptureLabel">{opponentName}'s captures:</span>
+        <Tray pieces={opponentCaptured} />
+      </div>
+
+      <div className="kBoardWrap">
+        <div className="kBoard" style={boardVars} role="grid" aria-label="Chess board" ref={boardRef}>{rows}</div>
+        {renderDragGhost()}
+        {promo && (
+          <div className="kPromoOv">
+            {[WQ, WR, WB, WN].map(pp => (
+              <button key={pp} onClick={() => {
+                const m = promo.moves.find(x => mPromo(x) === pp);
+                setPromo(null);
+                if (m) playMove(m);
+              }}>{renderPiece(eng.getSide() === 1 ? pp : -pp)}</button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="kCaptureRow">
+        <span className="kCaptureLabel">Your captures:</span>
+        <Tray pieces={youCaptured} />
+      </div>
+
+      <div className="kMoves">{moveText || "No moves yet - good luck!"}</div>
+
+      {/* Split in two: things you do to THIS game on top, places you can
+          go underneath. It was previously one undifferentiated row of
+          nine buttons, which a kid reads as noise -- and "Lessons"
+          appeared twice, since the header already has its own 🎓 button. */}
+      <div className="kCtrls">
+        {result && <button className="kBtnPurple kReplayBtn" onClick={() => setReplayOpen(true)}>🦉 Owl's Replay</button>}
+        {result && <button className="kBtnPink" onClick={() => newGame(playerColor)}>Play Again!</button>}
+        <button className="kBtnGreen" onClick={startNewGame}>New Game</button>
+        <button className="kBtnGhost" onClick={undo} disabled={thinking || !!result || eng.plyCount() === 0}>Undo</button>
+        <button className="kBtnGold" onClick={onHint} disabled={thinking || !!result || !!promo || hinting || eng.getSide() !== playerColor || shop.coins < HINT_COST}
+          title={`Costs ${HINT_COST} coin`}>
+          {hinting ? "Thinking…" : `💡 Hint (${HINT_COST}🪙)`}
+        </button>
+      </div>
+      <div className="kVsLine">Playing against <b>{opponentName}</b> {starLabel(DIFFICULTIES[difficultyIdx].stars)}</div>
+      {replayOpen && result && (
+        <KidReplay moves={moveList} playerColor={playerColor} won={result.winner === playerColor} pals={progress.pals}
+          renderPiece={renderPiece} boardVars={boardVars} runSearch={runSearch} onClose={() => setReplayOpen(false)} />
+      )}
+
+      {newGameConfirm && (
+        <div className="kShopOv" onClick={e => { if (e.target === e.currentTarget) setNewGameConfirm(false); }}>
+          <h2 className="kLessonTitle" style={{ textAlign: "center" }}>Start a new game?</h2>
+          <div className="kMoves" style={{ width: "min(92vw, 380px)", textAlign: "center", fontSize: 16 }}>
+            This game will disappear and you can&apos;t get it back.
+          </div>
+          <div className="kCtrls">
+            <button className="kBtnGreen" onClick={() => { setNewGameConfirm(false); setColorPick(true); }}>Yes, new game</button>
+            <button className="kBtnGhost" onClick={() => setNewGameConfirm(false)}>Keep playing</button>
+          </div>
+        </div>
+      )}
+
+      {colorPick && (
+        <div className="kShopOv" onClick={e => { if (e.target === e.currentTarget) setColorPick(false); }}>
+          <button className="kCloseX" onClick={() => setColorPick(false)} aria-label="Close">✕</button>
+          <h2 className="kLessonTitle" style={{ textAlign: "center" }}>Which side do you want?</h2>
+          {/* Shows the actual pieces, not just the words -- "white" and
+              "black" are the labels, but the piece is what she picks. */}
+          <div className="kCtrls">
+            <button className="kBtnGreen kSidePick" onClick={() => newGame(1)}>
+              {renderPiece(1)}<span>Play White</span>
+            </button>
+            <button className="kBtnBlue kSidePick" onClick={() => newGame(-1)}>
+              {renderPiece(-1)}<span>Play Black</span>
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

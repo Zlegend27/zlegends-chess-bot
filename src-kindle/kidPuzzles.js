@@ -58,3 +58,9 @@ export function kidDailyPuzzle() {
   const dayNum = Math.floor(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate()) / 86400000);
   return ALL[dayNum % ALL.length];
 }
+
+/** Kid puzzles (each with its hint) that match `fn`, for the Adventure's
+ *  puzzle levels. */
+export function kidPuzzlesWhere(fn) {
+  return ALL.filter(fn);
+}

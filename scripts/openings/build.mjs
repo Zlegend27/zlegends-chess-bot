@@ -15,13 +15,17 @@
      there, when too few games reach it, or at MAX_PLIES: the opening is over
      there and the trainer stops; it never teaches middlegames.
 
-   Usage: node scripts/openings/build.mjs [nodesPerSearch] [workers]
-   Reads scripts/openings/data/counts.json, writes src/data/openings/<id>.json */
+   Usage: node scripts/openings/build.mjs [nodesPerSearch] [workers] [kid]
+   Reads scripts/openings/data/counts.json, writes src/data/openings/<id>.json.
+   With "kid", builds Kinnda's Opening Camp courses instead
+   (src-kindle/kidOpeningCourses.js) into src-kindle/openings/, ending the
+   opening sooner (KID_MAX_PLIES). */
 import { spawn } from "node:child_process";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createEngine, MATE } from "../../src/engine/chessEngine.js";
-import { COURSES } from "../../src/data/openingCourses.js";
+import { COURSES as MAIN_COURSES } from "../../src/data/openingCourses.js";
+import { KID_COURSES } from "../../src-kindle/kidOpeningCourses.js";
 import { uciOf as uci } from "../../src/utils/explainLine.js";
 const uciOf = (_eng, m) => uci(m);
 
@@ -29,9 +33,14 @@ const NODES = Number(process.argv[2]) || 400000;
 const WORKERS = Number(process.argv[3]) || 8;
 const ENGINE = fileURLToPath(new URL("../review-lab/data/engine/stockfish-18-lite-single.js", import.meta.url));
 const COUNTS = new URL("./data/counts.json", import.meta.url);
-const OUT = new URL("../../src/data/openings/", import.meta.url);
+const KID = process.argv[4] === "kid";
+const COURSES = KID ? KID_COURSES : MAIN_COURSES;
+const OUT = new URL(KID ? "../../src-kindle/openings/" : "../../src/data/openings/", import.meta.url);
 
-const MAX_PLIES = 24;       // twelve moves each: the opening is over by then
+/* Twelve moves each: the opening is over by then. A child's courses stop
+   at about move 7. */
+const KID_MAX_PLIES = 14;
+const MAX_PLIES = KID ? KID_MAX_PLIES : 24;
 const LEVEL_BANDS = [0, 1, 2]; // Easy, Medium, Hard
 const STRONG = [2, 3];      // Hard and strong players judge what's played
 const MIN_SHARE = 0.08;     // a reply at least this many of a level's players chose...

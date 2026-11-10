@@ -4,7 +4,7 @@
 * { box-sizing: border-box; }
 body {
   margin: 0; color: #4a3728;
-  font-family: "Comic Sans MS", "Chalkboard SE", Verdana, sans-serif;
+  font-family: "Baloo 2", "Comic Sans MS", "Chalkboard SE", Verdana, sans-serif;
   background: linear-gradient(160deg, #FFF3D6 0%, #FFE1EC 45%, #DFF3FF 100%);
   min-height: 100vh;
 }
@@ -373,3 +373,226 @@ body {
 
 .kErrBox { padding: 24px; text-align: center; }
 .kErrBox button { font-family: inherit; font-size: 14px; padding: 8px 14px; border: none; border-radius: 12px; background: #FFD166; margin-top: 10px; }
+
+/* ---------------- Home and Game Room (kh*) ----------------
+   Big, rounded, chunky: every button is a thumb-sized target for a
+   9-year-old on a Fire tablet held upright. */
+.khRoot { width: min(94vw, 520px); display: flex; flex-direction: column; gap: 14px; padding-bottom: 24px; }
+.khTop { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.khChip {
+  display: inline-flex; align-items: center; gap: 6px; font-family: inherit; font-weight: 800; font-size: 17px;
+  color: #3b2a20; background: #fff; border: 0; border-radius: 999px; padding: 5px 13px; box-shadow: 0 3px 0 #0000001a;
+}
+.khMusic { cursor: pointer; }
+.khBack {
+  font-family: inherit; font-weight: 800; font-size: 16px; color: #3b2a20; background: #ffffffcc; border: 0;
+  border-radius: 999px; padding: 7px 15px; cursor: pointer; box-shadow: 0 3px 0 #0000001a;
+}
+.khBack:active, .khChip:active { transform: translateY(2px); }
+.khTitle { margin: 0; font-size: 32px; line-height: 1.1; color: #3b2a20; }
+.khSub { margin: -8px 0 0; color: #7a6253; font-size: 16px; font-weight: 600; }
+.khH2 { margin: 0; font-size: 19px; color: #3b2a20; }
+
+.khHello { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; }
+.khOwl {
+  border: 0; background: none; padding: 0; cursor: pointer; touch-action: none; -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none; transition: transform .2s;
+}
+.khOwl.khHolding { transform: scale(1.08); }
+.khBubble {
+  position: relative; background: #fff; border-radius: 20px; padding: 12px 15px; font-size: 18px; font-weight: 600;
+  color: #3b2a20; box-shadow: 0 4px 0 #00000014;
+}
+.khBubble::before {
+  content: ""; position: absolute; left: -9px; top: 50%; margin-top: -9px; border: 9px solid transparent;
+  border-right-color: #fff; border-left: 0;
+}
+
+.khDoors { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.khDoor {
+  border: 0; font-family: inherit; text-align: left; border-radius: 26px; padding: 16px 14px 14px; cursor: pointer;
+  min-height: 190px; display: flex; flex-direction: column; justify-content: space-between; color: #fff;
+}
+.khDoor:active { transform: translateY(4px); }
+.khLearn { background: linear-gradient(160deg, #8fd8ff, #4a9ee0); box-shadow: 0 7px 0 #2f78b5; }
+.khPlay { background: linear-gradient(160deg, #ffa3c3, #e0507f); box-shadow: 0 7px 0 #b33461; }
+.khArt { font-size: 60px; line-height: 1; }
+.khDoor b { display: block; font-size: 30px; line-height: 1.1; }
+.khDoorSub { display: block; font-size: 15px; font-weight: 600; opacity: .96; }
+.khBar { display: block; height: 10px; border-radius: 999px; background: #ffffff55; margin-top: 8px; overflow: hidden; }
+.khBar i { display: block; height: 100%; background: #fff; border-radius: 999px; }
+
+.khCard { background: #fff; border-radius: 22px; padding: 14px 16px; box-shadow: 0 5px 0 #00000014; color: #3b2a20; }
+.khQuestTitle { margin: 0 0 4px; font-size: 22px; display: flex; justify-content: space-between; align-items: center; }
+.khQuestTitle span { font-size: 16px; color: #7a6253; }
+.khQuest {
+  display: grid; grid-template-columns: 42px 1fr auto; gap: 10px; align-items: center; padding: 10px 0;
+  border-top: 2px dashed #f0e6d8; font-size: 17px; font-weight: 600;
+}
+.khQuest:first-of-type { border-top: 0; }
+.khTick { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-size: 20px; background: #f3ecdf; }
+.khTick.khDone { background: #6fd3a8; color: #fff; font-weight: 800; }
+.khCount { color: #7a6253; }
+.khStar { font-size: 22px; }
+.khGo {
+  font-family: inherit; font-weight: 800; font-size: 16px; border: 0; border-radius: 14px; padding: 7px 16px; cursor: pointer;
+  background: #6fd3a8; color: #12402c; box-shadow: 0 4px 0 #3fae80;
+}
+.khGo:active { transform: translateY(3px); box-shadow: 0 1px 0 #3fae80; }
+.khChest {
+  display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; width: 100%; margin-top: 8px;
+  padding: 10px 12px; border-radius: 16px; background: #fff4cf; font-family: inherit; font-size: 16px; font-weight: 700;
+  color: #5c4300; border: 0; text-align: left;
+}
+.khChestIcon { font-size: 34px; line-height: 1; }
+.khChestReady { cursor: pointer; background: linear-gradient(135deg, #ffe27a, #ffc93c); box-shadow: 0 5px 0 #e0a400; animation: khWiggle 1.2s ease-in-out infinite; }
+@keyframes khWiggle { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-1.2deg); } 75% { transform: rotate(1.2deg); } }
+.khWeek { display: flex; gap: 6px; margin-top: 12px; }
+.khDay { flex: 1; text-align: center; border-radius: 14px; padding: 6px 0; background: #f6f0e6; font-weight: 700; font-size: 13px; color: #7a6253; }
+.khDay span { display: block; font-size: 19px; line-height: 1.2; }
+.khDay.khLit { background: #ffe08a; color: #5c4300; }
+.khDay.khToday { outline: 3px solid #ffc93c; }
+.khCode { width: min(92vw, 420px); height: 140px; font-family: monospace; font-size: 12px; border-radius: 12px; border: 2px solid #e8dcc8; padding: 8px; }
+
+.khLadder { display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 10px; -webkit-overflow-scrolling: touch; }
+.khRung {
+  flex: none; width: 96px; display: flex; flex-direction: column; align-items: center; gap: 2px; border: 3px solid transparent;
+  background: #fff; border-radius: 18px; padding: 8px 4px; font-family: inherit; color: #3b2a20; cursor: pointer;
+  box-shadow: 0 4px 0 #00000014;
+}
+.khRung b { font-size: 16px; }
+.khRung.khNow { border-color: #ffc93c; background: #fff8dd; }
+.khRung.khLocked { opacity: .6; }
+.khStars { color: #e0a400; font-size: 12px; letter-spacing: 1px; }
+.khRungNote { font-size: 13px; font-weight: 700; color: #7a6253; }
+.khPlayRow { display: flex; gap: 10px; }
+.khBig {
+  flex: 1; font-family: inherit; font-weight: 800; font-size: 21px; border: 0; border-radius: 18px; padding: 13px 18px;
+  cursor: pointer; color: #12402c;
+}
+.khBig:active { transform: translateY(3px); }
+.khMint { background: #6fd3a8; box-shadow: 0 5px 0 #3fae80; }
+.khWhite { flex: 0 0 auto; background: #fff; color: #3b2a20; box-shadow: 0 5px 0 #0000001a; font-size: 17px; }
+.khTiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.khTile {
+  border: 0; font-family: inherit; border-radius: 22px; padding: 14px; text-align: left; color: #3b2a20; cursor: pointer;
+  min-height: 128px; display: flex; flex-direction: column; justify-content: flex-end; gap: 2px; box-shadow: 0 6px 0 #00000022;
+}
+.khTile:active { transform: translateY(3px); }
+.khTileArt { font-size: 38px; line-height: 1; margin-bottom: auto; }
+.khTile b { font-size: 20px; }
+.khTile span:last-child { font-size: 14px; font-weight: 600; color: #5d4a3e; }
+.kVsLine { font-size: 15px; color: #6b5444; margin: 6px 0 0; text-align: center; }
+
+/* ---------------- Opening Camp (kc*) ---------------- */
+.kcOwl { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; }
+.kcOwl .khBubble { font-size: 17px; }
+.kcCourses { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.kcCourseTab {
+  font-family: inherit; font-weight: 800; font-size: 17px; color: #3b2a20; background: #ffffffcc; border: 3px solid transparent;
+  border-radius: 18px; padding: 10px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  box-shadow: 0 4px 0 #00000014;
+}
+.kcCourseTab small { font-size: 13px; color: #7a6253; font-weight: 700; }
+.kcCourseTab[aria-selected="true"] { border-color: #a98bff; background: #f3eeff; }
+.kcSteps, .kcCards { display: grid; gap: 10px; }
+.kcStep, .kcCard {
+  display: grid; grid-template-columns: 54px 1fr auto; gap: 12px; align-items: center; width: 100%; text-align: left;
+  font-family: inherit; color: #3b2a20; background: #fff; border: 0; border-radius: 20px; padding: 10px 12px; cursor: pointer;
+  box-shadow: 0 5px 0 #00000014;
+}
+.kcStep:active, .kcCard:active { transform: translateY(3px); }
+.kcLocked { opacity: .55; cursor: default; }
+.kcIcon { width: 54px; height: 54px; border-radius: 16px; display: grid; place-items: center; font-size: 28px; }
+.kcStepText b, .kcCardText b { display: block; font-size: 18px; }
+.kcStepText small, .kcCardText small { display: block; font-size: 14px; font-weight: 600; color: #7a6253; }
+.kcRight { font-weight: 800; font-size: 16px; color: #3fae80; }
+.kcMove { font-size: 22px; font-weight: 800; background: #f3ecdf; border-radius: 14px; text-align: center; padding: 8px 0; }
+.kcTrap .kcMove { background: #ffd6e3; color: #b33461; }
+.kcOpps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.kcOpps .khRung { width: auto; }
+.kcMoves { margin: -4px 0 0; text-align: center; font-size: 15px; font-weight: 700; color: #6b5444; min-height: 20px; }
+.kcDone { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; padding: 24px 6px; }
+.kcDoneText { margin: 0; font-size: 18px; font-weight: 600; color: #3b2a20; white-space: pre-line; }
+.khBig:disabled { opacity: .55; cursor: default; }
+
+/* ---------------- Adventure map and levels (ka*, kl*) ---------------- */
+.kaMap {
+  position: relative; height: 760px; border-radius: 26px; overflow: hidden;
+  background: radial-gradient(circle at 18% 12%, #c8f0ff 0 14%, transparent 15%), radial-gradient(circle at 85% 70%, #b7e6ff 0 10%, transparent 11%), linear-gradient(180deg, #9fdcff, #5fb3ec);
+  box-shadow: inset 0 -8px 0 #00000014;
+}
+.kaPath { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.kaIsland {
+  position: absolute; width: 44%; display: flex; flex-direction: column; align-items: center; gap: 2px; border: 0; background: none;
+  font-family: inherit; cursor: pointer; color: #fff; padding: 0;
+}
+.kaBlob {
+  width: 118px; height: 82px; border-radius: 50% 50% 46% 46%; display: grid; place-items: center; font-size: 40px;
+  box-shadow: 0 8px 0 #00000022, inset 0 -10px 0 #0000001a; transition: transform .15s;
+}
+.kaIsland:active .kaBlob { transform: translateY(3px); }
+.kaPicked .kaBlob { outline: 4px solid #fff; }
+.kaIsland b { font-size: 18px; text-shadow: 0 2px 0 #00000033; }
+.kaStars { font-size: 14px; font-weight: 800; color: #fff; text-shadow: 0 1px 0 #00000033; }
+.kaLocked .kaBlob { filter: grayscale(.8) brightness(1.05); opacity: .85; }
+.kaOwl { position: absolute; right: 2%; top: -14px; animation: kaBob 1.6s ease-in-out infinite; }
+@keyframes kaBob { 50% { transform: translateY(-6px); } }
+.kaSheet { margin-top: -4px; }
+.kaLevels { display: grid; gap: 8px; }
+.kaLevel {
+  display: grid; grid-template-columns: 44px 1fr auto; gap: 10px; align-items: center; width: 100%; text-align: left;
+  font-family: inherit; font-size: 17px; font-weight: 700; color: #3b2a20; background: #faf6ee; border: 0; border-radius: 16px;
+  padding: 8px 10px; cursor: pointer; box-shadow: 0 3px 0 #0000001a;
+}
+.kaLevel:active { transform: translateY(2px); }
+.kaLevelIcon { width: 44px; height: 44px; border-radius: 14px; background: #fff; display: grid; place-items: center; font-size: 24px; }
+.kaDone { background: #eafaf2; }
+.kaBoss { background: #fff4cf; }
+.kaLevelStars { color: #e0a400; font-size: 18px; letter-spacing: 1px; }
+.kStarSq { position: absolute; inset: 0; display: grid; place-items: center; font-size: 26px; pointer-events: none; z-index: 1; }
+.klProgress { display: flex; gap: 6px; justify-content: center; }
+.klDot { width: 22px; height: 8px; border-radius: 99px; background: #ffffffaa; display: block; }
+.klDot.klDone { background: #6fd3a8; }
+.klDot.klNow { background: #ffc93c; }
+.klQuiz { display: grid; gap: 10px; }
+.klOption {
+  font-family: inherit; font-size: 20px; font-weight: 800; color: #3b2a20; background: #fff; border: 3px solid transparent;
+  border-radius: 18px; padding: 14px; cursor: pointer; box-shadow: 0 5px 0 #00000014;
+}
+.klOption.klRight { border-color: #3fae80; background: #eafaf2; }
+.klOption.klWrong { border-color: #e0507f; background: #ffe9ef; }
+
+/* ---------------- Home extras ---------------- */
+.khMemory { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; border: 0; font-family: inherit; text-align: left; cursor: pointer; font-size: 16px; }
+
+/* ---------------- Owl's Replay and Piece Pals (kr*) ---------------- */
+.krPanel { width: min(94vw, 520px); display: flex; flex-direction: column; gap: 12px; padding-bottom: 20px; }
+.krMoment { display: flex; flex-direction: column; gap: 10px; }
+.krHead { margin: 0; font-size: 20px; display: flex; align-items: center; gap: 8px; color: #3b2a20; }
+.krBadge { font-size: 14px; font-weight: 800; border-radius: 999px; padding: 2px 10px; }
+.krGood { background: #d8f7e8; color: #22865c; }
+.krOops { background: #ffe3d0; color: #c45a12; }
+.krBoard { max-width: 300px; width: 100%; align-self: center; }
+.krBoard .kBoard { width: 100%; }
+.krPals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.krPal {
+  display: flex; flex-direction: column; align-items: center; gap: 1px; background: #fff; border-radius: 16px; padding: 8px 4px;
+  box-shadow: 0 3px 0 #00000014; color: #3b2a20;
+}
+.krPalGlyph { font-size: 30px; line-height: 1; }
+.krPalName { font-size: 14px; font-weight: 800; }
+.krPalLv { font-size: 13px; font-weight: 800; color: #7d5fe0; }
+.krBar { display: block; width: 80%; height: 7px; border-radius: 99px; background: #eee3f8; overflow: hidden; margin-top: 3px; }
+.krBar i { display: block; height: 100%; background: #a98bff; }
+.krSparkle { box-shadow: 0 3px 0 #00000014, 0 0 0 2px #c7b2ff; }
+.krGold { box-shadow: 0 3px 0 #00000014, 0 0 0 3px #ffc93c; background: #fffaeb; }
+.kPalNote {
+  font-weight: 800; font-size: 16px; color: #5c4300; background: linear-gradient(135deg, #ffe27a, #ffc93c); border-radius: 999px;
+  padding: 6px 16px; margin: -4px 0 8px; box-shadow: 0 3px 0 #e0a400; animation: kPalPop .4s ease-out;
+}
+@keyframes kPalPop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+/* Her pieces' Piece Pals level on the board: a sparkle from level 3, gold at 5. */
+.kPalGlow { filter: drop-shadow(0 0 4px #b9a2ff) drop-shadow(0 0 2px #fff); }
+.kPalGold { filter: drop-shadow(0 0 5px #ffc93c) drop-shadow(0 0 2px #fff6cf); }
+.kReplayBtn { animation: khWiggle 1.4s ease-in-out infinite; }
