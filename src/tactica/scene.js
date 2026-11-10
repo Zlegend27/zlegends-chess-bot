@@ -121,18 +121,18 @@ function idleFor(kind) {
 export class TacticaScene {
   /** `colors` is { light, dark, background, highlight, target, select }. The
    *  solver's side is always nearest the camera. */
-  /** `onTurn(angle)` reports how far the view is turned from the player's
-   *  side, so the map can turn with it. */
+  /** `onView(view)` reports what the camera sees whenever it moves, for the
+   *  map (see reportView). */
   /** `onDragStart(sq)` returns whether that character may be dragged;
    *  `onDrop(sq)` gets the square it was let go over, or null, and returns
    *  whether it took the move; if not, the character slides home. */
-  constructor(canvas, { colors, flipped, onTap, onDoubleTap, onSwipe, onDragStart, onDrop, onLost, onTurn }) {
+  constructor(canvas, { colors, flipped, onTap, onDoubleTap, onSwipe, onDragStart, onDrop, onLost, onView }) {
     this.canvas = canvas;
     this.flipped = flipped;
     this.onTap = onTap;
     this.onDoubleTap = onDoubleTap;
     this.onSwipe = onSwipe;
-    this.onTurn = onTurn;
+    this.onView = onView;
     /* How far the view is turned from the player's side, the point it turns
        around, and whether the player turned it with the map. */
     this.turn = 0;
@@ -677,17 +677,59 @@ export class TacticaScene {
 
   setTurn(angle) {
     this.turn = Math.atan2(Math.sin(angle), Math.cos(angle));
-    this.onTurn?.(this.turn);
   }
 
-  /** Turns the view by `angle` around the selected character (or the
-   *  board's middle), at once; used when the player drags the map. The turn
-   *  holds until another character is chosen. */
+  /** Tells the map what the camera sees, whenever it has moved: where it
+   *  stands and where it looks (`cam`, `look`), and exactly which part of
+   *  the board is on screen (`area`, a polygon: the board's square cut down
+   *  by the camera's view), all as board x, z. `whole` is true when the
+   *  whole board is in view. Taken from the camera's own position each
+   *  frame, so it is right during glides, attack shots, edge scrolling and
+   *  turns alike. */
+  reportView() {
+    if (!this.onView) return;
+    const p = this.camPos, l = this.camLook;
+    const key = [p.x, p.y, p.z, l.x, l.y, l.z, this.camera.aspect, this.camera.fov].map((v) => Math.round(v * 1000)).join(",");
+    if (key === this.viewKey) return;
+    this.viewKey = key;
+    const probe = this.viewProbe ??= new THREE.PerspectiveCamera();
+    probe.fov = this.camera.fov; probe.aspect = this.camera.aspect; probe.near = 0.1; probe.far = 100;
+    probe.updateProjectionMatrix();
+    probe.position.copy(p);
+    probe.lookAt(l);
+    probe.updateMatrixWorld();
+    /* The board's square, clipped by each side of the camera's view in turn. */
+    const frustum = (this.viewFrustum ??= new THREE.Frustum());
+    frustum.setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(probe.projectionMatrix, probe.matrixWorldInverse));
+    const square = [[-4, -4], [4, -4], [4, 4], [-4, 4]].map(([x, z]) => new THREE.Vector3(x, 0, z));
+    let area = square;
+    for (const plane of frustum.planes) {
+      const kept = [];
+      for (let i = 0; i < area.length; i++) {
+        const a = area[i], b = area[(i + 1) % area.length];
+        const da = plane.distanceToPoint(a), db = plane.distanceToPoint(b);
+        if (da >= 0) kept.push(a);
+        if ((da >= 0) !== (db >= 0)) kept.push(a.clone().lerp(b, da / (da - db)));
+      }
+      area = kept;
+      if (!area.length) break;
+    }
+    const whole = square.every((c) => frustum.containsPoint(c));
+    this.onView({ cam: { x: p.x, z: p.z }, look: { x: l.x, z: l.z }, area: area.map((v) => ({ x: v.x, z: v.z })), whole });
+  }
+
+  /** Turns the view by `angle` around what the close view is looking at
+   *  (the selected character and its squares), at once; used when the
+   *  player drags the map. The turn holds until another character is
+   *  chosen. */
   spinBy(angle) {
     if (this.active.length || this.moving) return;
     this.manualTurn = true;
     for (const p of [this.goalPos, this.goalLook, this.camPos, this.camLook]) p.copy(turnAround(this.pivot, p, angle));
     this.setTurn(this.turn + angle);
+    /* Remembered, so the view comes back to it (after a drag, say) for as
+       long as the same character stays selected. */
+    this.manualView = { position: this.goalPos.clone(), look: this.goalLook.clone() };
     this.wake();
   }
 
@@ -808,8 +850,12 @@ export class TacticaScene {
        view, so none is favoured. */
     if (sq !== this.lastSq) this.manualTurn = false;
     this.lastSq = sq;
-    this.pivot.copy(at);
-    this.setTurn(this.manualTurn ? this.turn : this.clearTurn(sq, positionFor(1), look));
+    /* The same character, turned with the map: back to where it was put. */
+    if (this.manualTurn && this.manualView) {
+      this.moveCamera(this.manualView.position, this.manualView.look);
+      return;
+    }
+    this.setTurn(this.clearTurn(sq, positionFor(1), look));
     /* A wide spread of squares (a long diagonal, a rook's rank) slides the
        view sideways to the middle of them before pulling back. */
     /* The camera itself only slides half as far, so it stays behind the
@@ -819,7 +865,11 @@ export class TacticaScene {
     const lookAt = look.clone().add(new THREE.Vector3(shift, 0, 0));
     const sidePositionFor = (extra) => positionFor(extra).add(new THREE.Vector3(shift / 2, 0, 0));
     const position = sidePositionFor(this.fitPull(sq, sidePositionFor, lookAt, this.turn, targets.length ? [sq, ...targets] : []));
-    this.moveCamera(turnAround(at, position, this.turn), turnAround(at, lookAt, this.turn));
+    const finalLook = turnAround(at, lookAt, this.turn);
+    /* Turning with the map circles the point the camera looks at, so the
+       character and its squares stay in the middle of the view. */
+    this.pivot.copy(finalLook).setY(0);
+    this.moveCamera(turnAround(at, position, this.turn), finalLook);
   }
 
   /** View of a character with every square it can reach in sight, from
@@ -1593,6 +1643,7 @@ export class TacticaScene {
         this.camera.position.y += (Math.random() - 0.5) * this.shake;
       }
       this.camera.lookAt(this.camLook);
+      this.reportView();
       this.renderer.render(this.scene, this.camera);
       if (busy && dt < 200) this.adaptResolution(dt, now);
     }

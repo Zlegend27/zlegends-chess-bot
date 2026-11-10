@@ -15,7 +15,7 @@ export default function MiniBoard({ fen, colors, pieceImgSrc, size = 104, flippe
     <div
       role="img"
       aria-label={label}
-      className="grid shrink-0 grid-cols-8 overflow-hidden rounded-lg"
+      className="grid shrink-0 grid-cols-8 grid-rows-8 overflow-hidden rounded-lg"
       style={{ width: size, height: size }}
     >
       {oriented.map((piece, i) => {
@@ -26,7 +26,7 @@ export default function MiniBoard({ fen, colors, pieceImgSrc, size = 104, flippe
               <img
                 src={pieceImgSrc(PIECE_TYPES.indexOf(piece.toLowerCase()) + 1, piece === piece.toUpperCase())}
                 alt=""
-                className="size-full object-contain"
+                className="block size-full object-contain"
               />
             )}
           </div>

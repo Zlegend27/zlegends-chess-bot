@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createEngine, mFrom, mPromo, mTo, M120TO64, EMPTY } from "../engine/chessEngine";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
-import { BrassButton, MapButton, MenuButton } from "./ui";
+import { BrassButton, MapButton, MenuButton, useViewSource } from "./ui";
 import { play as playSound } from "./sound";
 import { loadBonds, levelsOf } from "./bonds";
 
@@ -58,7 +58,8 @@ export default function TutorialMode({ pieceImgSrc, sweetheart, onExit }) {
   /* After the last step: free play on the same board. */
   const [practising, setPractising] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [turn, setTurn] = useState(0);
+  /* What the camera sees, for the map's view cone. */
+  const viewSource = useViewSource();
   /* The tutorial plays the full attacks. */
   const pace = "full";
 
@@ -99,7 +100,7 @@ export default function TutorialMode({ pieceImgSrc, sweetheart, onExit }) {
       onDragStart: (sq) => dragStartRef.current(sq),
       onDrop: (sq) => dropRef.current(sq),
       onLost: () => setLost(true),
-      onTurn: setTurn,
+      onView: (v) => viewSource.set(v),
     });
     sceneRef.current = scene;
     scene.setBonds(levelsOf(loadBonds()));
@@ -269,7 +270,8 @@ export default function TutorialMode({ pieceImgSrc, sweetheart, onExit }) {
             size={88}
             flipped={false}
             view={view}
-            turn={turn}
+            selected={selected}
+            viewSource={viewSource}
             onToggle={toggleView}
             onSpin={spin}
           />

@@ -5,7 +5,7 @@ import { PUZZLES } from "../utils/puzzles";
 import { judgePuzzleMove } from "../utils/puzzleSession";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin, placeEscapeProps } from "./sets/trashBin";
-import { BrassButton, MapButton, MenuButton } from "./ui";
+import { BrassButton, MapButton, MenuButton, useViewSource } from "./ui";
 import { play as playSound } from "./sound";
 import { makeEscape, movesOf, apply, escaped, strikerOf, piecesOf, fenOf, escapeClock, closeRing, outerRing, ringSquares, allStuck } from "./escape";
 import { loadSetting, saveSetting } from "../utils/storage";
@@ -112,8 +112,8 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
   /* The Bin Run always plays the full attacks. */
   const pace = "full";
   const [menuOpen, setMenuOpen] = useState(false);
-  /* How far the view is turned, so the map turns with it like a compass. */
-  const [turn, setTurn] = useState(0);
+  /* What the camera sees, for the map's view cone. */
+  const viewSource = useViewSource();
   /* An Escape floor in progress: { start, state, used } (moves used), or null
      on a puzzle floor. The garbage and light props live in propsRef. */
   const [escape, setEscapeState] = useState(null);
@@ -168,7 +168,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
       onSwipe: (dir) => cycleRef.current(dir),
       onDragStart: (sq) => dragStartRef.current(sq),
       onDrop: (sq) => dropRef.current(sq),
-      onTurn: setTurn,
+      onView: (v) => viewSource.set(v),
     });
     sceneRef.current = scene;
     scene.setBonds(levelsOf(loadBonds()));
@@ -796,7 +796,8 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
                 size={96}
                 flipped={side === -1}
                 view={view}
-                turn={turn}
+                selected={selected}
+                viewSource={viewSource}
                 locked={mapLocked}
                 onToggle={toggleView}
                 onSpin={(a) => sceneRef.current?.spinBy(a)}
