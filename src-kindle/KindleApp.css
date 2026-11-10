@@ -596,3 +596,6 @@ body {
 .kPalGlow { filter: drop-shadow(0 0 4px #b9a2ff) drop-shadow(0 0 2px #fff); }
 .kPalGold { filter: drop-shadow(0 0 5px #ffc93c) drop-shadow(0 0 2px #fff6cf); }
 .kReplayBtn { animation: khWiggle 1.4s ease-in-out infinite; }
+
+.khTile:disabled { opacity: .5; cursor: default; }
+.khTile:disabled:active { transform: none; }

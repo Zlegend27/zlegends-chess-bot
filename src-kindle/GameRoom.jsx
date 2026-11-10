@@ -5,7 +5,7 @@ import { AnimalIcon } from "./AnimalIcon";
 
 const starText = (n) => "★".repeat(n) + "☆".repeat(5 - n);
 
-export default function GameRoom({ opponents, current, shop, medalFor, gameUnderway, dailyStreak, dailyDone, bestRush, onPick, onPlay, onNewGame, onDaily, onPuzzles, onRush, onTrophies, onShop, onBack }) {
+export default function GameRoom({ opponents, current, gameOpp, thinking, shop, medalFor, gameUnderway, dailyStreak, dailyDone, bestRush, onPick, onPlay, onNewGame, onDaily, onPuzzles, onRush, onTrophies, onShop, onBack }) {
   const opp = opponents[current];
   const totalMedals = opponents.filter((d) => medalFor(shop.winsByAnimal?.[d.id] || 0)).length;
   return (
@@ -39,23 +39,26 @@ export default function GameRoom({ opponents, current, shop, medalFor, gameUnder
           );
         })}
       </div>
+      {/* A game in progress keeps its own opponent; a different animal picked
+          here plays the next game. */}
       <div className="khPlayRow">
-        <button className="khBig khMint" onClick={onPlay}>▶ {gameUnderway ? `Back to your game` : `Play ${opp.label}`}</button>
-        {gameUnderway && <button className="khBig khWhite" onClick={onNewGame}>New game</button>}
+        <button className="khBig khMint" onClick={onPlay}>▶ {gameUnderway ? `Back to your game vs ${opponents[gameOpp].label}` : `Play ${opp.label}`}</button>
+        {gameUnderway && <button className="khBig khWhite" onClick={onNewGame}>New game{current !== gameOpp ? ` vs ${opp.label}` : ""}</button>}
       </div>
 
       <div className="khTiles">
-        <button className="khTile" style={{ background: "#FFE9B8" }} onClick={onDaily}>
+        {thinking && <p className="khSub" style={{ gridColumn: "1 / -1", margin: 0 }}>{opponents[gameOpp].label} is still thinking about your game. Puzzles open in a moment!</p>}
+        <button className="khTile" style={{ background: "#FFE9B8" }} onClick={onDaily} disabled={thinking}>
           <span className="khTileArt" aria-hidden="true">📅</span>
           <b>Daily Puzzle{dailyDone ? " ✓" : ""}</b>
           <span>{dailyStreak > 0 ? `🔥 ${dailyStreak} day${dailyStreak === 1 ? "" : "s"} in a row` : "A new one every day"}</span>
         </button>
-        <button className="khTile" style={{ background: "#E3F4FF" }} onClick={onPuzzles}>
+        <button className="khTile" style={{ background: "#E3F4FF" }} onClick={onPuzzles} disabled={thinking}>
           <span className="khTileArt" aria-hidden="true">🧩</span>
           <b>Puzzles</b>
           <span>Easy · Medium · Hard</span>
         </button>
-        <button className="khTile" style={{ background: "#FFE0EA" }} onClick={onRush}>
+        <button className="khTile" style={{ background: "#FFE0EA" }} onClick={onRush} disabled={thinking}>
           <span className="khTileArt" aria-hidden="true">⚡</span>
           <b>Puzzle Rush</b>
           <span>{bestRush ? `Best ${bestRush}` : "Beat the clock"}</span>

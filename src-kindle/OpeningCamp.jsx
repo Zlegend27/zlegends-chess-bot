@@ -268,14 +268,22 @@ export default function OpeningCamp({ courseId: startCourse = null, startMode = 
     const node = playerNode(nodes, before);
     const answer = node?.p?.rep;
     const verdict = judgeMove(node, san);
-    if (verdict === "off" || (mode === "memory" && verdict !== "book")) {
+    if (mode === "memory" && verdict === "good") {
+      /* Not the camp's move: it comes back tomorrow, like a miss. */
+      missRef.current.here++;
+      setCamp((c) => rememberMove(c, courseId, before, false));
+      say(`${san} is a good move too! But in camp we play another one. Can you find it?`);
+      setWaiting(true);
+      return;
+    }
+    if (verdict === "off") {
       setMoves([...before, san]);
       await wait(350);
       return missed(before, san, answer);
     }
     setArrows([]);
     setGlow([]);
-    setCamp((c) => rememberMove(c, courseId, before, missRef.current.here === 0));
+    if (missRef.current.here === 0) setCamp((c) => rememberMove(c, courseId, before, true));
     audio?.sfxMove?.();
     /* Another good move is fine, but the camp keeps to its own line. */
     const after = [...before, answer];

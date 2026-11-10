@@ -14,7 +14,7 @@ const THEME_HINTS = {
   fork: "One of your pieces can attack two things at once!",
   pin: "An enemy piece can't move without exposing something bigger behind it.",
   skewer: "Attack the piece in front so a bigger piece behind it falls too!",
-  hangingPiece: "A black piece is just sitting there undefended!",
+  hangingPiece: "An enemy piece is just sitting there undefended!",
   discoveredAttack: "Moving one piece out of the way unleashes another!",
   discoveredCheck: "Moving one piece out of the way gives check with another!",
   backRankMate: "The enemy king is stuck on the back row with no escape!",

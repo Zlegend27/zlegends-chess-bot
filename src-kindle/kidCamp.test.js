@@ -95,8 +95,12 @@ describe("Opening Camp", () => {
     expect(courseStars(s, "kid-vienna", 3)).toBe(2);
     s = updateCourse(s, "kid-vienna", (c) => ({ practice: { ...c.practice, cat: true } }));
     expect(courseStars(s, "kid-vienna", 3)).toBe(3);
+    /* A right answer that was never missed doesn't go in. */
+    expect(rememberMove(s, "kid-vienna", ["e4", "e5", "Nc3", "Nc6"], true, 100)).toBe(s);
     s = rememberMove(s, "kid-vienna", ["e4", "e5", "Nc3", "Nc6"], false, 100);
     expect(dueMoves(s, 100)).toEqual([]);
     expect(dueMoves(s, 101)).toEqual(["kid-vienna|main|e4 e5 Nc3 Nc6"]);
+    s = rememberMove(s, "kid-vienna", ["e4", "e5", "Nc3", "Nc6"], true, 101);
+    expect(dueMoves(s, 102)).toEqual([]);
   });
 });

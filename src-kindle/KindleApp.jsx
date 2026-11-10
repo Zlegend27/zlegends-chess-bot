@@ -232,7 +232,13 @@ export default function KindleApp() {
   const [thinking, setThinking] = useState(false);
   const [result, setResult] = useState(null);
   const [promo, setPromo] = useState(null);
+  /* The animal picked in the Game Room (for the next game), and the one the
+     game on the board is against. Picking another animal mid-game must not
+     change the game in progress: that would pay Lion's coins for a game
+     played against Bunny, and log it against the wrong animal. */
   const [difficultyIdx, setDifficultyIdx] = useState(1);
+  const [gameOpp, setGameOpp] = useState(1);
+  const gameOppRef = useRef(1);
   const [botLastMove, setBotLastMove] = useState(null);
   const [hintMove, setHintMove] = useState(null);
   const [hinting, setHinting] = useState(false);
@@ -313,12 +319,12 @@ export default function KindleApp() {
       ? (shop.dailyStreak || 0) : 0;
   const dailyDoneToday = shop.dailyPuzzleSolvedDate === todayKey();
   const totalWins = Object.values(shop.winsByAnimal || {}).reduce((a, b) => a + b, 0);
-  const winsVsCurrent = shop.winsByAnimal?.[DIFFICULTIES[difficultyIdx].id] || 0;
+  const winsVsCurrent = shop.winsByAnimal?.[DIFFICULTIES[gameOpp].id] || 0;
   /* Next opponent she can actually choose -- skips unlockables she
      hasn't bought, so the nudge never points at something she'd have to
      pay for to accept. -1 when she's already at the top. */
   const nextOpponentIdx = DIFFICULTIES.findIndex((d, i) =>
-    i > difficultyIdx && (!d.unlockable || shop.ownedAnimals.includes(d.id)));
+    i > gameOpp && (!d.unlockable || shop.ownedAnimals.includes(d.id)));
   useEffect(() => { audio.setTune(shop.equippedTune); }, [audio, shop.equippedTune]);
   useEffect(() => { audio.setVolume(shop.musicVolume / 100); }, [audio, shop.musicVolume]);
 
@@ -372,7 +378,7 @@ export default function KindleApp() {
   const announceResult = (over) => {
     if (!over) return;
     log({
-      type: "game", opponent: DIFFICULTIES[difficultyIdx].id, moves: eng.plyCount(),
+      type: "game", opponent: DIFFICULTIES[gameOppRef.current].id, moves: eng.plyCount(),
       result: over.winner === 0 ? "draw" : over.winner === playerColorRef.current ? "win" : "loss",
     });
     if (over.winner === playerColorRef.current) {
@@ -380,7 +386,8 @@ export default function KindleApp() {
       /* Coins AND a trophy-shelf tally in one update -- two separate
          setShop calls would each start from the same `s` and the second
          would discard the first's change. */
-      setShop(s => recordWin(addCoins(s, botCoinReward(difficultyIdx)), DIFFICULTIES[difficultyIdx].id));
+      const opp = gameOppRef.current;
+      setShop(s => recordWin(addCoins(s, botCoinReward(opp)), DIFFICULTIES[opp].id));
       setWinBurst(n => n + 1);
     }
     else if (over.winner === 0) { /* draw: no stinger, keep it neutral */ }
@@ -391,7 +398,7 @@ export default function KindleApp() {
   const engineSearchIdRef = useRef(0);
   const engineMove = useCallback(() => {
     setThinking(true);
-    const diff = DIFFICULTIES[difficultyIdx];
+    const diff = DIFFICULTIES[gameOppRef.current];
     /* New Game stays tappable while the bot thinks, so the reply may belong
        to a game that's gone. Applying it anyway flipped the turn on the new
        board with no search running, which froze the game. Only the newest
@@ -418,7 +425,8 @@ export default function KindleApp() {
       setThinking(false);
       rerender();
     });
-  }, [eng, audio, difficultyIdx, checkGameOver, runSearch]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eng, audio, checkGameOver, runSearch]);
   engineMoveRef.current = engineMove;
 
   const playMove = (m) => {
@@ -485,7 +493,10 @@ export default function KindleApp() {
     else setColorPick(true);
   };
 
-  const newGame = (color) => {
+  const newGame = (color, opp = difficultyIdx) => {
+    gameOppRef.current = opp;
+    setGameOpp(opp);
+    setDifficultyIdx(opp);
     setReplayOpen(false);
     setNewGameConfirm(false);
     setColorPick(false);
@@ -581,6 +592,7 @@ export default function KindleApp() {
   };
 
   const startRush = (seconds) => {
+    if (thinking) return;
     if (!activePuzzle) prevPlayerColorRef.current = playerColor;
     setIsDailyPuzzle(false);
     rushSolvedRef.current = 0;
@@ -1094,6 +1106,8 @@ export default function KindleApp() {
         <GameRoom
           opponents={DIFFICULTIES}
           current={difficultyIdx}
+          gameOpp={gameOpp}
+          thinking={thinking}
           shop={shop}
           medalFor={medalFor}
           gameUnderway={gameUnderway}
@@ -1129,20 +1143,20 @@ export default function KindleApp() {
         </div>
         {!activePuzzle ? (
           <>
-            <div className="kStatus">Pick a puzzle level!</div>
+            <div className="kStatus">{thinking ? `${DIFFICULTIES[gameOpp].label} is still thinking about your game. One moment!` : "Pick a puzzle level!"}</div>
             <div className="kCtrls">
-              <button onClick={startDailyPuzzle}>
+              <button onClick={startDailyPuzzle} disabled={thinking}>
                 📅 Daily Puzzle{dailyDoneToday ? " ✓" : ""}
                 {liveDailyStreak > 0 && ` · 🔥 ${liveDailyStreak}`}
               </button>
             </div>
             <div className="kCtrls">
               {KID_PUZZLE_BANDS.map(b => (
-                <button key={b.id} onClick={() => startPuzzle(b.id)}>{b.label} ({kidPuzzlesInBand(b.id).length})</button>
+                <button key={b.id} onClick={() => startPuzzle(b.id)} disabled={thinking}>{b.label} ({kidPuzzlesInBand(b.id).length})</button>
               ))}
             </div>
             <div className="kCtrls">
-              <button onClick={() => setRushOpen(true)}>⚡ Puzzle Rush</button>
+              <button onClick={() => setRushOpen(true)} disabled={thinking}>⚡ Puzzle Rush</button>
               <button onClick={exitPuzzle}>← Game Room</button>
             </div>
           </>
@@ -1180,7 +1194,7 @@ export default function KindleApp() {
               {RUSH_DURATIONS.map(d => {
                 const best = shop.bestRushStreak[String(d.seconds)] || 0;
                 return (
-                  <button key={d.seconds} onClick={() => startRush(d.seconds)}>
+                  <button key={d.seconds} onClick={() => startRush(d.seconds)} disabled={thinking}>
                     {d.label}{best > 0 ? ` — best ${best} 🏆` : ""}
                   </button>
                 );
@@ -1249,7 +1263,7 @@ export default function KindleApp() {
   const youCaptured = playerColor === 1 ? mat.capturedBlack : mat.capturedWhite;
   const opponentCaptured = playerColor === 1 ? mat.capturedWhite : mat.capturedBlack;
 
-  const opponentName = DIFFICULTIES[difficultyIdx].label;
+  const opponentName = DIFFICULTIES[gameOpp].label;
   const status = result
     ? (result.winner === 0
         ? "It's a tie - great game!"
@@ -1295,7 +1309,7 @@ export default function KindleApp() {
             That&apos;s <b>{winsVsCurrent} wins</b> against {opponentName}! Ready for{" "}
             <b>{DIFFICULTIES[nextOpponentIdx].label}</b> {starLabel(DIFFICULTIES[nextOpponentIdx].stars)}?
           </span>
-          <button onClick={() => { setDifficultyIdx(nextOpponentIdx); newGame(playerColor); }}>Let&apos;s try!</button>
+          <button onClick={() => newGame(playerColor, nextOpponentIdx)}>Let&apos;s try!</button>
         </div>
       )}
 
@@ -1341,7 +1355,7 @@ export default function KindleApp() {
           {hinting ? "Thinking…" : `💡 Hint (${HINT_COST}🪙)`}
         </button>
       </div>
-      <div className="kVsLine">Playing against <b>{opponentName}</b> {starLabel(DIFFICULTIES[difficultyIdx].stars)}</div>
+      <div className="kVsLine">Playing against <b>{opponentName}</b> {starLabel(DIFFICULTIES[gameOpp].stars)}</div>
       {replayOpen && result && (
         <KidReplay moves={moveList} playerColor={playerColor} won={result.winner === playerColor} pals={progress.pals}
           renderPiece={renderPiece} boardVars={boardVars} runSearch={runSearch} onClose={() => setReplayOpen(false)} />

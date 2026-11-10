@@ -77,7 +77,7 @@ function StarHunt({ level, renderPiece, boardVars, audio, onFinish, onExit }) {
   };
   const again = () => { setUsed(0); setResult(null); startRound(0); };
   const onSquare = (s) => {
-    if (result) return;
+    if (result || !left.length) return;
     if (selected === pos && targets.includes(s)) {
       const nowLeft = left.filter((x) => x !== s);
       if (nowLeft.length < left.length) audio?.sfxCapture?.(); else audio?.sfxMove?.();
@@ -165,7 +165,8 @@ function MiniBattle({ level, renderPiece, boardVars, audio, onFinish, onExit }) 
 /* ---------------- Real-chess positions (drills, puzzles, endgames) ---------------- */
 function engineFrom(fen) { const e = createEngine(); e.loadFen(fen); return e; }
 function useChessBoard(fen) {
-  const engRef = useRef(engineFrom(fen));
+  const engRef = useRef(null);
+  if (!engRef.current) engRef.current = engineFrom(fen);
   const [, setTick] = useState(0);
   const [selected, setSelected] = useState(-1);
   const [last, setLast] = useState(null);
@@ -197,6 +198,7 @@ function Drill({ level, renderPiece, boardVars, audio, onFinish, onExit }) {
   const [mood, setMood] = useState();
   const [shake, setShake] = useState(false);
   const [result, setResult] = useState(null);
+  const [busy, setBusy] = useState(false);
   const board = useChessBoard(list[0]);
   const judge = (m) => {
     const e = board.eng;
@@ -209,7 +211,7 @@ function Drill({ level, renderPiece, boardVars, audio, onFinish, onExit }) {
       : "They can take back. Find a capture that really wins something!";
   };
   const onSquare = async (s) => {
-    if (result) return;
+    if (result || busy) return;
     const m = board.tap(s);
     if (m === undefined) return;
     const why = judge(m);
@@ -224,7 +226,9 @@ function Drill({ level, renderPiece, boardVars, audio, onFinish, onExit }) {
     board.make(m);
     cap ? audio?.sfxCapture?.() : audio?.sfxMove?.();
     setCoach(level.set === "giveCheck" ? "Check! Their king is attacked. ⭐" : "Yes! A free piece. ⭐"); setMood("happy");
+    setBusy(true);
     await wait(900);
+    setBusy(false);
     if (i + 1 >= list.length) { setResult({ stars: mistakeStars(misses) }); return; }
     setI(i + 1); board.load(list[i + 1]); setCoach(level.intro); setMood(undefined);
   };
@@ -347,7 +351,8 @@ function Quiz({ level, audio, onFinish, onExit }) {
   const [result, setResult] = useState(null);
   const q = level.questions[i];
   const choose = (k) => {
-    if (picked !== null && level.questions[i].answer === picked) return;
+    /* Once answered right, or a second tap on the same wrong answer, does nothing. */
+    if ((picked !== null && level.questions[i].answer === picked) || k === picked) return;
     setPicked(k);
     if (k === q.answer) audio?.sfxWin?.(); else { audio?.sfxWrong?.(); setMisses((n) => n + 1); }
   };

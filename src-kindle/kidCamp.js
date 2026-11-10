@@ -102,9 +102,13 @@ export function updateCourse(state, id, fn) {
   return { ...state, courses: { ...state.courses, [id]: { ...courseState(state, id), ...fn(courseState(state, id)) } } };
 }
 
-/** A move she found (or missed): it comes back in the Memory Game. */
+/** A move she missed comes back in the Memory Game; getting a remembered
+ *  move right sends it further away. A move she gets right that was never
+ *  missed isn't added: the Memory Game is only for the ones she needs. */
 export function rememberMove(state, courseId, before, correct, today = dayOf()) {
-  return { ...state, reviews: recordReview(state.reviews, reviewId(courseId, "main", before), correct, today) };
+  const id = reviewId(courseId, "main", before);
+  if (correct && !state.reviews[id]) return state;
+  return { ...state, reviews: recordReview(state.reviews, id, correct, today) };
 }
 export const dueMoves = (state, today = dayOf()) => dueReviews(state.reviews, today);
 
