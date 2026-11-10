@@ -19,6 +19,11 @@ export const SET_BOARD = { light: "#EED6B0", dark: "#8A5229", frame: "#5C3317" }
 /* Idle breathing only needs about 30 frames a second. */
 const IDLE_FRAME_MS = 33;
 const SWIPE_PX = 50;
+/* A quick sideways flick is a swipe to the next character even when it
+   starts on one: the character isn't picked up while a sideways move is
+   this young, and a drag of the selected character let go this soon,
+   sideways and off its glowing squares, still counts as a swipe. */
+const FLICK_MS = 220, FLICK_DRAG_MS = 400, SIDEWAYS = 1.3;
 /* How far a finger may drift and still count as a tap. A quick tap on a
    phone drifts more, so a short press is allowed more. */
 const TAP_SLOP_PX = 16, QUICK_TAP_SLOP_PX = 32, QUICK_TAP_MS = 250;
@@ -65,8 +70,14 @@ const AUTO_TURNS = [0, 0.45, -0.45, 0.9, -0.9, 1.4, -1.4];
 /* Half the board's width including its frame, and the furthest the
    whole-board view pulls back to fit it on a narrow screen. */
 const BOARD_EDGE = 4.6, MAX_BOARD_PULL = 2.2;
-/* The furthest the close view pulls back to fit every glowing square. */
-const MAX_FIT_PULL = 2;
+/* The furthest the close view pulls back to fit every glowing square, and
+   the furthest it slides sideways (in squares) to centre a wide spread of
+   them, like a bishop's long diagonal on a narrow phone. */
+const MAX_FIT_PULL = 2.4, MAX_SIDE_SHIFT = 2.5;
+/* Room kept around the game's own buttons and panels (the map, the menu
+   button, the tutorial card), in pixels: a glowing square under one of
+   them couldn't be tapped. They are marked with data-tactica-hud. */
+const HUD_PAD_PX = 6;
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 const turnAround = (pivot, point, angle) => point.clone().sub(pivot).applyAxisAngle(Y_AXIS, angle).add(pivot);
 /* The attack shot settles faster, so it is in place before the hit. */
@@ -247,6 +258,7 @@ export class TacticaScene {
     /* A new board: animations still finishing from the old one must not
        put their pieces back on it (see animateMove). */
     this.generation = (this.generation ?? 0) + 1;
+    this.stopAttacks(() => false);
     for (const entry of this.pieces.values()) this.scene.remove(entry.group);
     this.pieces.clear();
     for (const piece of pieces) this.addPiece(piece);
@@ -447,21 +459,20 @@ export class TacticaScene {
         o.material.opacity = HELD_OPACITY;
       });
     } else {
-      for (const [o, m] of entry.ghost) o.material = m;
+      for (const [o, m] of entry.ghost) { o.material.dispose(); o.material = m; }
       entry.ghost = null;
     }
   }
 
   /** Which square a tap means, given the character bodies under the finger,
    *  nearest first (`hits`), and the board square under it (`tile`). The
-   *  nearest body wins, except that while a character is selected the tap
-   *  looks past bodies that only stand in the way, to a glowing square
-   *  behind them: the selected character itself (a pawn hides its own
-   *  square ahead; a rook can stand in front of the enemy it takes) and
-   *  enemies it can't take. A friend stops the search, so tapping one still
-   *  switches to it, except over the square already chosen (its ghost is
-   *  showing): tapping it again means play it, even through a friend's
-   *  body standing in front. */
+   *  nearest body wins, except that while a character is selected its
+   *  glowing squares come first: the tap looks past bodies that only stand
+   *  in the way (the selected character itself, enemies it can't take) and
+   *  past a friend standing in front of a glowing square, so moving a
+   *  bishop out from behind its own pawn never picks the pawn. A friend is
+   *  still picked by tapping it where no glowing square is behind it (its
+   *  own square, say), or with a swipe or the ‹ › buttons. */
   throughTo(hits, tile) {
     if (!hits.length) return tile;
     /* Nothing picked yet: you can only pick your own characters, so the tap
@@ -469,18 +480,17 @@ export class TacticaScene {
     if (this.held == null) return hits.find((sq) => this.pieces.get(sq)?.colour === this.nearColour) ?? hits[0];
     if (this.chosen != null && (hits.includes(this.chosen) || tile === this.chosen)) return this.chosen;
     const mine = this.pieces.get(this.held);
+    const glowing = tile != null && this.targets.includes(tile) ? tile : null;
     for (const [i, sq] of hits.entries()) {
       if (this.targets.includes(sq)) return sq;
       const there = this.pieces.get(sq);
       const inTheWay = sq === this.held || (mine && there && there.colour !== mine.colour);
       if (inTheWay) continue;
-      /* A friend in front of a glowing square: where a first tap only shows
-         a ghost (`confirm`), the glowing square wins, since nothing is
-         played yet; where one tap plays, the friend wins. */
-      const behind = this.confirm ? hits.slice(i + 1).find((s) => this.targets.includes(s)) : undefined;
-      return behind ?? sq;
+      /* A friend in front: an enemy to take behind it, or a glowing square
+         under the finger, wins over switching to the friend. */
+      return hits.slice(i + 1).find((s) => this.targets.includes(s)) ?? glowing ?? sq;
     }
-    return tile != null && this.targets.includes(tile) ? tile : hits[0];
+    return glowing ?? hits[0];
   }
 
   /** Highlights: a ring under the selected character and, with `held`, a
@@ -674,6 +684,7 @@ export class TacticaScene {
    *  board's middle), at once; used when the player drags the map. The turn
    *  holds until another character is chosen. */
   spinBy(angle) {
+    if (this.active.length || this.moving) return;
     this.manualTurn = true;
     for (const p of [this.goalPos, this.goalLook, this.camPos, this.camLook]) p.copy(turnAround(this.pivot, p, angle));
     this.setTurn(this.turn + angle);
@@ -699,17 +710,40 @@ export class TacticaScene {
     const probe = this.probe ??= new THREE.PerspectiveCamera();
     probe.fov = this.camera.fov; probe.aspect = this.camera.aspect; probe.near = 0.1; probe.far = 100;
     probe.updateProjectionMatrix();
+    const huds = this.hudRects();
+    const rect = this.canvas.getBoundingClientRect();
     for (let pull = 1; pull <= MAX_FIT_PULL; pull += 0.1) {
       probe.position.copy(turnAround(at, basePosFor(pull), turn));
       probe.lookAt(turnAround(at, baseLook, turn));
       probe.updateMatrixWorld();
       const fits = targets.every((t) => {
         const ndc = this.worldOf(t).setY(0.2).project(probe);
-        return Math.abs(ndc.x) < 0.9 && ndc.y > -0.72 && ndc.y < 0.8 && ndc.z < 1;
+        if (!(Math.abs(ndc.x) < 0.9 && ndc.y > -0.72 && ndc.y < 0.8 && ndc.z < 1)) return false;
+        const x = rect.left + ((ndc.x + 1) / 2) * rect.width, y = rect.top + ((1 - ndc.y) / 2) * rect.height;
+        return !huds.some((h) => x > h.left - HUD_PAD_PX && x < h.right + HUD_PAD_PX && y > h.top - HUD_PAD_PX && y < h.bottom + HUD_PAD_PX);
       });
       if (fits) return pull;
     }
     return MAX_FIT_PULL;
+  }
+
+  /** Where the game's own buttons and panels sit on screen. */
+  hudRects() {
+    const root = this.canvas.parentElement;
+    if (!root) return [];
+    return [...root.querySelectorAll("[data-tactica-hud]")].map((el) => el.getBoundingClientRect()).filter((r) => r.width && r.height);
+  }
+
+  /** How far (in squares, sideways in the view) to slide the close view so
+   *  the character and all its glowing squares sit centred: the middle of
+   *  their spread, never more than MAX_SIDE_SHIFT. Every square counts the
+   *  same, so it favours none of them. */
+  sideShift(sq, targets, turn) {
+    if (!targets.length) return 0;
+    const at = this.worldOf(sq);
+    const xs = [0, ...targets.map((t) => this.worldOf(t).sub(at).applyAxisAngle(Y_AXIS, -turn).x)];
+    const mid = (Math.min(...xs) + Math.max(...xs)) / 2;
+    return Math.max(-MAX_SIDE_SHIFT, Math.min(MAX_SIDE_SHIFT, mid));
   }
 
   /** The turn that shows a character and the squares it can reach best:
@@ -776,8 +810,16 @@ export class TacticaScene {
     this.lastSq = sq;
     this.pivot.copy(at);
     this.setTurn(this.manualTurn ? this.turn : this.clearTurn(sq, positionFor(1), look));
-    const position = positionFor(this.fitPull(sq, positionFor, look, this.turn, targets));
-    this.moveCamera(turnAround(at, position, this.turn), turnAround(at, look, this.turn));
+    /* A wide spread of squares (a long diagonal, a rook's rank) slides the
+       view sideways to the middle of them before pulling back. */
+    /* The camera itself only slides half as far, so it stays behind the
+       character rather than behind its neighbours; the character must stay
+       in view as well. */
+    const shift = this.sideShift(sq, targets, this.turn);
+    const lookAt = look.clone().add(new THREE.Vector3(shift, 0, 0));
+    const sidePositionFor = (extra) => positionFor(extra).add(new THREE.Vector3(shift / 2, 0, 0));
+    const position = sidePositionFor(this.fitPull(sq, sidePositionFor, lookAt, this.turn, targets.length ? [sq, ...targets] : []));
+    this.moveCamera(turnAround(at, position, this.turn), turnAround(at, lookAt, this.turn));
   }
 
   /** View of a character with every square it can reach in sight, from
@@ -791,6 +833,7 @@ export class TacticaScene {
   setHover(sq) {
     if (sq === this.hoverSq) return;
     this.hoverSq = sq;
+    for (const m of this.hoverMark.children) m.material?.dispose();
     this.hoverMark.clear();
     if (sq != null && this.outlineGeometry) {
       const legal = this.targets.includes(sq);
@@ -875,6 +918,8 @@ export class TacticaScene {
    *  and colour needs in the new position; any left over shrink away and any
    *  new ones grow in. Resolves when they have settled. */
   regroupTo(pieces) {
+    this.generation = (this.generation ?? 0) + 1;
+    this.stopAttacks();
     const fast = reducedMotion();
     const moves = [], added = [];
     const free = [...this.pieces.entries()].map(([sq, e]) => ({ sq, e, used: false }));
@@ -1096,15 +1141,18 @@ export class TacticaScene {
     this.setGhost(mover, false);
     this.moving++;
     const generation = this.generation;
+    /* A board rebuilt mid-move (a new game, a reset) keeps its own pieces
+       where they are; the camera view asked for meanwhile is still applied,
+       or it would wait forever. */
+    const current = () => generation === this.generation;
     const finish = () => {
       this.moving--;
-      if (generation !== this.generation) return;
-      this.settle(mover, from, to, captured);
+      if (current()) this.settle(mover, from, to, captured);
       if (!this.moving && !this.active.length) { const view = this.pendingView; this.pendingView = null; view?.(); }
     };
     const full = pace === "full", quick = !full;
     if (victim && pace !== "off" && !reducedMotion()) {
-      return this.attack(mover, victim, from, to, { speed: full ? 1 : QUICK_ATTACK_SPEED, shot: camera && full }).then(finish);
+      return this.attack(mover, victim, from, to, { speed: full ? 1 : QUICK_ATTACK_SPEED, shot: camera && full, current }).then(finish);
     }
     /* A dropped character lands from where it was let go, without a leap. */
     const a = mover.group.position.clone(), b = this.worldOf(to);
@@ -1113,13 +1161,15 @@ export class TacticaScene {
     const fast = reducedMotion();
     return new Promise((resolve) => {
       this.tween(fast ? 0 : quick ? QUICK_MOVE_MS : MOVE_MS, (t) => {
+        if (!current()) return;
         const k = ease(t);
         mover.group.position.lerpVectors(a, b, k);
         if (leap) mover.group.position.y = Math.sin(Math.PI * k) * KNIGHT_HOP * (quick ? 0.5 : 1);
       }, () => {
+        if (!current()) { resolve(); return; }
         if (!victim) { playSound(leap ? "landHeavy" : "land", { volume: quick ? 0.6 : 0.8 }); resolve(); return; }
         playSound("poof", { volume: 0.7 });
-        this.tween(fast ? 0 : quick ? QUICK_CAPTURE_MS : CAPTURE_MS, (t) => victim.group.scale.setScalar(Math.max(0.001, 1 - t)), resolve);
+        this.tween(fast ? 0 : quick ? QUICK_CAPTURE_MS : CAPTURE_MS, (t) => { if (current()) victim.group.scale.setScalar(Math.max(0.001, 1 - t)); }, resolve);
       });
     }).then(finish);
   }
@@ -1141,12 +1191,8 @@ export class TacticaScene {
     const body = mover.model.getObjectByName("body");
     if (body) {
       const yaw = new THREE.Euler().setFromQuaternion(body.quaternion, "YXZ").y;
-      mover.mixer.stopAllAction();
-      body.position.set(0, 0, 0);
-      body.quaternion.identity();
-      body.scale.set(1, 1, 1);
+      this.standUp(mover);
       mover.holder.rotation.y += yaw;
-      mover.idle.reset().play();
     }
     const facing = mover.colour === this.nearColour ? Math.PI : 0;
     const start = mover.holder.rotation.y;
@@ -1155,11 +1201,39 @@ export class TacticaScene {
     this.wake();
   }
 
+  /** Stops a character's attack or reaction and stands it back up, breathing. */
+  standUp(entry) {
+    entry.mixer.stopAllAction();
+    const body = entry.model.getObjectByName("body");
+    if (body) { body.position.set(0, 0, 0); body.quaternion.identity(); body.scale.set(1, 1, 1); }
+    entry.idle.reset().play();
+  }
+
+  /** Stops every attack still playing: the board is being rebuilt, so they
+   *  are out of date. A character that stays (`staying`) is stood back up,
+   *  facing the other side, its bond look back on. */
+  stopAttacks(staying = () => true) {
+    for (const run of this.active) {
+      run.cancelled = true;
+      for (const entry of [run.mover, run.victim]) {
+        if (!entry || !staying(entry)) continue;
+        this.standUp(entry);
+        entry.holder.rotation.set(0, entry.colour === this.nearColour ? Math.PI : 0, 0);
+        entry.group.scale.setScalar(1);
+        for (const part of entry.bondParts ?? []) part.visible = !entry.sunk;
+      }
+    }
+  }
+
   /** Brings the board in line with `pieces` ([{ sq, type, white }]) without
    *  rebuilding what is already right: pieces in place are kept (and put
    *  back on their squares), anything else is added or removed. Covers
    *  castling, en passant and promotion after a move. */
   syncPieces(pieces) {
+    /* Normally called once a move has finished; if one is still playing
+       (the board was reset under it), it stops here. */
+    this.generation = (this.generation ?? 0) + 1;
+    this.stopAttacks();
     const want = new Map(pieces.map((p) => [p.sq, p]));
     for (const [sq, entry] of [...this.pieces]) {
       const p = want.get(sq);
@@ -1179,7 +1253,7 @@ export class TacticaScene {
 
   /** The attacker plays its attack at the victim's square, the victim its
    *  reaction, and the effects run on the attack's clock. */
-  attack(mover, victim, from, to, { speed = 1, shot = true } = {}) {
+  attack(mover, victim, from, to, { speed = 1, shot = true, current = () => true } = {}) {
     const a = this.worldOf(from), b = this.worldOf(to);
     /* A dragged character goes back to its square to make its attack. */
     mover.group.position.copy(a);
@@ -1216,15 +1290,15 @@ export class TacticaScene {
     if (shot) this.attackShot(from, to, mover.colour === this.nearColour, leapRoom);
     return new Promise((resolve) => {
       this.active.push({
-        act, fx, end,
+        act, fx, end, mover, victim,
         /* Each attack's sounds, on the attack's own clock. */
         cues: ATTACK_CUES[mover.kind] ?? [], cueAt: 0, loud: speed > 1 ? 0.8 : 1,
         done: () => {
           fx.dispose();
-          if (mover.kind !== "pawn") { resolve(); return; }
+          if (mover.kind !== "pawn" || !current()) { resolve(); return; }
           /* The pawn steps onto the square once its slash is done. */
           const start = mover.group.position.clone();
-          this.tween(speed > 1 ? QUICK_MOVE_MS : MOVE_MS, (t) => mover.group.position.lerpVectors(start, b, ease(t)), resolve);
+          this.tween(speed > 1 ? QUICK_MOVE_MS : MOVE_MS, (t) => { if (current()) mover.group.position.lerpVectors(start, b, ease(t)); }, resolve);
         },
       });
       this.wake();
@@ -1240,24 +1314,37 @@ export class TacticaScene {
 
   bindPointer() {
     const raycaster = new THREE.Raycaster();
-    const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     const aim = (e) => {
       const rect = this.canvas.getBoundingClientRect();
       raycaster.setFromCamera(new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1), this.camera);
     };
-    const groundSquare = () => {
-      const point = raycaster.ray.intersectPlane(ground, new THREE.Vector3());
-      return point ? { point, sq: this.squareAt(point) } : null;
-    };
     /* Every character body under the finger, nearest first. */
-    const pieceHits = () => [...new Set(raycaster.intersectObjects([...this.pieces.values()].map((v) => v.hit)).map((h) => h.object.userData.sq))];
+    /* Every character body under the finger, nearest first, and where the
+       finger met each one. */
+    const pieceHits = () => {
+      const points = new Map();
+      for (const h of raycaster.intersectObjects([...this.pieces.values()].map((v) => v.hit))) {
+        if (!points.has(h.object.userData.sq)) points.set(h.object.userData.sq, h.point.clone());
+      }
+      return points;
+    };
     let down = null, drag = null, lastTap = null;
-    const follow = (e) => {
+    /* A dragged character stays under the point of it that was grabbed: the
+       finger slides it across a level through that point, so picking a
+       piece up by its head doesn't make it jump to the square behind (and a
+       small wobble lets it go on its own square, playing nothing). Returns
+       the square it is over, or null off the board. */
+    const dragTo = (e) => {
       aim(e);
-      const hit = groundSquare();
-      if (!hit) return;
-      drag.piece.group.position.set(hit.point.x, DRAG_LIFT, hit.point.z);
-      this.setHover(hit.sq === drag.sq ? null : hit.sq);
+      const p = raycaster.ray.intersectPlane(drag.plane, new THREE.Vector3());
+      if (p) drag.at = { x: p.x - drag.offset.x, z: p.z - drag.offset.z };
+      return drag.at ? this.squareAt(drag.at) : null;
+    };
+    const follow = (e) => {
+      const sq = dragTo(e);
+      if (!drag.at) return;
+      drag.piece.group.position.set(drag.at.x, DRAG_LIFT, drag.at.z);
+      this.setHover(sq === drag.sq ? null : sq);
     };
     /* Called every frame of a drag: slides the camera while the finger rests
        near an edge, keeping the character under it. */
@@ -1296,18 +1383,35 @@ export class TacticaScene {
       /* What a tap means is fixed where the finger lands, not where it lifts:
          a fast tap drifts, sometimes onto the next square or off the board. */
       const tile = raycaster.intersectObjects(this.tiles)[0]?.object.userData.sq ?? null;
-      const hits = pieceHits();
-      down = { id: e.pointerId, x: e.clientX, y: e.clientY, sq: hits[0] ?? null, hits, tile, at: performance.now() };
+      const points = pieceHits();
+      const hits = [...points.keys()];
+      down = { id: e.pointerId, x: e.clientX, y: e.clientY, sq: hits[0] ?? null, hits, points, tile, at: performance.now() };
     };
     this.onMove = (e) => {
       if (!down || e.pointerId !== down.id) return;
       /* A mouse released outside the page never sends pointerup here. */
       if (e.pointerType === "mouse" && e.buttons === 0 && !drag) { down = null; return; }
-      if (!drag && down.sq != null && Math.hypot(e.clientX - down.x, e.clientY - down.y) > TAP_SLOP_PX) {
+      const mx = e.clientX - down.x, my = e.clientY - down.y;
+      const age = performance.now() - down.at;
+      /* A young sideways move may still be a swipe, and a quick tap may
+         drift as far as it is allowed to (see onUp): wait before picking up. */
+      const flicking = Math.abs(mx) > Math.abs(my) * SIDEWAYS && age < FLICK_MS;
+      const slop = age < QUICK_TAP_MS ? QUICK_TAP_SLOP_PX : TAP_SLOP_PX;
+      if (!drag && down.sq != null && Math.hypot(mx, my) > slop && !flicking) {
         this.dragging = true;
+        /* Whether it's the character already selected: only then can a quick
+           sideways drag still turn out to be a swipe (see onUp). */
+        const wasHeld = this.held === down.sq;
         if (this.onDragStart?.(down.sq)) {
-          drag = { sq: down.sq, piece: this.pieces.get(down.sq) };
-          this.canvas.setPointerCapture?.(e.pointerId);
+          const grab = down.points.get(down.sq) ?? this.worldOf(down.sq);
+          const home = this.worldOf(down.sq);
+          drag = {
+            sq: down.sq, piece: this.pieces.get(down.sq), wasHeld,
+            plane: new THREE.Plane(new THREE.Vector3(0, 1, 0), -grab.y),
+            offset: { x: grab.x - home.x, z: grab.z - home.z },
+            at: null,
+          };
+          try { this.canvas.setPointerCapture?.(e.pointerId); } catch { /* the pointer is already gone */ }
         } else { down.sq = null; this.dragging = false; }
       }
       if (!drag?.piece) return;
@@ -1321,17 +1425,25 @@ export class TacticaScene {
       const pressed = down;
       down = null;
       if (drag) {
-        const { sq, piece } = drag;
+        const over = dragTo(e);
+        const { sq, piece, wasHeld } = drag;
         drag = null;
-        aim(e);
-        const over = groundSquare()?.sq ?? null;
         this.setHover(null);
         this.dragging = false;
-        const taken = over !== sq && this.onDrop?.(over);
+        /* The selected character flicked sideways, quickly, and let go off
+           its glowing squares: that was a swipe, not a move. */
+        const flick = wasHeld && performance.now() - pressed.at < FLICK_DRAG_MS && Math.abs(dx) > SWIPE_PX
+          && Math.abs(dx) > Math.abs(dy) * SIDEWAYS && !this.targets.includes(over);
+        /* The game always hears that the drag ended, even when the character
+           is let go over its own square (or the drag was a swipe), or it
+           would go on thinking a drag is in progress and stop moving the
+           camera. */
+        const taken = !flick && over !== sq && over != null ? !!this.onDrop?.(over) : (this.onDrop?.(null), false);
         if (piece && !taken) {
           const from = piece.group.position.clone(), home = this.worldOf(sq);
           this.tween(reducedMotion() ? 0 : 160, (t) => piece.group.position.lerpVectors(from, home, ease(t)));
         }
+        if (flick) this.onSwipe?.(dx < 0 ? 1 : -1);
         return;
       }
       if (Math.abs(dx) > SWIPE_PX && Math.abs(dx) > Math.abs(dy)) { this.onSwipe?.(dx < 0 ? 1 : -1); return; }
@@ -1374,6 +1486,11 @@ export class TacticaScene {
     this.canvas.addEventListener("pointermove", this.onMove);
     this.canvas.addEventListener("pointerup", this.onUp);
     this.canvas.addEventListener("pointercancel", this.onCancel);
+    /* If the browser takes the pointer away mid-drag without a pointerup,
+       end the drag, or every later touch would be ignored. (After a normal
+       pointerup `down` is already cleared, so this does nothing.) */
+    this.onLostCapture = (e) => { if (drag && down && e.pointerId === down.id) this.onCancel(e); };
+    this.canvas.addEventListener("lostpointercapture", this.onLostCapture);
   }
 
   resize() {
@@ -1441,7 +1558,10 @@ export class TacticaScene {
           playSound(name, { volume: volume * run.loud });
         }
       }
-      const ended = this.active.filter((run) => run.act.time >= run.end - 1e-3 || !run.act.isRunning());
+      /* An attack ends when its clip does, or when it was stopped or its
+         attacker left the board (its clock would never run again, and the
+         camera would wait for it forever). */
+      const ended = this.active.filter((run) => run.cancelled || !run.mover.group.parent || run.act.time >= run.end - 1e-3 || !run.act.isRunning());
       this.active = this.active.filter((run) => !ended.includes(run));
       ended.forEach((run) => run.done());
       if (this.dragging) this.dragFollow?.(dt);
@@ -1488,6 +1608,7 @@ export class TacticaScene {
     this.canvas.removeEventListener("pointerup", this.onUp);
     this.canvas.removeEventListener("pointermove", this.onMove);
     this.canvas.removeEventListener("pointercancel", this.onCancel);
+    this.canvas.removeEventListener("lostpointercapture", this.onLostCapture);
     this.canvas.removeEventListener("webglcontextlost", this.onLostEvent);
     this.renderer.dispose();
     /* Hand the WebGL context back now rather than whenever the browser gets

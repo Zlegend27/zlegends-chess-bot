@@ -19,7 +19,7 @@ export function BrassButton({ children, className = "", ...props }) {
 /** The round button that opens a screen's game menu. */
 export function MenuButton({ open, onClick }) {
   return (
-    <button type="button" className="tc-round pointer-events-auto" onClick={onClick} aria-label="Game menu" aria-expanded={open}>
+    <button type="button" data-tactica-hud className="tc-round pointer-events-auto" onClick={onClick} aria-label="Game menu" aria-expanded={open}>
       <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 6h16v2.2H4zM4 10.9h16v2.2H4zM4 15.8h16V18H4z" /></svg>
     </button>
   );
@@ -56,6 +56,7 @@ export function MapButton({ fen, pieceImgSrc, size = 96, flipped, view, turn = 0
   return (
     <button
       type="button"
+      data-tactica-hud
       onClick={click}
       onPointerDown={down}
       onPointerMove={move}

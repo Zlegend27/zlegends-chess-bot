@@ -49,6 +49,9 @@ export default function BlitzMode({ sweetheart, best, onBest, onExit }) {
   const usedRef = useRef(new Set());
   const deadlineRef = useRef(0);
   const busyRef = useRef(false);
+  /* Bumped when a game starts or is ended early, so a move still playing
+     from before doesn't land on the new board or count. */
+  const gameIdRef = useRef(0);
   /* The second last ticked, so each of the final ten ticks once. */
   const tickRef = useRef(null);
 
@@ -122,6 +125,8 @@ export default function BlitzMode({ sweetheart, best, onBest, onExit }) {
   };
 
   const start = () => {
+    gameIdRef.current++;
+    busyRef.current = false;
     usedRef.current = new Set();
     setScore(0); setCombo(0); setBestCombo(0);
     deadlineRef.current = performance.now() + BLITZ_SECONDS * 1000;
@@ -182,14 +187,18 @@ export default function BlitzMode({ sweetheart, best, onBest, onExit }) {
     return () => clearTimeout(t);
   }, [flash]);
 
+  /** Plays a move out; false if the game changed while it played. */
   const moveQuick = async (move) => {
     const scene = sceneRef.current;
     const from = sqOf(mFrom(move)), to = sqOf(mTo(move));
     const captured = eng.pieceAt(to) !== EMPTY ? to : null;
     const knight = Math.abs(eng.pieceAt(from)) === KNIGHT;
+    const game = gameIdRef.current;
     await scene?.animateMove(from, to, { knight, captured, pace, camera: false });
+    if (game !== gameIdRef.current) return false;
     eng.make(move);
     scene?.syncPieces(piecesNow());
+    return true;
   };
 
   const play = async (target) => {
@@ -211,8 +220,9 @@ export default function BlitzMode({ sweetheart, best, onBest, onExit }) {
     const bond = recordMove(eng.pieceAt(sqOf(mFrom(move))), { capture: eng.pieceAt(target) !== EMPTY, final: verdict.solved });
     if (bond.levelUp) { sceneRef.current?.setBonds(levelsOf(bond.bonds)); playSound("shimmer", { volume: 0.8 }); }
     const bondNote = bond.levelUp ? levelUpText(bond.kind, bond.levelUp) : null;
+    const game = gameIdRef.current;
     try {
-      await moveQuick(move);
+      if (!(await moveQuick(move))) return;
       const afterMine = [...played, verdict.san];
       if (verdict.solved) {
         const newScore = score + 1, newCombo = combo + 1;
@@ -227,17 +237,18 @@ export default function BlitzMode({ sweetheart, best, onBest, onExit }) {
         }
         else say("good", bondNote ?? "Solved");
         await new Promise((r) => setTimeout(r, NEXT_PUZZLE_MS));
-        if (deadlineRef.current - performance.now() > 0) loadNext(newScore);
+        if (game === gameIdRef.current && deadlineRef.current - performance.now() > 0) loadNext(newScore);
         return;
       }
       await new Promise((r) => setTimeout(r, REPLY_DELAY_MS));
+      if (game !== gameIdRef.current) return;
       const reply = eng.legalMoves().find((m) => eng.sanOf(m) === verdict.reply);
       if (bondNote) say("good", bondNote);
-      if (reply) await moveQuick(reply);
+      if (reply && !(await moveQuick(reply))) return;
       setPlayed([...afterMine, verdict.reply]);
       setTick((t) => t + 1);
     } finally {
-      busyRef.current = false;
+      if (game === gameIdRef.current) busyRef.current = false;
     }
   };
 
@@ -294,7 +305,7 @@ export default function BlitzMode({ sweetheart, best, onBest, onExit }) {
       {phase === "playing" && (
         <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/75 to-transparent px-4 pt-10 pb-[calc(0.9rem+env(safe-area-inset-bottom))]">
           <span className="text-sm text-[var(--tc-cream-dim)]">{selected == null ? "Tap a piece, then a glowing square" : "Tap a glowing square to play it"}</span>
-          <button type="button" className="tc-link" onClick={() => setPhase("done")}>End run</button>
+          <button type="button" className="tc-link" onClick={() => { gameIdRef.current++; busyRef.current = false; setPhase("done"); }}>End run</button>
         </div>
       )}
 

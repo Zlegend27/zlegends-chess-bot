@@ -51,7 +51,6 @@ export default function TutorialMode({ pieceImgSrc, sweetheart, onExit }) {
   const [moves, setMoves] = useState(0);
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [chosen, setChosen] = useState(null);
-  const draggingRef = useRef(false);
   const [dragging, setDragging] = useState(false);
   const playingRef = useRef(false);
   const [busy, setBusy] = useState(true);
@@ -115,11 +114,11 @@ export default function TutorialMode({ pieceImgSrc, sweetheart, onExit }) {
   /* The camera moves only for a new view, a new character, or after a move. */
   useEffect(() => {
     const scene = sceneRef.current;
-    if (!scene || draggingRef.current) return;
+    if (!scene || dragging || playingRef.current) return;
     if (view === "board") scene.showBoard();
     else scene.showReach(selected, targets);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, selected, moves, sceneKey]);
+  }, [view, selected, moves, sceneKey, dragging]);
   useEffect(() => {
     const show = view === "close" && !busy;
     sceneRef.current?.setMarks(show ? { selected, held: true, ghost: dragging, targets, chosen, captures, confirm: true } : {});
@@ -162,6 +161,8 @@ export default function TutorialMode({ pieceImgSrc, sweetheart, onExit }) {
   };
 
   const restart = () => {
+    /* Not while a move is playing: it would land on the fresh board. */
+    if (playingRef.current) return;
     eng.loadFen(START_FEN);
     setMoves((n) => n + 1);
     setChosen(null);
@@ -169,13 +170,15 @@ export default function TutorialMode({ pieceImgSrc, sweetheart, onExit }) {
     setMenuOpen(false);
     sceneRef.current?.syncPieces(piecesNow());
   };
-  const startOver = () => { restart(); setStep(0); setPractising(false); setView("board"); };
+  const startOver = () => { if (playingRef.current) return; restart(); setStep(0); setPractising(false); setView("board"); };
 
   const cycleCharacter = (dir) => {
     if (busy) return;
     setChosen(null);
     setSelectedIdx((i) => (i + dir + friends.length) % friends.length);
     if (view === "close") complete("swipe");
+    /* From the whole board, switching goes in close on the next one. */
+    setView("close");
   };
   const tapRef = useRef(null);
   tapRef.current = (sq) => {
@@ -203,7 +206,6 @@ export default function TutorialMode({ pieceImgSrc, sweetheart, onExit }) {
   dragStartRef.current = (sq) => {
     const friendIdx = friends.indexOf(sq);
     if (!canMove || friendIdx < 0) return false;
-    draggingRef.current = true;
     setDragging(true);
     setSelectedIdx(friendIdx);
     setChosen(null);
@@ -211,7 +213,6 @@ export default function TutorialMode({ pieceImgSrc, sweetheart, onExit }) {
   };
   const dropRef = useRef(null);
   dropRef.current = (sq) => {
-    draggingRef.current = false;
     setDragging(false);
     if (sq != null && targets.includes(sq) && !busy && !playingRef.current) { play(sq, "drag"); return true; }
     return false;
@@ -253,7 +254,7 @@ export default function TutorialMode({ pieceImgSrc, sweetheart, onExit }) {
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3">
         <MenuButton open={menuOpen} onClick={() => setMenuOpen((o) => !o)} />
         {current.id !== "done" && (
-          <div role="status" aria-live="polite" className="tc-panel pointer-events-auto m-0 max-w-[60%] px-3 py-2.5">
+          <div role="status" aria-live="polite" data-tactica-hud className="tc-panel pointer-events-auto m-0 max-w-[60%] px-3 py-2.5">
             <p className="tc-label m-0">Step {step + 1} of {STEPS.length - 1} · {current.title}</p>
             <p className="m-0 mt-1 text-[15px] leading-snug">{current.text}</p>
             {current.id === "capture" && enemiesLeft === 0 && (
@@ -279,8 +280,8 @@ export default function TutorialMode({ pieceImgSrc, sweetheart, onExit }) {
         <>
           <button type="button" aria-label="Close the menu" className="absolute inset-0 cursor-default border-0 bg-transparent" onClick={() => setMenuOpen(false)} />
           <div className="tc-panel absolute top-16 left-3 flex w-60 flex-col gap-3 p-3">
-            <button type="button" className="tc-plank tc-center tc-small" onClick={restart}>Reset the board</button>
-            <button type="button" className="tc-plank tc-center tc-small" onClick={startOver}>Start the tutorial over</button>
+            <button type="button" className="tc-plank tc-center tc-small" onClick={restart} disabled={busy}>Reset the board</button>
+            <button type="button" className="tc-plank tc-center tc-small" onClick={startOver} disabled={busy}>Start the tutorial over</button>
             <button type="button" className="tc-plank tc-center tc-small" onClick={onExit}>Back to the menu</button>
           </div>
         </>

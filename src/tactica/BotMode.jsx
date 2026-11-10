@@ -83,7 +83,8 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
   const engRef = useRef(createEngine());
   const eng = engRef.current;
   const busyRef = useRef(false);
-  const draggingRef = useRef(false);
+  /* A drag in progress. The camera and highlights catch up when it ends. */
+  const [dragging, setDragging] = useState(false);
   /* Bumped for every new game, so a bot reply from an old game is dropped. */
   const gameIdRef = useRef(0);
 
@@ -157,16 +158,16 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
   /* ---- Camera and highlights ---- */
   useEffect(() => {
     const scene = sceneRef.current;
-    if (!scene || draggingRef.current || stage !== "playing" || busy) return;
+    if (!scene || dragging || stage !== "playing" || busy) return;
     if (view === "board") scene.showBoard();
     else scene.showReach(selected, targets);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, selected, moveList, stage, busy]);
+  }, [view, selected, moveList, stage, busy, dragging]);
   useEffect(() => {
     const show = myTurn && view === "close" && !busy;
-    sceneRef.current?.setMarks(show ? { selected, held: true, ghost: draggingRef.current, targets, chosen, captures, confirm: true } : {});
+    sceneRef.current?.setMarks(show ? { selected, held: true, ghost: dragging, targets, chosen, captures, confirm: true } : {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, selected, chosen, moveList, stage, busy, thinking]);
+  }, [view, selected, chosen, moveList, stage, busy, thinking, dragging]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -182,7 +183,10 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
     const captured = eng.pieceAt(to) !== EMPTY ? to : null;
     const knight = Math.abs(eng.pieceAt(from)) === KNIGHT;
     const san = eng.sanOf(move);
+    const game = gameIdRef.current;
     await scene?.animateMove(from, to, { knight, captured, follow, pace });
+    /* A new game started while it played: this move isn't part of it. */
+    if (game !== gameIdRef.current) return null;
     eng.make(move);
     scene?.syncPieces(piecesNow());
     return san;
@@ -284,6 +288,8 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
     if (busy || !friends.length) return;
     setChosen(null);
     setSelectedIdx((i) => (i + dir + friends.length) % friends.length);
+    /* From the whole board, switching goes in close on the next one. */
+    setView("close");
   };
   const cycleRef = useRef(null);
   cycleRef.current = cycle;
@@ -308,14 +314,14 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
   dragStartRef.current = (sq) => {
     const idx = friends.indexOf(sq);
     if (!canMove || idx < 0) return false;
-    draggingRef.current = true;
+    setDragging(true);
     setSelectedIdx(idx);
     setChosen(null);
     return true;
   };
   const dropRef = useRef(null);
   dropRef.current = (sq) => {
-    draggingRef.current = false;
+    setDragging(false);
     if (sq != null && targets.includes(sq) && !busyRef.current) { play(sq); return true; }
     return false;
   };

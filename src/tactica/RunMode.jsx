@@ -67,7 +67,9 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
   const eng = engRef.current;
   const usedRef = useRef(new Set());
   const busyRef = useRef(false);
-  const draggingRef = useRef(false);
+  /* A drag in progress. The camera and highlights catch up when it ends,
+     including a drag let go where it started, which plays nothing. */
+  const [dragging, setDragging] = useState(false);
   /* The phase timer: time left while paused, or the moment it runs out. */
   const timerRef = useRef({ running: false, left: 0, deadline: 0 });
   /* The second last ticked, so each of the final ten ticks once. */
@@ -222,16 +224,16 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
   /* ---- Camera and highlights ---- */
   useEffect(() => {
     const scene = sceneRef.current;
-    if (!scene || draggingRef.current || stage !== "playing" || busy) return;
+    if (!scene || dragging || stage !== "playing" || busy) return;
     if (view === "board") scene.showBoard();
     else scene.showReach(selected, targets);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, selected, played, stage, puzzle, busy, escape]);
+  }, [view, selected, played, stage, puzzle, busy, escape, dragging]);
   useEffect(() => {
     const show = stage === "playing" && view === "close" && !busy;
-    sceneRef.current?.setMarks(show ? { selected, held: true, ghost: draggingRef.current, targets, chosen, captures, confirm: true } : {});
+    sceneRef.current?.setMarks(show ? { selected, held: true, ghost: dragging, targets, chosen, captures, confirm: true } : {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, selected, chosen, played, stage, puzzle, busy, escape]);
+  }, [view, selected, chosen, played, stage, puzzle, busy, escape, dragging]);
 
   useEffect(() => { warmUpStockfish(); }, []);
 
@@ -462,7 +464,11 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
     const from = sqOf(mFrom(move)), to = sqOf(mTo(move));
     const captured = eng.pieceAt(to) !== EMPTY ? to : null;
     const knight = Math.abs(eng.pieceAt(from)) === KNIGHT;
+    const run = runIdRef.current;
     await scene?.animateMove(from, to, { knight, captured, follow: Math.sign(eng.pieceAt(from)) !== side, pace });
+    /* Quit (and maybe a new run started) while it played: the board is no
+       longer the one this move belongs to. */
+    if (run !== runIdRef.current) return null;
     eng.make(move);
     scene?.syncPieces(piecesNow());
     return { from, to, captured };
@@ -701,9 +707,11 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
 
   /* ---- Input ---- */
   const cycle = (dir) => {
-    if (busy || !friends.length) return;
+    if (busy || !friends.length || stage !== "playing") return;
     setChosen(null);
     setSelectedIdx((i) => (i + dir + friends.length) % friends.length);
+    /* From the whole board, switching goes in close on the next one. */
+    setView("close");
   };
   const cycleRef = useRef(null);
   cycleRef.current = cycle;
@@ -728,14 +736,14 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
   dragStartRef.current = (sq) => {
     const idx = friends.indexOf(sq);
     if (!canMove || idx < 0) return false;
-    draggingRef.current = true;
+    setDragging(true);
     setSelectedIdx(idx);
     setChosen(null);
     return true;
   };
   const dropRef = useRef(null);
   dropRef.current = (sq) => {
-    draggingRef.current = false;
+    setDragging(false);
     if (sq != null && targets.includes(sq) && !busyRef.current) { play(sq); return true; }
     return false;
   };
@@ -778,7 +786,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
             {/* The map sits under the health bar: tap it to switch views, drag it to turn the view. */}
             <div className="flex items-start justify-between gap-2">
               {effect ? (
-                <div className="tc-panel px-3 py-1 text-xs">
+                <div data-tactica-hud className="tc-panel px-3 py-1 text-xs">
                   <span className="tc-display">{effect.kind === "challenge" ? "Challenge" : "Reward"}:</span> {effect.name}{effect.id === "shield" && effect.shieldUsed ? " (used)" : ""} · {effect.floorsLeft} floor{effect.floorsLeft === 1 ? "" : "s"} left
                 </div>
               ) : <span />}
