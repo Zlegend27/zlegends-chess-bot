@@ -41,10 +41,13 @@ export default function AdventureMap({ ctx, openId: pickedId, onOpen, onLevel, o
           return (
             <button key={isl.id} className={"kaIsland" + (open ? "" : " kaLocked") + (isl.id === openId ? " kaPicked" : "")}
               style={SPOTS[i]} onClick={() => setOpenId(isl.id)} aria-label={`${isl.name}${open ? `, ${got} of ${of} stars` : `, locked`}`}>
-              <span className="kaBlob" style={{ background: isl.color }} aria-hidden="true">{open ? isl.emoji : "🔒"}</span>
+              {/* Owl sits on the island she's working on, whatever the screen width. */}
+              <span className="kaBlobWrap">
+                <span className="kaBlob" style={{ background: isl.color }} aria-hidden="true">{open ? isl.emoji : "🔒"}</span>
+                {isl.id === here.id && <span className="kaOwl" aria-hidden="true"><AnimalIcon kind="Owl" size={40} /></span>}
+              </span>
               <b>{isl.name}</b>
               <span className="kaStars">{open ? `⭐ ${got}/${of}` : `needs ⭐ ${isl.needs}`}</span>
-              {isl.id === here.id && <span className="kaOwl" aria-hidden="true"><AnimalIcon kind="Owl" size={40} /></span>}
             </button>
           );
         })}

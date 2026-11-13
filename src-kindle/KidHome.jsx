@@ -133,7 +133,7 @@ export default function KidHome({ shop, quests, streak, week, yesterday, learnTe
         <div className="kShopOv" onClick={(e) => { if (e.target === e.currentTarget) setCodeOpen(false); }}>
           <button className="kCloseX" onClick={() => setCodeOpen(false)} aria-label="Close">✕</button>
           <h2 className="kLessonTitle" style={{ textAlign: "center" }}>Progress code</h2>
-          <div className="kMoves" style={{ width: "min(92vw, 420px)", fontSize: 15 }}>
+          <div className="kMoves" style={{ width: "var(--kCol)", fontSize: 15 }}>
             For a grown-up: copy this and paste it into a chat to get a report on how she&apos;s doing.
           </div>
           <textarea id="khCode" className="khCode" readOnly value={code} onFocus={(e) => e.target.select()} />

@@ -854,12 +854,12 @@ export default function KindleApp() {
               );
             })}
           </div>
-          <div className="kMoves" style={{ width: "min(92vw, 430px)", textAlign: "center", fontSize: 14 }}>
+          <div className="kMoves" style={{ width: "var(--kCol)", textAlign: "center", fontSize: 14 }}>
             🥉 1 win &nbsp;·&nbsp; 🥈 5 wins &nbsp;·&nbsp; 🥇 15 wins
           </div>
           <h2 className="kLessonTitle" style={{ textAlign: "center" }}>Piece Pals</h2>
-          <div style={{ width: "min(92vw, 430px)" }}><PiecePals pals={progress.pals} /></div>
-          <div className="kMoves" style={{ width: "min(92vw, 430px)", textAlign: "center", fontSize: 14 }}>
+          <div style={{ width: "var(--kCol)" }}><PiecePals pals={progress.pals} /></div>
+          <div className="kMoves" style={{ width: "var(--kCol)", textAlign: "center", fontSize: 14 }}>
             Your pieces grow when you use them well: captures, checkmates and puzzles. Level 3 sparkles on the board!
           </div>
         </div>
@@ -1187,10 +1187,10 @@ export default function KindleApp() {
           <div className="kShopOv" onClick={e => { if (e.target === e.currentTarget) setRushOpen(false); }}>
             <button className="kCloseX" onClick={() => setRushOpen(false)} aria-label="Close Puzzle Rush">✕</button>
             <h2 className="kLessonTitle" style={{ textAlign: "center" }}>Puzzle Rush</h2>
-            <div className="kMoves" style={{ width: "min(92vw, 380px)" }}>
+            <div className="kMoves" style={{ width: "var(--kCol)" }}>
               Solve as many puzzles as you can! Three wrong answers or running out of time ends the rush.
             </div>
-            <div className="kCtrls" style={{ flexDirection: "column", width: "min(92vw, 380px)" }}>
+            <div className="kCtrls" style={{ flexDirection: "column", width: "var(--kCol)" }}>
               {RUSH_DURATIONS.map(d => {
                 const best = shop.bestRushStreak[String(d.seconds)] || 0;
                 return (
@@ -1210,7 +1210,7 @@ export default function KindleApp() {
             <h2 className="kLessonTitle" style={{ textAlign: "center" }}>
               {rushResult.reason === "time" ? "Time's up!" : "3 misses — rush over!"}
             </h2>
-            <div className="kMoves" style={{ width: "min(92vw, 380px)", textAlign: "center", fontSize: 16 }}>
+            <div className="kMoves" style={{ width: "var(--kCol)", textAlign: "center", fontSize: 16 }}>
               You solved <b>{rushResult.solved}</b> puzzle{rushResult.solved === 1 ? "" : "s"}!
               {rushResult.newBest && <><br /><b className="kNewBest">🏆 New personal best!</b></>}
             </div>
@@ -1364,7 +1364,7 @@ export default function KindleApp() {
       {newGameConfirm && (
         <div className="kShopOv" onClick={e => { if (e.target === e.currentTarget) setNewGameConfirm(false); }}>
           <h2 className="kLessonTitle" style={{ textAlign: "center" }}>Start a new game?</h2>
-          <div className="kMoves" style={{ width: "min(92vw, 380px)", textAlign: "center", fontSize: 16 }}>
+          <div className="kMoves" style={{ width: "var(--kCol)", textAlign: "center", fontSize: 16 }}>
             This game will disappear and you can&apos;t get it back.
           </div>
           <div className="kCtrls">
