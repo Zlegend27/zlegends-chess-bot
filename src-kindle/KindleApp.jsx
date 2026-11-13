@@ -1278,7 +1278,7 @@ export default function KindleApp() {
           : "Nice try! Better luck next time!")
     : thinking ? `${opponentName} is thinking...`
     : eng.getSide() === playerColor ? "Your move!" : `${opponentName}'s move`;
-  const mood = !result ? undefined : result.winner === 0 ? undefined : result.winner === playerColor ? "happy" : "sad";
+  const mood = !result ? (thinking ? "think" : undefined) : result.winner === 0 ? undefined : result.winner === playerColor ? "happy" : "sad";
 
   const Tray = ({ pieces }) => (
     <div className="kTray">

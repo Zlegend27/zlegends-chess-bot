@@ -297,6 +297,21 @@ body {
   50% { transform: translateY(-7px) rotate(4deg) scale(1.06); }
 }
 .kAnimalsad { animation: kBounceSad 2.6s ease-in-out infinite; }
+/* Thinking: a slow head tilt while the bot picks its move. */
+.kAnimalthink { animation: kTilt 1.6s ease-in-out infinite; }
+@keyframes kTilt {
+  0%, 100% { transform: rotate(-6deg); }
+  50% { transform: rotate(4deg) translateY(-1px); }
+}
+/* Every few seconds the animals blink (each on its own --kBlinkDelay). */
+.kBlink { transform-box: fill-box; transform-origin: center; animation: kBlink 4.6s infinite; animation-delay: var(--kBlinkDelay, 1s); }
+@keyframes kBlink {
+  0%, 94%, 99%, 100% { transform: scaleY(1); }
+  96.5% { transform: scaleY(0.1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kAnimal, .kBlink { animation: none; }
+}
 @keyframes kBounceSad {
   0%, 100% { transform: translateY(0) rotate(0deg); }
   50% { transform: translateY(2px) rotate(-2deg); }
