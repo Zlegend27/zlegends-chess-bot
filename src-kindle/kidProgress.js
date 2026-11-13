@@ -76,7 +76,7 @@ export function questsFor(state, key) {
   const day = dayOf(state, key);
   const seed = seedOf(key);
   return SLOTS.map((options, i) => {
-    const id = options[(seed >> (i * 3)) % options.length];
+    const id = options[(seed >>> (i * 3)) % options.length];
     const done = Math.min(QUESTS[id].need, countFor(day, id));
     return { id, ...QUESTS[id], done, complete: done >= QUESTS[id].need };
   });

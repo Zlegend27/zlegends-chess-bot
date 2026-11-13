@@ -248,6 +248,8 @@ export default function KindleApp() {
   const [activePuzzle, setActivePuzzle] = useState(null);
   const [puzzleFeedback, setPuzzleFeedback] = useState(null);
   const [puzzleSolved, setPuzzleSolved] = useState(false);
+  /* Coins paid for the puzzle just solved (0 for the Daily Puzzle solved again). */
+  const [puzzleReward, setPuzzleReward] = useState(0);
   const [rushOpen, setRushOpen] = useState(false);
   const [rushMode, setRushMode] = useState(false);
   const [rushDuration, setRushDuration] = useState(60);
@@ -683,8 +685,11 @@ export default function KindleApp() {
         if (puzzleProgressRef.current.length === activePuzzle.moves.length) {
           setPuzzleSolved(true);
           audio.sfxWin();
-          log({ type: "puzzle", solved: true, rating: activePuzzle.rating, themes: activePuzzle.themes, rush: rushMode });
-          if (!rushMode && isDailyPuzzle) log({ type: "daily" });
+          /* The Daily Puzzle pays (and counts for the quests) once a day:
+             solving it again is just for fun. */
+          const dailyRepeat = !rushMode && isDailyPuzzle && dailyDoneToday;
+          if (!dailyRepeat) log({ type: "puzzle", solved: true, rating: activePuzzle.rating, themes: activePuzzle.themes, rush: rushMode });
+          if (!rushMode && isDailyPuzzle && !dailyRepeat) log({ type: "daily" });
           if (rushMode) {
             rushSolvedRef.current += 1;
             setRushSolved(rushSolvedRef.current);
@@ -697,7 +702,8 @@ export default function KindleApp() {
             setShop(s => addCoins(s, puzzleCoinReward(activePuzzle.rating)));
             schedulePuzzleStep(() => nextRushPuzzle(), 500);
           } else {
-            const reward = puzzleCoinReward(activePuzzle.rating);
+            const reward = dailyRepeat ? 0 : puzzleCoinReward(activePuzzle.rating);
+            setPuzzleReward(reward);
             setShop(s => {
               const next = addCoins(s, reward);
               return isDailyPuzzle ? markDailyPuzzleSolved(next, todayKey(), yesterdayKey()) : next;
@@ -1165,7 +1171,7 @@ export default function KindleApp() {
             <div className="kStatus">
               {rushMode
                 ? `Puzzle Rush · ${KID_PUZZLE_BANDS[rushBandIdx].label} · ${formatKidClock(rushTimeLeft)} left · Solved ${rushSolved} · Misses ${rushMistakes}/3`
-                : puzzleSolved ? `You got it! Great puzzle solving! (+${puzzleCoinReward(activePuzzle.rating)} coins)`
+                : puzzleSolved ? (puzzleReward ? `You got it! Great puzzle solving! (+${puzzleReward} coins)` : "You got it again! (Today's coins are already yours.)")
                 : puzzleFeedback === "wrong" ? "Not quite - give it another try!"
                 : isDailyPuzzle ? `Daily Puzzle (rated ${activePuzzle.rating}) - find the best move for ${sideLabel}!`
                 : `${band ? band.label : ""} puzzle (rated ${activePuzzle.rating}) - find the best move for ${sideLabel}!`}
