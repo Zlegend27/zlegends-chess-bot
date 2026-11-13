@@ -416,6 +416,11 @@ body {
    9-year-old on a Fire tablet held upright. */
 .khRoot { width: var(--khCol); display: flex; flex-direction: column; gap: 14px; padding-bottom: 24px; }
 .khTop { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+/* Kinnda's logo (Owl with a knight) and name; the name hides on narrow phones. */
+.khBrand { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; font-size: 22px; color: #E8622C; white-space: nowrap; }
+.khBrand img { width: 42px; height: 42px; filter: drop-shadow(0 3px 0 #0000001a); }
+.khChips { display: inline-flex; align-items: center; gap: 8px; }
+@media (max-width: 459px) { .khBrand span { display: none; } }
 .khChip {
   display: inline-flex; align-items: center; gap: 6px; font-family: inherit; font-weight: 800; font-size: 17px;
   color: #3b2a20; background: #fff; border: 0; border-radius: 999px; padding: 5px 13px; box-shadow: 0 3px 0 #0000001a;

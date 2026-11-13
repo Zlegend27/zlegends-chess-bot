@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimalIcon } from "./AnimalIcon";
 import { CHEST_COINS } from "./kidProgress";
+import logoUrl from "./kinnda-logo.svg";
 
 const HOLD_MS = 3000;
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -53,9 +54,12 @@ export default function KidHome({ shop, quests, streak, week, yesterday, learnTe
   return (
     <div className="khRoot">
       <div className="khTop">
+        <span className="khBrand"><img src={logoUrl} alt="" /><span>Kinnda Chess</span></span>
+        <span className="khChips">
         <span className="khChip" title="Days in a row with at least one quest">🔥 {streak} day{streak === 1 ? "" : "s"}</span>
         <span className="khChip">🪙 {shop.coins}</span>
         <button className="khChip khMusic" onClick={onMusic} aria-label={musicOn ? "Pause music" : "Play music"}>{musicOn ? "🔊" : "🔈"}</button>
+        </span>
       </div>
 
       <div className="khHello">
