@@ -1,0 +1,12 @@
+{
+  "name": "Kinnda Chess",
+  "short_name": "Kinnda",
+  "description": "Learn chess with Owl: quests, puzzles and friendly animals to play.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFF3D6",
+  "theme_color": "#FFF3D6",
+  "icons": [
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}

@@ -23,20 +23,22 @@ export const BOARDS = [
   { id: "galaxy", label: "Galaxy", price: 110, light: "#EAE3FF", dark: "#7C64C4" },
 ];
 
-/* "Classic" here is Kinnda's own glyph-in-a-circle look (free, always
-   owned) -- Standard and Wood are the same SVG piece sets the main site
-   uses, unlocked with coins like everything else in the shop. */
+/* Standard (the main site's usual chess pieces) is the default, free and
+   always owned, so the board looks like a real chess board. "Bubbles"
+   (id "classic") is Kinnda's old glyph-in-a-circle look, also free; Wood
+   is unlocked with coins. */
 export const PIECES = [
-  { id: "classic", label: "Classic", price: 0 },
-  { id: "standard", label: "Standard", price: 50 },
+  { id: "standard", label: "Standard", price: 0 },
+  { id: "classic", label: "Bubbles", price: 0 },
   { id: "wood", label: "Wood", price: 70 },
 ];
 
 function defaultState() {
   return {
     coins: 0,
-    ownedHats: ["none"], ownedBoards: ["classic"], ownedTunes: ["classic"], ownedAnimals: [], ownedPieces: ["classic"],
-    equippedHat: "none", equippedBoard: "classic", equippedTune: "classic", equippedPiece: "classic",
+    ownedHats: ["none"], ownedBoards: ["classic"], ownedTunes: ["classic"], ownedAnimals: [], ownedPieces: ["standard", "classic"],
+    equippedHat: "none", equippedBoard: "classic", equippedTune: "classic", equippedPiece: "standard",
+    piecesV2: true,
     musicVolume: 60, dailyPuzzleSolvedDate: null,
     completedLessons: [], bestRushStreak: {},
     /* Wins per opponent id, for the trophy shelf. Coins get spent and
@@ -57,7 +59,15 @@ function load() {
     const raw = localStorage.getItem(KEY);
     if (!raw) return defaultState();
     const parsed = JSON.parse(raw);
-    return { ...defaultState(), ...parsed };
+    const state = { ...defaultState(), ...parsed };
+    /* Saves from before Standard became the default: switch them to
+       Standard once (and own it, free). After that the choice sticks. */
+    if (!parsed.piecesV2) {
+      state.piecesV2 = true;
+      if (!state.ownedPieces.includes("standard")) state.ownedPieces = ["standard", ...state.ownedPieces];
+      if (state.equippedPiece === "classic") state.equippedPiece = "standard";
+    }
+    return state;
   } catch {
     return defaultState();
   }
