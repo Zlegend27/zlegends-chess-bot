@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import PixelAvatar, { SPAL, SPIX } from "./PixelAvatar";
 import SocialLinks from "./SocialLinks";
+import AccountAvatar from "./AccountAvatar";
 import { getUiTheme } from "../utils/uiTheme";
 
 /* The app's one menu. It's rendered by App.jsx above every page rather than
@@ -50,7 +51,7 @@ function MenuItem({ onClick, T, label, children }) {
   );
 }
 
-function ProfileMenu({ profile, onClose, onSignIn, onSignOut, onProfile, onShare, hasMoves, onYourGames, onSettings, onMusic, surface, T }) {
+function ProfileMenu({ profile, email, onClose, onSignIn, onSignOut, onProfile, onShare, hasMoves, onYourGames, onSettings, onMusic, surface, T }) {
   useEffect(() => {
     const onKeyDown = (e) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKeyDown);
@@ -68,15 +69,27 @@ function ProfileMenu({ profile, onClose, onSignIn, onSignOut, onProfile, onShare
         className={`fixed inset-x-0 bottom-0 rounded-t-2xl border ${T.cardBorder} ${surface} p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-[0_8px_32px_#00000066] md:absolute md:inset-x-auto md:bottom-auto md:right-0 md:top-full md:mt-2 md:w-64 md:rounded-2xl md:pb-2`}
       >
         {profile ? (
-          <div className="flex items-center gap-3 px-3 py-2">
-            {profile.avatarUrl && <img src={profile.avatarUrl} alt="" className="size-12 rounded-full object-cover" />}
-            <span className={`min-w-0 truncate text-base font-bold ${T.ink}`}>{profile.name}</span>
-          </div>
+          /* Who's signed in; tapping it opens the profile. */
+          <button
+            type="button"
+            role="menuitem"
+            onClick={choose(onProfile)}
+            className={`flex w-full items-center gap-3 rounded-lg border-0 bg-transparent px-3 py-2 text-left transition-colors hover:bg-violet/15 focus-visible:outline-none focus-visible:ring-2 ${T.ring}`}
+          >
+            <AccountAvatar profile={profile} size={44} />
+            <span className="flex min-w-0 flex-col">
+              <span className={`truncate text-base font-bold ${T.ink}`}>{profile.name}</span>
+              {email && <span className={`truncate text-xs ${T.dimText}`}>{email}</span>}
+            </span>
+          </button>
         ) : (
-          <MenuItem onClick={choose(onSignIn)} T={T}>Log in</MenuItem>
+          <div className="flex flex-col gap-2 px-3 py-2">
+            <span className={`text-sm ${T.dimText}`}>Keep your games on every device and play 1v1.</span>
+            <button type="button" role="menuitem" className="btn gold" style={{ width: "100%" }} onClick={choose(onSignIn)}>Log in</button>
+          </div>
         )}
         <div className={divider} />
-        <MenuItem onClick={choose(onProfile)} T={T}>Profile</MenuItem>
+        <MenuItem onClick={choose(onProfile)} T={T}>{profile ? "Profile and account" : "Profile"}</MenuItem>
         {hasMoves && <MenuItem onClick={choose(onShare)} T={T}>Share this game</MenuItem>}
         <MenuItem onClick={choose(onYourGames)} T={T}>Your Game History</MenuItem>
         <MenuItem onClick={choose(onMusic)} T={T}>Music</MenuItem>
@@ -86,7 +99,7 @@ function ProfileMenu({ profile, onClose, onSignIn, onSignOut, onProfile, onShare
         {profile && (
           <>
             <div className={divider} />
-            <MenuItem onClick={choose(onSignOut)} T={T}>Sign out</MenuItem>
+            <MenuItem onClick={choose(onSignOut)} T={T}>Log out</MenuItem>
           </>
         )}
       </div>
@@ -94,7 +107,7 @@ function ProfileMenu({ profile, onClose, onSignIn, onSignOut, onProfile, onShare
   );
 }
 
-export function AppHeader({ section, onSection, profile, sweetheart, dark, ...menuActions }) {
+export function AppHeader({ section, onSection, profile, email, sweetheart, dark, ...menuActions }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const T = themeFor(sweetheart, dark);
   const surface = surfaceFor(sweetheart, dark);
@@ -143,14 +156,14 @@ export function AppHeader({ section, onSection, profile, sweetheart, dark, ...me
             aria-label={profile ? `Profile menu for ${profile.name}` : "Menu"}
             className={`flex size-11 items-center justify-center rounded-full border-0 bg-transparent ${T.dimText} ${T.hoverInk} ${focus}`}
           >
-            {profile?.avatarUrl ? (
-              <img src={profile.avatarUrl} alt="" className={`size-9 rounded-full object-cover ring-2 ${T.avatarRing}`} />
+            {profile ? (
+              <AccountAvatar profile={profile} size={36} className={`ring-2 ${T.avatarRing}`} />
             ) : (
               <Icon d={PERSON_ICON} size={26} />
             )}
           </button>
           {menuOpen && (
-            <ProfileMenu profile={profile} onClose={() => setMenuOpen(false)} surface={surface} T={T} {...menuActions} />
+            <ProfileMenu profile={profile} email={email} onClose={() => setMenuOpen(false)} surface={surface} T={T} {...menuActions} />
           )}
         </div>
       </div>

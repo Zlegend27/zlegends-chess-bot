@@ -4,13 +4,15 @@
    straight to the REST API. The anon key can already read these tables, and
    a signed-in player's token is sent when there is one, so the results are
    the same either way. */
-const URL = import.meta.env.VITE_SUPABASE_URL?.replace(/\/$/, "");
+/* Not named URL: that would hide the browser's own URL, which storageKey
+   needs (it did once, and every refresh looked signed out). */
+const BASE = import.meta.env.VITE_SUPABASE_URL?.replace(/\/$/, "");
 const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-export const isConfigured = () => !!(URL && KEY);
+export const isConfigured = () => !!(BASE && KEY);
 
 /* The library keeps its session under sb-<project>-auth-token. */
-const storageKey = () => `sb-${new URL(URL).hostname.split(".")[0]}-auth-token`;
+const storageKey = () => `sb-${new URL(BASE).hostname.split(".")[0]}-auth-token`;
 
 /** The stored session, if the player has signed in on this browser before. */
 export function storedSession() {
@@ -35,7 +37,7 @@ export async function restGet(table, params) {
   const session = storedSession();
   const fresh = session && session.expires_at * 1000 > Date.now();
   const bearer = fresh ? session.access_token : KEY;
-  const res = await fetch(`${URL}/rest/v1/${table}?${params}`, {
+  const res = await fetch(`${BASE}/rest/v1/${table}?${params}`, {
     headers: { apikey: KEY, Authorization: `Bearer ${bearer}` },
   });
   if (!res.ok) throw new Error(`${table} read failed (${res.status})`);

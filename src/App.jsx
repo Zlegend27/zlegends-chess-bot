@@ -9,7 +9,7 @@ import PlayPage from "./components/PlayPage";
 import { currentStreak, nextStreak, utcDay } from "./utils/dailyStreak";
 import { historyStep, pathForView, sectionForView, viewForPath } from "./utils/routes";
 import { pickPostGameLine } from "./utils/botLines";
-import { signOut, watchAuthState, accountProfile } from "./utils/auth";
+import { signOut, watchAuthState, accountProfile, accountInfo, saveAccountName } from "./utils/auth";
 import { openSignIn } from "./utils/signInPrompt";
 import { claimAnonymousData } from "./utils/accountMigration";
 import { loadSetting, saveSetting } from "./utils/storage";
@@ -297,7 +297,8 @@ export default function ZlegendsBot() {
      modal below are derived from. */
   const [session, setSession] = useState(null);
   useEffect(() => watchAuthState(setSession), []);
-  const profile = accountProfile(session);
+  const baseProfile = accountProfile(session);
+  const account = accountInfo(session);
   /* Folds this browser's anonymous client_id data (Rank Bot rating, game
      history, Rush scores) onto the account, so a returning player who just
      signed in doesn't look like they're starting from zero. */
@@ -357,7 +358,17 @@ export default function ZlegendsBot() {
   const saveProfileName = (name) => {
     const saved = setDisplayName(name);
     setDisplayNameState(saved);
+    saveAccountName(saved);
   };
+  /* The name picked on the profile follows the account: logging in on a new
+     device brings it along, and a name picked before logging in is kept. */
+  const accountName = baseProfile?.chosenName;
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    if (accountName && accountName !== displayNameRef.current) setDisplayNameState(setDisplayName(accountName));
+    else if (!accountName && displayNameRef.current) saveAccountName(displayNameRef.current);
+  }, [session?.user?.id, accountName]);
+  const profile = baseProfile && { ...baseProfile, name: displayName || baseProfile.name };
   const saveDisplayName = () => {
     const saved = setDisplayName(nameDraft);
     setDisplayNameState(saved);
@@ -2575,6 +2586,7 @@ export default function ZlegendsBot() {
       <Suspense fallback={null}>
         <ProfilePage
           profile={profile}
+          account={account}
           displayName={displayName}
           onSaveName={saveProfileName}
           onBack={() => setSiteView("home")}
@@ -2666,6 +2678,7 @@ export default function ZlegendsBot() {
         section={section}
         onSection={onSection}
         profile={profile}
+        email={account?.email}
         sweetheart={sweetheart}
         dark={darkNav}
         onSignIn={openSignIn}
