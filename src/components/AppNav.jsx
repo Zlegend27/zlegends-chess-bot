@@ -73,7 +73,7 @@ function ProfileMenu({ profile, onClose, onSignIn, onSignOut, onProfile, onShare
             <span className={`min-w-0 truncate text-base font-bold ${T.ink}`}>{profile.name}</span>
           </div>
         ) : (
-          <MenuItem onClick={choose(onSignIn)} T={T}>Log in with Discord</MenuItem>
+          <MenuItem onClick={choose(onSignIn)} T={T}>Log in</MenuItem>
         )}
         <div className={divider} />
         <MenuItem onClick={choose(onProfile)} T={T}>Profile</MenuItem>

@@ -4,6 +4,7 @@ import { registerSW } from "virtual:pwa-register";
 import App from "./App.jsx";
 import HandoffLanding from "./components/HandoffLanding.jsx";
 import { readHandoffLanding } from "./utils/authHandoff";
+import SignInSheet from "./components/SignInSheet";
 import { reloadIfStaleBuild } from "./utils/staleBuild";
 import "./index.css";
 
@@ -42,7 +43,7 @@ const handoff = readHandoffLanding(window.location.search);
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <ErrorBoundary>
-      {handoff ? <HandoffLanding {...handoff} /> : <App />}
+      {handoff ? <HandoffLanding {...handoff} /> : <><App /><SignInSheet /></>}
     </ErrorBoundary>
   </React.StrictMode>,
 );

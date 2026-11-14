@@ -25,8 +25,8 @@ export default function LobbyPage({ session, profile, displayName, avatar, piece
     return (
       <SubPage onBack={onBack} sweetheart={sweetheart}>
         <div className="boxHead">Play a real person</div>
-        <p className={"m-0 text-sm " + T.ink}>Log in with Discord to join the lobby. Your name and your look come from your profile.</p>
-        <button type="button" className="btn gold" style={{ width: "100%" }} onClick={onSignIn}>Log in with Discord</button>
+        <p className={"m-0 text-sm " + T.ink}>Log in to join the lobby. Your name and your look come from your profile.</p>
+        <button type="button" className="btn gold" style={{ width: "100%" }} onClick={onSignIn}>Log in</button>
       </SubPage>
     );
   }

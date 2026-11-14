@@ -59,13 +59,13 @@ export default function ProfilePage({ profile, displayName, onSaveName, onBack, 
         <div className={"text-xs font-bold uppercase tracking-[0.14em] " + T.dimText}>Account</div>
         {profile ? (
           <>
-            <p className={"m-0 text-sm " + T.ink}>Signed in with Discord. Your games follow you to every device you sign in on.</p>
+            <p className={"m-0 text-sm " + T.ink}>Signed in. Your games follow you to every device you sign in on.</p>
             <button type="button" className="btn ghost" style={{ width: "100%" }} onClick={onSignOut}>Sign out</button>
           </>
         ) : (
           <>
             <p className={"m-0 text-sm " + T.ink}>Log in to keep your games on every device.</p>
-            <button type="button" className="btn gold" style={{ width: "100%" }} onClick={onSignIn}>Log in with Discord</button>
+            <button type="button" className="btn gold" style={{ width: "100%" }} onClick={onSignIn}>Log in</button>
           </>
         )}
       </div>

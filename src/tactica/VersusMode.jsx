@@ -38,8 +38,8 @@ export default function VersusMode({ session, profile, displayName, avatar, onSi
     return (
       <Screen>
         <h2 className="tc-title m-0 text-center text-[28px]">1v1</h2>
-        <p className="m-0 text-center text-base text-[var(--tc-cream-dim)]">Play a real person in the bin. Log in with Discord to join; your name and look come from your profile.</p>
-        <BrassButton className="self-center" onClick={onSignIn}>Log in with Discord</BrassButton>
+        <p className="m-0 text-center text-base text-[var(--tc-cream-dim)]">Play a real person in the bin. Log in to join; your name and look come from your profile.</p>
+        <BrassButton className="self-center" onClick={onSignIn}>Log in</BrassButton>
         <button type="button" className="tc-link self-center" onClick={onExit}>Back to the menu</button>
       </Screen>
     );

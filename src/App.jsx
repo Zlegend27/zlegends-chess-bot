@@ -9,7 +9,8 @@ import PlayPage from "./components/PlayPage";
 import { currentStreak, nextStreak, utcDay } from "./utils/dailyStreak";
 import { historyStep, pathForView, sectionForView, viewForPath } from "./utils/routes";
 import { pickPostGameLine } from "./utils/botLines";
-import { signInWithDiscord, signOut, watchAuthState, discordProfile } from "./utils/auth";
+import { signOut, watchAuthState, accountProfile } from "./utils/auth";
+import { openSignIn } from "./utils/signInPrompt";
 import { claimAnonymousData } from "./utils/accountMigration";
 import { loadSetting, saveSetting } from "./utils/storage";
 const RushThemeArt = lazy(() => import("./components/RushThemeArt"));
@@ -288,14 +289,14 @@ export default function ZlegendsBot() {
     setSettingsOpen(true);
     if (!ratingInfo) estimateRating().then(setRatingInfo);
   };
-  /* Discord sign-in (see utils/auth.js). watchAuthState fires once
+  /* Sign-in: Google, Discord or an email code (see utils/auth.js, SignInSheet). watchAuthState fires once
      immediately with whatever session already exists (page reload after
      a previous sign-in), then again on every future sign-in/out --
      session is the single source of truth `profile` and the account
      modal below are derived from. */
   const [session, setSession] = useState(null);
   useEffect(() => watchAuthState(setSession), []);
-  const profile = discordProfile(session);
+  const profile = accountProfile(session);
   /* Folds this browser's anonymous client_id data (Rank Bot rating, game
      history, Rush scores) onto the account, so a returning player who just
      signed in doesn't look like they're starting from zero. */
@@ -2534,7 +2535,7 @@ export default function ZlegendsBot() {
           avatar={avatarFromSession(session)}
           pieceSetId={pieceSetId}
           onBack={() => setSiteView("playHub")}
-          onSignIn={signInWithDiscord}
+          onSignIn={openSignIn}
           sweetheart={sweetheart}
         />
       </Suspense>
@@ -2554,7 +2555,7 @@ export default function ZlegendsBot() {
       <Suspense fallback={null}>
         <TacticaPage
           pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={() => onSection("play")}
-          player={{ session, profile, displayName, avatar: avatarFromSession(session), onSignIn: signInWithDiscord }}
+          player={{ session, profile, displayName, avatar: avatarFromSession(session), onSignIn: openSignIn }}
         />
       </Suspense>
     );
@@ -2568,7 +2569,7 @@ export default function ZlegendsBot() {
           displayName={displayName}
           onSaveName={saveProfileName}
           onBack={() => setSiteView("home")}
-          onSignIn={signInWithDiscord}
+          onSignIn={openSignIn}
           onSignOut={signOut}
           onYourGames={() => enterMode("review")}
           avatar={avatarFromSession(session)}
@@ -2658,7 +2659,7 @@ export default function ZlegendsBot() {
         profile={profile}
         sweetheart={sweetheart}
         dark={darkNav}
-        onSignIn={signInWithDiscord}
+        onSignIn={openSignIn}
         onSignOut={signOut}
         onProfile={() => setSiteView("profile")}
         onShare={onShare}

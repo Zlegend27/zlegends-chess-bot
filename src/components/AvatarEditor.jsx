@@ -84,7 +84,7 @@ export default function AvatarEditor({ avatar, discordUrl, signedIn, onSave, swe
       <Swatches label="Trousers" colors={PANTS} value={draft.pants} onPick={(pants) => change({ pants })} T={T} />
 
       <p className={"m-0 text-xs " + T.dimText} role="status">
-        {signedIn ? (status || "Changes save on their own.") : "Log in with Discord to save your look and play 1v1."}
+        {signedIn ? (status || "Changes save on their own.") : "Log in to save your look and play 1v1."}
       </p>
     </div>
   );
