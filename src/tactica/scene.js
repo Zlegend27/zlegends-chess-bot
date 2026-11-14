@@ -50,6 +50,10 @@ const HELD_WIDEN = 1.15;
 const BEAM_HEIGHT = 0.5;
 const DRAG_LIFT = 0.35;
 const HELD_OPACITY = 0.55;
+/* A character standing between the camera and the picked one (or one of its
+   glowing squares) fades to this, so it never hides them. It counts as in
+   the way when the line of sight passes within FADE_RADIUS of its body. */
+const FADE_OPACITY = 0.25, FADE_RADIUS = 0.42, FADE_SMOOTH = 10;
 /* Dragging near a screen edge slides the camera that way, in board squares
    per second, so a far square can be reached without lifting the finger. The
    finger has to rest there briefly first, so squares near an edge stay easy
@@ -450,6 +454,7 @@ export class TacticaScene {
   setGhost(entry, on) {
     if (!!entry.ghost === on) return;
     if (on) {
+      this.unfade(entry);
       entry.ghost = new Map();
       entry.model.traverse((o) => {
         if (!o.isMesh) return;
@@ -462,6 +467,64 @@ export class TacticaScene {
       for (const [o, m] of entry.ghost) { o.material.dispose(); o.material = m; }
       entry.ghost = null;
     }
+  }
+
+  /** Fades the characters standing in front of the picked one or its glowing
+   *  squares, and brings back the ones no longer in the way. */
+  updateFades(dt) {
+    const blockers = new Set();
+    const focus = this.focusSq != null ? this.pieces.get(this.focusSq) : null;
+    if (focus) {
+      const eye = this.camera.position;
+      const points = [focus.group.position.clone().setY((TAP_HEIGHT[focus.kind] ?? 1.4) * 0.6)];
+      for (const sq of this.targets) points.push(this.worldOf(sq).setY(0.2));
+      const d = new THREE.Vector3(), p = new THREE.Vector3(), q = new THREE.Vector3();
+      for (const entry of this.pieces.values()) {
+        if (entry === focus || entry.ghost) continue;
+        const h = TAP_HEIGHT[entry.kind] ?? 1.4;
+        in_the_way: for (const y of [0.35, h * 0.75]) {
+          p.copy(entry.group.position).setY(y);
+          for (const at of points) {
+            /* Its own square (a capture) isn't hidden by itself. */
+            if (Math.hypot(at.x - p.x, at.z - p.z) < 0.5) continue;
+            d.subVectors(at, eye);
+            const t = q.subVectors(p, eye).dot(d) / d.lengthSq();
+            if (t <= 0 || t >= 1) continue;
+            if (q.copy(eye).addScaledVector(d, t).distanceTo(p) < FADE_RADIUS) { blockers.add(entry); break in_the_way; }
+          }
+        }
+      }
+    }
+    const k = 1 - Math.exp(-FADE_SMOOTH * dt);
+    for (const entry of this.pieces.values()) {
+      const goal = blockers.has(entry) ? FADE_OPACITY : 1;
+      const now = entry.fade ?? 1;
+      if (now === goal && (goal < 1 || !entry.fadeMats)) continue;
+      const next = Math.abs(goal - now) < 0.02 ? goal : now + (goal - now) * k;
+      if (next >= 1) { this.unfade(entry); continue; }
+      if (!entry.fadeMats) {
+        entry.fadeMats = new Map();
+        entry.model.traverse((o) => {
+          if (!o.isMesh) return;
+          entry.fadeMats.set(o, o.material);
+          o.material = o.material.clone();
+          o.material.transparent = true;
+          o.material.depthWrite = false;
+        });
+      }
+      entry.fade = next;
+      for (const o of entry.fadeMats.keys()) o.material.opacity = next;
+      this.wake();
+    }
+  }
+
+  /** Puts a faded character back to solid at once. */
+  unfade(entry) {
+    if (entry.fadeMats) {
+      for (const [o, m] of entry.fadeMats) { o.material.dispose(); o.material = m; }
+      entry.fadeMats = null;
+    }
+    entry.fade = 1;
   }
 
   /** Which square a tap means, given the character bodies under the finger,
@@ -507,6 +570,7 @@ export class TacticaScene {
     this.marks.clear();
     this.pulse = [];
     this.held = held ? selected : null;
+    this.focusSq = held ? selected : null;
     this.targets = held ? targets : [];
     this.captures = captures;
     /* A tap when a character is picked, a tick when a move is previewed. */
@@ -1643,6 +1707,7 @@ export class TacticaScene {
         this.camera.position.y += (Math.random() - 0.5) * this.shake;
       }
       this.camera.lookAt(this.camLook);
+      this.updateFades(since);
       this.reportView();
       this.renderer.render(this.scene, this.camera);
       if (busy && dt < 200) this.adaptResolution(dt, now);
