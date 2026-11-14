@@ -54,8 +54,19 @@ export function watchAuthState(onChange) {
   let cancelled = false;
   getSupabase().then((supabase) => {
     if (!supabase || cancelled) return;
-    supabase.auth.getSession().then(({ data }) => { if (!cancelled) onChange(data?.session ?? null); });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => onChange(session));
+    /* A phone waking up often has no network for its first token refresh:
+       the library then reports no session, though it keeps the stored one
+       and refreshes it a moment later. Showing that as signed out logged
+       players out for no reason, so the player only counts as signed out
+       after a real sign-out (SIGNED_OUT clears the stored session too) or
+       once nothing is stored. */
+    const report = (event, session) => {
+      if (cancelled) return;
+      if (!session && event !== "SIGNED_OUT") session = storedSession();
+      onChange(session ?? null);
+    };
+    supabase.auth.getSession().then(({ data }) => report("INITIAL", data?.session));
+    const { data: sub } = supabase.auth.onAuthStateChange(report);
     const stopHandoff = isIosHomeScreenApp() ? watchHandoff(supabase) : () => {};
     unsub = () => { sub.subscription.unsubscribe(); stopHandoff(); };
   });
