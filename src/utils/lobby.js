@@ -58,12 +58,13 @@ function hash(text) {
 }
 
 /** The match at a full table, the same on both clients:
- *  { id, white, black, tc }, or null if the table isn't full. */
-export function matchAt(table) {
+ *  { id, white, black, tc }, or null if the table isn't full. `prefix`
+ *  keeps the match ids of different lobbies apart. */
+export function matchAt(table, prefix = "") {
   if (!table.full) return null;
   const [a, b] = [...table.seats].sort((x, y) => (x.id < y.id ? -1 : 1));
   const startedAt = Math.min(a.seat.at, b.seat.at);
-  const id = `t${table.id}-${startedAt}-${a.id.slice(0, 8)}-${b.id.slice(0, 8)}`;
+  const id = `${prefix}t${table.id}-${startedAt}-${a.id.slice(0, 8)}-${b.id.slice(0, 8)}`;
   const aIsWhite = hash(id) % 2 === 0;
   return { id, white: aIsWhite ? a : b, black: aIsWhite ? b : a, tc: table.tc ?? TIME_CONTROLS[1].id };
 }

@@ -2552,7 +2552,10 @@ export default function ZlegendsBot() {
   if (siteView === "tactica") {
     return (
       <Suspense fallback={null}>
-        <TacticaPage pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={() => onSection("play")} />
+        <TacticaPage
+          pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={() => onSection("play")}
+          player={{ session, profile, displayName, avatar: avatarFromSession(session), onSignIn: signInWithDiscord }}
+        />
       </Suspense>
     );
   }

@@ -9,85 +9,17 @@
    development a guest identity per tab stands in, so two tabs can test
    it.
    ================================================================ */
-import { useEffect, useMemo, useRef, useState } from "react";
-import { getSupabase } from "../utils/supabase";
-import { loadSetting, saveSetting } from "../utils/storage";
-import { TIME_CONTROLS, playersFrom, tablesFrom, holdsSeat, matchAt, timeControl } from "../utils/lobby";
+import { TIME_CONTROLS, timeControl } from "../utils/lobby";
 import { getUiTheme } from "../utils/uiTheme";
-import { DEFAULT_AVATAR } from "../utils/avatar";
 import SubPage from "../components/SubPage";
 import PlayerSprite from "../components/PlayerSprite";
 import PvpMatch from "./PvpMatch";
-
-const ACTIVE_KEY = "pvpActive";
-const LOBBY_CHANNEL = "lobby-v1";
-
-/** In local development, a different guest per tab so two tabs can play. */
-function devGuest() {
-  let id = sessionStorage.getItem("zlDevGuest");
-  if (!id) { id = `guest-${crypto.randomUUID()}`; sessionStorage.setItem("zlDevGuest", id); }
-  return { id, name: `Guest ${id.slice(6, 10)}`, avatar: { ...DEFAULT_AVATAR, shirt: id.charCodeAt(7) % 8 }, discordUrl: null };
-}
+import { useLobby, useLobbyMe } from "./useLobby";
 
 export default function LobbyPage({ session, profile, displayName, avatar, pieceSetId, onBack, onSignIn, sweetheart }) {
   const T = getUiTheme(sweetheart);
-  const signedIn = !!session?.user?.id;
-  const me = useMemo(() => {
-    if (signedIn) {
-      const name = displayName && displayName !== "Challenger" ? displayName : profile?.name || "Player";
-      return { id: session.user.id, name, avatar, discordUrl: profile?.avatarUrl ?? null };
-    }
-    return import.meta.env.DEV ? devGuest() : null;
-  }, [signedIn, session?.user?.id, displayName, profile?.name, profile?.avatarUrl, avatar]);
-
-  const [supabase, setSupabase] = useState(null);
-  const [connected, setConnected] = useState(false);
-  const [players, setPlayers] = useState([]);
-  const [seat, setSeat] = useState(null); // { table, side, at }
-  const [tcId, setTcId] = useState(() => loadSetting("pvpTc", "10+0"));
-  const [match, setMatch] = useState(() => loadSetting(ACTIVE_KEY, null));
-  const [note, setNote] = useState(null);
-  const joinedAt = useRef(Date.now());
-  const channelRef = useRef(null);
-
-  useEffect(() => { saveSetting("pvpTc", tcId); }, [tcId]);
-  useEffect(() => { saveSetting(ACTIVE_KEY, match); }, [match]);
-  useEffect(() => { getSupabase().then(setSupabase); }, []);
-
-  /* Join the room. */
-  useEffect(() => {
-    if (!supabase || !me) return;
-    const channel = supabase.channel(LOBBY_CHANNEL, { config: { presence: { key: me.id } } });
-    channelRef.current = channel;
-    channel
-      .on("presence", { event: "sync" }, () => setPlayers(playersFrom(channel.presenceState())))
-      .subscribe((status) => setConnected(status === "SUBSCRIBED"));
-    return () => { supabase.removeChannel(channel); channelRef.current = null; setConnected(false); };
-  }, [supabase, me]);
-
-  /* Tell the room where I am, whenever that changes. */
-  useEffect(() => {
-    if (!connected || !me) return;
-    channelRef.current?.track({
-      id: me.id, name: me.name, avatar: me.avatar, discordUrl: me.discordUrl,
-      seat: match ? match.seat ?? seat : seat, tc: tcId, playing: match?.id ?? null, joinedAt: joinedAt.current,
-    });
-  }, [connected, me, seat, tcId, match]);
-
-  const tables = useMemo(() => tablesFrom(players), [players]);
-  const mePresent = players.find((p) => p.id === me?.id);
-
-  /* Lost a seat to someone who got there first; or a table filled: start. */
-  useEffect(() => {
-    if (!seat || match || !mePresent?.seat) return;
-    if (!holdsSeat(mePresent, tables)) {
-      setSeat(null);
-      setNote("Someone sat there a moment before you.");
-      return;
-    }
-    const found = matchAt(tables[seat.table]);
-    if (found) setMatch({ ...found, seat });
-  }, [tables, seat, match, mePresent]);
+  const { me, signedIn } = useLobbyMe({ session, profile, displayName, avatar });
+  const { supabase, connected, players, tables, seat, tcId, setTcId, match, note, standing, sit, standUp, leaveMatch } = useLobby({ me });
 
   if (!me) {
     return (
@@ -104,17 +36,11 @@ export default function LobbyPage({ session, profile, displayName, avatar, piece
       <div className="root">
         <PvpMatch
           supabase={supabase} me={me} match={match} pieceSetId={pieceSetId} signedIn={signedIn}
-          onExit={() => { setMatch(null); setSeat(null); }}
+          onExit={leaveMatch}
         />
       </div>
     );
   }
-
-  const sit = (table, side) => {
-    setNote(null);
-    setSeat({ table, side, at: Date.now() });
-  };
-  const standing = players.filter((p) => !p.seat && !p.playing);
 
   return (
     <SubPage onBack={onBack} sweetheart={sweetheart}>
@@ -165,7 +91,7 @@ export default function LobbyPage({ session, profile, displayName, avatar, piece
               </div>
               <div className="pvpTableTop" aria-hidden="true" />
               {table.seats.some((p) => p?.id === me.id) && !busy && (
-                <button type="button" className="border-0 bg-transparent p-0 text-xs underline" style={{ color: "var(--dim)" }} onClick={() => setSeat(null)}>
+                <button type="button" className="border-0 bg-transparent p-0 text-xs underline" style={{ color: "var(--dim)" }} onClick={standUp}>
                   Stand up
                 </button>
               )}

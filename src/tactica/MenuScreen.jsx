@@ -19,6 +19,7 @@ const MODES = [
   { id: "run", name: "Bin Run", piece: 4 },
   { id: "blitz", name: "Blitz in the Bin", piece: 2 },
   { id: "bot", name: "Regular Chess", piece: 6 },
+  { id: "versus", name: "1v1", piece: 5 },
   { id: "tutorial", name: "Tutorial", piece: 1 },
 ];
 

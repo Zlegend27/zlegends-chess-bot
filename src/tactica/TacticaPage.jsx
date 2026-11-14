@@ -5,6 +5,7 @@ import TutorialMode from "./TutorialMode";
 import BlitzMode from "./BlitzMode";
 import RunMode from "./RunMode";
 import BotMode from "./BotMode";
+import VersusMode from "./VersusMode";
 import { unlock, play, setFlies } from "./sound";
 import "./tactica.css";
 
@@ -13,8 +14,11 @@ import "./tactica.css";
    look (tactica.css). Sound starts on the first touch (phones require it);
    wooden buttons knock, brass ones click, and the bin's flies buzz past
    now and then. */
-export default function TacticaPage({ pieceImgSrc, sweetheart, onExit }) {
-  const [screen, setScreen] = useState("menu");
+/* `player` ({ session, profile, displayName, avatar, onSignIn }) is who
+   plays 1v1. */
+export default function TacticaPage({ pieceImgSrc, sweetheart, player, onExit }) {
+  /* A 1v1 game still on (a refresh mid-game) goes straight back to it. */
+  const [screen, setScreen] = useState(() => (loadSetting("tacticaPvpActive", null) ? "versus" : "menu"));
   const [blitzBest, setBlitzBest] = useState(() => loadSetting("tacticaBlitzBest", 0));
   const toMenu = () => setScreen("menu");
   const recordBest = (score) => { setBlitzBest(score); saveSetting("tacticaBlitzBest", score); };
@@ -40,6 +44,7 @@ export default function TacticaPage({ pieceImgSrc, sweetheart, onExit }) {
   if (screen === "tutorial") page = <TutorialMode pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={toMenu} />;
   else if (screen === "run") page = <RunMode pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} best={runBest} onBest={recordRunBest} onExit={toMenu} />;
   else if (screen === "bot") page = <BotMode pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={toMenu} />;
+  else if (screen === "versus") page = <VersusMode {...player} pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={toMenu} />;
   else if (screen === "blitz") page = <BlitzMode sweetheart={sweetheart} best={blitzBest} onBest={recordBest} onExit={toMenu} />;
   else page = <MenuScreen onPick={setScreen} onExit={onExit} blitzBest={blitzBest} sweetheart={sweetheart} />;
   return <div className="tactica" onPointerDownCapture={onPointerDown} onClickCapture={unlock} onTouchEndCapture={unlock}>{page}</div>;

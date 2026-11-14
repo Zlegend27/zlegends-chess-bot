@@ -23,7 +23,8 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
    yours has finished. */
 const MIN_THINK_MS = 400;
 
-function friendlySquares(eng, side) {
+/** Your characters, front rank first, left to right as you look at the board. */
+export function friendlySquares(eng, side) {
   const squares = [];
   for (let sq = 0; sq < 64; sq++) if (Math.sign(eng.pieceAt(sq)) === side) squares.push(sq);
   const rank = (sq) => (side === 1 ? (sq / 8) | 0 : 7 - ((sq / 8) | 0));
