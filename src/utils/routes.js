@@ -16,6 +16,8 @@ const VIEW_PATHS = {
   rush: "/rush",
   tactica: "/tactica",
   lobby: "/lobby",
+  privacy: "/privacy",
+  terms: "/terms",
 };
 
 export const pathForView = (view) => VIEW_PATHS[view] ?? "/";
@@ -32,7 +34,7 @@ export function sectionForView({ siteView, rushMode, activePuzzle, pastedGame })
   if (siteView === "lessons" || siteView === "openings") return "learn";
   if (siteView === "review") return "review";
   if (siteView === "home") return "home";
-  if (siteView === "profile") return "";
+  if (["profile", "privacy", "terms"].includes(siteView)) return "";
   if (["playHub", "watch", "tactica", "lobby"].includes(siteView)) return "play";
   if (rushMode || activePuzzle) return "puzzles";
   return pastedGame ? "review" : "play";

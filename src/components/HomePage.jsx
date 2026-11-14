@@ -97,6 +97,8 @@ export default function HomePage({
 
       <footer className={"mt-3 text-center text-xs " + T.dimText}>
         Built by <a href="https://www.youtube.com/@Zlegend27" target="_blank" rel="noopener noreferrer" className={(sweetheart ? "text-sh-lteal" : "text-cyan") + " hover:underline"}>Zlegend27</a> · <a href="https://github.com/Zlegend27/zlegends-chess-bot" target="_blank" rel="noopener noreferrer" className={(sweetheart ? "text-sh-lteal" : "text-cyan") + " hover:underline"}>Source code</a> · <a href="https://github.com/Zlegend27/zlegends-chess-bot/blob/main/NOTICE.md" target="_blank" rel="noopener noreferrer" className={(sweetheart ? "text-sh-lteal" : "text-cyan") + " hover:underline"}>Licenses</a>
+        <br />
+        <a href="/privacy" className={(sweetheart ? "text-sh-lteal" : "text-cyan") + " hover:underline"}>Privacy</a> · <a href="/terms" className={(sweetheart ? "text-sh-lteal" : "text-cyan") + " hover:underline"}>Terms</a>
       </footer>
     </div>
   );

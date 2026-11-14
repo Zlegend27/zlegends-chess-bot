@@ -41,6 +41,7 @@ const GameReviewPage = lazy(() => import("./components/GameReviewPage"));
 const AppPopups = lazy(() => import("./components/AppPopups"));
 const ModePages = lazy(() => import("./components/ModePages"));
 const ProfilePage = lazy(() => import("./components/ProfilePage"));
+const LegalPage = lazy(() => import("./components/LegalPage"));
 const LobbyPage = lazy(() => import("./pvp/LobbyPage"));
 const PlayView = lazy(() => import("./components/PlayView"));
 import { syncRankBotToSupabase, fetchRankBotFromSupabase, logRankBotMove } from "./utils/rankBot";
@@ -2557,6 +2558,14 @@ export default function ZlegendsBot() {
           pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={() => onSection("play")}
           player={{ session, profile, displayName, avatar: avatarFromSession(session), onSignIn: openSignIn }}
         />
+      </Suspense>
+    );
+  }
+
+  if (siteView === "privacy" || siteView === "terms") {
+    return (
+      <Suspense fallback={null}>
+        <LegalPage doc={siteView} onBack={() => setSiteView("home")} sweetheart={sweetheart} />
       </Suspense>
     );
   }

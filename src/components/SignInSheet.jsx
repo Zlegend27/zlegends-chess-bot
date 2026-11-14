@@ -108,6 +108,9 @@ export default function SignInSheet() {
         </form>
       )}
 
+      <p className="m-0 text-xs" style={{ color: "var(--dim)" }}>
+        By logging in you agree to the <a href="/terms" target="_blank" rel="noopener">Terms</a> and <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.
+      </p>
       {error && <p className="m-0 text-sm" role="alert" style={{ color: "var(--magenta)" }}>{error}</p>}
     </Modal>
   );
