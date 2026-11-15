@@ -58,17 +58,19 @@ Security and fairness
 4. Check that nobody can change or delete another player's rows (S). Not
    tested, on purpose: it needs the owner's OK since the test writes.
 
-Legal
-5. Music rights (owner decision). The "Juice" and "Omori" playlists are
-   other people's music streamed from our storage. For a public or paid
-   site this is the biggest legal risk. Options: remove them, replace with
-   licensed or original tracks, or keep only the chiptune and theme.
-6. Art rights: the Sweetheart art and the Wood piece set's source are still
-   unconfirmed (open since 2026-11-01).
-7. Maia3 (Rank Bot's human-move model) is AGPL: the licence notices are in
-   place; keep the source public.
-8. Self-serve account deletion (M). Today it's "email us", which is fine
-   for a small site and what the Privacy Policy says.
+Legal (owner decided 2026-11-15)
+5. Music: DECIDED, the Juice and Omori playlists will be removed. Not done
+   yet: the owner asked to be reminded. To do it: drop them from
+   MP3_PLAYLISTS in src/utils/musicLibrary.js and delete the folders from
+   the Supabase "music" bucket.
+6. Art: DECIDED, accepted as is. The Sweetheart art and the Wood piece set
+   are a small part of the site; remove them if anyone objects.
+7. Maia3 (AGPL): DONE. LICENSE and NOTICE.md are in the repo, the repo is
+   public, and the home page links to both.
+8. Account deletion: BUILT 2026-11-15. "Delete my account" on the profile,
+   with a confirm step. It needs supabase/004_delete_account.sql run once
+   in the Supabase SQL Editor; until then the button says to email us.
+   Not tested against the live database.
 
 Reliability and limits
 9. Hosting plans. Vercel's free plan doesn't allow commercial use, so any

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { PROVIDERS, linkProvider, unlinkProvider, takeLinkResult } from "../utils/auth";
+import { PROVIDERS, linkProvider, unlinkProvider, takeLinkResult, deleteAccount } from "../utils/auth";
 
 /* The Account part of the profile page: which logins open this account,
    connecting another one, and logging out. One person, one account: logins
@@ -11,6 +11,7 @@ export default function AccountSection({ account, onSignIn, onSignOut, T }) {
   const [busy, setBusy] = useState(null); // provider id being connected or removed
   const [note, setNote] = useState(null); // { ok, text }
   const [removing, setRemoving] = useState(null); // provider id awaiting a second tap
+  const [deleting, setDeleting] = useState("idle"); // idle | confirm | busy
 
   /* Back from connecting a login: say how it went, once. */
   useEffect(() => {
@@ -45,6 +46,14 @@ export default function AccountSection({ account, onSignIn, onSignOut, T }) {
     setBusy(null);
     setRemoving(null);
     setNote(error ? { ok: false, text: error } : { ok: true, text: "Removed. You can connect it again any time." });
+  };
+
+  const erase = async () => {
+    setDeleting("busy");
+    setNote(null);
+    const { error } = await deleteAccount();
+    /* On success the session ends and this section shows Log in again. */
+    if (error) { setNote({ ok: false, text: error }); setDeleting("idle"); }
   };
 
   const linkedCount = account.linked.length;
@@ -90,8 +99,19 @@ export default function AccountSection({ account, onSignIn, onSignOut, T }) {
       {note && <p className="m-0 text-sm" role="status" style={{ color: note.ok ? "var(--cyan)" : "var(--magenta)" }}>{note.text}</p>}
 
       <button type="button" className="btn ghost" style={{ width: "100%" }} onClick={onSignOut}>Log out</button>
+      {deleting === "idle" ? (
+        <button type="button" className={"cursor-pointer self-start border-0 bg-transparent p-0 py-2 text-xs underline " + T.dimText} onClick={() => setDeleting("confirm")}>Delete my account</button>
+      ) : (
+        <div className="flex flex-col gap-2 rounded-2xl border p-3" style={{ borderColor: "var(--magenta)" }}>
+          <p className={"m-0 text-sm " + T.ink}>This deletes your account, your saved games and your scores for good. It can&apos;t be undone.</p>
+          <div className="flex gap-2">
+            <button type="button" className="btn ghost" style={{ flex: 1 }} disabled={deleting === "busy"} onClick={() => setDeleting("idle")}>Keep my account</button>
+            <button type="button" className="btn ghost" style={{ flex: 1, color: "var(--magenta)" }} disabled={deleting === "busy"} onClick={erase}>{deleting === "busy" ? "Deleting…" : "Yes, delete everything"}</button>
+          </div>
+        </div>
+      )}
       <p className={"m-0 text-xs " + T.dimText}>
-        To delete your account and everything saved with it, email <a href={`mailto:${SUPPORT}?subject=Delete%20my%20account`} style={{ color: "var(--cyan)" }}>{SUPPORT}</a>.
+        Questions about your data: <a href={`mailto:${SUPPORT}`} style={{ color: "var(--cyan)" }}>{SUPPORT}</a>.
       </p>
     </div>
   );

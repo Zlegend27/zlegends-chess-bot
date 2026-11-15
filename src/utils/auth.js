@@ -165,6 +165,19 @@ export async function saveAccountName(name) {
   await supabase?.auth.updateUser({ data: { zl_name: name || null } });
 }
 
+/** Deletes the signed-in player's account and everything saved with it
+ *  (supabase/004_delete_account.sql). Resolves { error } with a message to
+ *  show, or {} once it's gone and this browser is signed out. */
+export async function deleteAccount() {
+  const supabase = await getSupabase();
+  if (!supabase) return { error: "Sign-in isn't available right now." };
+  const { error } = await supabase.rpc("delete_my_account");
+  if (error) return { error: "Couldn't delete it from here. Email us and we'll do it for you." };
+  /* The account is gone, so only this browser's copy of the session is left. */
+  await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+  return {};
+}
+
 /* ---------------- One account, several ways in ---------------- */
 
 export const PROVIDERS = [

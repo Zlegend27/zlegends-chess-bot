@@ -5,7 +5,7 @@ import { getUiTheme } from "../utils/uiTheme";
    sign-in setup links to both). Written in plain words, and it has to match
    what the site really does: if the site starts collecting or sending
    anything new, update the policy and its date. */
-const UPDATED = "November 14, 2026";
+const UPDATED = "November 15, 2026";
 const CONTACT = "support@zlegend2700.com";
 
 function Section({ title, children, T }) {
@@ -55,7 +55,7 @@ function Privacy({ T }) {
         <p className="m-0">You need to be 13 or older to make an account. If you believe a child under 13 has made one, email us and we&apos;ll delete it.</p>
       </Section>
       <Section title="Your choices" T={T}>
-        <p className="m-0">To see or delete your account and everything saved with it, email <a href={`mailto:${CONTACT}`}>{CONTACT}</a> from the address you log in with (or tell us your Discord name). Clearing this site&apos;s data in your browser removes what is kept there. We keep account data while the account exists.</p>
+        <p className="m-0">You can delete your account and everything saved with it from your profile page (Delete my account). To see what we hold, or if you&apos;d rather we delete it for you, email <a href={`mailto:${CONTACT}`}>{CONTACT}</a> from the address you log in with. Clearing this site&apos;s data in your browser removes what is kept there. We keep account data while the account exists.</p>
       </Section>
       <Section title="Changes" T={T}>
         <p className="m-0">If this policy changes, the date at the top changes too.</p>
