@@ -88,14 +88,6 @@ export default function useMusic({ musicOpen, blindOpen }) {
   mp3PlayingRef.current = mp3Playing;
   const mp3ShuffleRef = useRef(mp3Shuffle);
   mp3ShuffleRef.current = mp3Shuffle;
-  /* First-time visitors get the theme track playing softly the moment
-     they first interact with the page (browsers block audio-with-sound
-     autoplay before any user gesture, so we can't start it on load --
-     the very first click/tap/keydown anywhere satisfies that gesture
-     requirement while still feeling immediate). Only fires once, ever,
-     and only if they haven't already picked a source themselves. */
-  const themeAutoplayArmedRef = useRef(!loadSetting("visitedBefore", false) && loadSetting("musicSource", "chiptune") === "chiptune");
-
   const [musicOn, setMusicOn] = useState(false);
   const [trackName, setTrackName] = useState(audioRef.current.trackName());
 
@@ -177,36 +169,6 @@ export default function useMusic({ musicOpen, blindOpen }) {
       mp3Audio.removeEventListener("canplay", onReady);
     };
   }, [mp3Audio]);
-  /* Cues the theme track (metadata + src only, not full playback) as soon
-     as a genuine first-time visitor loads the page, so it's ready to go
-     the instant they satisfy the browser's user-gesture requirement for
-     audio-with-sound autoplay below -- without this, the first click would
-     have to wait on a fresh Storage round trip before anything could play. */
-  useEffect(() => {
-    if (!themeAutoplayArmedRef.current) return;
-    setMusicSourceState(THEME_ID);
-    saveSetting("musicSource", THEME_ID);
-    loadMp3Playlist(THEME_ID);
-  }, []);
-  useEffect(() => {
-    if (!themeAutoplayArmedRef.current) return;
-    const start = () => {
-      if (!themeAutoplayArmedRef.current) return;
-      themeAutoplayArmedRef.current = false;
-      onVolume(35);
-      setMp3Playing(true);
-      resumeMp3Gain();
-      if (mp3Audio.src) mp3Audio.play().catch(() => {});
-    };
-    document.addEventListener("pointerdown", start, { once: true });
-    document.addEventListener("keydown", start, { once: true });
-    return () => {
-      document.removeEventListener("pointerdown", start);
-      document.removeEventListener("keydown", start);
-    };
-    /* Runs only when the volume or player changes. The helpers it calls are rebuilt every render. */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   /* Backgrounding the tab (swiped away, phone locked, switched apps) is
      supposed to keep music playing -- that's the whole point of it being
      music -- but browsers auto-suspend AudioContexts and throttle
@@ -231,7 +193,6 @@ export default function useMusic({ musicOpen, blindOpen }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [musicOn]);
   const setMusicSource = (id) => {
-    themeAutoplayArmedRef.current = false;
     if (id === musicSource) return;
     if (musicOn) { audio.toggle(); setMusicOn(false); }
     if (mp3PlayingRef.current) { mp3Audio.pause(); setMp3Playing(false); }
@@ -278,14 +239,29 @@ export default function useMusic({ musicOpen, blindOpen }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blindOpen]);
+  /* Starts a track right now, inside the tap that asked for it. Phones
+     (iPhones above all) only allow audio to start during a tap; starting
+     it a moment later from an effect was refused, which left the player
+     stuck on "buffering" with no sound. */
+  const playMp3Now = (idx) => {
+    const tracks = mp3TracksRef.current;
+    if (!tracks.length) return;
+    const track = tracks[((idx % tracks.length) + tracks.length) % tracks.length];
+    setMp3Idx(idx);
+    saveSetting("mp3Idx", idx);
+    if (mp3Audio.src !== track.url) {
+      mp3Audio.src = track.url;
+      setMp3Duration(0);
+      setMp3CurrentTime(0);
+    }
+    resumeMp3Gain();
+    setMp3Playing(true);
+    mp3Audio.play().catch(() => { setMp3Playing(false); setMp3Buffering(false); });
+  };
   const switchMp3Track = (delta) => {
     const tracks = mp3TracksRef.current;
     if (!tracks.length) return;
-    setMp3Idx(i => {
-      const next = pickTrackIndex(i, tracks.length, delta, mp3ShuffleRef.current);
-      saveSetting("mp3Idx", next);
-      return next;
-    });
+    playMp3Now(pickTrackIndex(mp3IdxRef.current, tracks.length, delta, mp3ShuffleRef.current));
   };
   const toggleShuffle = () => {
     setMp3Shuffle(v => {
@@ -302,15 +278,13 @@ export default function useMusic({ musicOpen, blindOpen }) {
     saveSetting("sfxOn", on);
     if (on) audio.sfxMove();
   };
-  const pickMp3Track = (idx) => {
-    setMp3Idx(idx);
-    saveSetting("mp3Idx", idx);
-  };
+  /* Tapping a song plays it. */
+  const pickMp3Track = (idx) => playMp3Now(idx);
   const toggleMusic = () => {
     if (musicSource === "chiptune") { setMusicOn(audio.toggle()); return; }
     if (!mp3TracksRef.current.length) return;
     if (mp3PlayingRef.current) { mp3Audio.pause(); setMp3Playing(false); }
-    else { resumeMp3Gain(); mp3Audio.play().catch(() => {}); setMp3Playing(true); }
+    else { resumeMp3Gain(); setMp3Playing(true); mp3Audio.play().catch(() => { setMp3Playing(false); setMp3Buffering(false); }); }
   };
   const nextTrack = () => {
     if (musicSource === "chiptune") { setTrackName(audio.next()); saveSetting("trackIdx", audio.trackIndex()); return; }

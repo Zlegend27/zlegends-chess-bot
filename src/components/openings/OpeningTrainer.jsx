@@ -24,7 +24,7 @@ const STEPS = [
 
 /* `back` is the link to Learn; it shows on the library only, since courses
    and sessions have their own way back. */
-export default function OpeningTrainer({ sweetheart, pieceSetId, back = null }) {
+export default function OpeningTrainer({ sweetheart, pieceSetId, back = null, onLibrary = null }) {
   const T = getUiTheme(sweetheart);
   const pieceImgSrc = (type, isWhite) => getPieceSet(pieceSetId).svgUrl(type, isWhite);
   const colors = getBoardColor(loadSetting("boardColor", "default"));
@@ -195,6 +195,16 @@ export default function OpeningTrainer({ sweetheart, pieceSetId, back = null }) 
       <div className="grid grid-cols-2 gap-3">
         {COURSES.filter((c) => c.side === side).map((c) => <CourseTile key={c.id} course={c} progress={progress} colors={colors} pieceImgSrc={pieceImgSrc} T={T} focus={focus} onOpen={openCourse} />)}
       </div>
+
+      {/* The old Openings Library lives here now: every named opening, to
+          look up, play through or be quizzed on. */}
+      {onLibrary && (
+        <button onClick={onLibrary}
+          className={`rounded-2xl border ${T.cardBorder} ${T.panelBg} px-4 py-3 text-left transition hover:-translate-y-0.5 ${focus}`}>
+          <b className={`block text-sm ${T.ink}`} style={{ fontFamily: "var(--font-display)" }}>Looking for another opening?</b>
+          <span className={`text-xs ${T.dimText}`}>Browse the full openings library: the Italian, Sicilian, Ruy Lopez and more.</span>
+        </button>
+      )}
     </div>
   );
 }

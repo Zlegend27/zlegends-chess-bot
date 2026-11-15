@@ -1,0 +1,122 @@
+# Launch plan (written 2026-11-15)
+
+What's left before opening the site to the public, what data we collect and
+what we're missing, and ways to earn from it. Nothing here is built: each
+item is for the owner to say yes or no to. Sizes: S = under an hour,
+M = a session, L = several sessions.
+
+## 1. Where we are
+
+Live today (2026-11-15), read with the public key: 130 saved games, 13
+players, 1,980 Rank Bot moves, 44 Rush scores. So far that's the owner and
+a handful of testers.
+
+## 2. The data we collect, and the gaps
+
+Collected now:
+- Bot games: opponent, colour, moves, result, final eval (table `games`).
+- Rank Bot: every bot move with why it was chosen (`rank_bot_moves`).
+- Puzzle Rush scores with the typed name (`rush_scores`).
+- Blind Chess: text of moves it couldn't understand (`blind_utterances`).
+- Site 1v1 and Tactica 1v1 games save like bot games (signed-in only).
+
+Not collected at all (so we can't improve them from data):
+- Chess Tactica: Bin Run floors reached, Blitz scores, tutorial drop-off,
+  which modes get opened. Nothing is saved.
+- Game Review: how many reviews run, pasted vs own game, whether people
+  practise the missed moves.
+- Puzzles outside Rush: daily and ranked solves and fails.
+- Lessons and Opening Trainer: what's started and finished.
+- The basics: visits, which pages, new vs returning, sign-ups, device.
+- Errors: when the site crashes for someone, nobody finds out.
+
+Proposal A (M): one first-party `events` table, written from our own code.
+  One small row per event: { name, detail, client id, user id, time }. No
+  third-party tracker, no cookies, nothing sold. Events: page opened, mode
+  started and finished (with score), review run, puzzle solved/failed,
+  lesson step, sign-up, error. The owner runs one SQL file; the Privacy
+  Policy gets one added line ("which features are used"), since it
+  currently says we run no analytics.
+Proposal B (S): error reports into the same table (message, page, app
+  version), so crashes are visible.
+Proposal C (S): a private stats page or script that prints weekly numbers
+  (players, games per mode, Rank Bot results, drop-off).
+Proposal D (S): Rank Bot: a one-tap "How did that feel?" after a game
+  (too easy / close / unfair). Three taps of real feedback beat guessing.
+
+## 3. Must fix before a public launch
+
+Security and fairness
+1. Anyone can read every saved game and name (M). The public key reads all
+   rows of `games`, `players`, `rush_scores`. Fine for a leaderboard, not
+   for private game history. Tighten the database rules (owner runs SQL).
+2. Leaderboard can be faked (M). Rush scores are sent by the browser and
+   trusted. Add server-side limits (sane maximum, rate limit) and a name
+   filter for offensive names.
+3. 1v1 lobby is open to anyone with the public key (M). Turn on Supabase
+   Realtime Authorization; games stay unrated until a server checks moves.
+4. Check that nobody can change or delete another player's rows (S). Not
+   tested, on purpose: it needs the owner's OK since the test writes.
+
+Legal
+5. Music rights (owner decision). The "Juice" and "Omori" playlists are
+   other people's music streamed from our storage. For a public or paid
+   site this is the biggest legal risk. Options: remove them, replace with
+   licensed or original tracks, or keep only the chiptune and theme.
+6. Art rights: the Sweetheart art and the Wood piece set's source are still
+   unconfirmed (open since 2026-11-01).
+7. Maia3 (Rank Bot's human-move model) is AGPL: the licence notices are in
+   place; keep the source public.
+8. Self-serve account deletion (M). Today it's "email us", which is fine
+   for a small site and what the Privacy Policy says.
+
+Reliability and limits
+9. Hosting plans. Vercel's free plan doesn't allow commercial use, so any
+   monetization means Vercel Pro (about $20/month). Supabase free tier has
+   caps (database size, monthly users, 200 live connections, storage
+   bandwidth, which music eats). Check usage monthly; upgrade when close.
+10. Email: Resend free tier caps daily sends; fine now, watch it.
+11. Backups (S): Supabase free has no point-in-time restore. Schedule a
+    weekly export.
+12. Uptime check (S): a free monitor that emails when the site is down.
+
+## 4. Should fix soon
+
+13. New-player welcome (M): first visit explains what's here in one screen.
+14. 1v1: choose the promotion piece (auto-queens today); rematch button;
+    report/block a player (M-L).
+15. Ratings: shown nowhere until calibrated; decide what players see (M).
+16. Search and sharing (S-M): page titles and descriptions per page, a
+    sitemap, nicer share cards for a game link.
+17. Accessibility pass (M): keyboard play, contrast in the light theme,
+    screen-reader labels on the board controls.
+18. Real-device testing (owner): iPhone home-screen app, Android, iPad:
+    sign-in, staying signed in, music, 1v1 on two phones, Tactica checklist.
+19. First script is 302 KB; Preact would cut about 120 KB (M, needs a full
+    retest).
+20. Rank Bot design 3 went in on 2026-11-15 on a small sample (32 games, 7
+    players). Re-run `scripts/review-lab/rankbot-live.mjs` after 30+ new
+    games and compare v3 with v2: engine-best share (was 72%), lead of 300+
+    (was 40% of moves), player wins (was 0), abandoned games (was 25%).
+
+## 5. Ways to earn (later; needs items 5, 6 and 9 first)
+
+- Supporter tier (recommended first): a few dollars a month for cosmetics
+  only: extra piece sets, board colours, avatar items, a badge. Nothing
+  that affects play. Needs Stripe and a server piece to record who paid (L).
+- Donations (S): a Ko-fi or similar link in the menu. Easiest start.
+- Premium features (L): deeper Game Review, more lessons and opening
+  lines. Works against "reviews are free here", our best hook, so go
+  carefully.
+- Ads: not recommended; they'd cost the look and the speed, and need a
+  consent banner.
+- The YouTube/TikTok funnel is already free marketing; a share-your-game
+  card (item 16) feeds it.
+
+## 6. Suggested order
+
+1. Legal items 5 and 6 (decisions only).
+2. Data: proposals A-D, so launch traffic teaches us something.
+3. Security items 1-4.
+4. Items 11, 12 and 18.
+5. Soft launch to the Discord, watch the numbers for two weeks, then wider.

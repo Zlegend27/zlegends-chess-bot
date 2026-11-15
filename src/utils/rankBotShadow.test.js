@@ -92,8 +92,8 @@ describe("reading the player", () => {
   });
 
   test("the closing move always falls in the same range", () => {
-    expect(newGameState({}, () => 0).closePly).toBe(60);
-    expect(newGameState({}, () => 0.999).closePly).toBe(83);
+    expect(newGameState({}, () => 0).closePly).toBe(76);
+    expect(newGameState({}, () => 0.999).closePly).toBe(99);
   });
 });
 
@@ -140,7 +140,21 @@ describe("choosing what to consider", () => {
 
   test("far ahead, the lead comes down but not all at once", () => {
     const lines = [line("a", 500), line("b", 420), line("c", 330), line("d", 200), line("e", 50)];
-    expect(optionsFor(lines, 60, safe).map((l) => l.uci)).toEqual(["c"]);
+    expect(optionsFor(lines, 60, safe).map((l) => l.uci)).toEqual(["d"]);
+  });
+
+  test("in the opening, about level is enough, and every sound move near the best is an option", () => {
+    const lines = [line("a", 30), line("b", 10), line("c", -5), line("d", -40)];
+    /* Outside the opening, +30 is short of a step, so only the best move. */
+    expect(optionsFor(lines, 60, safe).map((l) => l.uci)).toEqual(["a"]);
+    expect(optionsFor(lines, 60, safe, true).map((l) => l.uci)).toEqual(["a", "b", "c"]);
+    expect(isLeadLost(line("a", 30), 60)).toBe(true);
+    expect(isLeadLost(line("a", 30), 60, true)).toBe(false);
+  });
+
+  test("in the opening he still plays the best move when worse or down material", () => {
+    expect(optionsFor([line("a", -30), line("b", -35)], 60, safe, true).map((l) => l.uci)).toEqual(["a"]);
+    expect(optionsFor([line("a", 40, -1), line("b", 35)], 60, safe, true).map((l) => l.uci)).toEqual(["a"]);
   });
 
   test("a mate is always played", () => {

@@ -42,6 +42,8 @@ const AppPopups = lazy(() => import("./components/AppPopups"));
 const ModePages = lazy(() => import("./components/ModePages"));
 const ProfilePage = lazy(() => import("./components/ProfilePage"));
 const LegalPage = lazy(() => import("./components/LegalPage"));
+const GameHistoryPage = lazy(() => import("./components/GameHistoryPage"));
+const AvatarBuilderPage = lazy(() => import("./components/AvatarBuilderPage"));
 const LobbyPage = lazy(() => import("./pvp/LobbyPage"));
 const PlayView = lazy(() => import("./components/PlayView"));
 import { syncRankBotToSupabase, fetchRankBotFromSupabase, logRankBotMove } from "./utils/rankBot";
@@ -2178,6 +2180,14 @@ export default function ZlegendsBot() {
     }));
   };
   const reviewReturnRef = useRef("home");
+  /* Where the profile's Back goes: the page it was opened from. */
+  const profileReturnRef = useRef("home");
+  const openProfile = () => {
+    if (!["profile", "avatar"].includes(siteView)) profileReturnRef.current = ["play", "history"].includes(siteView) ? "home" : siteView;
+    setSiteView("profile");
+  };
+  /* Where Game History's Back goes: the page it was opened from. */
+  const historyReturnRef = useRef("home");
   const openReviewPage = () => {
     reviewReturnRef.current = siteView === "review" ? reviewReturnRef.current : siteView;
     setSiteView("review");
@@ -2465,6 +2475,7 @@ export default function ZlegendsBot() {
     leaveActivity();
     if (modeId === "lessons") { setSiteView("lessons"); return; }
     if (modeId === "review") { openReviewPage(); return; }
+    if (modeId === "history") { historyReturnRef.current = siteView === "history" ? historyReturnRef.current : siteView; setSiteView("history"); return; }
     if (modeId === "puzzles") { setSiteView("puzzlesHome"); ensurePuzzlesLoaded(); return; }
     if (modeId === "openings" || modeId === "rush") { setSiteView(modeId); return; }
     if (modeId === "spectate") { setSiteView("watch"); return; }
@@ -2607,12 +2618,28 @@ export default function ZlegendsBot() {
           account={account}
           displayName={displayName}
           onSaveName={saveProfileName}
-          onBack={() => setSiteView("home")}
+          onBack={() => setSiteView(profileReturnRef.current)}
           onSignIn={openSignIn}
           onSignOut={signOut}
-          onYourGames={() => enterMode("review")}
+          onYourGames={() => enterMode("history")}
           avatar={avatarFromSession(session)}
           onSaveAvatar={saveAvatar}
+          onEditAvatar={() => setSiteView("avatar")}
+          sweetheart={sweetheart}
+        />
+      </Suspense>
+    );
+  }
+
+  if (siteView === "avatar") {
+    return (
+      <Suspense fallback={null}>
+        <AvatarBuilderPage
+          avatar={avatarFromSession(session)}
+          signedIn={!!session?.user?.id}
+          onSave={saveAvatar}
+          onBack={() => setSiteView("profile")}
+          onSignIn={openSignIn}
           sweetheart={sweetheart}
         />
       </Suspense>
@@ -2651,10 +2678,24 @@ export default function ZlegendsBot() {
         onBack={() => setSiteView(reviewReturnRef.current)}
         onReview={reviewPastedGame}
         onOpenSaved={reviewSavedGame}
+        onHistory={() => enterMode("history")}
         hasLiveGame={hasLiveGame}
-        profile={profile}
         sweetheart={sweetheart}
       />
+    );
+  }
+
+  if (siteView === "history") {
+    return (
+      <Suspense fallback={null}>
+        <GameHistoryPage
+          onBack={() => setSiteView(historyReturnRef.current === "play" ? "home" : historyReturnRef.current)}
+          onOpenSaved={reviewSavedGame}
+          profile={profile}
+          onSignIn={openSignIn}
+          sweetheart={sweetheart}
+        />
+      </Suspense>
     );
   }
 
@@ -2701,14 +2742,15 @@ export default function ZlegendsBot() {
         section={section}
         onSection={onSection}
         profile={profile}
+        avatar={session?.user?.id ? avatarFromSession(session) : null}
         email={account?.email}
         sweetheart={sweetheart}
         onSignIn={openSignIn}
         onSignOut={signOut}
-        onProfile={() => setSiteView("profile")}
+        onProfile={openProfile}
         onShare={onShare}
         hasMoves={moveList.length > 0}
-        onYourGames={() => enterMode("review")}
+        onYourGames={() => enterMode("history")}
         onSettings={openSettings}
         onMusic={() => setMusicOpen(true)}
       />}

@@ -3,6 +3,11 @@ import StarField from "./StarField";
 import { fetchRecentGames, summarizeGame } from "../utils/gameHistory";
 import { getUiTheme } from "../utils/uiTheme";
 import { overlayOpen } from "../utils/routes";
+import { GameRow } from "./GameHistoryPage";
+
+/* The last few games sit here for a quick review; all of them are on the
+   Game History page. */
+const RECENT = 5;
 
 /* Export steps per source. Chess.com's are from its help center ("How do I
    get a PGN of my game?"). Lichess has moved these controls over the years,
@@ -32,14 +37,13 @@ const SOURCES = [
   },
 ];
 
-const OUTCOME_LABEL = { win: "Won", loss: "Lost", draw: "Draw", abandoned: "Unfinished" };
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
 /** Game Review's front door: the one place to paste or open a game. Same
  *  page shell as LeaderboardPage.jsx. `onReview` and `onOpenSaved` both
  *  return the loader's result, so a problem can be shown here where the
  *  player is looking. On success App.jsx moves to the board. */
-export default function GameReviewPage({ onBack, profile, sweetheart, onReview, onOpenSaved, hasLiveGame }) {
+export default function GameReviewPage({ onBack, sweetheart, onReview, onOpenSaved, onHistory, hasLiveGame }) {
   const T = getUiTheme(sweetheart);
   const [text, setText] = useState("");
   const [error, setError] = useState(null);
@@ -51,7 +55,7 @@ export default function GameReviewPage({ onBack, profile, sweetheart, onReview, 
   const loadRecent = () => {
     setRecent(null);
     setRecentError(null);
-    fetchRecentGames().then((r) => {
+    fetchRecentGames(RECENT + 1).then((r) => {
       if (r.error) setRecentError(r.error);
       else setRecent(r.games.map(summarizeGame));
     });
@@ -158,7 +162,7 @@ export default function GameReviewPage({ onBack, profile, sweetheart, onReview, 
       </div>
 
       <div className={`mt-4 w-full max-w-md rounded-2xl border ${T.cardBorder} ${T.panelBg} p-4 backdrop-blur-sm`}>
-        <h2 className={"m-0 mb-2 " + eyebrow}>{profile ? "Your Game History" : "Games you played here"}</h2>
+        <h2 className={"m-0 mb-2 " + eyebrow}>Your last games</h2>
         {recentError ? (
           <div className="flex flex-col items-start gap-2">
             <p className={"m-0 text-sm " + T.dimText}>{recentError}</p>
@@ -168,20 +172,14 @@ export default function GameReviewPage({ onBack, profile, sweetheart, onReview, 
           <p className={"m-0 text-sm " + T.dimText}>Loading…</p>
         ) : recent.length === 0 ? (
           <p className={"m-0 text-sm " + T.dimText}>Games you play against the bots will show up here.</p>
-        ) : recent.map((g) => (
-          <button
-            key={g.id}
-            type="button"
-            className="openingRow recentRow"
-            onClick={() => { const r = onOpenSaved(g); if (!r.ok) setError(r.error); }}
-          >
-            <span>
-              <b>vs {g.opponent}</b>
-              <span className="recentMeta"> · {g.date}</span>
-            </span>
-            <span className={"recentOutcome " + g.outcome}>{OUTCOME_LABEL[g.outcome]}</span>
-          </button>
-        ))}
+        ) : (
+          <>
+            {recent.slice(0, RECENT).map((g) => (
+              <GameRow key={g.id} game={g} onOpen={(game) => { const r = onOpenSaved(game); if (!r.ok) setError(r.error); }} />
+            ))}
+            {recent.length > RECENT && <button type="button" className="btn ghost" style={{ width: "100%", marginTop: 10 }} onClick={onHistory}>See all your games</button>}
+          </>
+        )}
       </div>
 
     </div>

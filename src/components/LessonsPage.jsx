@@ -48,7 +48,7 @@ export default function LessonsPage({ onOpenings, sweetheart }) {
       <div className="root">
         <StarField sweetheart={sweetheart} />
         <Suspense fallback={null}>
-          <OpeningTrainer sweetheart={sweetheart} pieceSetId={pieceSetId} back={backLink("Learn", () => setTrainerOpen(false))} />
+          <OpeningTrainer sweetheart={sweetheart} pieceSetId={pieceSetId} back={backLink("Learn", () => setTrainerOpen(false))} onLibrary={onOpenings} />
         </Suspense>
       </div>
     );
@@ -81,7 +81,7 @@ export default function LessonsPage({ onOpenings, sweetheart }) {
       {lesson && backLink("Back", () => setLessonId(null))}
 
       <div className="hdr">
-        <h1 style={{ fontSize: 34, display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+        <h1 style={{ fontSize: 34, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, paddingRight: "0.2em", paddingBottom: "0.1em" }}>
           {/* fill is an explicit color, not currentColor: .hdr h1 sets
               color:transparent (a background-clip:text gradient-title
               trick) -- currentColor would inherit that and render the
@@ -91,8 +91,15 @@ export default function LessonsPage({ onOpenings, sweetheart }) {
           </svg>
           {lesson ? "Lessons" : "Learn"}
         </h1>
-        <div className="sub">{lesson ? lesson.title : "Pick a lesson"}</div>
+        {lesson && <div className="sub">{lesson.title}</div>}
       </div>
+
+      {!lesson && (
+        <div className="mt-1 flex w-full max-w-md items-center gap-3">
+          <img src="/sweetheart-still.png" alt="" width="83" height="64" className="h-16 w-auto shrink-0" />
+          <p className={`relative m-0 rounded-2xl border ${T.cardBorder} ${T.panelBg} px-4 py-2.5 text-sm font-bold ${T.ink}`}>Wanna learn something?</p>
+        </div>
+      )}
 
       <div className="mt-4 flex w-full max-w-md flex-col gap-3">
         {!lesson && (
@@ -102,16 +109,7 @@ export default function LessonsPage({ onOpenings, sweetheart }) {
           >
             <div className={"text-[11px] font-bold uppercase tracking-[0.14em] " + T.accentText}>New</div>
             <div className={"mt-1 font-bold " + T.ink}>Opening Trainer</div>
-            <div className={"mt-1 text-xs " + T.dimText}>Learn 12 openings the right way: the ideas, the replies players at your level make, and how to punish their mistakes.</div>
-          </button>
-        )}
-        {!lesson && (
-          <button
-            onClick={onOpenings}
-            className={`rounded-2xl border ${T.cardBorder} ${T.panelBg} px-4 py-3 text-left backdrop-blur-sm transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 ${T.ring}`}
-          >
-            <div className={"font-bold " + T.ink}>Openings Library</div>
-            <div className={"mt-1 text-xs " + T.dimText}>Study the Italian, Sicilian, Ruy Lopez and more.</div>
+            <div className={"mt-1 text-xs " + T.dimText}>Learn 12 openings the right way: the ideas, the replies players at your level make, and how to punish their mistakes. The openings library is in here too.</div>
           </button>
         )}
         {!lesson ? (

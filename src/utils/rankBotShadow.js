@@ -24,10 +24,21 @@ const KEPT_SHARE = 0.9;
 const MIN_STEP = 25;
 const MAX_STEP = 200;
 const STEP_PER_MISTAKE = 1.5;
-const MIN_GIVE_BACK = 100;
-const GIVE_BACK_SHARE = 0.6;
-const CLOSE_PLY_MIN = 60;
-const CLOSE_PLY_MAX = 84;
+/* Design 3 (2026-11-15), from 841 live moves in 32 games: 72% of his moves
+   were the engine's first choice (85% in the first ten moves), his lead was
+   300+ on 40% of moves instead of about one step, and players won 0 of 32.
+   So he now plays a human opening, hands back more of a big lead per move,
+   and starts closing the game out later. */
+const MIN_GIVE_BACK = 120;
+const GIVE_BACK_SHARE = 0.7;
+const CLOSE_PLY_MIN = 76;
+const CLOSE_PLY_MAX = 100;
+/* The opening: nobody is a step ahead on move five, and demanding it made
+   him play the engine's first choice every move. For these plies the bar is
+   "about level", and he picks the most human of the moves near the best. */
+const OPENING_PLIES = 20;
+const OPENING_FLOOR = -10;
+const OPENING_GIVE = 40;
 const ENDGAME_PIECES = 6;
 const TRAP_WEIGHT = 1;
 const SLOW_SEARCH_MS = 2500;
@@ -106,8 +117,13 @@ export function nextPace(pace, searchMs) {
 
 export const isClosing = (ply, closePly, pieces) => ply >= closePly || pieces <= ENDGAME_PIECES;
 
+export const isOpening = (ply) => ply < OPENING_PLIES;
+
+/** The lead he has to keep: a step, or just about level in the opening. */
+export const barFor = (step, opening = false) => (opening ? OPENING_FLOOR : step);
+
 /** Behind in position or in material, even after the engine's best line. */
-export const isLeadLost = (best, step) => best.score < step || best.material < 0;
+export const isLeadLost = (best, step, opening = false) => best.score < barFor(step, opening) || best.material < 0;
 
 /** The moves worth choosing between, out of `lines` ({ uci, score, material },
  *  best first). With the lead lost, only the engine's move. Otherwise anything
@@ -115,9 +131,15 @@ export const isLeadLost = (best, step) => best.score < step || best.material < 0
  *  moves near the bottom of that range, so a big lead comes down. It comes
  *  down in part per move, so no one move looks like a gift. `hangs(uci)` rules
  *  out moves that leave a whole piece for free. */
-export function optionsFor(lines, step, hangs) {
+export function optionsFor(lines, step, hangs, opening = false) {
   const best = lines[0];
-  if (best.score >= MATE_EVAL || isLeadLost(best, step)) return [best];
+  if (best.score >= MATE_EVAL || isLeadLost(best, step, opening)) return [best];
+  if (opening) {
+    /* Any sound move close to the best one, best first: the most human of
+       them gets played, not the weakest. */
+    const floor = Math.max(OPENING_FLOOR, best.score - OPENING_GIVE);
+    return lines.filter((l, i) => i === 0 || (l.score >= floor && l.material >= 0 && !hangs(l.uci)));
+  }
   const floor = Math.max(step, best.score - Math.max(MIN_GIVE_BACK, GIVE_BACK_SHARE * (best.score - step)));
   const safe = lines.filter((l, i) => i === 0 || (l.score >= floor && l.material >= 0 && !hangs(l.uci)));
   const lowest = safe[safe.length - 1].score;

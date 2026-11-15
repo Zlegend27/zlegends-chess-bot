@@ -16,6 +16,11 @@ const SECTIONS = [
   { id: "review", label: "Game Review", icon: "M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" },
 ];
 const COG_ICON = "M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7 7 0 0 0-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.48.48 0 0 0-.47.41l-.36 2.54a7.3 7.3 0 0 0-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87a.48.48 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54a7 7 0 0 0 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.48.48 0 0 0-.12-.61l-2.01-1.58zM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2z";
+const BOOK_ICON = "M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z";
+const MUSIC_ICON = "M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z";
+const SHARE_ICON = "M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11A2.99 2.99 0 1 0 15 5c0 .24.04.47.09.7L8.04 9.81a3 3 0 1 0 0 4.38l7.12 4.16c-.05.21-.08.43-.08.65a2.92 2.92 0 1 0 2.92-2.92z";
+const LOGOUT_ICON = "M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5-5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z";
+const CHEVRON_ICON = "M8.59 16.59 13.17 12 8.59 7.41 10 6l6 6-6 6z";
 const PERSON_ICON = "M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5z";
 
 /* Solid rather than translucent: a backdrop blur here would make this the
@@ -36,70 +41,75 @@ function Icon({ d, size = 22 }) {
   );
 }
 
-function MenuItem({ onClick, T, label, children }) {
+/* One row of the menu: an icon, then what it opens. */
+function MenuItem({ onClick, T, icon, children }) {
   return (
     <button
       type="button"
       role="menuitem"
-      aria-label={label}
-      title={label}
       onClick={onClick}
-      className={`flex h-11 w-full items-center rounded-lg border-0 bg-transparent px-3 text-left text-sm font-semibold ${T.ink} transition-colors hover:bg-violet/15 focus-visible:outline-none focus-visible:ring-2 ${T.ring}`}
+      className={`flex h-11 w-full items-center gap-3 rounded-lg border-0 bg-transparent px-3 text-left text-sm font-semibold ${T.ink} transition-colors hover:bg-violet/15 focus-visible:outline-none focus-visible:ring-2 ${T.ring}`}
     >
+      <span className={T.dimText}><Icon d={icon} size={20} /></span>
       {children}
     </button>
   );
 }
 
-function ProfileMenu({ profile, email, onClose, onSignIn, onSignOut, onProfile, onShare, hasMoves, onYourGames, onSettings, onMusic, surface, T }) {
+/* The account menu: who's signed in (tapping that opens the profile and
+   account page, so there's no separate row for it), then History, Music
+   and Settings, the socials, and Log out. Signed out, the top is a Log in
+   button instead. */
+function ProfileMenu({ profile, avatar, email, onClose, onSignIn, onSignOut, onProfile, onShare, hasMoves, onYourGames, onSettings, onMusic, surface, T }) {
   useEffect(() => {
     const onKeyDown = (e) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
   const choose = (action) => () => { onClose(); action(); };
-  const divider = `my-1 border-t ${T.cardBorder}`;
+  const divider = `my-1.5 border-t ${T.cardBorder}`;
 
   return (
     <>
       <div className="fixed inset-0 bg-black/60 md:bg-transparent" onClick={onClose} aria-hidden="true" />
       <div
         role="menu"
-        aria-label="Profile menu"
-        className={`fixed inset-x-0 bottom-0 rounded-t-2xl border ${T.cardBorder} ${surface} p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-[0_8px_32px_#00000066] md:absolute md:inset-x-auto md:bottom-auto md:right-0 md:top-full md:mt-2 md:w-64 md:rounded-2xl md:pb-2`}
+        aria-label="Account menu"
+        className={`fixed inset-x-0 bottom-0 rounded-t-2xl border ${T.cardBorder} ${surface} p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-[0_8px_32px_#00000066] md:absolute md:inset-x-auto md:bottom-auto md:right-0 md:top-full md:mt-2 md:w-72 md:rounded-2xl md:pb-2`}
       >
         {profile ? (
-          /* Who's signed in; tapping it opens the profile. */
           <button
             type="button"
             role="menuitem"
             onClick={choose(onProfile)}
-            className={`flex w-full items-center gap-3 rounded-lg border-0 bg-transparent px-3 py-2 text-left transition-colors hover:bg-violet/15 focus-visible:outline-none focus-visible:ring-2 ${T.ring}`}
+            aria-label={`${profile.name}: profile and account`}
+            className={`flex w-full items-center gap-3 rounded-xl border-0 bg-transparent p-3 text-left transition-colors hover:bg-violet/15 focus-visible:outline-none focus-visible:ring-2 ${T.ring}`}
           >
-            <AccountAvatar profile={profile} size={44} />
-            <span className="flex min-w-0 flex-col">
+            <AccountAvatar profile={profile} avatar={avatar} size={48} />
+            <span className="flex min-w-0 flex-1 flex-col">
               <span className={`truncate text-base font-bold ${T.ink}`}>{profile.name}</span>
-              {email && <span className={`truncate text-xs ${T.dimText}`}>{email}</span>}
+              <span className={`truncate text-xs ${T.dimText}`}>{email || "Profile and account"}</span>
             </span>
+            <span className={T.dimText}><Icon d={CHEVRON_ICON} size={20} /></span>
           </button>
         ) : (
-          <div className="flex flex-col gap-2 px-3 py-2">
+          <div className="flex flex-col gap-2 p-3">
             <span className={`text-sm ${T.dimText}`}>Keep your games on every device and play 1v1.</span>
             <button type="button" role="menuitem" className="btn gold" style={{ width: "100%" }} onClick={choose(onSignIn)}>Log in</button>
+            <button type="button" role="menuitem" className={`cursor-pointer border-0 bg-transparent p-1 text-xs font-bold underline ${T.dimText}`} onClick={choose(onProfile)}>Set your name and avatar</button>
           </div>
         )}
         <div className={divider} />
-        <MenuItem onClick={choose(onProfile)} T={T}>{profile ? "Profile and account" : "Profile"}</MenuItem>
-        {hasMoves && <MenuItem onClick={choose(onShare)} T={T}>Share this game</MenuItem>}
-        <MenuItem onClick={choose(onYourGames)} T={T}>Your Game History</MenuItem>
-        <MenuItem onClick={choose(onMusic)} T={T}>Music</MenuItem>
-        <MenuItem onClick={choose(onSettings)} T={T} label="Settings"><Icon d={COG_ICON} /></MenuItem>
+        <MenuItem onClick={choose(onYourGames)} T={T} icon={BOOK_ICON}>History</MenuItem>
+        <MenuItem onClick={choose(onMusic)} T={T} icon={MUSIC_ICON}>Music</MenuItem>
+        <MenuItem onClick={choose(onSettings)} T={T} icon={COG_ICON}>Settings</MenuItem>
+        {hasMoves && <MenuItem onClick={choose(onShare)} T={T} icon={SHARE_ICON}>Share this game</MenuItem>}
         <div className={divider} />
         <div className="px-3 py-2"><SocialLinks /></div>
         {profile && (
           <>
             <div className={divider} />
-            <MenuItem onClick={choose(onSignOut)} T={T}>Log out</MenuItem>
+            <MenuItem onClick={choose(onSignOut)} T={T} icon={LOGOUT_ICON}>Log out</MenuItem>
           </>
         )}
       </div>
@@ -107,7 +117,7 @@ function ProfileMenu({ profile, email, onClose, onSignIn, onSignOut, onProfile, 
   );
 }
 
-export function AppHeader({ section, onSection, profile, email, sweetheart, dark, ...menuActions }) {
+export function AppHeader({ section, onSection, profile, avatar, email, sweetheart, dark, ...menuActions }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const T = themeFor(sweetheart, dark);
   const surface = surfaceFor(sweetheart, dark);
@@ -153,17 +163,17 @@ export function AppHeader({ section, onSection, profile, email, sweetheart, dark
             onClick={() => setMenuOpen((open) => !open)}
             aria-haspopup="menu"
             aria-expanded={menuOpen}
-            aria-label={profile ? `Profile menu for ${profile.name}` : "Menu"}
+            aria-label={profile ? `Account menu for ${profile.name}` : "Menu"}
             className={`flex size-11 items-center justify-center rounded-full border-0 bg-transparent ${T.dimText} ${T.hoverInk} ${focus}`}
           >
             {profile ? (
-              <AccountAvatar profile={profile} size={36} className={`ring-2 ${T.avatarRing}`} />
+              <AccountAvatar profile={profile} avatar={avatar} size={36} className={`ring-2 ${T.avatarRing}`} />
             ) : (
               <Icon d={PERSON_ICON} size={26} />
             )}
           </button>
           {menuOpen && (
-            <ProfileMenu profile={profile} email={email} onClose={() => setMenuOpen(false)} surface={surface} T={T} {...menuActions} />
+            <ProfileMenu profile={profile} avatar={avatar} email={email} onClose={() => setMenuOpen(false)} surface={surface} T={T} {...menuActions} />
           )}
         </div>
       </div>

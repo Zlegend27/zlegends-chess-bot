@@ -16,6 +16,8 @@ const VIEW_PATHS = {
   rush: "/rush",
   tactica: "/tactica",
   lobby: "/lobby",
+  history: "/history",
+  avatar: "/avatar",
   privacy: "/privacy",
   terms: "/terms",
 };
@@ -50,7 +52,7 @@ export function sectionForView({ siteView, rushMode, activePuzzle, pastedGame })
   if (siteView === "lessons" || siteView === "openings") return "learn";
   if (siteView === "review") return "review";
   if (siteView === "home") return "home";
-  if (["profile", "privacy", "terms"].includes(siteView)) return "";
+  if (["profile", "avatar", "history", "privacy", "terms"].includes(siteView)) return "";
   if (["playHub", "watch", "tactica", "lobby"].includes(siteView)) return "play";
   if (rushMode || activePuzzle) return "puzzles";
   return pastedGame ? "review" : "play";

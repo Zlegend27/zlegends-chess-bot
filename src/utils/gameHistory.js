@@ -96,14 +96,14 @@ export function ownGamesFilter(userId, clientId) {
  *  through the same path as a pasted game. Returns { games } or
  *  { error } -- an unconfigured or unreachable backend should read as
  *  "couldn't load", not as "you haven't played any games". */
-export async function fetchRecentGames(limit = 15) {
+export async function fetchRecentGames(limit = 15, offset = 0) {
   if (!isConfigured()) return { error: "Game history isn't set up on this deployment yet." };
   try {
     const userId = storedUserId();
     const who = userId ? `or=(${ownGamesFilter(userId, getClientId())})` : `client_id=eq.${getClientId()}`;
     const data = await restGet(
       "games",
-      `select=id,created_at,difficulty_label,player_color,winner,result_text,result_reason,pgn&pgn=not.is.null&order=created_at.desc&limit=${limit}&${who}`
+      `select=id,created_at,difficulty_label,player_color,winner,result_text,result_reason,pgn&pgn=not.is.null&order=created_at.desc&limit=${limit}&offset=${offset}&${who}`
     );
     return { games: data };
   } catch (e) {
@@ -131,7 +131,8 @@ export function summarizeGame(row) {
     playerColor: row.player_color === -1 ? -1 : 1,
     outcome,
     reason: row.result_reason || "",
-    date: when.toLocaleDateString(undefined, { day: "numeric", month: "short" }),
+    /* The year only when it isn't this one. */
+    date: when.toLocaleDateString(undefined, when.getFullYear() === new Date().getFullYear() ? { day: "numeric", month: "short" } : { day: "numeric", month: "short", year: "numeric" }),
     pgn: row.pgn,
   };
 }

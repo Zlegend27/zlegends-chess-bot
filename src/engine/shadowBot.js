@@ -10,7 +10,7 @@ import { hangingPieces } from "../utils/gradeGame";
 import { PTS } from "../utils/material";
 import { MATE_EVAL } from "../utils/reviewScoring";
 import {
-  expectedReplyLoss, isClosing, isLeadLost, isTrusted, learnFromMove, levelsFor, mistakeFor, newGameState, nextPace,
+  barFor, expectedReplyLoss, isClosing, isLeadLost, isOpening, isTrusted, learnFromMove, levelsFor, mistakeFor, newGameState, nextPace,
   optionsFor, rankOptions, stepFor,
 } from "../utils/rankBotShadow";
 import { isMaiaReady, maiaChances, warmMaia } from "./maiaEngine";
@@ -18,7 +18,7 @@ import { stockfishAnalyze } from "./stockfishEngine";
 
 /* Saved with every move, so results can be compared across rule changes.
    Raise it when the rules change. */
-const DESIGN_VERSION = 2;
+const DESIGN_VERSION = 3;
 
 const SEARCH_NODES = 90000;
 const SEARCH_LINES = 18;
@@ -91,12 +91,12 @@ async function trapValues(fen, options, levels, started, pace) {
 /** The first of `ranked` that still holds the lead when searched deeper, if
  *  any, with the deeper score since that's the truer one. Also says how many
  *  failed the check. */
-async function firstSound(fen, ranked, step, pace) {
+async function firstSound(fen, ranked, bar, pace) {
   let rejected = 0;
   for (const option of ranked.slice(0, CHECKED_MOVES)) {
     const res = await stockfishAnalyze(fen, { nodes: Math.round(CHECK_NODES * pace), multiPv: 1, searchMoves: [option.uci] });
     const score = reviewCp(res.lines[0]?.score ?? -MATE_EVAL);
-    if (score >= step) return { sound: { ...option, score }, rejected };
+    if (score >= bar) return { sound: { ...option, score }, rejected };
     rejected++;
   }
   return { sound: null, rejected };
@@ -118,7 +118,8 @@ export async function chooseShadowMove(fen, ply, state) {
   const step = stepFor(mistakeFor(state.recent));
   const levels = levelsFor(state);
   const closing = isClosing(ply, state.closePly, pieceCount(at(fen)));
-  const leadLost = isLeadLost(lines[0], step);
+  const opening = isOpening(ply);
+  const leadLost = isLeadLost(lines[0], step, opening);
 
   const searchMs = Date.now() - started;
   let pick = lines[0];
@@ -133,9 +134,11 @@ export async function chooseShadowMove(fen, ply, state) {
       probe.make(probe.moveFromUci(uci));
       return Math.max(0, ...Object.values(hangingPieces(probe))) >= REAL_PIECE;
     };
-    const options = optionsFor(lines, step, hangs);
+    const options = optionsFor(lines, step, hangs, opening);
     optionCount = options.length;
-    let ranked = rankOptions(options, step, null);
+    /* Without Maia: the lowest option brings a lead down, but in the opening
+       there's no lead to bring down, so the best move stays first. */
+    let ranked = opening ? options : rankOptions(options, step, null);
     mode = "human";
     if (options.length > 1 && !isMaiaReady()) {
       mode = "maia loading";
@@ -151,7 +154,7 @@ export async function chooseShadowMove(fen, ply, state) {
       }
     }
     if (ranked[0] !== lines[0]) {
-      const check = await firstSound(fen, ranked, step, pace);
+      const check = await firstSound(fen, ranked, barFor(step, opening), pace);
       rejected = check.rejected;
       pick = check.sound ?? lines[0];
       if (!check.sound) mode = "best";
