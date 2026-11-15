@@ -8,7 +8,8 @@ import { useLobby, useLobbyMe } from "../pvp/useLobby";
 import { usePvpMatch } from "../pvp/usePvpMatch";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
-import { BrassButton, MapButton, MenuButton, useViewSource } from "./ui";
+import { BrassButton, MapButton, MenuButton, PromotionPicker, useViewSource } from "./ui";
+import { track } from "../utils/track";
 import { play as playSound } from "./sound";
 import { loadBonds, levelsOf } from "./bonds";
 import { friendlySquares } from "./BotMode";
@@ -20,8 +21,9 @@ import { friendlySquares } from "./BotMode";
    after a refresh) is the same as the site's 1v1 (usePvpMatch). The board
    on screen plays every move out as the usual attack scenes, yours and
    theirs, one after another, so it can lag the game a moment while a
-   scene finishes; you can move again once it has caught up. Casual, not
-   rated; promotions become a queen. Your clock starts only once their
+   scene finishes; you can move again once it has caught up. A table is
+   casual or ranked (whoever opens it chooses); a pawn reaching the last
+   rank asks which piece it becomes. Your clock starts only once their
    move has played out on your board. */
 const KNIGHT = 2, QUEEN = 5;
 const sqOf = (sq120) => M120TO64[sq120];
@@ -30,9 +32,9 @@ const sqOf = (sq120) => M120TO64[sq120];
 const FLAG_GRACE_MS = 10_000;
 const LOBBY = { room: "tactica-lobby-v1", activeKey: "tacticaPvpActive", tcKey: "tacticaPvpTc", matchPrefix: "tc-" };
 
-export default function VersusMode({ session, profile, displayName, avatar, onSignIn, sweetheart, pieceImgSrc, onExit }) {
+export default function VersusMode({ session, profile, displayName, avatar, onSignIn, rating = null, onRated, sweetheart, pieceImgSrc, onExit }) {
   const { me, signedIn } = useLobbyMe({ session, profile, displayName, avatar });
-  const lobby = useLobby({ me, ...LOBBY });
+  const lobby = useLobby({ me, rating, ...LOBBY });
 
   if (!me) {
     return (
@@ -47,8 +49,10 @@ export default function VersusMode({ session, profile, displayName, avatar, onSi
   if (lobby.match && lobby.supabase) {
     return (
       <VersusGame
+        key={lobby.match.id}
         supabase={lobby.supabase} me={me} match={lobby.match} signedIn={signedIn}
         sweetheart={sweetheart} pieceImgSrc={pieceImgSrc} onLeave={lobby.leaveMatch}
+        onRated={onRated} onRematch={lobby.rematch} onBlock={lobby.block}
       />
     );
   }
@@ -66,65 +70,83 @@ function Screen({ children }) {
 /* ---------------- The lobby ---------------- */
 
 function Lobby({ me, lobby, onExit }) {
-  const { connected, players, tables, seat, tcId, setTcId, note, standing, sit, standUp } = lobby;
+  const { connected, players, tables, seat, tcId, setTcId, ranked, setRanked, note, standing, sit, standUp } = lobby;
+  const mySeatTable = seat ? tables[seat.table] : null;
+
+  const seatView = (table, side) => {
+    const p = table.seats[side];
+    const mine = p?.id === me.id;
+    if (!p) {
+      return (
+        <button type="button" className="tc-plank tc-small tc-center flex-1" disabled={!connected || !!seat} onClick={() => sit(table.id, side)}>
+          {table.seats[1 - side] ? "Join" : "Sit"}
+        </button>
+      );
+    }
+    return (
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <PlayerSprite avatar={p.avatar} discordUrl={p.discordUrl} size={40} />
+        <span className="flex min-w-0 flex-col">
+          <span className={"truncate text-sm font-bold " + (mine ? "text-[var(--tc-gold-hi)]" : "text-[var(--tc-cream)]")}>{mine ? "You" : p.name}</span>
+          <span className="text-[11px] text-[var(--tc-cream-dim)]">{p.elo != null ? `${p.elo} Elo` : "Unrated"}</span>
+        </span>
+      </div>
+    );
+  };
+
   return (
     <Screen>
-      <div className="text-center">
+      <div className="flex items-end justify-between gap-3">
         <h2 className="tc-title m-0 text-[28px]">1v1</h2>
-        <p className="m-0 mt-1 text-base text-[var(--tc-cream-dim)]">Sit at a table. When both seats are taken, the game starts. Casual, not rated.</p>
-        <p className="tc-label m-0 mt-2">{connected ? `${players.length} in the bin` : "Connecting…"}</p>
+        <span className="tc-label flex items-center gap-1.5 pb-1" role="status">
+          <i className="block size-2 rounded-full" style={{ background: connected ? "#8fd18a" : "var(--tc-cream-dim)" }} aria-hidden="true" />
+          {connected ? `${players.length} in the bin` : "Connecting…"}
+        </span>
       </div>
 
       <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
-        <legend className="tc-label mb-2">Clock for a table you open</legend>
-        <div className="grid grid-cols-2 gap-2">
+        <legend className="tc-label mb-2">Your table</legend>
+        <div className="grid grid-cols-4 gap-2">
           {TIME_CONTROLS.map((t) => (
-            <button key={t.id} type="button" aria-pressed={tcId === t.id} disabled={!!seat} className="tc-plank tc-small tc-center" onClick={() => setTcId(t.id)}>{t.label}</button>
+            <button key={t.id} type="button" aria-pressed={tcId === t.id} disabled={!!seat} className="tc-plank tc-small tc-center" style={{ padding: "8px 4px", fontSize: 12 }} onClick={() => setTcId(t.id)}>{t.label.replace(" min", "m").replace("No clock", "None")}</button>
           ))}
         </div>
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" aria-pressed={!ranked} disabled={!!seat} className="tc-plank tc-small tc-center" onClick={() => setRanked(false)}>Casual</button>
+          <button type="button" aria-pressed={ranked} disabled={!!seat} className="tc-plank tc-small tc-center" onClick={() => setRanked(true)}>Ranked</button>
+        </div>
+        <p className="m-0 text-xs text-[var(--tc-cream-dim)]">{ranked ? "Ranked: win or lose, your rating moves." : "Casual: just for fun, no rating change."}</p>
       </fieldset>
 
-      <div className="grid grid-cols-2 gap-2.5">
+      <div className="flex flex-col gap-2">
+        <span className="tc-label">Tables</span>
         {tables.map((table) => {
           const busy = table.seats.some((p) => p?.playing);
+          const taken = table.seats.filter(Boolean).length;
+          const mineHere = table.seats.some((p) => p?.id === me.id);
           return (
-            <div key={table.id} className="tc-panel flex flex-col items-center gap-2 p-2.5">
-              <div className="tc-label flex w-full items-baseline justify-between">
-                <span>Table {table.id + 1}</span>
-                <span>{busy ? "Playing" : table.tc ? timeControl(table.tc).label : ""}</span>
+            <div key={table.id} className="tc-panel flex flex-col gap-2 p-2.5" style={mineHere ? { boxShadow: "inset 0 0 0 2px var(--tc-brass)" } : undefined}>
+              <div className="tc-label flex items-baseline justify-between gap-2">
+                <span>Table {table.id + 1}{taken > 0 && ` · ${timeControl(table.tc).label} · ${table.ranked ? "Ranked" : "Casual"}`}</span>
+                <span style={{ color: busy ? "var(--tc-gold-hi)" : undefined }}>{busy ? "Playing" : taken === 1 ? "Waiting" : "Open"}</span>
               </div>
-              <div className="flex w-full items-end justify-around">
-                {[0, 1].map((side) => {
-                  const p = table.seats[side];
-                  const mine = p?.id === me.id;
-                  return (
-                    <div key={side} className="flex w-1/2 flex-col items-center gap-1">
-                      {p ? (
-                        <>
-                          <PlayerSprite avatar={p.avatar} discordUrl={p.discordUrl} size={40} />
-                          <span className={"max-w-full truncate text-xs " + (mine ? "text-[var(--tc-gold-hi)]" : "text-[var(--tc-cream)]")}>{mine ? "You" : p.name}</span>
-                        </>
-                      ) : (
-                        <button type="button" className="tc-plank tc-small tc-center" style={{ minHeight: 34, padding: "4px 10px", fontSize: 12 }}
-                          disabled={!connected || !!seat} onClick={() => sit(table.id, side)}>
-                          Sit
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
+              <div className="flex items-center gap-2">
+                {seatView(table, 0)}
+                <span className="tc-label" aria-hidden="true">vs</span>
+                {seatView(table, 1)}
               </div>
-              {table.seats.some((p) => p?.id === me.id) && !busy && (
-                <button type="button" className="tc-link" style={{ fontSize: 12, padding: 2 }} onClick={standUp}>Stand up</button>
-              )}
+              {mineHere && !busy && <button type="button" className="tc-link self-start" style={{ fontSize: 12, padding: 2 }} onClick={standUp}>Leave the table</button>}
             </div>
           );
         })}
       </div>
 
+      {mySeatTable && !mySeatTable.full && <p className="m-0 text-center text-sm text-[var(--tc-cream)]" role="status">You&apos;re seated. The game starts as soon as someone joins you.</p>}
+      {note && <p className="m-0 text-center text-sm text-[var(--tc-gold-hi)]" role="status">{note}</p>}
+
       {standing.length > 0 && (
         <div className="flex flex-col gap-2">
-          <span className="tc-label">Standing around</span>
+          <span className="tc-label">Looking around</span>
           <div className="flex flex-wrap gap-3">
             {standing.map((p) => (
               <div key={p.id} className="flex w-14 flex-col items-center gap-1">
@@ -136,7 +158,6 @@ function Lobby({ me, lobby, onExit }) {
         </div>
       )}
 
-      {note && <p className="m-0 text-center text-sm text-[var(--tc-gold-hi)]" role="status">{note}</p>}
       <button type="button" className="tc-link self-center" onClick={onExit}>Back to the menu</button>
     </Screen>
   );
@@ -144,8 +165,11 @@ function Lobby({ me, lobby, onExit }) {
 
 /* ---------------- The game ---------------- */
 
-function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, onLeave }) {
-  const game = usePvpMatch({ supabase, me, match, signedIn, storeKey: "tacticaPvpMatch", label: "Tactica 1v1", clockFromShown: true, flagGraceMs: FLAG_GRACE_MS });
+function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, onLeave, onRated, onRematch, onBlock }) {
+  const game = usePvpMatch({ supabase, me, match, signedIn, storeKey: "tacticaPvpMatch", label: "Tactica 1v1", clockFromShown: true, flagGraceMs: FLAG_GRACE_MS, onRated, onRematch });
+  /* The square a pawn is promoting on, while the player picks the piece. */
+  const [promoting, setPromoting] = useState(null);
+  const [blocked, setBlocked] = useState(false);
   const { moves, result, myColor, opponent, timeLeft, sideToMove, drawOffer, oppGoneLong, canAbort } = game;
 
   const canvasRef = useRef(null);
@@ -293,10 +317,14 @@ function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, on
   }, [menuOpen]);
 
   /* ---- Input ---- */
-  const play = (target) => {
+  const play = (target, piece = null) => {
     if (!canMove) return;
-    const move = movesFrom.find((m) => sqOf(mTo(m)) === target && (!mPromo(m) || mPromo(m) === QUEEN));
+    const found = movesFrom.filter((m) => sqOf(mTo(m)) === target);
+    /* Several moves to one square is a promotion: ask which piece first. */
+    if (found.length > 1 && piece == null) { setPromoting(target); return; }
+    const move = found.find((m) => !mPromo(m) || mPromo(m) === (piece ?? QUEEN));
     if (!move) return;
+    setPromoting(null);
     setChosen(null);
     game.submit(shown.sanOf(move));
   };
@@ -359,7 +387,7 @@ function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, on
   const clock = (color) => {
     const left = timeLeft(color);
     if (left == null) return null;
-    const running = color === sideToMove && !result && moves.length >= 2;
+    const running = color === sideToMove && !result;
     return (
       <span className={"tc-display text-[15px] " + (left < 20_000 ? "text-[var(--tc-gold-hi)]" : running ? "text-[var(--tc-cream)]" : "text-[var(--tc-cream-dim)]")} style={{ fontFamily: "var(--font-mono)" }}>
         {clockText(left)}
@@ -378,7 +406,7 @@ function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, on
           <MenuButton open={menuOpen} onClick={() => setMenuOpen((o) => !o)} />
           <PlayerSprite avatar={opponent.avatar} discordUrl={opponent.discordUrl} size={34} />
           <div className="min-w-0">
-            <div className="tc-label truncate">vs {opponent.name}</div>
+            <div className="tc-label truncate">vs {opponent.name}{match.ranked ? " · Ranked" : ""}</div>
             <div className="flex items-baseline gap-2">
               <span className="tc-display text-[15px]" aria-live="polite">{inCheck ? "Check!" : sideToMove === myColor ? "Your move" : "Their move"}</span>
               {clock(-myColor)}
@@ -429,6 +457,10 @@ function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, on
         </div>
       )}
 
+      {promoting != null && !over && (
+        <PromotionPicker onPick={(piece) => play(promoting, piece)} onCancel={() => setPromoting(null)} />
+      )}
+
       {!over && (
         <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/80 to-transparent px-3 pt-10 pb-[calc(0.9rem+env(safe-area-inset-bottom))]">
           <button type="button" className="tc-round" onClick={() => cycle(-1)} disabled={busy} aria-label="Previous character">‹</button>
@@ -449,9 +481,25 @@ function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, on
             {result.reason === "Aborted" ? "Game aborted" : won ? "You win!" : lost ? `${opponent.name} wins` : "Draw"}
           </h2>
           {result.reason !== "Aborted" && (
-            <p className="m-0 text-base text-[var(--tc-cream-dim)]">{result.text} · {result.reason} · {Math.ceil(moves.length / 2)} moves</p>
+            <p className="m-0 text-base text-[var(--tc-cream-dim)]">
+              {result.text} · {result.reason} · {Math.ceil(moves.length / 2)} moves
+              {game.ratingChange != null && <b className="text-[var(--tc-gold-hi)]"> · Rating {game.ratingChange >= 0 ? "+" : ""}{game.ratingChange}</b>}
+            </p>
           )}
-          <BrassButton onClick={leave}>Back to the lobby</BrassButton>
+          {game.rematch === "received" && <p className="m-0 text-sm text-[var(--tc-gold-hi)]" role="status">{opponent.name} wants a rematch.</p>}
+          {result.reason !== "Aborted" ? (
+            <BrassButton onClick={game.offerRematch} disabled={game.rematch === "sent"}>
+              {game.rematch === "sent" ? "Waiting for them…" : game.rematch === "received" ? "Accept rematch" : "Rematch"}
+            </BrassButton>
+          ) : (
+            <BrassButton onClick={leave}>Back to the lobby</BrassButton>
+          )}
+          <div className="flex gap-4">
+            {result.reason !== "Aborted" && <button type="button" className="tc-link" onClick={leave}>Back to the lobby</button>}
+            {blocked
+              ? <span className="p-1.5 text-sm text-[var(--tc-cream-dim)]" role="status">Blocked</span>
+              : <button type="button" className="tc-link" onClick={() => { onBlock(opponent.id); track("player_block", { player: opponent.id, reason: null, match: match.id }); setBlocked(true); }}>Block {opponent.name}</button>}
+          </div>
         </div>
       )}
     </div>

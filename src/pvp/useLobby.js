@@ -40,7 +40,7 @@ export function useLobbyMe({ session, profile, displayName, avatar }) {
 /** `room`: the Realtime channel; `matchPrefix` keeps match ids (and so
  *  their channels) apart between rooms; the keys keep each room's saved
  *  clock choice and active match apart on this device. */
-export function useLobby({ me, room = "lobby-v1", activeKey = "pvpActive", tcKey = "pvpTc", matchPrefix = "" }) {
+export function useLobby({ me, rating = null, room = "lobby-v1", activeKey = "pvpActive", tcKey = "pvpTc", matchPrefix = "" }) {
   const [supabase, setSupabase] = useState(null);
   const [connected, setConnected] = useState(false);
   const [players, setPlayers] = useState([]);
@@ -48,6 +48,12 @@ export function useLobby({ me, room = "lobby-v1", activeKey = "pvpActive", tcKey
   const [tcId, setTcId] = useState(() => loadSetting(tcKey, "10+0"));
   const [match, setMatch] = useState(() => loadSetting(activeKey, null));
   const [note, setNote] = useState(null);
+  /* A table I open is ranked or casual; it only applies between two accounts. */
+  const [ranked, setRanked] = useState(() => loadSetting(tcKey + "Ranked", false));
+  useEffect(() => { saveSetting(tcKey + "Ranked", ranked); }, [tcKey, ranked]);
+  /* Players I've blocked on this device: I never get matched with them. */
+  const [blocked, setBlocked] = useState(() => loadSetting("pvpBlocked", []));
+  const block = (id) => setBlocked((list) => { const next = [...new Set([...list, id])].slice(-200); saveSetting("pvpBlocked", next); return next; });
   const joinedAt = useRef(Date.now());
   const channelRef = useRef(null);
 
@@ -76,9 +82,9 @@ export function useLobby({ me, room = "lobby-v1", activeKey = "pvpActive", tcKey
     if (!connected || !me) return;
     channelRef.current?.track({
       id: me.id, name: me.name, avatar: me.avatar, discordUrl: me.discordUrl,
-      seat: match ? match.seat ?? seat : seat, tc: tcId, playing: match?.id ?? null, joinedAt: joinedAt.current,
+      seat: match ? match.seat ?? seat : seat, tc: tcId, ranked, elo: rating, playing: match?.id ?? null, joinedAt: joinedAt.current,
     });
-  }, [connected, me, seat, tcId, match]);
+  }, [connected, me, seat, tcId, ranked, rating, match]);
 
   const tables = useMemo(() => tablesFrom(players), [players]);
   const mePresent = players.find((p) => p.id === me?.id);
@@ -92,11 +98,20 @@ export function useLobby({ me, room = "lobby-v1", activeKey = "pvpActive", tcKey
       return;
     }
     const found = matchAt(tables[seat.table], matchPrefix);
-    if (found) setMatch({ ...found, seat });
-  }, [tables, seat, match, mePresent, matchPrefix]);
+    if (!found) return;
+    const other = found.white.id === me.id ? found.black : found.white;
+    if (blocked.includes(other.id)) {
+      setSeat(null);
+      setNote("That seat was taken by someone you've blocked, so you stood up.");
+      return;
+    }
+    setMatch({ ...found, seat });
+  }, [tables, seat, match, mePresent, matchPrefix, blocked, me]);
 
   return {
-    supabase, connected, players, tables, seat, tcId, setTcId, match, note,
+    supabase, connected, players, tables, seat, tcId, setTcId, ranked, setRanked, blocked, block, match, note,
+    /** Both players asked for another game: on to it, same seats. */
+    rematch: (next) => setMatch((m) => ({ ...next, seat: m?.seat ?? seat })),
     /** Players in the room who are neither seated nor playing. */
     standing: players.filter((p) => !p.seat && !p.playing),
     sit: (table, side) => { setNote(null); setSeat({ table, side, at: Date.now() }); },

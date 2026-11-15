@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { playersFrom, tablesFrom, holdsSeat, matchAt, clockText } from "./lobby";
+import { playersFrom, tablesFrom, holdsSeat, matchAt, clockText, eloChange, rematchOf } from "./lobby";
 
 const player = (id, seat = null, extra = {}) => ({ id, name: id, seat, tc: "5+0", joinedAt: 1, ...extra });
 
@@ -43,4 +43,35 @@ test("clocks read like a chess clock", () => {
   expect(clockText(9_340)).toBe("0:09.3");
   expect(clockText(-50)).toBe("0:00.0");
   expect(clockText(null)).toBe("–");
+});
+
+describe("ranked tables", () => {
+  const seat = (id, table, side, at, extra = {}) => ({ id, seat: { table, side, at }, tc: "5+0", ...extra });
+
+  test("whoever sat first decides whether the table is ranked", () => {
+    const tables = tablesFrom([seat("aaaaaaaa-1", 0, 0, 1, { ranked: true }), seat("bbbbbbbb-2", 0, 1, 2, { ranked: false })]);
+    expect(tables[0].ranked).toBe(true);
+    expect(matchAt(tables[0]).ranked).toBe(true);
+  });
+
+  test("a table with a local development guest is never ranked", () => {
+    const tables = tablesFrom([seat("guest-1234", 0, 0, 1, { ranked: true }), seat("bbbbbbbb-2", 0, 1, 2)]);
+    expect(matchAt(tables[0]).ranked).toBe(false);
+  });
+
+  test("rating moves by the Elo rule: more for an upset, nothing lost by both sides in total", () => {
+    expect(eloChange(1000, 1000, 1)).toBe(12);
+    expect(eloChange(1000, 1000, 0)).toBe(-12);
+    expect(eloChange(1000, 1000, 0.5)).toBe(0);
+    expect(eloChange(1000, 1400, 1)).toBeGreaterThan(eloChange(1400, 1000, 1));
+    /* Someone unrated counts as 1000. */
+    expect(eloChange(null, null, 1)).toBe(12);
+  });
+
+  test("a rematch swaps colours and keeps both players' ids in its name", () => {
+    const first = { id: "t0-5-aaaaaaaa-bbbbbbbb", white: { id: "a" }, black: { id: "b" }, tc: "5+0", ranked: true };
+    const second = rematchOf(first);
+    expect(second).toMatchObject({ id: "t0-5-aaaaaaaa-bbbbbbbb-r1", white: { id: "b" }, black: { id: "a" }, ranked: true });
+    expect(rematchOf(second).id).toBe("t0-5-aaaaaaaa-bbbbbbbb-r2");
+  });
 });

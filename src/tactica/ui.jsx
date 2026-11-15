@@ -16,6 +16,25 @@ export function BrassButton({ children, className = "", ...props }) {
   );
 }
 
+/** Which piece a pawn becomes: four planks over the board. `onPick` gets
+ *  the engine piece type (5 queen, 4 rook, 3 bishop, 2 knight). */
+const PROMOTIONS = [[5, "Queen"], [4, "Rook"], [3, "Bishop"], [2, "Knight"]];
+export function PromotionPicker({ onPick, onCancel }) {
+  return (
+    <div className="tc-scrim absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 p-5" role="dialog" aria-label="Promote your pawn">
+      <h2 className="tc-title m-0 text-2xl">Promote to</h2>
+      <div className="grid w-full max-w-xs grid-cols-2 gap-2.5">
+        {PROMOTIONS.map(([type, name]) => (
+          <button key={type} type="button" className="tc-plank tc-small" onClick={() => onPick(type)}>
+            <Medal type={type} />{name}
+          </button>
+        ))}
+      </div>
+      <button type="button" className="tc-link" onClick={onCancel}>Cancel</button>
+    </div>
+  );
+}
+
 /** The round button that opens a screen's game menu. */
 export function MenuButton({ open, onClick }) {
   return (

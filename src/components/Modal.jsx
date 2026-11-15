@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 /* Shared chrome for every dismissable promoOv/promoBox modal in this
    file (Music, Puzzles, Settings, Rush, ...) -- backdrop-click and the
    close-X both call the same onClose, matching what every one of these
@@ -15,6 +17,15 @@
    JSX shape, not that behavior, so this stays a plain function rather
    than needing access to any of that state. */
 export default function Modal({ open, onClose, closeLabel, zIndex = 50, minWidth = 260, maxWidth = 360, className, style, children }) {
+  /* Escape closes it, for keyboard users (the X and the backdrop do too). */
+  const close = useRef(onClose);
+  close.current = onClose;
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === "Escape") { e.stopPropagation(); close.current(); } };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [open]);
   if (!open) return null;
   return (
     <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex }}

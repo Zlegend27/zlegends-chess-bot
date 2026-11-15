@@ -6,15 +6,15 @@ import { gameResult, resultSentence } from "../utils/gameResult";
 import { loadSetting, saveSetting } from "../utils/storage";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
-import { BrassButton, MapButton, MenuButton, useViewSource } from "./ui";
+import { BrassButton, MapButton, MenuButton, PromotionPicker, useViewSource } from "./ui";
 import { play as playSound } from "./sound";
 import { loadBonds, levelsOf } from "./bonds";
 
 /* Regular Chess in the bin: a full game on the 3D board against the site's own
    bots (the 1000, 1500 and 2000 Elo Stockfish levels and the homemade
    Engine). Rank Bot is left out here: its games feed your rank, and a game
-   in the bin isn't rated. Same controls as the tutorial; promotions become
-   a queen. */
+   in the bin isn't rated. Same controls as the tutorial; a pawn reaching
+   the last rank asks which piece it becomes. */
 const BOTS = DIFFICULTIES.filter((d) => d.id !== "rank");
 const KNIGHT = 2, QUEEN = 5;
 const sqOf = (sq120) => M120TO64[sq120];
@@ -101,6 +101,8 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
   const [thinking, setThinking] = useState(false);
   const [result, setResult] = useState(null); // { text, reason, winner?, resigned? }
   const [menuOpen, setMenuOpen] = useState(false);
+  /* The square a pawn is promoting on, while the player picks the piece. */
+  const [promoting, setPromoting] = useState(null);
   /* What the camera sees, for the map's view cone. */
   const viewSource = useViewSource();
   /* Regular Chess always plays the full attacks. */
@@ -251,10 +253,14 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
     if (s === -1) botTurn([]);
   };
 
-  const play = async (target) => {
+  const play = async (target, piece = null) => {
     if (busyRef.current || !myTurn) return;
-    const move = movesFrom.find((m) => sqOf(mTo(m)) === target && (!mPromo(m) || mPromo(m) === QUEEN));
+    const found = movesFrom.filter((m) => sqOf(mTo(m)) === target);
+    /* Several moves to one square is a promotion: ask which piece first. */
+    if (found.length > 1 && piece == null) { setPromoting(target); return; }
+    const move = found.find((m) => !mPromo(m) || mPromo(m) === (piece ?? QUEEN));
     if (!move) return;
+    setPromoting(null);
     busyRef.current = true;
     setBusy(true);
     setChosen(null);
@@ -386,6 +392,10 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
             <button type="button" className="tc-round" onClick={() => cycle(1)} disabled={busy} aria-label="Next character">›</button>
           </div>
         </>
+      )}
+
+      {promoting != null && stage === "playing" && (
+        <PromotionPicker onPick={(piece) => play(promoting, piece)} onCancel={() => setPromoting(null)} />
       )}
 
       {stage === "setup" && (

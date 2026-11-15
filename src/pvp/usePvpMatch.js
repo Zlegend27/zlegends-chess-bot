@@ -19,7 +19,8 @@ import { replayIntoEngine } from "../utils/share";
 import { loadSetting, saveSetting } from "../utils/storage";
 import { gameResult } from "../utils/gameResult";
 import { moveBySan } from "../utils/chessMoves";
-import { timeControl } from "../utils/lobby";
+import { timeControl, eloChange, rematchOf } from "../utils/lobby";
+import { track } from "../utils/track";
 import { saveGame } from "../utils/gameHistory";
 import { openChannel } from "./channel";
 
@@ -35,7 +36,9 @@ export const resultFor = (winner, reason) => ({ text: winner === 1 ? "1–0" : w
  *  `clockFromShown`: my clock only starts once the screen says the
  *  opponent's move has been shown (call `shown()`), for a board that plays
  *  moves out as scenes; `flagGraceMs` then has to cover that time too. */
-export function usePvpMatch({ supabase, me, match, signedIn, storeKey = "pvpMatch", label = "1v1", clockFromShown = false, flagGraceMs = FLAG_GRACE_MS }) {
+/*  `onRated(change)`: a ranked game ended, with this player's rating change.
+ *  `onRematch(next)`: both players asked for another game. */
+export function usePvpMatch({ supabase, me, match, signedIn, storeKey = "pvpMatch", label = "1v1", clockFromShown = false, flagGraceMs = FLAG_GRACE_MS, onRated, onRematch }) {
   const myColor = match.white.id === me.id ? 1 : -1;
   const opponent = myColor === 1 ? match.black : match.white;
   const tc = timeControl(match.tc);
@@ -49,9 +52,15 @@ export function usePvpMatch({ supabase, me, match, signedIn, storeKey = "pvpMatc
   const [clocks, setClocks] = useState(resume?.clocks ?? { w: tc.baseMs, b: tc.baseMs });
   /* Saved too, so a refresh can't reset the clock of the side to move.
      Null while my clock waits for the opponent's move to be shown. */
-  const [turnStart, setTurnStart] = useState(() => resume?.turnStart ?? Date.now());
+  const [turnStart, setTurnStart] = useState(() => resume?.turnStart ?? null);
   const [result, setResult] = useState(resume?.result ?? null);
   const [drawOffer, setDrawOffer] = useState(null); // "sent" | "received" | "declined"
+  /* Who has asked for a rematch since the game ended. */
+  const [rematch, setRematch] = useState({ mine: false, theirs: false });
+  /* This player's rating change from this game, once it's known. */
+  const [ratingChange, setRatingChange] = useState(resume?.ratingChange ?? null);
+  const callbacks = useRef({});
+  callbacks.current = { onRated, onRematch };
   const [oppOnline, setOppOnline] = useState(false);
   const [oppGoneSince, setOppGoneSince] = useState(null);
   const [now, setNow] = useState(() => Date.now());
@@ -64,19 +73,28 @@ export function usePvpMatch({ supabase, me, match, signedIn, storeKey = "pvpMatc
   }, []);
 
   /* Keep the game on this device, so a refresh can rejoin it. */
-  useEffect(() => { saveSetting(storeKey, { id: match.id, moves, clocks, result, turnStart }); }, [storeKey, match.id, moves, clocks, result, turnStart]);
+  useEffect(() => { saveSetting(storeKey, { id: match.id, moves, clocks, result, turnStart, ratingChange }); }, [storeKey, match.id, moves, clocks, result, turnStart, ratingChange]);
 
   const finish = useCallback((res, { announce = true } = {}) => {
     if (live.current.result) return;
     live.current.result = res;
     setResult(res);
     if (announce) send("result", res);
+    /* A ranked game moves the rating, once, when it ends. */
+    if (match.ranked && res.reason !== "Aborted") {
+      const mine = myColor === 1 ? match.white : match.black;
+      const change = eloChange(mine.elo, opponent.elo, res.winner === myColor ? 1 : res.winner ? 0 : 0.5);
+      setRatingChange(change);
+      callbacks.current.onRated?.(change);
+    }
+    track("pvp_end", { label, ranked: !!match.ranked, reason: res.reason, plies: live.current.moves.length });
     if (signedIn && res.reason !== "Aborted") {
       saveGame({
         difficultyLabel: `${label} vs ${opponent.name}`, playerColor: myColor, moveList: live.current.moves,
         result: res, finalEval: null, gameUid: `${match.id}-${me.id.slice(0, 8)}`,
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [send, signedIn, label, opponent.name, myColor, match.id, me.id]);
 
   /* Plays a move given in SAN onto the engine and the move list. */
@@ -101,8 +119,8 @@ export function usePvpMatch({ supabase, me, match, signedIn, storeKey = "pvpMatc
     setMoves(list);
     if (newClocks) setClocks(newClocks);
     setTurnStart(clockFromShown && (list.length % 2 === 0 ? 1 : -1) === myColor ? null : Date.now());
-    if (res && !live.current.result) { live.current.result = res; setResult(res); }
-  }, [eng, clockFromShown, myColor]);
+    if (res) finish(res, { announce: false });
+  }, [eng, clockFromShown, myColor, finish]);
 
   /* The match channel: moves, resync, results and draw offers, plus
      presence to notice the opponent leaving. */
@@ -131,12 +149,13 @@ export function usePvpMatch({ supabase, me, match, signedIn, storeKey = "pvpMatc
         const theirs = payload.moves ?? [];
         const extends_ = theirs.length > mine.length && mine.every((m, i) => theirs[i] === m);
         if (extends_) adopt(theirs, payload.clocks, payload.result);
-        else if (payload.result && !live.current.result) { live.current.result = payload.result; setResult(payload.result); }
+        else if (payload.result) finish(payload.result, { announce: false });
       })
       .on("broadcast", { event: "result" }, ({ payload }) => finish(payload, { announce: false }))
       .on("broadcast", { event: "draw-offer" }, () => setDrawOffer("received"))
       .on("broadcast", { event: "draw-decline" }, () => setDrawOffer("declined"))
       .on("broadcast", { event: "draw-accept" }, () => finish(resultFor(0, "Agreement"), { announce: false }))
+      .on("broadcast", { event: "rematch" }, () => setRematch((r) => ({ ...r, theirs: true })))
       .on("presence", { event: "sync" }, () => {
         const here = Object.keys(channel.presenceState()).includes(opponent.id);
         setOppOnline(here);
@@ -146,6 +165,13 @@ export function usePvpMatch({ supabase, me, match, signedIn, storeKey = "pvpMatc
     });
     return () => { table.close(); channelRef.current = null; };
   }, [supabase, match.id, me.id, opponent.id, apply, adopt, finish, send, signedIn]);
+
+  /* The clocks run from the first move, like any chess clock: White's
+     starts once both players are at the board (so nobody loses time waiting
+     for the other to arrive), and each move starts the other side's. */
+  useEffect(() => {
+    if (oppOnline && moves.length === 0) setTurnStart((t) => t ?? Date.now());
+  }, [oppOnline, moves.length]);
 
   /* Clocks tick on screen, and run out. */
   useEffect(() => {
@@ -159,15 +185,20 @@ export function usePvpMatch({ supabase, me, match, signedIn, storeKey = "pvpMatc
   const timeLeft = (color) => {
     if (tc.baseMs == null) return null;
     const base = clocks[keyOf(color)];
-    return color === sideToMove && !result && moves.length >= 2 && turnStart != null ? base - (now - turnStart) : base;
+    return color === sideToMove && !result && turnStart != null ? base - (now - turnStart) : base;
   };
   useEffect(() => {
-    if (result || tc.baseMs == null || moves.length < 2) return;
+    if (result || tc.baseMs == null) return;
     const left = timeLeft(sideToMove);
     if (sideToMove === myColor && left <= 0) finish(resultFor(-myColor, "Timeout"));
     else if (sideToMove !== myColor && left <= -flagGraceMs) finish(resultFor(myColor, "Timeout"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [now]);
+
+  /* Both asked: on to the next game. */
+  useEffect(() => {
+    if (rematch.mine && rematch.theirs && result) callbacks.current.onRematch?.(rematchOf(match));
+  }, [rematch, result, match]);
 
   const myTurn = sideToMove === myColor && !result;
 
@@ -176,8 +207,8 @@ export function usePvpMatch({ supabase, me, match, signedIn, storeKey = "pvpMatc
     if (!myTurn) return false;
     const ply = moves.length;
     const k = keyOf(myColor);
-    const spent = ply >= 2 && turnStart != null ? Date.now() - turnStart : 0; // the clock starts after both first moves
-    const newClocks = tc.baseMs == null ? clocks : { ...clocks, [k]: clocks[k] - spent + (ply >= 2 ? tc.incMs : 0) };
+    const spent = turnStart != null ? Date.now() - turnStart : 0;
+    const newClocks = tc.baseMs == null ? clocks : { ...clocks, [k]: clocks[k] - spent + tc.incMs };
     if (!apply(san, newClocks, true)) return false;
     send("move", { ply, san, clocks: newClocks });
     if (drawOffer === "received" || drawOffer === "declined") setDrawOffer(null);
@@ -201,15 +232,18 @@ export function usePvpMatch({ supabase, me, match, signedIn, storeKey = "pvpMatc
   } else if (drawOffer === "declined") {
     status = "Draw declined. Play on.";
   } else {
-    status = myTurn ? `Your move${moves.length < 2 ? " (the clocks start after both first moves)" : ""}.` : `${opponent.name} is thinking…`;
+    status = myTurn ? "Your move." : `${opponent.name} is thinking…`;
   }
 
   return {
     eng, moves, result, tc, myColor, opponent, sideToMove, myTurn, timeLeft,
-    oppOnline, oppGoneLong, drawOffer, canAbort, status,
+    oppOnline, oppGoneLong, drawOffer, canAbort, status, ratingChange,
+    /** "none" | "sent" | "received": who has asked for another game. */
+    rematch: rematch.mine ? "sent" : rematch.theirs ? "received" : "none",
+    offerRematch: () => { send("rematch"); setRematch((r) => ({ ...r, mine: true })); },
     submit,
     /** The opponent's last move is on screen: my clock starts now. */
-    shown: () => setTurnStart((t) => t ?? Date.now()),
+    shown: () => { if (live.current.moves.length) setTurnStart((t) => t ?? Date.now()); },
     abort: () => finish(resultFor(0, "Aborted")),
     resign: () => finish(resultFor(-myColor, "Resignation")),
     claimWin: () => finish(resultFor(myColor, "Opponent left")),

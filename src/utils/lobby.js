@@ -39,7 +39,8 @@ export function tablesFrom(players, count = TABLE_COUNT) {
       .filter((p) => p.seat?.table === id && p.seat.side === side)
       .sort(firstClaim)[0] ?? null);
     const held = seats.filter(Boolean).sort(firstClaim);
-    return { id, seats, tc: held[0]?.tc ?? null, full: held.length === 2 };
+    /* Whoever sat first sets the table: its clock, and whether it's ranked. */
+    return { id, seats, tc: held[0]?.tc ?? null, ranked: !!held[0]?.ranked, full: held.length === 2 };
   });
 }
 
@@ -66,7 +67,28 @@ export function matchAt(table, prefix = "") {
   const startedAt = Math.min(a.seat.at, b.seat.at);
   const id = `${prefix}t${table.id}-${startedAt}-${a.id.slice(0, 8)}-${b.id.slice(0, 8)}`;
   const aIsWhite = hash(id) % 2 === 0;
-  return { id, white: aIsWhite ? a : b, black: aIsWhite ? b : a, tc: table.tc ?? TIME_CONTROLS[1].id };
+  /* Ranked needs two real accounts (local development guests don't count). */
+  const ranked = !!table.ranked && ![a.id, b.id].some((who) => String(who).startsWith("guest-"));
+  return { id, white: aIsWhite ? a : b, black: aIsWhite ? b : a, tc: table.tc ?? TIME_CONTROLS[1].id, ranked };
+}
+
+/* Ranked 1v1 moves a player's rating by the usual Elo rule. Someone with no
+   rating yet counts as UNRATED_ELO. */
+export const UNRATED_ELO = 1000;
+const ELO_K = 24;
+/** The rating change for a result: `score` is 1 for a win, 0.5 a draw, 0 a loss. */
+export function eloChange(mine, theirs, score) {
+  const expected = 1 / (1 + 10 ** (((theirs ?? UNRATED_ELO) - (mine ?? UNRATED_ELO)) / 400));
+  return Math.round(ELO_K * (score - expected));
+}
+
+/** The match after this one when both players ask for a rematch: the same
+ *  two players with colours swapped. Its id keeps both players' ids in it
+ *  (the database lets only them join), with a rematch count on the end. */
+export function rematchOf(match) {
+  const base = match.id.replace(/-r\d+$/, "");
+  const round = Number(/-r(\d+)$/.exec(match.id)?.[1] ?? 0) + 1;
+  return { ...match, id: `${base}-r${round}`, white: match.black, black: match.white };
 }
 
 /** "4:05", or "0:09.3" under ten seconds; "–" without a clock. */

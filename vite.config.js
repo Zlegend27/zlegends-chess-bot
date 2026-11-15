@@ -1,5 +1,8 @@
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
+// Preact with its React-compatible layer stands in for React in the main
+// app: same components and hooks, about 40 KB less for every visitor to
+// download. (The Kinnda build, vite.config.kindle.js, still uses React.)
+import preact from '@preact/preset-vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import tailwindcss from '@tailwindcss/vite';
 
@@ -23,7 +26,7 @@ export default defineConfig({
      problem can be tied to the version that had it. */
   define: { __APP_VERSION__: JSON.stringify(new Date().toISOString().slice(0, 16)) },
   plugins: [
-    react(),
+    preact(),
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',

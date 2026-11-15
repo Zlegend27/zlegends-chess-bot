@@ -8,7 +8,7 @@ import AccountSection from "./AccountSection";
    the avatar you built; the builder is its own page), your games, and your
    account (which logins open it; see AccountSection). The rating isn't
    shown here; it stays hidden until it's calibrated. */
-export default function ProfilePage({ profile, account, displayName, onSaveName, onBack, onSignIn, onSignOut, onYourGames, avatar, onSaveAvatar, onEditAvatar, sweetheart }) {
+export default function ProfilePage({ profile, account, rating, displayName, onSaveName, onBack, onSignIn, onSignOut, onYourGames, avatar, onSaveAvatar, onEditAvatar, sweetheart }) {
   const T = getUiTheme(sweetheart);
   const [draft, setDraft] = useState(displayName);
   const [saved, setSaved] = useState(false);
@@ -87,6 +87,14 @@ export default function ProfilePage({ profile, account, displayName, onSaveName,
         )}
         <button type="button" className="btn ghost" style={{ width: "100%" }} onClick={onEditAvatar}>{profile ? "Edit your avatar" : "Build an avatar"}</button>
         {picNote && <p className="m-0 text-sm" role="alert" style={{ color: "var(--magenta)" }}>{picNote}</p>}
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <div className={label}>Rating</div>
+        <p className={"m-0 text-sm " + T.ink}>
+          {rating != null ? <><b style={{ color: "var(--cyan)" }}>~{rating} Elo</b>. </> : "Unrated so far. "}
+          <span className={T.dimText}>It comes from games against Rank Bot and ranked 1v1 games; nothing else changes it.</span>
+        </p>
       </div>
 
       <button type="button" className="btn ghost" style={{ width: "100%" }} onClick={onYourGames}>Game history</button>

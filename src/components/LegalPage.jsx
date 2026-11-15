@@ -68,7 +68,7 @@ function Terms({ T }) {
   return (
     <>
       <Section title="Using the site" T={T}>
-        <p className="m-0">Zlegend&apos;s Chess Bot is free, for fun and for learning chess. By using it you agree to these terms. You need to be 13 or older to make an account, and you are responsible for keeping access to it (your Google, Discord or email).</p>
+        <p className="m-0">Zlegend&apos;s Chess Bot is free, for fun and for learning chess. Donations through the Support link are voluntary, go through Ko-fi under its own terms, and don&apos;t buy anything on the site. By using it you agree to these terms. You need to be 13 or older to make an account, and you are responsible for keeping access to it (your Google, Discord or email).</p>
       </Section>
       <Section title="Play fair, be kind" T={T}>
         <ul className="m-0 pl-5">

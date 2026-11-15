@@ -11,6 +11,7 @@ import { historyStep, pathForView, sectionForView, viewForPath, hiddenHeadingFor
 import { pickPostGameLine } from "./utils/botLines";
 import { signOut, watchAuthState, accountProfile, accountInfo, saveAccountName } from "./utils/auth";
 import { openSignIn } from "./utils/signInPrompt";
+import { UNRATED_ELO } from "./utils/lobby";
 import { track } from "./utils/track";
 import { claimAnonymousData } from "./utils/accountMigration";
 import { loadSetting, saveSetting } from "./utils/storage";
@@ -32,7 +33,7 @@ import { buildPgn, parsePgnMoves, replayForeignPgn, parsePgnHeaders, countPgnGam
 import { encodeGame, decodeGame, getSharedHash, replayIntoEngine } from "./utils/share";
 import { getPieceSet, loadPieceSet, PIECE_SETS } from "./utils/pieceSets";
 import { getBoardColor } from "./utils/boardColors";
-import { saveGame, estimateRating } from "./utils/gameHistory";
+import { saveGame } from "./utils/gameHistory";
 import { getDisplayName, setDisplayName } from "./utils/playerIdentity";
 import { submitRushScore } from "./utils/leaderboard";
 const LeaderboardPage = lazy(() => import("./components/LeaderboardPage"));
@@ -43,6 +44,7 @@ const AppPopups = lazy(() => import("./components/AppPopups"));
 const ModePages = lazy(() => import("./components/ModePages"));
 const ProfilePage = lazy(() => import("./components/ProfilePage"));
 const LegalPage = lazy(() => import("./components/LegalPage"));
+const WelcomeSheet = lazy(() => import("./components/WelcomeSheet"));
 const GameHistoryPage = lazy(() => import("./components/GameHistoryPage"));
 const AvatarBuilderPage = lazy(() => import("./components/AvatarBuilderPage"));
 const LobbyPage = lazy(() => import("./pvp/LobbyPage"));
@@ -167,6 +169,9 @@ export default function ZlegendsBot() {
      visit, independent of whether theme-music autoplay is armed (that
      one also requires musicSource === "chiptune"). */
   const isFirstVisitRef = useRef(!loadSetting("visitedBefore", false));
+  /* A brand-new visitor arriving on Home gets a one-screen welcome, once. */
+  const [welcomeOpen, setWelcomeOpen] = useState(() => isFirstVisitRef.current && !loadSetting("welcomeSeen", false) && viewForPath(window.location.pathname) === "home" && !window.location.hash);
+  const closeWelcome = () => { setWelcomeOpen(false); saveSetting("welcomeSeen", true); };
   /* Flips for every first-time visitor once this render has read it. It also
      arms the first-visit theme music (see hooks/useMusic.js), which reads
      the flag before this effect runs. */
@@ -285,19 +290,7 @@ export default function ZlegendsBot() {
   const [shareLinkFallback, setShareLinkFallback] = useState(null);
   const [pgnToast, setPgnToast] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [ratingInfo, setRatingInfo] = useState(null);
-  /* Fetched up-front (not just when Settings opens) now that the estimate
-     also shows next to the "You" card -- but deferred a few seconds past
-     load, since it dynamic-imports the ~100KB supabase-js chunk and
-     shouldn't compete with the board/engine for startup bandwidth. */
-  useEffect(() => {
-    const t = setTimeout(() => estimateRating().then(setRatingInfo), 3000);
-    return () => clearTimeout(t);
-  }, []);
-  const openSettings = () => {
-    setSettingsOpen(true);
-    if (!ratingInfo) estimateRating().then(setRatingInfo);
-  };
+  const openSettings = () => setSettingsOpen(true);
   /* Sign-in: Google, Discord or an email code (see utils/auth.js, SignInSheet). watchAuthState fires once
      immediately with whatever session already exists (page reload after
      a previous sign-in), then again on every future sign-in/out --
@@ -438,6 +431,18 @@ export default function ZlegendsBot() {
      game-ending dial values accumulate in rankBotRecentGameElosRef until
      there are enough for a new checkpoint, then reset. */
   const [rankBotAssessedElo, setRankBotAssessedElo] = useState(() => loadSetting("rankBotAssessedElo", null));
+  /* The player's one rating. It comes from two places only: Rank Bot's
+     assessment of their play, and ranked 1v1 games, which move it up and
+     down by the usual Elo rule. Games against the fixed bots, casual 1v1
+     and puzzles don't touch it. Unrated until one of the two has happened. */
+  const [pvpRating, setPvpRating] = useState(() => loadSetting("pvpRating", { change: 0, games: 0 }));
+  const onRated = (change) => setPvpRating((r) => {
+    const next = { change: r.change + change, games: r.games + 1 };
+    saveSetting("pvpRating", next);
+    return next;
+  });
+  const playerRating = rankBotAssessedElo != null ? rankBotAssessedElo + pvpRating.change
+    : pvpRating.games > 0 ? UNRATED_ELO + pvpRating.change : null;
   const rankBotRecentGameElosRef = useRef(loadSetting("rankBotRecentGameElos", []));
   /* How many post-opening moves Rank Bot tracked this game --
      an abandoned game with enough of these still counts toward the
@@ -2591,6 +2596,8 @@ export default function ZlegendsBot() {
           displayName={displayName}
           avatar={avatarFromSession(session)}
           pieceSetId={pieceSetId}
+          rating={playerRating}
+          onRated={onRated}
           onBack={() => setSiteView("playHub")}
           onSignIn={openSignIn}
           sweetheart={sweetheart}
@@ -2613,7 +2620,7 @@ export default function ZlegendsBot() {
         <TacticaPage
           pieceImgSrc={pieceImgSrc} sweetheart={sweetheart}
           start={tacticaStart} onExit={() => onSection(tacticaStart ? "puzzles" : "play")}
-          player={{ session, profile, displayName, avatar: avatarFromSession(session), onSignIn: openSignIn }}
+          player={{ session, profile, displayName, avatar: avatarFromSession(session), onSignIn: openSignIn, rating: playerRating, onRated }}
         />
       </Suspense>
     );
@@ -2633,6 +2640,7 @@ export default function ZlegendsBot() {
         <ProfilePage
           profile={profile}
           account={account}
+          rating={playerRating}
           displayName={displayName}
           onSaveName={saveProfileName}
           onBack={() => setSiteView(profileReturnRef.current)}
@@ -2727,7 +2735,7 @@ export default function ZlegendsBot() {
 
   return (
     <Suspense fallback={null}>
-      <PlayView mateFxProps={mateFxProps} rechecking={rechecking} betterMoveLine={betterMoveLine} rankTestNote={rankBotTest && difficultyRef.current.id === "rank" ? (rankTestNote || {}) : null} RushThemeArt={RushThemeArt} Tray={Tray} activeOpening={activeOpening} activePuzzle={activePuzzle} analysisBusy={analysisBusy} analysisContent={analysisContent} analysisLabel={analysisLabel} analysisMove={analysisMove} analyzing={analyzing} arrowLine={arrowLine} beginRestartCountdown={beginRestartCountdown} bestArrow={bestArrow} boardColorId={boardColorId} boardRef={boardRef} boardVars={boardVars} botColor={botColor} botLine={botLine} botMood={botMood} botTaken={botTaken} colorPick={colorPick} curMoveIdx={curMoveIdx} difficultyIdx={difficultyIdx} difficultyRef={difficultyRef} displayName={displayName} dragCellSize={dragCellSize} dragFrom={dragFrom} dragPos={dragPos} eng={eng} evalLabel={evalLabel} evalPawns={evalPawns} exitMissedAttempt={exitMissedAttempt} exitPractice={exitPractice} exitPuzzle={exitPuzzle} exitReplay={exitReplay} exitRush={exitRush} endRush={endRush} formatClock={formatClock} gameStyle={gameStyle} gradeDetail={gradeDetail} gradeProgress={gradeProgress} grading={grading} hideEvalBar={hideEvalBar} hideRushSummary={hideRushSummary} hinting={hinting} inChk={inChk} liveOpening={liveOpening} missedAttempt={missedAttempt} missedStepIdx={missedStepIdx} mode={mode} moveGrades={moveGrades} moveList={moveList} nameDraft={nameDraft} nameEditOpen={nameEditOpen} newGame={newGame} newGameConfirm={newGameConfirm} nextPuzzle={nextPuzzle} onCopyPgn={onCopyPgn} onDifficultyChange={onDifficultyChange} onHint={onHint} onMissedSwipeEnd={onMissedSwipeEnd} onMissedSwipeStart={onMissedSwipeStart} openLeaderboard={openLeaderboard} openReviewPage={openReviewPage} pairs={pairs} pastedGame={pastedGame} pauseSpectate={pauseSpectate} pgnToast={pgnToast} pieceImgSrc={pieceImgSrc} pieceSetId={pieceSetId} playMove={playMove} playerAdvantageCp={playerAdvantageCp} playerColor={playerColor} playerShare={playerShare} practice={practice} practiceMove={practiceMove} practiceNext={practiceNext} practiceReveal={practiceReveal} promo={promo} puzzleBand={puzzleBand} puzzleFeedback={puzzleFeedback} puzzleMove={puzzleMove} puzzleSolved={puzzleSolved} pz={pz} quizDoneToast={quizDoneToast} quizMove={quizMove} quizOpening={quizOpening} rankBotAssessedElo={rankBotAssessedElo} rankBotGames={rankBotGames} ratingInfo={ratingInfo} replayFull={replayFull} replayIndex={replayIndex} replayPlaying={replayPlaying} replayStep={replayStep} restartCountdown={restartCountdown} result={result} resumeSpectate={resumeSpectate} reviewIndex={reviewIndex} reviewInfo={reviewInfo} reviewMissedPuzzle={reviewMissedPuzzle} reviewing={reviewing} rows={rows} rushBandIdx={rushBandIdx} rushBestMap={rushBestMap} rushDuration={rushDuration} rushLifetime={rushLifetime} rushMilestone={rushMilestone} rushMissed={rushMissed} rushMistakes={rushMistakes} rushMode={rushMode} rushResult={rushResult} rushSolved={rushSolved} rushSummaryOpen={rushSummaryOpen} rushTimeLeft={rushTimeLeft} saveDisplayName={saveDisplayName} setBotLine={setBotLine} setColorPick={setColorPick} setMissedStepIdx={setMissedStepIdx} setNameDraft={setNameDraft} setNameEditOpen={setNameEditOpen} setNewGameConfirm={setNewGameConfirm} setPlayerColor={setPlayerColor} setPromo={setPromo} setReplayIndex={setReplayIndex} setReviewIndex={setReviewIndex} setRushSummaryOpen={setRushSummaryOpen} setShareLinkFallback={setShareLinkFallback} setShareToast={setShareToast} setSiteView={setSiteView} shareLinkFallback={shareLinkFallback} shareToast={shareToast} spectateBlackIdx={spectateBlackIdx} spectateMode={spectateMode} spectateOpeningId={spectateOpeningId} spectatePaused={spectatePaused} spectateWhiteIdx={spectateWhiteIdx} startPuzzle={startPuzzle} startQuiz={startQuiz} startSpectate={startSpectate} status={status} stopSpectate={stopSpectate} sweetheart={sweetheart} thinking={thinking} toggleAnalyze={toggleAnalyze} toggleReplayPlay={toggleReplayPlay} uiT={uiT} undo={undo} youDiff={youDiff} youTaken={youTaken} />
+      <PlayView mateFxProps={mateFxProps} rechecking={rechecking} betterMoveLine={betterMoveLine} rankTestNote={rankBotTest && difficultyRef.current.id === "rank" ? (rankTestNote || {}) : null} RushThemeArt={RushThemeArt} Tray={Tray} activeOpening={activeOpening} activePuzzle={activePuzzle} analysisBusy={analysisBusy} analysisContent={analysisContent} analysisLabel={analysisLabel} analysisMove={analysisMove} analyzing={analyzing} arrowLine={arrowLine} beginRestartCountdown={beginRestartCountdown} bestArrow={bestArrow} boardColorId={boardColorId} boardRef={boardRef} boardVars={boardVars} botColor={botColor} botLine={botLine} botMood={botMood} botTaken={botTaken} colorPick={colorPick} curMoveIdx={curMoveIdx} difficultyIdx={difficultyIdx} difficultyRef={difficultyRef} displayName={displayName} dragCellSize={dragCellSize} dragFrom={dragFrom} dragPos={dragPos} eng={eng} evalLabel={evalLabel} evalPawns={evalPawns} exitMissedAttempt={exitMissedAttempt} exitPractice={exitPractice} exitPuzzle={exitPuzzle} exitReplay={exitReplay} exitRush={exitRush} endRush={endRush} formatClock={formatClock} gameStyle={gameStyle} gradeDetail={gradeDetail} gradeProgress={gradeProgress} grading={grading} hideEvalBar={hideEvalBar} hideRushSummary={hideRushSummary} hinting={hinting} inChk={inChk} liveOpening={liveOpening} missedAttempt={missedAttempt} missedStepIdx={missedStepIdx} mode={mode} moveGrades={moveGrades} moveList={moveList} nameDraft={nameDraft} nameEditOpen={nameEditOpen} newGame={newGame} newGameConfirm={newGameConfirm} nextPuzzle={nextPuzzle} onCopyPgn={onCopyPgn} onDifficultyChange={onDifficultyChange} onHint={onHint} onMissedSwipeEnd={onMissedSwipeEnd} onMissedSwipeStart={onMissedSwipeStart} openLeaderboard={openLeaderboard} openReviewPage={openReviewPage} pairs={pairs} pastedGame={pastedGame} pauseSpectate={pauseSpectate} pgnToast={pgnToast} pieceImgSrc={pieceImgSrc} pieceSetId={pieceSetId} playMove={playMove} playerAdvantageCp={playerAdvantageCp} playerColor={playerColor} playerShare={playerShare} practice={practice} practiceMove={practiceMove} practiceNext={practiceNext} practiceReveal={practiceReveal} promo={promo} puzzleBand={puzzleBand} puzzleFeedback={puzzleFeedback} puzzleMove={puzzleMove} puzzleSolved={puzzleSolved} pz={pz} quizDoneToast={quizDoneToast} quizMove={quizMove} quizOpening={quizOpening} rankBotAssessedElo={rankBotAssessedElo} rankBotGames={rankBotGames} playerRating={playerRating} replayFull={replayFull} replayIndex={replayIndex} replayPlaying={replayPlaying} replayStep={replayStep} restartCountdown={restartCountdown} result={result} resumeSpectate={resumeSpectate} reviewIndex={reviewIndex} reviewInfo={reviewInfo} reviewMissedPuzzle={reviewMissedPuzzle} reviewing={reviewing} rows={rows} rushBandIdx={rushBandIdx} rushBestMap={rushBestMap} rushDuration={rushDuration} rushLifetime={rushLifetime} rushMilestone={rushMilestone} rushMissed={rushMissed} rushMistakes={rushMistakes} rushMode={rushMode} rushResult={rushResult} rushSolved={rushSolved} rushSummaryOpen={rushSummaryOpen} rushTimeLeft={rushTimeLeft} saveDisplayName={saveDisplayName} setBotLine={setBotLine} setColorPick={setColorPick} setMissedStepIdx={setMissedStepIdx} setNameDraft={setNameDraft} setNameEditOpen={setNameEditOpen} setNewGameConfirm={setNewGameConfirm} setPlayerColor={setPlayerColor} setPromo={setPromo} setReplayIndex={setReplayIndex} setReviewIndex={setReviewIndex} setRushSummaryOpen={setRushSummaryOpen} setShareLinkFallback={setShareLinkFallback} setShareToast={setShareToast} setSiteView={setSiteView} shareLinkFallback={shareLinkFallback} shareToast={shareToast} spectateBlackIdx={spectateBlackIdx} spectateMode={spectateMode} spectateOpeningId={spectateOpeningId} spectatePaused={spectatePaused} spectateWhiteIdx={spectateWhiteIdx} startPuzzle={startPuzzle} startQuiz={startQuiz} startSpectate={startSpectate} status={status} stopSpectate={stopSpectate} sweetheart={sweetheart} thinking={thinking} toggleAnalyze={toggleAnalyze} toggleReplayPlay={toggleReplayPlay} uiT={uiT} undo={undo} youDiff={youDiff} youTaken={youTaken} />
     </Suspense>
   );
   };
@@ -2772,6 +2780,11 @@ export default function ZlegendsBot() {
         onMusic={() => setMusicOpen(true)}
       />}
       {hiddenHeadingFor(siteView) && <h1 className="sr-only">{hiddenHeadingFor(siteView)}</h1>}
+      {welcomeOpen && siteView === "home" && (
+        <Suspense fallback={null}>
+          <WelcomeSheet open onClose={closeWelcome} onPlay={() => { closeWelcome(); onSection("play"); }} />
+        </Suspense>
+      )}
       <div key={siteView} className="pageIn">
         <Suspense fallback={null}>{renderPage()}</Suspense>
       </div>

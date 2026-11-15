@@ -4,6 +4,7 @@ import SocialBanner from "./SocialBanner";
 import BotBubble from "./BotBubble";
 import { pickWelcomeLine } from "../utils/botLines";
 import { getUiTheme } from "../utils/uiTheme";
+import { SUPPORT_URL } from "../utils/links";
 
 /* Below the buttons, so it loads after the first page instead of with it. */
 const YouTubeTv = lazy(() => import("./YouTubeTv"));
@@ -58,7 +59,7 @@ export default function HomePage({ onEnter, onPlay, hasLiveGame, firstVisit, ran
       <footer className={"mt-3 text-center text-xs " + T.dimText}>
         Built by <a href="https://www.youtube.com/@Zlegend27" target="_blank" rel="noopener noreferrer" className={(sweetheart ? "text-sh-lteal" : "text-cyan") + " inline-block py-2 hover:underline"}>Zlegend27</a> · <a href="https://github.com/Zlegend27/zlegends-chess-bot" target="_blank" rel="noopener noreferrer" className={(sweetheart ? "text-sh-lteal" : "text-cyan") + " inline-block py-2 hover:underline"}>Source code</a> · <a href="https://github.com/Zlegend27/zlegends-chess-bot/blob/main/NOTICE.md" target="_blank" rel="noopener noreferrer" className={(sweetheart ? "text-sh-lteal" : "text-cyan") + " inline-block py-2 hover:underline"}>Licenses</a>
         <br />
-        <a href="/privacy" className={(sweetheart ? "text-sh-lteal" : "text-cyan") + " inline-block py-2 hover:underline"}>Privacy</a> · <a href="/terms" className={(sweetheart ? "text-sh-lteal" : "text-cyan") + " inline-block py-2 hover:underline"}>Terms</a>
+        <a href={SUPPORT_URL} target="_blank" rel="noopener noreferrer" className={(sweetheart ? "text-sh-lteal" : "text-cyan") + " inline-block py-2 hover:underline"}>Support the site</a> · <a href="/privacy" className={(sweetheart ? "text-sh-lteal" : "text-cyan") + " inline-block py-2 hover:underline"}>Privacy</a> · <a href="/terms" className={(sweetheart ? "text-sh-lteal" : "text-cyan") + " inline-block py-2 hover:underline"}>Terms</a>
       </footer>
     </div>
   );

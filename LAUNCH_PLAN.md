@@ -219,3 +219,50 @@ What's left in this plan:
 - Could build next: 1v1 rematch and report/block (14), Tactica promotion
   choice (14), accessibility pass (17).
 - Needs data first: Rank Bot v3 against v2 (20), after 30+ new games.
+
+## 2026-11-16 (evening): owner's round of requests
+
+Confirmed by the owner: 008 run, a signed-in 1v1 works. (If "Allow public
+access" is now off, two guest tabs on this computer can no longer test 1v1.)
+
+Built:
+- 1v1 clocks: White's clock starts once both players are at the board and
+  Black's starts when White moves (they used to wait for both first moves).
+- Welcome screen for first-time visitors (WelcomeSheet.jsx), once per browser.
+- One rating (item 15): it comes only from Rank Bot's assessment and from
+  ranked 1v1 games. The estimate from games against the fixed bots is gone.
+  Shown on the board card, the profile and next to names in the lobbies.
+  The 1v1 part is saved on the device (setting pvpRating), not the account.
+- Ranked or casual tables (the opener chooses; needs two real accounts).
+  Ranked results are worked out by each player's own browser, so a
+  determined cheat could fake them: acceptable for now, noted.
+- Both lobbies rebuilt (site and Tactica): online count, your table's
+  clock and type, one row per table with both players, rating and status.
+- Rematch (both ask, colours swap), block (never matched again on this
+  device) and report (block + a `player_report` event with the reason).
+  Tactica has rematch and block.
+- Promotion choice in Tactica (Regular Chess and 1v1).
+- Support link to Ko-fi (https://ko-fi.com/zlegend2700) in the menu and
+  home footer; Terms say donations are voluntary and buy nothing.
+- Accessibility: Escape closes every popup; colour-picker buttons are
+  labelled. A fuller pass (keyboard play, contrast) is still open.
+- Preact (item 19): DONE. First script 310 -> 186 KB (109 -> 72 KB
+  compressed). Retested on the production build: all pages, a bot game
+  with undo, puzzles, Game Review, the trainer, typing and saving a name,
+  the login window, Tactica's 3D board. Kinnda still uses React.
+
+Not tested by Claude (needs two signed-in players): the new clock start,
+ranked rating changes, rematch, block/report, promotion in a live 1v1.
+
+Owner's to-do in Supabase for the email problems:
+- New accounts got a LINK, not a code: the "Confirm signup" email template
+  needs the same {{ .Token }} body as the Magic Link template.
+- Spam: add a DMARC record at Namecheap (TXT, host _dmarc, value
+  v=DMARC1; p=none; rua=mailto:support@zlegend2700.com), and check Resend
+  shows SPF and DKIM as verified.
+
+Supporter tier (owner's idea, details later): perks for people who support
+on YouTube or TikTok. YouTube has an API to check channel memberships
+(needs the viewer to link their Google account, which we now have);
+TikTok has no public way to check subscriptions, so that side would need
+a manual code or list. Not started.

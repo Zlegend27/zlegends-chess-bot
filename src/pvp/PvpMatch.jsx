@@ -13,12 +13,21 @@ import PlayerSprite from "../components/PlayerSprite";
 import { usePvpMatch } from "./usePvpMatch";
 import { getPieceSet } from "../utils/pieceSets";
 import Modal from "../components/Modal";
+import { track } from "../utils/track";
 
 /* Promotion choices, engine piece types, best first. */
 const PROMOTIONS = [[5, "Queen"], [4, "Rook"], [3, "Bishop"], [2, "Knight"]];
 
-export default function PvpMatch({ supabase, me, match, pieceSetId, signedIn, onExit }) {
-  const game = usePvpMatch({ supabase, me, match, signedIn });
+export default function PvpMatch({ supabase, me, match, pieceSetId, signedIn, onExit, onRated, onRematch, onBlock }) {
+  const game = usePvpMatch({ supabase, me, match, signedIn, onRated, onRematch });
+  /* Block or report: either way the two never get matched again on this
+     device; a report also tells us (the player's id and why, nothing typed). */
+  const [flag, setFlag] = useState("closed"); // closed | open | done
+  const blockThem = (reason) => {
+    onBlock(opponent.id);
+    track(reason ? "player_report" : "player_block", { player: opponent.id, reason: reason ?? null, match: match.id });
+    setFlag("done");
+  };
   const { eng, moves, result, myColor, opponent, sideToMove, myTurn, timeLeft, drawOffer, oppGoneLong, canAbort, status } = game;
   const [selected, setSelected] = useState(-1);
   const [targets, setTargets] = useState([]);
@@ -54,7 +63,7 @@ export default function PvpMatch({ supabase, me, match, pieceSetId, signedIn, on
   const playerRow = (player, color) => (
     <div className={"pvpPlayer" + (color === sideToMove && !result ? " toMove" : "")}>
       <PlayerSprite avatar={player.avatar} discordUrl={player.discordUrl} size={40} />
-      <span className="pvpName">{player.name}{player.id === me.id ? " (you)" : ""}</span>
+      <span className="pvpName">{player.name}{player.id === me.id ? " (you)" : ""}{player.elo != null && <span className="pvpElo"> {player.elo}</span>}</span>
       <span className={"pvpClock" + (timeLeft(color) != null && timeLeft(color) < 20_000 ? " low" : "")}>{clockText(timeLeft(color))}</span>
     </div>
   );
@@ -89,11 +98,19 @@ export default function PvpMatch({ supabase, me, match, pieceSetId, signedIn, on
       <div className="box trainerBox">
         <p className="lessonText" style={{ margin: 0 }} role="status">{status}</p>
         <p className="lessonHint" style={{ margin: "6px 0 0" }}>
-          {timeControl(match.tc).label} · Casual · Move {fullMoves(moves.length + (result ? 0 : 1))}
+          {timeControl(match.tc).label} · {match.ranked ? "Ranked" : "Casual"} · Move {fullMoves(moves.length + (result ? 0 : 1))}
+          {game.ratingChange != null && <b style={{ color: "var(--cyan)" }}> · Rating {game.ratingChange >= 0 ? "+" : ""}{game.ratingChange}</b>}
         </p>
         <div className="trainerActions" style={{ minHeight: 0, marginTop: 10 }}>
           {result ? (
-            <button className="btn gold" onClick={() => { game.forget(); onExit(); }}>Back to the lobby</button>
+            <>
+              {result.reason !== "Aborted" && (
+                <button className="btn gold" disabled={game.rematch === "sent"} onClick={game.offerRematch}>
+                  {game.rematch === "sent" ? "Waiting for them…" : game.rematch === "received" ? "Accept rematch" : "Rematch"}
+                </button>
+              )}
+              <button className={result.reason === "Aborted" ? "btn gold" : "btn ghost"} onClick={() => { game.forget(); onExit(); }}>Back to the lobby</button>
+            </>
           ) : (
             <>
               {drawOffer === "received" && (
@@ -112,6 +129,21 @@ export default function PvpMatch({ supabase, me, match, pieceSetId, signedIn, on
             </>
           )}
         </div>
+        {game.rematch === "received" && <p className="lessonHint" style={{ margin: "8px 0 0" }} role="status">{opponent.name} wants a rematch.</p>}
+        {flag === "closed" && (
+          <button type="button" className="pvpFlag" onClick={() => setFlag("open")}>Block or report {opponent.name}</button>
+        )}
+        {flag === "open" && (
+          <div className="pvpFlagBox" role="group" aria-label={`Block or report ${opponent.name}`}>
+            <span>You won&apos;t be matched with them again.</span>
+            <button className="btn ghost" onClick={() => blockThem(null)}>Just block</button>
+            <button className="btn ghost" onClick={() => blockThem("cheating")}>Report: cheating</button>
+            <button className="btn ghost" onClick={() => blockThem("name")}>Report: offensive name</button>
+            <button className="btn ghost" onClick={() => blockThem("stalling")}>Report: stalling or leaving</button>
+            <button className="btn ghost" onClick={() => setFlag("closed")}>Cancel</button>
+          </div>
+        )}
+        {flag === "done" && <p className="lessonHint" style={{ margin: "8px 0 0" }} role="status">Done. You won&apos;t be matched with {opponent.name} again.</p>}
       </div>
     </div>
   );

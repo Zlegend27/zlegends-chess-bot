@@ -974,8 +974,11 @@ select:hover{ border-color:var(--cyan); }
 .pvpClock{ font-family:var(--font-mono); font-size:18px; font-variant-numeric:tabular-nums; color:var(--white);
   background:#150C24; border-radius:var(--r-xs); padding:2px 8px; }
 .pvpClock.low{ color:#F05348; }
-.pvpTableTop{ width:70%; height:14px; border-radius:var(--r-2xs);
-  background:repeating-conic-gradient(var(--boardDark, #8B2FC9) 0 25%, var(--boardLight, #C9C2E8) 0 50%) 0 0/14px 14px; opacity:.75; }
+.pvpElo{ font-weight:400; font-size:12px; color:var(--dim); }
+/* Block or report: a quiet link, then its choices. */
+.pvpFlag{ margin-top:10px; padding:6px 0; border:0; background:transparent; color:var(--dim); font-size:12px; text-decoration:underline; cursor:pointer; }
+.pvpFlagBox{ margin-top:10px; display:flex; flex-wrap:wrap; align-items:center; gap:6px; font-size:12px; color:var(--dim); }
+.pvpFlagBox .btn{ min-height:32px; padding:5px 10px; font-size:11px; }
 
 /* Chess Tactica: the short note at the top of the board. A passing note
    fades in and back out over the same time it is shown (TacticaPage NOTE_MS). */
