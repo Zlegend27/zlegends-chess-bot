@@ -18,6 +18,10 @@ export async function claimAnonymousData(userId) {
   if (!supabase) return;
   const clientId = getClientId();
   try {
+    /* One function does all three tables once supabase/007_private_data.sql
+       has been run; the separate updates before. */
+    const { error } = await supabase.rpc("claim_my_data", { client: clientId });
+    if (!error) return;
     await Promise.all([
       supabase.from("players").update({ user_id: userId }).eq("client_id", clientId).is("user_id", null),
       supabase.from("games").update({ user_id: userId }).eq("client_id", clientId).is("user_id", null),

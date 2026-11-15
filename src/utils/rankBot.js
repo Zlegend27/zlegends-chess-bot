@@ -1,6 +1,6 @@
 import { getSupabase } from "./supabase";
 import { getClientId } from "./clientId";
-import { isConfigured, restGet } from "./restApi";
+import { isConfigured, restGet, restRpc } from "./restApi";
 
 /** Best-effort, mirrors gameHistory.js's saveGame -- never throws, never
  *  blocks gameplay. Upserts on client_id so each browser has exactly one
@@ -9,6 +9,11 @@ export async function syncRankBotToSupabase({ rankElo, rankGames, displayName })
   const supabase = await getSupabase();
   if (!supabase) return;
   try {
+    /* Through a function once supabase/007_private_data.sql has been run
+       (player rows can't be written directly after that); the upsert before. */
+    const name = (displayName || "").trim().slice(0, 24) || null;
+    const { error } = await supabase.rpc("sync_player", { client: getClientId(), name, elo: rankElo, games: rankGames });
+    if (!error) return;
     await supabase.from("players").upsert({
       client_id: getClientId(),
       display_name: (displayName || "").trim().slice(0, 24) || null,
@@ -29,7 +34,8 @@ export async function syncRankBotToSupabase({ rankElo, rankGames, displayName })
 export async function fetchRankBotFromSupabase() {
   if (!isConfigured()) return null;
   try {
-    const rows = await restGet("players", `select=rank_elo,rank_games&client_id=eq.${getClientId()}&limit=1`);
+    const rows = await restRpc("my_player", { client: getClientId() })
+      ?? await restGet("players", `select=rank_elo,rank_games&client_id=eq.${getClientId()}&limit=1`);
     const data = rows[0];
     if (!data || data.rank_elo == null) return null;
     return { rankElo: data.rank_elo, rankGames: data.rank_games || 0 };

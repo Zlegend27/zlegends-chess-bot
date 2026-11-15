@@ -12,7 +12,10 @@ async function all(table, select) {
   const rows = [];
   for (let offset = 0; ; offset += 1000) {
     const url = `${env.VITE_SUPABASE_URL}/rest/v1/${table}?select=${select}&order=created_at.asc&limit=1000&offset=${offset}`;
-    const res = await fetch(url, { headers: { apikey: env.VITE_SUPABASE_ANON_KEY, Authorization: `Bearer ${env.VITE_SUPABASE_ANON_KEY}` } });
+    /* Once supabase/007_private_data.sql has been run the public key can't
+       read these tables: put SUPABASE_SERVICE_KEY in .env (see scripts/backup.mjs). */
+    const key = env.SUPABASE_SERVICE_KEY || env.VITE_SUPABASE_ANON_KEY;
+    const res = await fetch(url, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
     if (!res.ok) throw new Error(`${table}: ${await res.text()}`);
     const page = await res.json();
     rows.push(...page);

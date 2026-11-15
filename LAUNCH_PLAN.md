@@ -163,3 +163,30 @@ Other:
 To test database changes safely we need one of: permission to install
 PGlite (a small local Postgres, development only), or a second free
 Supabase project to try SQL on first.
+
+## 2026-11-16: database files run, private-data rules written and tested
+
+Run by the owner and confirmed with the public key: 004 (delete account),
+005 (events; a test insert was accepted, reads are refused), 006
+(leaderboard view returns all 44 scores; rush_scores itself reads empty).
+
+Section 3 items 1 and 4: BUILT AND TESTED LOCALLY, waiting on the owner.
+- `supabase/007_private_data.sql`: games, player rows and the Rank Bot move
+  log stop being readable with the public key, and player rows stop being
+  writable directly. Reads and the rating sync go through functions that
+  take the browser's private id (my_games, my_rated_games, my_player,
+  sync_player, claim_my_data).
+- `supabase/rules.test.js` (14 checks, part of `npm test`) builds the whole
+  database locally with PGlite from the real SQL files and checks what a
+  visitor and two signed-in players can and can't do. It also covers 004,
+  005 and 006. A control run without 007 showed both holes open.
+- The site uses the functions when they exist and the old reads when they
+  don't, so: push first, then run 007.
+- After 007, `scripts/backup.mjs` and `rankbot-live.mjs` need
+  SUPABASE_SERVICE_KEY in .env to read everything.
+- Behaviour change: signed out, Game History shows only games no account
+  has claimed (a logged-out shared browser no longer shows the account's).
+
+Still open: item 3 (lobby authorization; Supabase Realtime can't be
+modelled in PGlite), uptime monitor, music removal (owner asked to be
+reminded), real-phone tests.

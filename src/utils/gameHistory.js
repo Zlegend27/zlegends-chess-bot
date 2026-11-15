@@ -1,6 +1,6 @@
 import { getSupabase } from "./supabase";
 import { getClientId } from "./clientId";
-import { isConfigured, restGet, storedUserId } from "./restApi";
+import { isConfigured, restGet, storedUserId, restRpc } from "./restApi";
 import { currentUserId } from "./auth";
 import { buildPgn } from "./pgn";
 
@@ -65,7 +65,8 @@ export async function estimateRating() {
       difficulty_label: `in.(${Object.keys(ANCHOR_ELO).map((l) => `"${l}"`).join(",")})`,
       order: "created_at.asc",
     });
-    const data = await restGet("games", params.toString());
+    const data = await restRpc("my_rated_games", { client: getClientId(), labels: Object.keys(ANCHOR_ELO) })
+      ?? await restGet("games", params.toString());
     let rating = START_RATING;
     for (const g of data) {
       const opponentElo = ANCHOR_ELO[g.difficulty_label];
@@ -99,6 +100,10 @@ export function ownGamesFilter(userId, clientId) {
 export async function fetchRecentGames(limit = 15, offset = 0) {
   if (!isConfigured()) return { error: "Game history isn't set up on this deployment yet." };
   try {
+    /* Through a function once supabase/007_private_data.sql has been run
+       (the table can't be read directly after that); the plain read before. */
+    const viaFunction = await restRpc("my_games", { client: getClientId(), lim: limit, off: offset });
+    if (viaFunction) return { games: viaFunction };
     const userId = storedUserId();
     const who = userId ? `or=(${ownGamesFilter(userId, getClientId())})` : `client_id=eq.${getClientId()}`;
     const data = await restGet(

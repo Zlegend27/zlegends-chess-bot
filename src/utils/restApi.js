@@ -31,6 +31,23 @@ export function storedUserId() {
   return storedSession()?.user?.id ?? null;
 }
 
+/** Calls a database function. Resolves to its rows, or to null if the
+ *  function doesn't exist yet (its SQL file hasn't been run), so callers
+ *  can fall back to the older way of reading. Throws on any other failure.
+ *  See supabase/007_private_data.sql for why reads go through functions. */
+export async function restRpc(name, args) {
+  const session = storedSession();
+  const fresh = session && session.expires_at * 1000 > Date.now();
+  const res = await fetch(`${BASE}/rest/v1/rpc/${name}`, {
+    method: "POST",
+    headers: { apikey: KEY, Authorization: `Bearer ${fresh ? session.access_token : KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify(args),
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`${name} failed (${res.status})`);
+  return res.json();
+}
+
 /** Adds rows to a table, without the Supabase library. Resolves to the
  *  HTTP status (it doesn't throw on a refused write). keepalive lets it
  *  finish while the page is being left. */

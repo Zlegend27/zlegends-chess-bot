@@ -1,6 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 
-const db = vi.hoisted(() => ({ userId: null, calls: [], reads: [] }));
+const db = vi.hoisted(() => ({ userId: null, calls: [], reads: [], rpcs: [], rpcRows: null }));
 
 vi.mock("./clientId", () => ({ getClientId: () => "this-browser" }));
 vi.mock("./supabase", () => ({
@@ -19,13 +19,15 @@ vi.mock("./restApi", () => ({
   isConfigured: () => true,
   storedUserId: () => db.userId,
   restGet: async (table, params) => { db.reads.push([table, params]); return []; },
+  /* null means the function doesn't exist yet (007_private_data.sql not run). */
+  restRpc: async (name, args) => { db.rpcs.push([name, args]); return db.rpcRows; },
 }));
 
 import { saveGame, fetchRecentGames, ownGamesFilter } from "./gameHistory";
 
 const save = () => saveGame({ playerColor: 1, moveList: ["e4"], result: { text: "1–0", reason: "Checkmate", winner: 1 } });
 
-beforeEach(() => { db.userId = null; db.calls = []; db.reads = []; });
+beforeEach(() => { db.userId = null; db.calls = []; db.reads = []; db.rpcs = []; db.rpcRows = null; });
 
 describe("signed out", () => {
   test("a save doesn't mention user_id, so it works before the account columns exist", async () => {
@@ -59,4 +61,13 @@ describe("signed in", () => {
 
 test("on a shared browser, only unclaimed games come along with the account's own", () => {
   expect(ownGamesFilter("a", "b")).toBe("user_id.eq.a,and(client_id.eq.b,user_id.is.null)");
+});
+
+describe("once the private-data functions exist", () => {
+  test("the list comes from my_games with this browser's id, and the table isn't read", async () => {
+    db.rpcRows = [{ id: "g1" }];
+    expect(await fetchRecentGames(30, 60)).toEqual({ games: [{ id: "g1" }] });
+    expect(db.rpcs[0]).toEqual(["my_games", { client: "this-browser", lim: 30, off: 60 }]);
+    expect(db.reads).toHaveLength(0);
+  });
 });
