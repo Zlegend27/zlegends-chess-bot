@@ -5,7 +5,7 @@
    open (Blind Mode reads moves aloud, so music steps aside for it). */
 import { useEffect, useRef, useState } from "react";
 import { createAudio } from "../audio/chiptune";
-import { MP3_PLAYLISTS, THEME_ID, loadPlaylistTracks } from "../utils/musicLibrary";
+import { MP3_PLAYLISTS, THEME_ID, loadPlaylistTracks, validMusicSource } from "../utils/musicLibrary";
 import { pickTrackIndex } from "../utils/trackIndex";
 import { loadSetting, saveSetting } from "../utils/storage";
 import { getSupabase } from "../utils/supabase";
@@ -71,7 +71,7 @@ export default function useMusic({ musicOpen, blindOpen }) {
     const gain = ensureMp3Gain();
     if (gain && gain.ctx.state === "suspended") gain.ctx.resume();
   };
-  const [musicSource, setMusicSourceState] = useState(() => loadSetting("musicSource", "chiptune"));
+  const [musicSource, setMusicSourceState] = useState(() => validMusicSource(loadSetting("musicSource", "chiptune")));
   const [mp3Tracks, setMp3Tracks] = useState([]);
   const [mp3Loading, setMp3Loading] = useState(false);
   const [mp3Idx, setMp3Idx] = useState(() => loadSetting("mp3Idx", 0));

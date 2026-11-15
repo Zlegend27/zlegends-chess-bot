@@ -5,7 +5,8 @@
    for real.
 
    What's stood in for Supabase: the two roles, auth.uid() (read from the
-   same setting Supabase's API sets), auth.users, storage.objects, and
+   same setting Supabase's API sets), auth.users, storage.objects, the
+   realtime schema (its messages table and realtime.topic()), and
    Supabase's habit of granting both roles access to everything in the
    public schema, leaving row level security as the gate. */
 import { readFileSync } from "node:fs";
@@ -14,7 +15,7 @@ import { PGlite } from "@electric-sql/pglite";
 
 const FILES = [
   "../supabase_setup.sql", "001_link_accounts.sql", "002_ios_sign_in_handoff.sql", "003_rank_bot_detail.sql",
-  "004_delete_account.sql", "005_events.sql", "006_leaderboard_safety.sql", "007_private_data.sql",
+  "004_delete_account.sql", "005_events.sql", "006_leaderboard_safety.sql", "007_private_data.sql", "008_lobby_access.sql",
 ];
 const ALICE = "11111111-1111-4111-8111-111111111111";
 const BOB = "22222222-2222-4222-8222-222222222222";
@@ -42,6 +43,14 @@ beforeAll(async () => {
     create schema storage;
     create table storage.objects (bucket_id text);
     alter table storage.objects enable row level security;
+    create schema realtime;
+    create table realtime.messages (topic text, extension text);
+    alter table realtime.messages enable row level security;
+    create function realtime.topic() returns text language sql stable as $$
+      select nullif(current_setting('realtime.topic', true), '')
+    $$;
+    grant usage on schema realtime to anon, authenticated;
+    grant all on realtime.messages to anon, authenticated;
     grant usage on schema public, auth to anon, authenticated;
     alter default privileges in schema public grant all on tables to anon, authenticated;
     alter default privileges in schema public grant all on sequences to anon, authenticated;
@@ -160,6 +169,35 @@ describe("the Rush leaderboard", () => {
       await expect(db.query("insert into rush_scores (client_id, duration_seconds, solved) values ('flood', 60, 1)")).rejects.toThrow(/too many/);
       await db.query("insert into rush_scores (client_id, duration_seconds, solved) values ('someone-else', 60, 1)");
     });
+  });
+});
+
+describe("the 1v1 lobby and matches (private channels)", () => {
+  /* Supabase sets the topic being joined; realtime.topic() reads it. */
+  const join = (uid, topic) => as(uid, async () => {
+    await db.query("select set_config('realtime.topic', $1, false)", [topic]);
+    await db.query("insert into realtime.messages (topic, extension) values ($1, 'presence')", [topic]);
+    return (await rows("select * from realtime.messages where topic = $1", [topic])).length;
+  });
+  const aliceMatch = "match-t0-1794700000000-" + ALICE.slice(0, 8) + "-99999999";
+  const tacticaMatch = "match-tc-t2-1794700000000-00000000-" + ALICE.slice(0, 8);
+
+  test("a signed-in player can use both lobbies and their own matches", async () => {
+    for (const topic of ["lobby-v1", "tactica-lobby-v1", aliceMatch, tacticaMatch]) expect(await join(ALICE, topic)).toBeGreaterThan(0);
+  });
+
+  test("a player can't join someone else's match, or any other channel", async () => {
+    await expect(join(BOB, aliceMatch)).rejects.toThrow();
+    await expect(join(ALICE, "some-other-room")).rejects.toThrow();
+    /* Listening is refused too, not just sending. */
+    await as(BOB, async () => {
+      await db.query("select set_config('realtime.topic', $1, false)", [aliceMatch]);
+      expect(await rows("select * from realtime.messages")).toHaveLength(0);
+    });
+  });
+
+  test("a visitor who isn't signed in can't use private channels at all", async () => {
+    await expect(join(null, "lobby-v1")).rejects.toThrow();
   });
 });
 

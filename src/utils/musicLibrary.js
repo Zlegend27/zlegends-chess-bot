@@ -20,11 +20,16 @@ const ROOT_PREFIX = "music";
    through the exact same code path as a real playlist and gets all the
    same next/prev/shuffle/progress-bar machinery for free. */
 export const THEME_ID = "theme";
+/* Only the site's own theme. The Juice and Omori playlists were other
+   artists' music and were removed on 2026-11-16 ahead of the public launch;
+   add a playlist back here only with the rights to stream it. */
 export const MP3_PLAYLISTS = [
   { id: THEME_ID, label: "Theme", folder: "" },
-  { id: "juice", label: "Juice", folder: "juice" },
-  { id: "omori", label: "Omori", folder: "omori" },
 ];
+
+/** A saved choice that no longer exists (a removed playlist) falls back to
+ *  the chiptune. */
+export const validMusicSource = (id) => (id === "chiptune" || MP3_PLAYLISTS.some((p) => p.id === id) ? id : "chiptune");
 
 const trackCache = new Map();
 

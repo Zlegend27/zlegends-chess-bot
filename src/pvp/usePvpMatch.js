@@ -21,6 +21,7 @@ import { gameResult } from "../utils/gameResult";
 import { moveBySan } from "../utils/chessMoves";
 import { timeControl } from "../utils/lobby";
 import { saveGame } from "../utils/gameHistory";
+import { openChannel } from "./channel";
 
 const TICK_MS = 200;
 /* The opponent's clock has to pass zero by this much before you can claim
@@ -106,7 +107,14 @@ export function usePvpMatch({ supabase, me, match, signedIn, storeKey = "pvpMatc
   /* The match channel: moves, resync, results and draw offers, plus
      presence to notice the opponent leaving. */
   useEffect(() => {
-    const channel = supabase.channel(`match-${match.id}`, { config: { broadcast: { self: false }, presence: { key: me.id } } });
+    const table = openChannel(supabase, `match-${match.id}`, { broadcast: { self: false }, presence: { key: me.id } }, {
+      signedIn,
+      onStatus: (status, channel) => {
+        if (status !== "SUBSCRIBED") return;
+        channel.track({ id: me.id });
+        send("sync-request");
+      },
+      build: (channel) => {
     channelRef.current = channel;
     channel
       .on("broadcast", { event: "move" }, ({ payload }) => {
@@ -133,14 +141,11 @@ export function usePvpMatch({ supabase, me, match, signedIn, storeKey = "pvpMatc
         const here = Object.keys(channel.presenceState()).includes(opponent.id);
         setOppOnline(here);
         setOppGoneSince((since) => (here ? null : since ?? Date.now()));
-      })
-      .subscribe((status) => {
-        if (status !== "SUBSCRIBED") return;
-        channel.track({ id: me.id });
-        send("sync-request");
       });
-    return () => { supabase.removeChannel(channel); channelRef.current = null; };
-  }, [supabase, match.id, me.id, opponent.id, apply, adopt, finish, send]);
+      },
+    });
+    return () => { table.close(); channelRef.current = null; };
+  }, [supabase, match.id, me.id, opponent.id, apply, adopt, finish, send, signedIn]);
 
   /* Clocks tick on screen, and run out. */
   useEffect(() => {

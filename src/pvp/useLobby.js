@@ -15,6 +15,7 @@ import { loadSetting, saveSetting } from "../utils/storage";
 import { playersFrom, tablesFrom, holdsSeat, matchAt } from "../utils/lobby";
 import { DEFAULT_AVATAR } from "../utils/avatar";
 import { cleanName } from "../utils/cleanName";
+import { openChannel } from "./channel";
 
 /** In local development, a different guest per tab so two tabs can play. */
 function devGuest() {
@@ -57,13 +58,17 @@ export function useLobby({ me, room = "lobby-v1", activeKey = "pvpActive", tcKey
   /* Join the room. */
   useEffect(() => {
     if (!supabase || !me) return;
-    const channel = supabase.channel(room, { config: { presence: { key: me.id } } });
-    channelRef.current = channel;
-    channel
-      /* Other players' names pass the name filter before anyone sees them. */
-      .on("presence", { event: "sync" }, () => setPlayers(playersFrom(channel.presenceState()).map((p) => ({ ...p, name: cleanName(p.name) }))))
-      .subscribe((status) => setConnected(status === "SUBSCRIBED"));
-    return () => { supabase.removeChannel(channel); channelRef.current = null; setConnected(false); };
+    const joined = openChannel(supabase, room, { presence: { key: me.id } }, {
+      /* Local development guests aren't signed in. */
+      signedIn: !me.id.startsWith("guest-"),
+      build: (channel) => {
+        channelRef.current = channel;
+        /* Other players' names pass the name filter before anyone sees them. */
+        channel.on("presence", { event: "sync" }, () => setPlayers(playersFrom(channel.presenceState()).map((p) => ({ ...p, name: cleanName(p.name) }))));
+      },
+      onStatus: (status) => setConnected(status === "SUBSCRIBED"),
+    });
+    return () => { joined.close(); channelRef.current = null; setConnected(false); };
   }, [supabase, me, room]);
 
   /* Tell the room where I am, whenever that changes. */

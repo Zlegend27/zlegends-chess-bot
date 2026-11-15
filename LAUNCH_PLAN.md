@@ -190,3 +190,32 @@ Section 3 items 1 and 4: BUILT AND TESTED LOCALLY, waiting on the owner.
 Still open: item 3 (lobby authorization; Supabase Realtime can't be
 modelled in PGlite), uptime monitor, music removal (owner asked to be
 reminded), real-phone tests.
+
+## 2026-11-16 (later): 007 confirmed, music removed, lobby access written
+
+- 007 run by the owner and confirmed with the public key: games, players,
+  rank_bot_moves and rush_scores read empty; a direct rating overwrite
+  changes nothing; visitors can't claim. Owner confirmed Game History still
+  lists games and a new game appears.
+- Music (section 3 item 5): DONE in the site. Juice and Omori are out of
+  `MP3_PLAYLISTS`; the music box offers Chiptune and Theme. The files are
+  still in the Supabase "music" bucket (folders music/juice and
+  music/omori) until the owner deletes them there.
+- Lobby access (section 3 item 3): BUILT, waiting on the owner.
+  `src/pvp/channel.js` asks for a private channel when signed in and falls
+  back to a public one if refused. `supabase/008_lobby_access.sql` lets
+  signed-in players into the lobbies and only a match's two players into
+  that match. The rules are tested locally (rules.test.js, 17 checks); the
+  live connection can only be tested on the site. Steps: push, run 008,
+  check a game starts between two signed-in players, THEN turn off
+  "Allow public access" under Realtime settings. After that, local
+  development guests can't use the lobby.
+
+What's left in this plan:
+- Owner: delete the two music folders; uptime monitor (item 12); real-phone
+  tests (item 18), now including 1v1 on two signed-in phones.
+- Needs a decision: new-player welcome (13), what players see of their
+  rating (15), supporter tier or donation link (section 5), Preact (19).
+- Could build next: 1v1 rematch and report/block (14), Tactica promotion
+  choice (14), accessibility pass (17).
+- Needs data first: Rank Bot v3 against v2 (20), after 30+ new games.
