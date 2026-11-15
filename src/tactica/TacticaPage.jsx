@@ -15,12 +15,15 @@ import "./tactica.css";
    wooden buttons knock, brass ones click, and the bin's flies buzz past
    now and then. */
 /* `player` ({ session, profile, displayName, avatar, onSignIn }) is who
-   plays 1v1. */
-export default function TacticaPage({ pieceImgSrc, sweetheart, player, onExit }) {
+   plays 1v1. `start` opens one mode directly (the site's Puzzles tab opens
+   "blitz"); leaving that mode then leaves Tactica, back to where it came
+   from, instead of stopping at Tactica's own menu. */
+export default function TacticaPage({ pieceImgSrc, sweetheart, player, start = null, onExit }) {
   /* A 1v1 game still on (a refresh mid-game) goes straight back to it. */
-  const [screen, setScreen] = useState(() => (loadSetting("tacticaPvpActive", null) ? "versus" : "menu"));
+  const [screen, setScreen] = useState(() => (loadSetting("tacticaPvpActive", null) ? "versus" : start ?? "menu"));
   const [blitzBest, setBlitzBest] = useState(() => loadSetting("tacticaBlitzBest", 0));
   const toMenu = () => setScreen("menu");
+  const leave = (mode) => (start === mode ? onExit : toMenu);
   const recordBest = (score) => { setBlitzBest(score); saveSetting("tacticaBlitzBest", score); };
   const [runBest, setRunBest] = useState(() => loadSetting("tacticaRunBest", 0));
   const recordRunBest = (score) => { setRunBest(score); saveSetting("tacticaRunBest", score); };
@@ -45,7 +48,7 @@ export default function TacticaPage({ pieceImgSrc, sweetheart, player, onExit })
   else if (screen === "run") page = <RunMode pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} best={runBest} onBest={recordRunBest} onExit={toMenu} />;
   else if (screen === "bot") page = <BotMode pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={toMenu} />;
   else if (screen === "versus") page = <VersusMode {...player} pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={toMenu} />;
-  else if (screen === "blitz") page = <BlitzMode sweetheart={sweetheart} best={blitzBest} onBest={recordBest} onExit={toMenu} />;
+  else if (screen === "blitz") page = <BlitzMode sweetheart={sweetheart} best={blitzBest} onBest={recordBest} onExit={leave("blitz")} exitLabel={start === "blitz" ? "Back to Puzzles" : undefined} />;
   else page = <MenuScreen onPick={setScreen} onExit={onExit} blitzBest={blitzBest} sweetheart={sweetheart} />;
   return <div className="tactica" onPointerDownCapture={onPointerDown} onClickCapture={unlock} onTouchEndCapture={unlock}>{page}</div>;
 }

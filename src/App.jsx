@@ -6,8 +6,8 @@ import {
 import HomePage from "./components/HomePage";
 import { AppHeader, BottomBar } from "./components/AppNav";
 import PlayPage from "./components/PlayPage";
-import { currentStreak, nextStreak, utcDay } from "./utils/dailyStreak";
-import { historyStep, pathForView, sectionForView, viewForPath } from "./utils/routes";
+import { nextStreak, utcDay } from "./utils/dailyStreak";
+import { historyStep, pathForView, sectionForView, viewForPath, hiddenHeadingFor } from "./utils/routes";
 import { pickPostGameLine } from "./utils/botLines";
 import { signOut, watchAuthState, accountProfile, accountInfo, saveAccountName } from "./utils/auth";
 import { openSignIn } from "./utils/signInPrompt";
@@ -305,6 +305,8 @@ export default function ZlegendsBot() {
   useEffect(() => {
     if (session?.user?.id) claimAnonymousData(session.user.id);
   }, [session?.user?.id]);
+  /* Which Tactica mode to open directly (the Puzzles tab opens "blitz"). */
+  const [tacticaStart, setTacticaStart] = useState(null);
   const closeMusic = () => setMusicOpen(false);
   const closeSettings = () => setSettingsOpen(false);
 
@@ -2345,7 +2347,7 @@ export default function ZlegendsBot() {
     : pastedGame
     ? "Reviewing this game"
     : thinking ? (!engineWarm && usesStockfish ? "Warming up the engine… first move only" : "Zlegend2700 is calculating…")
-    : eng.getSide() === playerColor ? "Your move, challenger" : "Bot to move";
+    : eng.getSide() === playerColor ? `Your move, ${displayName || "challenger"}` : "Bot to move";
 
   const arrowPoint = (sq120) => arrowPointAt(sq120, flipped);
 
@@ -2507,13 +2509,7 @@ export default function ZlegendsBot() {
       <HomePage
         onEnter={enterMode}
         onPlay={() => onSection("play")}
-        onDaily={openDaily}
         hasLiveGame={hasLiveGame}
-        daily={homeDaily}
-        dailySolved={dailySolvedDate === todayKey()}
-        streak={currentStreak(dailyStreak, utcDay())}
-        boardColors={getBoardColor(boardColorId)}
-        pieceImgSrc={pieceImgSrc}
         firstVisit={isFirstVisitRef.current}
         rankElo={rankBotAssessedElo ?? (rankBotGames > 0 ? rankBotElo : null)}
         rankGames={rankBotGames}
@@ -2531,7 +2527,7 @@ export default function ZlegendsBot() {
         onResume={() => setSiteView("play")}
         onMode={enterMode}
         onLobby={() => setSiteView("lobby")}
-        onTactica={() => setSiteView("tactica")}
+        onTactica={() => { setTacticaStart(null); setSiteView("tactica"); }}
         sweetheart={sweetheart}
       />
     );
@@ -2566,7 +2562,8 @@ export default function ZlegendsBot() {
     return (
       <Suspense fallback={null}>
         <TacticaPage
-          pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={() => onSection("play")}
+          pieceImgSrc={pieceImgSrc} sweetheart={sweetheart}
+          start={tacticaStart} onExit={() => onSection(tacticaStart ? "puzzles" : "play")}
           player={{ session, profile, displayName, avatar: avatarFromSession(session), onSignIn: openSignIn }}
         />
       </Suspense>
@@ -2609,6 +2606,7 @@ export default function ZlegendsBot() {
         onLeaderboard={() => openLeaderboard(leaderboardDuration)}
         onRanked={() => { leaveActivity(); setSiteView("ranked"); }}
         onRush={() => { leaveActivity(); setSiteView("rush"); }}
+        onTactica={() => { leaveActivity(); setTacticaStart("blitz"); setSiteView("tactica"); }}
         sweetheart={sweetheart}
         puzzlesReady={!!puzzlesData}
         dailySolved={dailySolvedDate === todayKey()}
@@ -2666,21 +2664,24 @@ export default function ZlegendsBot() {
   const focused = siteView === "tactica" || siteView === "play" && (rushMode || !!activePuzzle || spectateMode
     || (mode === "play" && moveList.length > 0 && !result && !pastedGame));
   focusedRef.current = focused;
+  /* The bottom bar is off for the whole of a game or puzzle, from before the
+     first move, so the board and its controls fit a phone without scrolling.
+     It comes back for a finished game and for a reviewed one. Unlike
+     `focused`, this doesn't block the back gesture. */
+  const barHidden = focused || (siteView === "play" && !result && !pastedGame);
   const section = sectionForView({ siteView, rushMode, activePuzzle, pastedGame });
-  const darkNav = siteView === "puzzlesHome" && !sweetheart;
   /* Chess Tactica is a game of its own: no site header at all (its menu has
      an Exit back to Play). */
   const immersive = siteView === "tactica";
 
   return (
-    <div className={"appShell" + (focused ? "" : " hasBottomBar") + (immersive ? " noHeader" : "")}>
+    <div className={"appShell" + (barHidden ? "" : " hasBottomBar") + (immersive ? " noHeader" : "")}>
       {!immersive && <AppHeader
         section={section}
         onSection={onSection}
         profile={profile}
         email={account?.email}
         sweetheart={sweetheart}
-        dark={darkNav}
         onSignIn={openSignIn}
         onSignOut={signOut}
         onProfile={() => setSiteView("profile")}
@@ -2690,10 +2691,11 @@ export default function ZlegendsBot() {
         onSettings={openSettings}
         onMusic={() => setMusicOpen(true)}
       />}
+      {hiddenHeadingFor(siteView) && <h1 className="sr-only">{hiddenHeadingFor(siteView)}</h1>}
       <div key={siteView} className="pageIn">
         <Suspense fallback={null}>{renderPage()}</Suspense>
       </div>
-      {!focused && <BottomBar section={section} onSection={onSection} sweetheart={sweetheart} dark={darkNav} />}
+      {!barHidden && <BottomBar section={section} onSection={onSection} sweetheart={sweetheart} />}
       {appOverlays}
     </div>
   );

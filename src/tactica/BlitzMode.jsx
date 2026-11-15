@@ -41,7 +41,7 @@ const clock = (ms) => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 };
 
-export default function BlitzMode({ sweetheart, best, onBest, onExit }) {
+export default function BlitzMode({ sweetheart, best, onBest, onExit, exitLabel = "Back to the menu" }) {
   const canvasRef = useRef(null);
   const sceneRef = useRef(null);
   const engRef = useRef(createEngine());
@@ -325,7 +325,7 @@ export default function BlitzMode({ sweetheart, best, onBest, onExit }) {
             </>
           )}
           <BrassButton onClick={start}>{phase === "ready" ? "Start" : "Play again"}</BrassButton>
-          <button type="button" className="tc-link" onClick={onExit}>Back to the menu</button>
+          <button type="button" className="tc-link" onClick={onExit}>{exitLabel}</button>
         </div>
       )}
     </div>

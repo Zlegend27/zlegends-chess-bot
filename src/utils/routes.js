@@ -22,6 +22,22 @@ const VIEW_PATHS = {
 
 export const pathForView = (view) => VIEW_PATHS[view] ?? "/";
 
+/* A heading for the pages that don't show one of their own, read out by
+   screen readers (the others carry a visible h1: Puzzles, Leaderboard,
+   Game Review, Lessons, Privacy, Terms). */
+const HIDDEN_HEADINGS = {
+  home: "Zlegend's Chess Bot",
+  playHub: "Play",
+  play: "Chess board",
+  openings: "Openings",
+  watch: "Watch bots play",
+  ranked: "Ranked puzzles",
+  rush: "Puzzle Rush",
+  profile: "Your profile",
+  lobby: "1v1 lobby",
+};
+export const hiddenHeadingFor = (view) => HIDDEN_HEADINGS[view] ?? null;
+
 export function viewForPath(path) {
   const clean = path.length > 1 ? path.replace(/\/+$/, "") : path;
   return Object.keys(VIEW_PATHS).find((view) => VIEW_PATHS[view] === clean) ?? "home";

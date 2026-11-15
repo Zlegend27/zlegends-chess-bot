@@ -27,9 +27,24 @@
     <meta name="twitter:title" content="Zlegend's Chess Bot — can you beat it?" />
     <meta name="twitter:description" content="Zlegend2700 — play instantly in your browser." />
     <meta name="twitter:image" content="/og.jpg" />
+    <!-- Shown until the app's script has loaded and drawn over it: the
+         theme's background and the header bar with the site's name, so the
+         first frame isn't a blank white page. Light theme is read from the
+         saved setting (see chooseTheme in App.jsx). -->
+    <style>
+      html, body { margin: 0; background: #0E0620; }
+      html.shellLight, html.shellLight body { background: #FCEFDD; }
+      #shell { font: 700 14px 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif; color: #F4EFFF; }
+      #shell header { box-sizing: border-box; height: calc(57px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) 12px 0; display: flex; align-items: center; border-bottom: 1px solid #8B2FC955; background: #1D1038; }
+      html.shellLight #shell { color: #4A1030; }
+      html.shellLight #shell header { background: #FFF6E9; border-color: #F0A8C4; }
+    </style>
+    <script>
+      try { if (localStorage.getItem("zlegendsBot.lightTheme") === "true") document.documentElement.classList.add("shellLight"); } catch (e) {}
+    </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div id="shell"><header>Zlegend2700</header></div></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

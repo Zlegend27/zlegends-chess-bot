@@ -16,7 +16,7 @@ function Swatches({ label, colors, value, onPick, T }) {
         {colors.map((c, i) => (
           <button key={c} type="button" role="radio" aria-checked={value === i} aria-label={`${label} ${i + 1}`}
             onClick={() => onPick(i)}
-            className={"size-7 cursor-pointer rounded-full border-2 focus-visible:outline-none focus-visible:ring-2 " + T.ring + (value === i ? " border-white" : " border-transparent")}
+            className={"size-8 cursor-pointer rounded-full border-2 focus-visible:outline-none focus-visible:ring-2 " + T.ring + (value === i ? " border-white" : " border-transparent")}
             style={{ background: c }} />
         ))}
       </div>

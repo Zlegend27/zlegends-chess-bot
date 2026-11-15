@@ -21,6 +21,9 @@ import { beginHandoff, isIosHomeScreenApp, watchHandoff } from "./authHandoff";
 export async function signInWithProvider(provider) {
   const supabase = await getSupabase();
   if (!supabase) return;
+  /* The iPhone home-screen app can stay open while the log-in happens in
+     another tab, so it has to start listening for the result now. */
+  window.dispatchEvent(new Event(AUTH_NEEDED));
   await supabase.auth.signInWithOAuth({
     provider,
     options: {
