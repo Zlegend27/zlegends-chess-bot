@@ -20,3 +20,8 @@ chessboard-bible/
 
 # Generated before each build and dev server by scripts/build-daily.mjs.
 src/data/dailyCalendar.json
+
+# Local data backups (scripts/backup.mjs).
+backups/
+# Scratch art files kept on this computer.
+branding/

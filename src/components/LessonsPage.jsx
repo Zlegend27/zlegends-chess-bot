@@ -7,6 +7,7 @@ import { LESSONS } from "../data/lessons";
 import { loadSetting } from "../utils/storage";
 import { warmUpStockfish } from "../engine/stockfishEngine";
 import { getUiTheme } from "../utils/uiTheme";
+import { track } from "../utils/track";
 
 /** Lessons: pick a lesson -> pick a chapter (or the Theory Trainer) ->
  *  the player/trainer takes over the board. Same page-not-modal,
@@ -29,6 +30,9 @@ export default function LessonsPage({ onOpenings, sweetheart }) {
      lean on the Stockfish worker -- start the WASM download the moment
      someone lands on Learn, same pattern the Play view uses. */
   useEffect(() => { warmUpStockfish(); }, []);
+
+  useEffect(() => { if (trainerOpen) track("trainer_open"); }, [trainerOpen]);
+  useEffect(() => { if (lessonId && chapterNumber != null) track("lesson_open", { lesson: lessonId, chapter: chapterNumber }); }, [lessonId, chapterNumber]);
 
   const lesson = LESSONS.find(l => l.id === lessonId) || null;
   const chapter = lesson?.chapters.find(c => c.number === chapterNumber && !c.comingSoon) || null;

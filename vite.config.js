@@ -19,6 +19,9 @@ import tailwindcss from '@tailwindcss/vite';
 // nav rework, auth/login screens, etc.) can reach for Tailwind classes;
 // nothing already working needs to be touched or converted.
 export default defineConfig({
+  /* The build's date and time, sent with crash reports and events so a
+     problem can be tied to the version that had it. */
+  define: { __APP_VERSION__: JSON.stringify(new Date().toISOString().slice(0, 16)) },
   plugins: [
     react(),
     tailwindcss(),

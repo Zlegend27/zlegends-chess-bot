@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { loadSetting, saveSetting } from "../utils/storage";
+import { track } from "../utils/track";
 import MenuScreen from "./MenuScreen";
 import TutorialMode from "./TutorialMode";
 import BlitzMode from "./BlitzMode";
@@ -28,6 +29,7 @@ export default function TacticaPage({ pieceImgSrc, sweetheart, player, start = n
   const [runBest, setRunBest] = useState(() => loadSetting("tacticaRunBest", 0));
   const recordRunBest = (score) => { setRunBest(score); saveSetting("tacticaRunBest", score); };
 
+  useEffect(() => { if (screen !== "menu") track("tactica_mode", { mode: screen }); }, [screen]);
   useEffect(() => {
     setFlies(true);
     return () => setFlies(false);

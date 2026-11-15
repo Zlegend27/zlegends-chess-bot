@@ -31,6 +31,21 @@ export function storedUserId() {
   return storedSession()?.user?.id ?? null;
 }
 
+/** Adds rows to a table, without the Supabase library. Resolves to the
+ *  HTTP status (it doesn't throw on a refused write). keepalive lets it
+ *  finish while the page is being left. */
+export async function restPost(table, rows) {
+  const session = storedSession();
+  const fresh = session && session.expires_at * 1000 > Date.now();
+  const res = await fetch(`${BASE}/rest/v1/${table}`, {
+    method: "POST",
+    keepalive: true,
+    headers: { apikey: KEY, Authorization: `Bearer ${fresh ? session.access_token : KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+    body: JSON.stringify(rows),
+  });
+  return res.status;
+}
+
 /** GET from the REST API. `params` is a query string. Throws on a failed
  *  request, so callers can show their own "couldn't reach" message. */
 export async function restGet(table, params) {

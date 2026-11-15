@@ -21,7 +21,11 @@ export async function claimAnonymousData(userId) {
     await Promise.all([
       supabase.from("players").update({ user_id: userId }).eq("client_id", clientId).is("user_id", null),
       supabase.from("games").update({ user_id: userId }).eq("client_id", clientId).is("user_id", null),
-      supabase.from("rush_scores").update({ user_id: userId }).eq("client_id", clientId).is("user_id", null),
+      /* Through a function once 006_leaderboard_safety.sql has been run (the
+         table can no longer be read directly then); the plain update before. */
+      supabase.rpc("claim_rush_scores", { client: clientId }).then(({ error }) => (error
+        ? supabase.from("rush_scores").update({ user_id: userId }).eq("client_id", clientId).is("user_id", null)
+        : null)),
     ]);
   } catch {
     /* best-effort, same as every other Supabase write in this app --

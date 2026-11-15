@@ -5,7 +5,8 @@
 -- tells them to email support instead, so nothing breaks either way.
 --
 -- What it deletes, for the caller only (auth.uid()): their Rank Bot move
--- log, their saved games, their Rush scores, their player row, and then
+-- log, their saved games, their Rush scores, their player row, their usage
+-- events, and then
 -- the account itself (which also removes its logins and sessions).
 --
 -- Security note: SECURITY DEFINER, because a player can't otherwise delete
@@ -29,6 +30,10 @@ begin
   delete from public.games where user_id = me;
   delete from public.rush_scores where user_id = me;
   delete from public.players where user_id = me;
+  -- The events table (005_events.sql) may not exist yet.
+  if to_regclass('public.events') is not null then
+    execute 'delete from public.events where user_id = $1' using me;
+  end if;
   delete from auth.users where id = me;
 end;
 $$;

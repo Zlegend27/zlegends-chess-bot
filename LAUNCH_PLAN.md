@@ -122,3 +122,44 @@ Reliability and limits
 3. Security items 1-4.
 4. Items 11, 12 and 18.
 5. Soft launch to the Discord, watch the numbers for two weeks, then wider.
+
+## Built 2026-11-15 (second pass; waiting on the owner to run the SQL)
+
+Data (section 2, proposals A-D): BUILT.
+- `src/utils/track.js` records page opens, sign-ins, puzzles solved/failed,
+  reviews run, Tactica modes and Blitz/Run scores, lessons, crashes, and a
+  visit's start. Real visits only (not tests or local development).
+- Needs `supabase/005_events.sql` run once. Until then the site gets a
+  "no such table" reply and stops sending for that visit.
+- `supabase/stats.sql`: eight read-only queries for the SQL Editor.
+- Rank Bot: "How did that feel?" (Too easy / A close fight / Unfair) after
+  a game. Not seen in the browser yet (needs a finished Rank Bot game).
+- Privacy Policy now describes this.
+
+Security (section 3):
+- Item 2, leaderboard: BUILT. `supabase/006_leaderboard_safety.sql` (NOT
+  TESTED against a database) gives the leaderboard a view without private
+  IDs, closes direct reads of rush_scores, refuses impossible scores and
+  floods. The site already reads the view and falls back to the table, so
+  run the SQL only after this version is live. Offensive names show as
+  "Player" on the leaderboard and in the lobbies (`cleanName.js`).
+- Item 4, found by reading the rules (nothing was written to test it):
+  the public key can UPDATE any row of `players` (rating and name), and
+  until 006 is run the leaderboard lists the private client_ids that let a
+  signed-in user claim someone's unclaimed games. Fixing `players` and
+  item 1 (private game history) changes how the site proves "this row is
+  mine", so it needs a test database first. STILL OPEN.
+- Item 3 (lobby authorization): STILL OPEN, same reason.
+
+Other:
+- Item 11: `scripts/backup.mjs` saves every table to backups/<date>/ (not
+  committed). First backup taken 2026-11-15 with the public key.
+- Item 14: the site's 1v1 asks which piece to promote to. Not played
+  through in the browser. Tactica 1v1 still auto-queens.
+- Item 16: each page sets its own tab title; sitemap.xml and robots.txt.
+- Item 12 (uptime monitor) is an outside service: sign up at a free one
+  (e.g. UptimeRobot) and point it at https://www.zlegend2700.com.
+
+To test database changes safely we need one of: permission to install
+PGlite (a small local Postgres, development only), or a second free
+Supabase project to try SQL on first.

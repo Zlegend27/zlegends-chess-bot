@@ -1,5 +1,6 @@
 import { getSupabase } from "./supabase";
 import { getClientId } from "./clientId";
+import { cleanName } from "./cleanName";
 
 /** Best-effort submit, mirroring gameHistory.js's saveGame -- never
  *  throws, never blocks the "rush over" screen from showing immediately.
@@ -24,26 +25,32 @@ export async function submitRushScore({ duration, solved, displayName }) {
  *  achiever breaks ties). Every run is stored as its own row, so this
  *  fetches a deeper slice and keeps only each player's best run --
  *  otherwise one person's ten attempts could fill the whole board.
+ *  Reads the rush_leaderboard view (supabase/006_leaderboard_safety.sql),
+ *  which leaves out players' private ids; before that file has been run it
+ *  falls back to the table. Names that aren't fit to show become "Player".
  *  Returns [] on any failure/misconfiguration so the leaderboard UI can
  *  just show "no scores yet" either way. */
 export async function fetchLeaderboard(duration, limit = 10) {
   const supabase = await getSupabase();
   if (!supabase) return [];
   try {
-    const { data, error } = await supabase
-      .from("rush_scores")
-      .select("client_id, display_name, solved, created_at")
+    const top = (table, key) => supabase
+      .from(table)
+      .select(key + ", display_name, solved, created_at")
       .eq("duration_seconds", duration)
       .order("solved", { ascending: false })
       .order("created_at", { ascending: true })
       .limit(limit * 10);
+    let key = "player_key";
+    let { data, error } = await top("rush_leaderboard", key);
+    if (error) { key = "client_id"; ({ data, error } = await top("rush_scores", key)); }
     if (error || !data) return [];
     const seen = new Set();
     const best = [];
     for (const row of data) {
-      if (seen.has(row.client_id)) continue;
-      seen.add(row.client_id);
-      best.push(row);
+      if (seen.has(row[key])) continue;
+      seen.add(row[key]);
+      best.push({ display_name: cleanName(row.display_name), solved: row.solved, created_at: row.created_at });
       if (best.length >= limit) break;
     }
     return best;

@@ -40,6 +40,17 @@ const HIDDEN_HEADINGS = {
 };
 export const hiddenHeadingFor = (view) => HIDDEN_HEADINGS[view] ?? null;
 
+/* The browser tab's title per page, so tabs, history and search results
+   say where they lead. */
+const SITE = "Zlegend's Chess Bot";
+const TITLES = {
+  playHub: "Play", play: "Game", puzzlesHome: "Puzzles", leaderboard: "Puzzle Rush leaderboard", review: "Game Review",
+  lessons: "Learn", openings: "Openings", watch: "Watch bots play", ranked: "Ranked puzzles", rush: "Puzzle Rush",
+  profile: "Profile", avatar: "Your avatar", history: "Game History", lobby: "1v1 lobby", tactica: "Chess Tactica",
+  privacy: "Privacy Policy", terms: "Terms of Service",
+};
+export const titleFor = (view) => (TITLES[view] ? `${TITLES[view]} · ${SITE}` : `${SITE} — can you beat it?`);
+
 export function viewForPath(path) {
   const clean = path.length > 1 ? path.replace(/\/+$/, "") : path;
   return Object.keys(VIEW_PATHS).find((view) => VIEW_PATHS[view] === clean) ?? "home";

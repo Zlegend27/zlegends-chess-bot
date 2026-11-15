@@ -11,29 +11,35 @@ import { fullMoves } from "../utils/moveNumber";
 import LessonBoard from "../components/LessonBoard";
 import PlayerSprite from "../components/PlayerSprite";
 import { usePvpMatch } from "./usePvpMatch";
+import { getPieceSet } from "../utils/pieceSets";
+import Modal from "../components/Modal";
 
-const QUEEN = 5;
+/* Promotion choices, engine piece types, best first. */
+const PROMOTIONS = [[5, "Queen"], [4, "Rook"], [3, "Bishop"], [2, "Knight"]];
 
 export default function PvpMatch({ supabase, me, match, pieceSetId, signedIn, onExit }) {
   const game = usePvpMatch({ supabase, me, match, signedIn });
   const { eng, moves, result, myColor, opponent, sideToMove, myTurn, timeLeft, drawOffer, oppGoneLong, canAbort, status } = game;
   const [selected, setSelected] = useState(-1);
   const [targets, setTargets] = useState([]);
+  /* A pawn reaching the last rank: the moves to choose between. */
+  const [promotion, setPromotion] = useState(null);
+  const play = (mv) => {
+    game.submit(eng.sanOf(mv));
+    setSelected(-1);
+    setTargets([]);
+    setPromotion(null);
+  };
 
   const onSquare = (i64) => {
     if (!myTurn) return;
     const legal = eng.legalMoves();
     const sq120 = M64TO120[i64];
     if (selected >= 0) {
-      /* Promotions become a queen for now. */
-      const mv = legal.filter((m) => mFrom(m) === M64TO120[selected] && mTo(m) === sq120)
-        .sort((a, b) => (mPromo(b) === QUEEN) - (mPromo(a) === QUEEN))[0];
-      if (mv !== undefined) {
-        game.submit(eng.sanOf(mv));
-        setSelected(-1);
-        setTargets([]);
-        return;
-      }
+      const found = legal.filter((m) => mFrom(m) === M64TO120[selected] && mTo(m) === sq120);
+      /* Several moves to one square means a promotion: ask which piece. */
+      if (found.length > 1) { setPromotion(found); return; }
+      if (found.length === 1) { play(found[0]); return; }
     }
     const p = eng.pieceAt(i64);
     if (p !== 0 && Math.sign(p) === myColor) {
@@ -55,6 +61,19 @@ export default function PvpMatch({ supabase, me, match, pieceSetId, signedIn, on
 
   return (
     <div className="trainerCol">
+      <Modal open={!!promotion && myTurn} onClose={() => setPromotion(null)} closeLabel="Cancel the promotion">
+        <div className="boxHead">Promote to</div>
+        <div className="flex justify-center gap-2">
+          {PROMOTIONS.map(([type, name]) => {
+            const mv = promotion?.find((m) => mPromo(m) === type);
+            return mv === undefined ? null : (
+              <button key={type} type="button" className="btn ghost" style={{ padding: 6 }} aria-label={name} title={name} onClick={() => play(mv)}>
+                <img src={getPieceSet(pieceSetId).svgUrl(type, myColor === 1)} alt="" width="44" height="44" />
+              </button>
+            );
+          })}
+        </div>
+      </Modal>
       {playerRow(opponent, -myColor)}
       <LessonBoard
         eng={eng}

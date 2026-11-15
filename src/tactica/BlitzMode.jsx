@@ -8,6 +8,7 @@ import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
 import { BrassButton } from "./ui";
 import { play as playSound } from "./sound";
+import { track } from "../utils/track";
 import { loadBonds, levelsOf, recordMove, levelUpText } from "./bonds";
 
 /* Blitz in the Bin: three minutes to solve as many puzzles as you can.
@@ -170,6 +171,7 @@ export default function BlitzMode({ sweetheart, best, onBest, onExit, exitLabel 
   useEffect(() => {
     if (phase !== "done") return;
     setSelected(null);
+    track("tactica_blitz_end", { score });
     if (score > (best || 0)) { setNewBest(true); onBest(score); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, score]);

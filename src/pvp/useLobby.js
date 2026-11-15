@@ -14,6 +14,7 @@ import { getSupabase } from "../utils/supabase";
 import { loadSetting, saveSetting } from "../utils/storage";
 import { playersFrom, tablesFrom, holdsSeat, matchAt } from "../utils/lobby";
 import { DEFAULT_AVATAR } from "../utils/avatar";
+import { cleanName } from "../utils/cleanName";
 
 /** In local development, a different guest per tab so two tabs can play. */
 function devGuest() {
@@ -59,7 +60,8 @@ export function useLobby({ me, room = "lobby-v1", activeKey = "pvpActive", tcKey
     const channel = supabase.channel(room, { config: { presence: { key: me.id } } });
     channelRef.current = channel;
     channel
-      .on("presence", { event: "sync" }, () => setPlayers(playersFrom(channel.presenceState())))
+      /* Other players' names pass the name filter before anyone sees them. */
+      .on("presence", { event: "sync" }, () => setPlayers(playersFrom(channel.presenceState()).map((p) => ({ ...p, name: cleanName(p.name) }))))
       .subscribe((status) => setConnected(status === "SUBSCRIBED"));
     return () => { supabase.removeChannel(channel); channelRef.current = null; setConnected(false); };
   }, [supabase, me, room]);

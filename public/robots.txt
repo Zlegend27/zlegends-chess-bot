@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /profile
+Disallow: /avatar
+Disallow: /history
+Disallow: /game
+
+Sitemap: https://www.zlegend2700.com/sitemap.xml

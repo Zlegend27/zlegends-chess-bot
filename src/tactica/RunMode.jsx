@@ -7,6 +7,7 @@ import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin, placeEscapeProps } from "./sets/trashBin";
 import { BrassButton, MapButton, MenuButton, useViewSource } from "./ui";
 import { play as playSound } from "./sound";
+import { track } from "../utils/track";
 import { makeEscape, movesOf, apply, escaped, strikerOf, piecesOf, fenOf, escapeClock, closeRing, outerRing, ringSquares, allStuck } from "./escape";
 import { loadSetting, saveSetting } from "../utils/storage";
 import {
@@ -454,6 +455,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
   useEffect(() => {
     if (stage !== "over") return;
     setNewBest(score > (best || 0));
+    track("tactica_run_end", { score });
     if (score > (best || 0)) onBest(score);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage]);

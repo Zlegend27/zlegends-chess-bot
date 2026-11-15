@@ -49,7 +49,7 @@ function Privacy({ T }) {
           <li>Google and Discord: only if you choose to log in with them</li>
           <li>YouTube: the video on the home page is a YouTube player; YouTube&apos;s own policy applies when you play it</li>
         </ul>
-        <p className="m-0">There are no ads and no tracking or analytics tools, and we never sell your information.</p>
+        <p className="m-0">To improve the site we keep our own simple record of which features get used (for example that a page was opened or a puzzle solved), how you arrived, and crashes, tied to the same random ID. There are no ads and no third-party tracking or analytics tools, and we never sell your information.</p>
       </Section>
       <Section title="Age" T={T}>
         <p className="m-0">You need to be 13 or older to make an account. If you believe a child under 13 has made one, email us and we&apos;ll delete it.</p>

@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { WN, WB, WR, WQ, WK, mPromo } from "../engine/chessEngine";
 import PixelAvatar, { ZPAL, ZPIX } from "../components/PixelAvatar";
 import StarField from "../components/StarField";
@@ -13,6 +13,24 @@ import { DIFFICULTIES } from "../utils/difficulties";
 import { RANK_BOT_ASSESSMENT_EVERY } from "../utils/rankBotMath";
 import { RUSH_DURATIONS } from "../utils/rushDurations";
 import { moveCounter } from "../utils/moveNumber";
+import { track } from "../utils/track";
+
+/* After a Rank Bot game: one tap on how it felt. He's tuned from what real
+   games show, and how a game felt is the one thing the moves can't say. */
+const FEELS = [["easy", "Too easy"], ["close", "A close fight"], ["unfair", "Unfair"]];
+function RankFeel({ outcome }) {
+  const [answered, setAnswered] = useState(false);
+  if (answered) return <div className="toast" role="status">Thanks. That helps tune him.</div>;
+  return (
+    <div className="newGameConfirm" role="group" aria-label="How did that game feel?">
+      <span>How did that feel?</span>
+      {FEELS.map(([id, label]) => (
+        <button key={id} className="btn ghost" style={{ minHeight: 30, padding: "5px 10px", fontSize: 11 }}
+          onClick={() => { track("rankbot_feel", { feel: id, result: outcome }); setAnswered(true); }}>{label}</button>
+      ))}
+    </div>
+  );
+}
 
 /* The game screen: the board, the bot card, the move list and the controls
    for a live game, a puzzle, a review or a rush. Loaded when a game starts
@@ -441,6 +459,9 @@ export default function PlayView({ mateFxProps, rechecking, betterMoveLine, rank
               {shareToast && <div className="toast">{shareToast}</div>}
               {quizDoneToast && <div className="toast">{quizDoneToast}</div>}
             </div>
+          )}
+          {mode === "play" && result && !pastedGame && !activePuzzle && !spectateMode && difficultyRef.current.id === "rank" && (
+            <RankFeel key={moveList.length} outcome={result.winner === playerColor ? "won" : result.winner ? "lost" : "draw"} />
           )}
           {newGameConfirm && (
             <div className="newGameConfirm">

@@ -7,10 +7,11 @@ import HomePage from "./components/HomePage";
 import { AppHeader, BottomBar } from "./components/AppNav";
 import PlayPage from "./components/PlayPage";
 import { nextStreak, utcDay } from "./utils/dailyStreak";
-import { historyStep, pathForView, sectionForView, viewForPath, hiddenHeadingFor } from "./utils/routes";
+import { historyStep, pathForView, sectionForView, viewForPath, hiddenHeadingFor, titleFor } from "./utils/routes";
 import { pickPostGameLine } from "./utils/botLines";
 import { signOut, watchAuthState, accountProfile, accountInfo, saveAccountName } from "./utils/auth";
 import { openSignIn } from "./utils/signInPrompt";
+import { track } from "./utils/track";
 import { claimAnonymousData } from "./utils/accountMigration";
 import { loadSetting, saveSetting } from "./utils/storage";
 const RushThemeArt = lazy(() => import("./components/RushThemeArt"));
@@ -338,6 +339,13 @@ export default function ZlegendsBot() {
     else if (step === "push") history.pushState({ subPage: true }, "", url);
     else history.replaceState(siteView === "home" ? null : { subPage: true }, "", url);
   }, [siteView]);
+  /* What gets used: one event per page opened, and per sign-in. */
+  useEffect(() => { track("page", { view: siteView }); document.title = titleFor(siteView); }, [siteView]);
+  const signedInId = session?.user?.id;
+  useEffect(() => {
+    if (signedInId) track("sign_in", { providers: session.user.app_metadata?.providers ?? [] });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signedInId]);
   const focusedRef = useRef(false);
   const leaveActivityRef = useRef(null);
   useEffect(() => {
@@ -1962,14 +1970,17 @@ export default function ZlegendsBot() {
         rushBandIdxRef.current = Math.max(0, rushBandIdxRef.current - 1);
         setRushBandIdx(rushBandIdxRef.current);
         if (rushMistakesRef.current >= 3) {
+          track("puzzle", { kind: "rush", solved: false, rating: activePuzzle.rating });
           setPuzzleFeedback("Wrong — that's 3 misses!");
           puzzleTimeoutRef.current = setTimeout(() => finishRush("mistakes"), 400);
         } else {
+          track("puzzle", { kind: "rush", solved: false, rating: activePuzzle.rating });
           setPuzzleFeedback("Not quite — next puzzle!");
           puzzleTimeoutRef.current = setTimeout(() => nextRushPuzzle(), 700);
         }
         return;
       }
+      track("puzzle", { kind: puzzleBand ? "ranked" : "daily", solved: false, rating: activePuzzle.rating });
       setPuzzleFeedback("Not quite — try again!");
       setTimeout(() => setPuzzleFeedback(null), 1400);
       return;
@@ -1986,6 +1997,7 @@ export default function ZlegendsBot() {
     setPuzzleFeedback(null);
 
     if (verdict.solved) {
+      track("puzzle", { kind: rushMode ? "rush" : puzzleBand ? "ranked" : "daily", solved: true, rating: activePuzzle.rating });
       setPuzzleSolved(true);
       try { audio.sfxCapture(); } catch { /* audio unavailable */ }
       const daily = homeDaily ?? dailyPuzzle(pz.PUZZLES);
@@ -2165,11 +2177,16 @@ export default function ZlegendsBot() {
     }
     return r;
   };
-  const reviewPastedGame = (text) => finishReviewLoad(loadPgnText(text));
+  const reviewPastedGame = (text) => {
+    const r = finishReviewLoad(loadPgnText(text));
+    track("review_run", { source: "pasted", ok: r.ok });
+    return r;
+  };
   /* Saved games know which side the player was on, so they open from that
      side, the way Chess.com keeps you at the bottom by default. */
   const reviewSavedGame = (game) => {
     const you = displayNameRef.current || "You";
+    track("review_run", { source: "saved", ok: true });
     return finishReviewLoad(loadPgnText(game.pgn, {
       side: game.playerColor,
       info: {

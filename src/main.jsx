@@ -5,6 +5,7 @@ import App from "./App.jsx";
 import HandoffLanding from "./components/HandoffLanding.jsx";
 import { readHandoffLanding } from "./utils/authHandoff";
 import SignInSheet from "./components/SignInSheet";
+import { startTracking, trackError } from "./utils/track";
 import { reloadIfStaleBuild } from "./utils/staleBuild";
 import "./index.css";
 
@@ -22,7 +23,7 @@ class ErrorBoundary extends React.Component {
     return { error };
   }
   componentDidCatch(error) {
-    reloadIfStaleBuild(error);
+    if (!reloadIfStaleBuild(error)) trackError(error, "render");
   }
   render() {
     if (this.state.error) {
@@ -39,6 +40,7 @@ class ErrorBoundary extends React.Component {
 }
 
 const handoff = readHandoffLanding(window.location.search);
+if (!handoff) startTracking();
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
