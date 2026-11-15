@@ -840,6 +840,24 @@ select:hover{ border-color:var(--cyan); }
      that component is hidden entirely on mobile (BottomNav, fixed/out of
      flow, covers this breakpoint instead), so it never needed one. */
   .gamePanelSlot{ order:7; }
+  /* Without the eval bar the board runs edge to edge, like the big chess
+     sites on a phone: no frame, no side gap, every square as large as the
+     screen allows. The negative margins pull it out past the column's side
+     padding to the screen edges without making the column itself wider. */
+  /* The player cards fill the column exactly (they were 96vw, wider than
+     the padded column, so they ran into the right edge). */
+  .root.noEval .card{ align-self:stretch; width:auto; }
+}
+/* Edge to edge only on a phone held upright: held sideways, a full-width
+   board would be far taller than the screen. */
+@media (max-width:700px) and (orientation:portrait){
+  .root.noEval .boardWrap{ align-self:stretch; width:auto; justify-content:center;
+    margin-left:calc(-14px - env(safe-area-inset-left)); margin-right:calc(-14px - env(safe-area-inset-right)); }
+  .root.noEval .board{ width:100%; border:0; outline:0; border-radius:0; box-shadow:none; }
+}
+/* A small phone held sideways: keep the board within the screen's height. */
+@media (max-width:700px) and (orientation:landscape){
+  .board, .root.noEval .board{ width:min(calc(100vw - 28px), 460px, calc(100dvh - 32px)); }
 }
 /* Desktop: the 440px cap above was sized for phones and left large windows
    mostly empty around a small board. Past the mobile breakpoint, let the

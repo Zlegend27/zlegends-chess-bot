@@ -29,7 +29,7 @@ import { reloadIfStaleBuild } from "./utils/staleBuild";
 import { gradeGame } from "./utils/gradeGame";
 import { buildPgn, parsePgnMoves, replayForeignPgn, parsePgnHeaders, countPgnGames, describePasteProblem, reviewInfoFromHeaders, exporterSide } from "./utils/pgn";
 import { encodeGame, decodeGame, getSharedHash, replayIntoEngine } from "./utils/share";
-import { getPieceSet } from "./utils/pieceSets";
+import { getPieceSet, loadPieceSet, PIECE_SETS } from "./utils/pieceSets";
 import { getBoardColor } from "./utils/boardColors";
 import { saveGame, estimateRating } from "./utils/gameHistory";
 import { getDisplayName, setDisplayName } from "./utils/playerIdentity";
@@ -126,7 +126,9 @@ export default function ZlegendsBot() {
   const [musicOpen, setMusicOpen] = useState(false);
   const [blindOpen, setBlindOpen] = useState(false);
   const { volume, audio, musicSource, mp3Tracks, mp3Idx, mp3Duration, mp3CurrentTime, mp3Buffering, mp3Shuffle, trackName, setMusicSource, toggleShuffle, sfxOn, toggleSfx, pickMp3Track, toggleMusic, nextTrack, prevTrack, onVolume, seekMp3, fmtTime, isMp3Source, jbTrackLabel, jbPlaying, jbDisabled } = useMusic({ musicOpen, blindOpen });
-  const [hideEvalBar, setHideEvalBar] = useState(() => loadSetting("hideEvalBar", false));
+  /* The eval bar is off unless the player turns it on in Settings. (A new
+     key, evalBarOn, so everyone started with it hidden when this changed.) */
+  const [hideEvalBar, setHideEvalBar] = useState(() => !loadSetting("evalBarOn", false));
   const [ecoData, setEcoData] = useState(null);
   /* The full ECO book is a ~480KB chunk that only matters once there's a
      game to name openings for -- don't make home-page visitors download
@@ -154,6 +156,9 @@ export default function ZlegendsBot() {
     warmUpStockfish().then(() => setEngineWarm(isStockfishWarm()));
   }, [siteView]);
   const pieceImgSrc = (type, isWhite) => getPieceSet(pieceSetId).svgUrl(type, isWhite);
+  /* Standard and Wood load on demand (see pieceSets.js); redraw once ready. */
+  const [, setPieceSetLoads] = useState(0);
+  useEffect(() => { loadPieceSet(pieceSetId).then(() => setPieceSetLoads((n) => n + 1)); }, [pieceSetId]);
   /* Read once, before the "mark visited" effect below flips the flag --
      HomePage's welcome beat needs to know if this is a genuine first
      visit, independent of whether theme-music autoplay is armed (that
@@ -458,6 +463,9 @@ export default function ZlegendsBot() {
     });
   }, []);
   const [pieceDesignsOpen, setPieceDesignsOpen] = useState(false);
+  useEffect(() => {
+    if (pieceDesignsOpen) Promise.all(PIECE_SETS.map((s) => loadPieceSet(s.id))).then(() => setPieceSetLoads((n) => n + 1));
+  }, [pieceDesignsOpen]);
   const [boardColorsOpen, setBoardColorsOpen] = useState(false);
   const [activeOpening, setActiveOpening] = useState(null);
   const [quizOpening, setQuizOpening] = useState(null);
@@ -1638,7 +1646,14 @@ export default function ZlegendsBot() {
   };
 
   const nextPuzzle = () => {
-    const pool = puzzlesInBand(puzzleBand);
+    /* After the daily (which has no band), carry on at the daily's own
+       level, so the next one isn't still titled "Daily Puzzle". */
+    let band = puzzleBand;
+    if (!band && activePuzzle) {
+      band = pz.RATING_BANDS.find((b) => activePuzzle.rating >= b.min && activePuzzle.rating < b.max) ?? null;
+      setPuzzleBand(band);
+    }
+    const pool = puzzlesInBand(band);
     startPuzzle(pool[(Math.random() * pool.length) | 0]);
   };
 
@@ -1764,6 +1779,12 @@ export default function ZlegendsBot() {
   const exitRush = () => {
     leaveActivity();
     setSiteView("puzzlesHome");
+  };
+  /* End Rush mid-run: a run with solves ends like any other (result
+     screen, personal best, leaderboard); an empty one just leaves. */
+  const endRush = () => {
+    if (rushSolvedRef.current > 0 && !rushResult) { clearTimeout(puzzleTimeoutRef.current); finishRush("ended"); }
+    else exitRush();
   };
 
   /* Closing the heartbreak-screen Modal (X/backdrop/Escape) -- unlike
@@ -2068,7 +2089,7 @@ export default function ZlegendsBot() {
 
   const choosePieceSet = (id) => { setPieceSetId(id); saveSetting("pieceSet", id); };
   const chooseBoardColor = (id) => { setBoardColorId(id); saveSetting("boardColor", id); };
-  const toggleEvalBar = () => { setHideEvalBar(v => { saveSetting("hideEvalBar", !v); return !v; }); };
+  const toggleEvalBar = () => { setHideEvalBar(v => { saveSetting("evalBarOn", v); return !v; }); };
 
   const onCopyPgn = async () => {
     const pgn = buildPgn(moveList, result ? result.text : "*");
@@ -2648,7 +2669,7 @@ export default function ZlegendsBot() {
 
   return (
     <Suspense fallback={null}>
-      <PlayView mateFxProps={mateFxProps} rechecking={rechecking} betterMoveLine={betterMoveLine} rankTestNote={rankBotTest && difficultyRef.current.id === "rank" ? (rankTestNote || {}) : null} RushThemeArt={RushThemeArt} Tray={Tray} activeOpening={activeOpening} activePuzzle={activePuzzle} analysisBusy={analysisBusy} analysisContent={analysisContent} analysisLabel={analysisLabel} analysisMove={analysisMove} analyzing={analyzing} arrowLine={arrowLine} beginRestartCountdown={beginRestartCountdown} bestArrow={bestArrow} boardColorId={boardColorId} boardRef={boardRef} boardVars={boardVars} botColor={botColor} botLine={botLine} botMood={botMood} botTaken={botTaken} colorPick={colorPick} curMoveIdx={curMoveIdx} difficultyIdx={difficultyIdx} difficultyRef={difficultyRef} displayName={displayName} dragCellSize={dragCellSize} dragFrom={dragFrom} dragPos={dragPos} eng={eng} evalLabel={evalLabel} evalPawns={evalPawns} exitMissedAttempt={exitMissedAttempt} exitPractice={exitPractice} exitPuzzle={exitPuzzle} exitReplay={exitReplay} exitRush={exitRush} formatClock={formatClock} gameStyle={gameStyle} gradeDetail={gradeDetail} gradeProgress={gradeProgress} grading={grading} hideEvalBar={hideEvalBar} hideRushSummary={hideRushSummary} hinting={hinting} inChk={inChk} liveOpening={liveOpening} missedAttempt={missedAttempt} missedStepIdx={missedStepIdx} mode={mode} moveGrades={moveGrades} moveList={moveList} nameDraft={nameDraft} nameEditOpen={nameEditOpen} newGame={newGame} newGameConfirm={newGameConfirm} nextPuzzle={nextPuzzle} onCopyPgn={onCopyPgn} onDifficultyChange={onDifficultyChange} onHint={onHint} onMissedSwipeEnd={onMissedSwipeEnd} onMissedSwipeStart={onMissedSwipeStart} openLeaderboard={openLeaderboard} openReviewPage={openReviewPage} pairs={pairs} pastedGame={pastedGame} pauseSpectate={pauseSpectate} pgnToast={pgnToast} pieceImgSrc={pieceImgSrc} pieceSetId={pieceSetId} playMove={playMove} playerAdvantageCp={playerAdvantageCp} playerColor={playerColor} playerShare={playerShare} practice={practice} practiceMove={practiceMove} practiceNext={practiceNext} practiceReveal={practiceReveal} promo={promo} puzzleBand={puzzleBand} puzzleFeedback={puzzleFeedback} puzzleMove={puzzleMove} puzzleSolved={puzzleSolved} pz={pz} quizDoneToast={quizDoneToast} quizMove={quizMove} quizOpening={quizOpening} rankBotAssessedElo={rankBotAssessedElo} rankBotGames={rankBotGames} ratingInfo={ratingInfo} replayFull={replayFull} replayIndex={replayIndex} replayPlaying={replayPlaying} replayStep={replayStep} restartCountdown={restartCountdown} result={result} resumeSpectate={resumeSpectate} reviewIndex={reviewIndex} reviewInfo={reviewInfo} reviewMissedPuzzle={reviewMissedPuzzle} reviewing={reviewing} rows={rows} rushBandIdx={rushBandIdx} rushBestMap={rushBestMap} rushDuration={rushDuration} rushLifetime={rushLifetime} rushMilestone={rushMilestone} rushMissed={rushMissed} rushMistakes={rushMistakes} rushMode={rushMode} rushResult={rushResult} rushSolved={rushSolved} rushSummaryOpen={rushSummaryOpen} rushTimeLeft={rushTimeLeft} saveDisplayName={saveDisplayName} setBotLine={setBotLine} setColorPick={setColorPick} setMissedStepIdx={setMissedStepIdx} setNameDraft={setNameDraft} setNameEditOpen={setNameEditOpen} setNewGameConfirm={setNewGameConfirm} setPlayerColor={setPlayerColor} setPromo={setPromo} setReplayIndex={setReplayIndex} setReviewIndex={setReviewIndex} setRushSummaryOpen={setRushSummaryOpen} setShareLinkFallback={setShareLinkFallback} setShareToast={setShareToast} setSiteView={setSiteView} shareLinkFallback={shareLinkFallback} shareToast={shareToast} spectateBlackIdx={spectateBlackIdx} spectateMode={spectateMode} spectateOpeningId={spectateOpeningId} spectatePaused={spectatePaused} spectateWhiteIdx={spectateWhiteIdx} startPuzzle={startPuzzle} startQuiz={startQuiz} startSpectate={startSpectate} status={status} stopSpectate={stopSpectate} sweetheart={sweetheart} thinking={thinking} toggleAnalyze={toggleAnalyze} toggleReplayPlay={toggleReplayPlay} uiT={uiT} undo={undo} youDiff={youDiff} youTaken={youTaken} />
+      <PlayView mateFxProps={mateFxProps} rechecking={rechecking} betterMoveLine={betterMoveLine} rankTestNote={rankBotTest && difficultyRef.current.id === "rank" ? (rankTestNote || {}) : null} RushThemeArt={RushThemeArt} Tray={Tray} activeOpening={activeOpening} activePuzzle={activePuzzle} analysisBusy={analysisBusy} analysisContent={analysisContent} analysisLabel={analysisLabel} analysisMove={analysisMove} analyzing={analyzing} arrowLine={arrowLine} beginRestartCountdown={beginRestartCountdown} bestArrow={bestArrow} boardColorId={boardColorId} boardRef={boardRef} boardVars={boardVars} botColor={botColor} botLine={botLine} botMood={botMood} botTaken={botTaken} colorPick={colorPick} curMoveIdx={curMoveIdx} difficultyIdx={difficultyIdx} difficultyRef={difficultyRef} displayName={displayName} dragCellSize={dragCellSize} dragFrom={dragFrom} dragPos={dragPos} eng={eng} evalLabel={evalLabel} evalPawns={evalPawns} exitMissedAttempt={exitMissedAttempt} exitPractice={exitPractice} exitPuzzle={exitPuzzle} exitReplay={exitReplay} exitRush={exitRush} endRush={endRush} formatClock={formatClock} gameStyle={gameStyle} gradeDetail={gradeDetail} gradeProgress={gradeProgress} grading={grading} hideEvalBar={hideEvalBar} hideRushSummary={hideRushSummary} hinting={hinting} inChk={inChk} liveOpening={liveOpening} missedAttempt={missedAttempt} missedStepIdx={missedStepIdx} mode={mode} moveGrades={moveGrades} moveList={moveList} nameDraft={nameDraft} nameEditOpen={nameEditOpen} newGame={newGame} newGameConfirm={newGameConfirm} nextPuzzle={nextPuzzle} onCopyPgn={onCopyPgn} onDifficultyChange={onDifficultyChange} onHint={onHint} onMissedSwipeEnd={onMissedSwipeEnd} onMissedSwipeStart={onMissedSwipeStart} openLeaderboard={openLeaderboard} openReviewPage={openReviewPage} pairs={pairs} pastedGame={pastedGame} pauseSpectate={pauseSpectate} pgnToast={pgnToast} pieceImgSrc={pieceImgSrc} pieceSetId={pieceSetId} playMove={playMove} playerAdvantageCp={playerAdvantageCp} playerColor={playerColor} playerShare={playerShare} practice={practice} practiceMove={practiceMove} practiceNext={practiceNext} practiceReveal={practiceReveal} promo={promo} puzzleBand={puzzleBand} puzzleFeedback={puzzleFeedback} puzzleMove={puzzleMove} puzzleSolved={puzzleSolved} pz={pz} quizDoneToast={quizDoneToast} quizMove={quizMove} quizOpening={quizOpening} rankBotAssessedElo={rankBotAssessedElo} rankBotGames={rankBotGames} ratingInfo={ratingInfo} replayFull={replayFull} replayIndex={replayIndex} replayPlaying={replayPlaying} replayStep={replayStep} restartCountdown={restartCountdown} result={result} resumeSpectate={resumeSpectate} reviewIndex={reviewIndex} reviewInfo={reviewInfo} reviewMissedPuzzle={reviewMissedPuzzle} reviewing={reviewing} rows={rows} rushBandIdx={rushBandIdx} rushBestMap={rushBestMap} rushDuration={rushDuration} rushLifetime={rushLifetime} rushMilestone={rushMilestone} rushMissed={rushMissed} rushMistakes={rushMistakes} rushMode={rushMode} rushResult={rushResult} rushSolved={rushSolved} rushSummaryOpen={rushSummaryOpen} rushTimeLeft={rushTimeLeft} saveDisplayName={saveDisplayName} setBotLine={setBotLine} setColorPick={setColorPick} setMissedStepIdx={setMissedStepIdx} setNameDraft={setNameDraft} setNameEditOpen={setNameEditOpen} setNewGameConfirm={setNewGameConfirm} setPlayerColor={setPlayerColor} setPromo={setPromo} setReplayIndex={setReplayIndex} setReviewIndex={setReviewIndex} setRushSummaryOpen={setRushSummaryOpen} setShareLinkFallback={setShareLinkFallback} setShareToast={setShareToast} setSiteView={setSiteView} shareLinkFallback={shareLinkFallback} shareToast={shareToast} spectateBlackIdx={spectateBlackIdx} spectateMode={spectateMode} spectateOpeningId={spectateOpeningId} spectatePaused={spectatePaused} spectateWhiteIdx={spectateWhiteIdx} startPuzzle={startPuzzle} startQuiz={startQuiz} startSpectate={startSpectate} status={status} stopSpectate={stopSpectate} sweetheart={sweetheart} thinking={thinking} toggleAnalyze={toggleAnalyze} toggleReplayPlay={toggleReplayPlay} uiT={uiT} undo={undo} youDiff={youDiff} youTaken={youTaken} />
     </Suspense>
   );
   };

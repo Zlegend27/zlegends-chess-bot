@@ -1,10 +1,12 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import StarField from "./StarField";
 import SocialBanner from "./SocialBanner";
 import BotBubble from "./BotBubble";
-import YouTubeTv from "./YouTubeTv";
 import { pickWelcomeLine } from "../utils/botLines";
 import { getUiTheme } from "../utils/uiTheme";
+
+/* Below the buttons, so it loads after the first page instead of with it. */
+const YouTubeTv = lazy(() => import("./YouTubeTv"));
 
 /* Game Review is always on Home: it's a main feature, and on Chess.com
    reviews are paid, so it's the thing to point at. */
@@ -48,7 +50,7 @@ export default function HomePage({ onEnter, onPlay, hasLiveGame, firstVisit, ran
       </div>
 
       <div className="relative z-10 mt-6">
-        <YouTubeTv sweetheart={sweetheart} />
+        <Suspense fallback={<div style={{ height: 300 }} aria-hidden="true" />}><YouTubeTv sweetheart={sweetheart} /></Suspense>
       </div>
 
       <SocialBanner />
