@@ -8,7 +8,7 @@ import { overlayOpen } from "../utils/routes";
 const getRankAccent = (sweetheart) => ({
   1: { text: sweetheart ? "text-sh-lgold" : "text-yellow", medal: "🥇" },
   2: { text: sweetheart ? "text-sh-link-dim" : "text-liliac", medal: "🥈" },
-  3: { text: sweetheart ? "text-[#A8703A]" : "text-[#E0A968]", medal: "🥉" },
+  3: { text: sweetheart ? "text-[#8A5A2B]" : "text-[#E0A968]", medal: "🥉" },
 });
 
 /** Puzzle Rush leaderboard, as its own page rather than a modal -- every

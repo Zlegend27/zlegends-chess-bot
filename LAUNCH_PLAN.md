@@ -266,3 +266,24 @@ on YouTube or TikTok. YouTube has an API to check channel memberships
 (needs the viewer to link their Google account, which we now have);
 TikTok has no public way to check subscriptions, so that side would need
 a manual code or list. Not started.
+
+## 2026-11-16 (night): what was left that Claude could build
+
+Owner confirmed: the signup email template and DMARC record are done.
+
+Built (not tested with two players or two devices):
+- The rating follows the account. It is saved on the signed-in account a
+  moment after it changes, and signing in on another device brings the
+  newer copy along (the newer of the device's and the account's wins).
+  It is still worked out in the browser, so it can be faked.
+- Report choices in Tactica's 1v1 end screen (just block, cheating,
+  offensive name, stalling or leaving), the same as the site's 1v1.
+- Contrast on the light (Sweetheart) theme: the teal and gold text, the
+  "win" label, the leaderboard bronze and the TV's "unavailable" text were
+  too faint and are darker now. The home page passes an automatic check.
+  Other pages on the light theme were not re-checked after the fix.
+
+Still open: keyboard play on the board, server-checked ranked results,
+uptime monitor, real-phone tests, deleting the old music folders in
+Supabase, Rank Bot v3 vs v2 comparison (needs the service key in .env),
+the supporter tier.

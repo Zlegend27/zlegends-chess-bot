@@ -41,7 +41,7 @@
      below, not a general replacement for the originals. */
   --sh-lbg:#FCEFDD; --sh-lbg2:#F9E4E9; --sh-lcard:#FFF6E9;
   --sh-link:#4A1030; --sh-linkDim:#8B5468; --sh-lborder:#F0A8C4;
-  --sh-lgold:#B8860B; --sh-lteal:#1E8577;
+  --sh-lgold:#8F6808; --sh-lteal:#176F63;
   /* Near-opaque plate the Rush popups sit their readable content on, so
      the shattered-glass background passes behind text and buttons rather
      than through them. Not fully opaque -- a little of the fracture still
@@ -97,5 +97,5 @@
 :root[data-theme="sweetheart"]{
   --void:var(--sh-lbg); --void2:var(--sh-lbg2); --panel:var(--sh-lcard);
   --violet:var(--sh-rose); --magenta:var(--sh-red); --cyan:var(--sh-lteal); --yellow:var(--sh-lgold);
-  --liliac:#B87A94; --white:var(--sh-link); --dim:var(--sh-linkDim);
+  --liliac:#96587A; --white:var(--sh-link); --dim:var(--sh-linkDim);
 }

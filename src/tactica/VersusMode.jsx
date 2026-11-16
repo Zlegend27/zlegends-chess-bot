@@ -169,7 +169,14 @@ function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, on
   const game = usePvpMatch({ supabase, me, match, signedIn, storeKey: "tacticaPvpMatch", label: "Tactica 1v1", clockFromShown: true, flagGraceMs: FLAG_GRACE_MS, onRated, onRematch });
   /* The square a pawn is promoting on, while the player picks the piece. */
   const [promoting, setPromoting] = useState(null);
-  const [blocked, setBlocked] = useState(false);
+  /* Block or report: closed, its choices open, or done. Either way the two
+     never get matched again on this device; a report also tells us why. */
+  const [flag, setFlag] = useState("closed");
+  const blockThem = (reason) => {
+    onBlock(opponent.id);
+    track(reason ? "player_report" : "player_block", { player: opponent.id, reason: reason ?? null, match: match.id });
+    setFlag("done");
+  };
   const { moves, result, myColor, opponent, timeLeft, sideToMove, drawOffer, oppGoneLong, canAbort } = game;
 
   const canvasRef = useRef(null);
@@ -496,10 +503,21 @@ function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, on
           )}
           <div className="flex gap-4">
             {result.reason !== "Aborted" && <button type="button" className="tc-link" onClick={leave}>Back to the lobby</button>}
-            {blocked
+            {flag === "done"
               ? <span className="p-1.5 text-sm text-[var(--tc-cream-dim)]" role="status">Blocked</span>
-              : <button type="button" className="tc-link" onClick={() => { onBlock(opponent.id); track("player_block", { player: opponent.id, reason: null, match: match.id }); setBlocked(true); }}>Block {opponent.name}</button>}
+              : <button type="button" className="tc-link" aria-expanded={flag === "open"} onClick={() => setFlag(flag === "open" ? "closed" : "open")}>Block or report</button>}
           </div>
+          {flag === "open" && (
+            <div className="tc-panel flex w-full flex-col gap-2 p-3" role="group" aria-label={`Block or report ${opponent.name}`}>
+              <p className="m-0 text-sm text-[var(--tc-cream-dim)]">You won&apos;t be matched with {opponent.name} again.</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" className="tc-plank tc-small tc-center" onClick={() => blockThem(null)}>Just block</button>
+                <button type="button" className="tc-plank tc-small tc-center" onClick={() => blockThem("cheating")}>Cheating</button>
+                <button type="button" className="tc-plank tc-small tc-center" onClick={() => blockThem("name")}>Offensive name</button>
+                <button type="button" className="tc-plank tc-small tc-center" onClick={() => blockThem("stalling")}>Stalling or leaving</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -9,7 +9,7 @@ import PlayPage from "./components/PlayPage";
 import { nextStreak, utcDay } from "./utils/dailyStreak";
 import { historyStep, pathForView, sectionForView, viewForPath, hiddenHeadingFor, titleFor } from "./utils/routes";
 import { pickPostGameLine } from "./utils/botLines";
-import { signOut, watchAuthState, accountProfile, accountInfo, saveAccountName } from "./utils/auth";
+import { signOut, watchAuthState, accountProfile, accountInfo, saveAccountName, accountRating, saveAccountRating } from "./utils/auth";
 import { openSignIn } from "./utils/signInPrompt";
 import { UNRATED_ELO } from "./utils/lobby";
 import { track } from "./utils/track";
@@ -436,11 +436,41 @@ export default function ZlegendsBot() {
      down by the usual Elo rule. Games against the fixed bots, casual 1v1
      and puzzles don't touch it. Unrated until one of the two has happened. */
   const [pvpRating, setPvpRating] = useState(() => loadSetting("pvpRating", { change: 0, games: 0 }));
-  const onRated = (change) => setPvpRating((r) => {
-    const next = { change: r.change + change, games: r.games + 1 };
-    saveSetting("pvpRating", next);
-    return next;
-  });
+  /* When the rating last changed on this device, to tell which copy is
+     newer: this one or the account's. */
+  const [ratingAt, setRatingAt] = useState(() => loadSetting("ratingAt", loadSetting("rankBotAssessedElo", null) != null ? 1 : 0));
+  const stampRating = () => { const at = Date.now(); setRatingAt(at); saveSetting("ratingAt", at); };
+  const onRated = (change) => {
+    setPvpRating((r) => {
+      const next = { change: r.change + change, games: r.games + 1 };
+      saveSetting("pvpRating", next);
+      return next;
+    });
+    stampRating();
+  };
+  /* The rating follows the account: signing in on another device brings the
+     newer copy along, and a change here is saved to the account a moment
+     later. */
+  const savedRating = accountRating(session);
+  const savedRatingAt = savedRating?.at ?? 0;
+  const signedInAs = session?.user?.id;
+  useEffect(() => {
+    if (!signedInAs) return undefined;
+    if (savedRating && savedRatingAt > ratingAt) {
+      setRankBotAssessedElo(savedRating.assessed);
+      saveSetting("rankBotAssessedElo", savedRating.assessed);
+      const pvp = { change: savedRating.change, games: savedRating.games };
+      setPvpRating(pvp);
+      saveSetting("pvpRating", pvp);
+      setRatingAt(savedRatingAt);
+      saveSetting("ratingAt", savedRatingAt);
+      return undefined;
+    }
+    if (ratingAt <= savedRatingAt) return undefined;
+    const t = setTimeout(() => saveAccountRating({ assessed: rankBotAssessedElo, change: pvpRating.change, games: pvpRating.games, at: ratingAt }), 1500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signedInAs, savedRatingAt, ratingAt]);
   const playerRating = rankBotAssessedElo != null ? rankBotAssessedElo + pvpRating.change
     : pvpRating.games > 0 ? UNRATED_ELO + pvpRating.change : null;
   const rankBotRecentGameElosRef = useRef(loadSetting("rankBotRecentGameElos", []));
@@ -1233,6 +1263,10 @@ export default function ZlegendsBot() {
       saveSetting("rankBotRecentGameElos", []);
       setRankBotAssessedElo(assessed);
       saveSetting("rankBotAssessedElo", assessed);
+      /* The rating changed: stamp it, so the newer copy wins on other devices. */
+      const at = Date.now();
+      setRatingAt(at);
+      saveSetting("ratingAt", at);
     } else {
       rankBotRecentGameElosRef.current = recent;
       saveSetting("rankBotRecentGameElos", recent);

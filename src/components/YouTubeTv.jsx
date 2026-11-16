@@ -62,7 +62,7 @@ function TvBody() {
   );
 }
 
-export default function YouTubeTv({ sweetheart }) {
+export default function YouTubeTv() {
   const [video, setVideo] = useState(null);
   const [checked, setChecked] = useState(false);
   const [near, setNear] = useState(false);
@@ -179,7 +179,6 @@ export default function YouTubeTv({ sweetheart }) {
     setTimeout(() => applyRef.current?.(), 600);
   };
 
-  const T = sweetheart ? { ink: "text-sh-link", dim: "text-sh-link-dim" } : { ink: "text-paper", dim: "text-dim" };
   const src = video && `https://www.youtube-nocookie.com/embed/${video.id}?enablejsapi=1&mute=1&playsinline=1&controls=0&rel=0&modestbranding=1&origin=${encodeURIComponent(window.location.origin)}`;
 
   return (
@@ -224,7 +223,7 @@ export default function YouTubeTv({ sweetheart }) {
               </button>
             </>
           ) : (
-            <div className={"flex size-full items-center justify-center p-2 text-center text-[11px] " + T.dim}>
+            <div className={"flex size-full items-center justify-center p-2 text-center text-[11px] text-[#D8CBD4]"}>
               {checked ? "Latest Short unavailable right now" : "Loading…"}
             </div>
           )}

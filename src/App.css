@@ -351,7 +351,7 @@
   background:#DDD6EA; border-radius:var(--r-2xs); }
 /* The green and red above are tuned for a dark background and are too
    faint on Sweetheart's light cards. */
-:root[data-theme="sweetheart"] .recentOutcome.win{ color:#1E9E5A; }
+:root[data-theme="sweetheart"] .recentOutcome.win{ color:#177A45; }
 :root[data-theme="sweetheart"] .recentOutcome.loss,
 :root[data-theme="sweetheart"] .pasteError{ color:var(--sh-red); }
 .durationGrid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:4px 0 12px; }

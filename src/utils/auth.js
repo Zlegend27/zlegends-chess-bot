@@ -165,6 +165,28 @@ export async function saveAccountName(name) {
   await supabase?.auth.updateUser({ data: { zl_name: name || null } });
 }
 
+/** The rating saved on the account ({ assessed, change, games, at }), or
+ *  null. `at` is when it last changed, so the newer of the account's and
+ *  this device's copy wins (see App.jsx). */
+export function accountRating(session) {
+  const r = session?.user?.user_metadata?.zl_rating;
+  if (!r || typeof r !== "object" || !Number.isFinite(r.at)) return null;
+  return {
+    assessed: Number.isFinite(r.assessed) ? Math.round(r.assessed) : null,
+    change: Number.isFinite(r.change) ? Math.round(r.change) : 0,
+    games: Number.isFinite(r.games) ? Math.max(0, Math.round(r.games)) : 0,
+    at: r.at,
+  };
+}
+
+/** Saves the rating on the account, so it follows the player to other
+ *  devices. Does nothing when signed out. */
+export async function saveAccountRating(rating) {
+  if (!storedSession()) return;
+  const supabase = await getSupabase();
+  await supabase?.auth.updateUser({ data: { zl_rating: rating } });
+}
+
 /** Deletes the signed-in player's account and everything saved with it
  *  (supabase/004_delete_account.sql). Resolves { error } with a message to
  *  show, or {} once it's gone and this browser is signed out. */

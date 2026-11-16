@@ -51,7 +51,7 @@ export default function HomePage({ onEnter, onPlay, hasLiveGame, firstVisit, ran
       </div>
 
       <div className="relative z-10 mt-6">
-        <Suspense fallback={<div style={{ height: 300 }} aria-hidden="true" />}><YouTubeTv sweetheart={sweetheart} /></Suspense>
+        <Suspense fallback={<div style={{ height: 300 }} aria-hidden="true" />}><YouTubeTv /></Suspense>
       </div>
 
       <SocialBanner />
