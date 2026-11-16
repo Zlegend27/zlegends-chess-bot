@@ -8,7 +8,7 @@ import { GRADE_COLOR, GRADE_TAG } from "../utils/grades";
 import EvalGraph from "./EvalGraph";
 import BoltIcon from "./BoltIcon";
 
-export default function AnalysisPanel({ activePuzzle, missedAttempt, puzzleSolved, puzzleFeedback, eng, rushMode, rushResult, toggleAnalyze, analyzing, analysisBusy, pz, rushBandIdx, quizOpening, moveList, quizFeedback, activeOpening, replayIndex, grading, gradeProgress, reviewing, moveGrades, mode, pastedGame, playerColor, gradeDetail, reviewIndex, setReviewIndex, practiceQueue, practice, startPractice, info, evalLabel, sweetheart, uiT, playerAdvantageCp }) {
+export default function AnalysisPanel({ siteAccuracy, activePuzzle, missedAttempt, puzzleSolved, puzzleFeedback, eng, rushMode, rushResult, toggleAnalyze, analyzing, analysisBusy, pz, rushBandIdx, quizOpening, moveList, quizFeedback, activeOpening, replayIndex, grading, gradeProgress, reviewing, moveGrades, mode, pastedGame, playerColor, gradeDetail, reviewIndex, setReviewIndex, practiceQueue, practice, startPractice, info, evalLabel, sweetheart, uiT, playerAdvantageCp }) {
   /* The tab itself is already named (Rush/Puzzle/Quiz/Opening/Analysis via
      analysisLabel), so no state repeats a heading inside its own content
      anymore -- each shows one small context chip where it earns its place,
@@ -50,8 +50,8 @@ export default function AnalysisPanel({ activePuzzle, missedAttempt, puzzleSolve
     };
     return {
       cols: [
-        { label: whiteIsYou ? "You" : blackIsYou ? "Bot" : "White", counts: tally(0), stats: sideStats(0) },
-        { label: blackIsYou ? "You" : whiteIsYou ? "Bot" : "Black", counts: tally(1), stats: sideStats(1) },
+        { label: whiteIsYou ? "You" : blackIsYou ? "Bot" : "White", counts: tally(0), stats: sideStats(0), theirs: siteAccuracy?.white },
+        { label: blackIsYou ? "You" : whiteIsYou ? "Bot" : "Black", counts: tally(1), stats: sideStats(1), theirs: siteAccuracy?.black },
       ],
     };
   })() : null;
@@ -140,6 +140,8 @@ export default function AnalysisPanel({ activePuzzle, missedAttempt, puzzleSolve
                   <div className={"text-[10px] font-bold uppercase tracking-[0.12em] " + uiT.dimText}>{col.label}</div>
                   <div className={"mt-0.5 text-xl font-bold leading-none " + uiT.interactiveText}>{col.stats ? `${col.stats.acc}%` : "—"}</div>
                   <div className={"mt-1 text-[10px] " + uiT.dimText}>accuracy</div>
+                  {/* The same game as the site it came from scored it, for comparison. */}
+                  {col.theirs != null && <div className={"mt-0.5 text-[10px] " + uiT.dimText}>{siteAccuracy.site}: {Math.round(col.theirs)}%</div>}
                 </div>
               ))}
             </div>

@@ -47,6 +47,7 @@ function Privacy({ T }) {
           <li>Vercel: hosts the site; like any web host it keeps short-lived request logs, including IP addresses</li>
           <li>Resend: sends the email log-in codes</li>
           <li>Google and Discord: only if you choose to log in with them</li>
+          <li>Chess.com and Lichess: only if you bring a game in by username or link in Game Review. Your browser asks that site for the player&apos;s public games; the username stays on your device and is never sent to us</li>
           <li>YouTube: the video on the home page is a YouTube player; YouTube&apos;s own policy applies when you play it</li>
         </ul>
         <p className="m-0">To improve the site we keep our own simple record of which features get used (for example that a page was opened or a puzzle solved), how you arrived, and crashes, tied to the same random ID. There are no ads and no third-party tracking or analytics tools, and we never sell your information.</p>

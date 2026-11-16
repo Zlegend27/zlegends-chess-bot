@@ -323,3 +323,40 @@ Tab and played with Enter or Space, and is read out by name.
 
 Still open: server-checked ranked results, share cards, supporter tier,
 uptime monitor (owner), real-phone tests incl. two signed-in players.
+
+## 2026-11-17: Game Review revamp
+
+Owner ran supabase/009 (Tactica Rush leaderboard is live).
+
+Fix: Quit always asks in a popup now (it used to quit straight away in the
+first two moves).
+
+Game Review page rebuilt (not pushed yet):
+- Three ways in: Chess.com username, Lichess username, or paste. A username
+  lists that player's latest games (opponent, rating, speed, date, colour,
+  length, result), ten at a time; tapping one starts the review from that
+  player's side. The username is remembered on the device and its games
+  load on the next visit. Both sites' public data works straight from the
+  browser, no key or login (checked from localhost).
+- Paste takes PGN text, a .pgn file, a Lichess game link, or a Chess.com
+  game link. Chess.com has no open way to fetch a game by its number, so a
+  Chess.com link is looked up among the remembered username's recent games.
+- When Chess.com already reviewed the game, its accuracy shows under ours.
+- Privacy page lists Chess.com and Lichess under services.
+
+Accuracy formula retuned (scripts/review-lab/variants.mjs compares six ways
+of combining moves; data: 3,000 Chess.com scores, half held back):
+- Before: within 5 points of Chess.com 70% of the time, typical miss 4.1,
+  under-800 games read 3.6 high.
+- Now: within 5 points 83%, typical miss 3.0, under-800 bias 0.1. The
+  change: the average move score's shortfall from 100 is stretched by 1.84
+  (Chess.com's scores spread wider than a plain average), with the curve
+  refitted.
+- Tried and rejected: weighting turbulent moves more (worse), capping one
+  move's cost, pulling short games to the middle (no gain).
+- A "game rating" like Chess.com's was NOT added: accuracy alone guesses a
+  rating with a typical miss of 556 Elo. Chess.com anchors its number on
+  the player's real rating; we have no examples of its output to fit to.
+- Move labels are still unvalidated: Chess.com publishes no label data.
+  Its help page says Great and Brilliant are given more generously to
+  lower-rated players; ours ignore rating.

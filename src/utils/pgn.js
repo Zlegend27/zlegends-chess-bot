@@ -102,7 +102,7 @@ export function describePasteProblem(text) {
   const t = (text || "").trim();
   if (!t) return "Paste a game first.";
   if (!/\s/.test(t) && /^(https?:\/\/|www\.|(chess\.com|lichess\.org)\/)/i.test(t)) {
-    return "That's a link to the game. We need the game's PGN text instead. The steps below show where to find it.";
+    return "That's a link, but not one to a single Lichess or Chess.com game. Paste the game's PGN text instead.";
   }
   if (/^[pnbrqk1-8]+(\/[pnbrqk1-8]+){7}(\s|$)/i.test(t)) {
     return "That's a single position, not a whole game. Paste the game's PGN instead.";

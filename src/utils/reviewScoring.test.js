@@ -52,9 +52,17 @@ describe("accuracy", () => {
     expect(withForced).toBeCloseTo(sideAccuracy([bad]), 6);
   });
 
-  test("a game is the average of its moves", () => {
-    const expected = (100 + moveAccuracy(pointsLost(0, -400))) / 2;
-    expect(sideAccuracy([{ ...bad, isBest: true }, bad])).toBeCloseTo(expected, 6);
+  test("a game is scored from the average of its moves, and more moves lost means less", () => {
+    const one = sideAccuracy([{ ...bad, isBest: true }, bad]);
+    const average = (100 + moveAccuracy(pointsLost(0, -400))) / 2;
+    expect(one).toBeLessThan(average);
+    expect(one).toBeGreaterThan(sideAccuracy([bad]));
+  });
+
+  test("a perfect game is 100 and a dreadful one stops at 0", () => {
+    expect(sideAccuracy([{ ...bad, isBest: true }, { ...bad, book: true }])).toBe(100);
+    const awful = { before: 0, after: -2000, isBest: false, forced: false, book: false };
+    expect(sideAccuracy([awful, awful])).toBe(0);
   });
 
   test("nothing to score gives no accuracy", () => {

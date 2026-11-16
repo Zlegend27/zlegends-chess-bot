@@ -2175,7 +2175,7 @@ export default function ZlegendsBot() {
      or { ok: true, note } where note is a warning worth showing the player.
      `side` is which colour sits at the bottom. A Chess.com export says who
      exported it; anything else starts from White and can be flipped. */
-  const loadPgnText = (text, { side = null, info = null } = {}) => {
+  const loadPgnText = (text, { side = null, info = null, extra = null } = {}) => {
     const problem = describePasteProblem(text);
     if (problem) return { ok: false, error: problem };
     const tokens = parsePgnMoves(text);
@@ -2195,7 +2195,7 @@ export default function ZlegendsBot() {
     /* Kept apart from playerColor, which the flip button changes. */
     const you = side ?? exporterSide(headers);
     setPlayerColor(you ?? 1);
-    setReviewInfo({ ...(info || reviewInfoFromHeaders(headers)), you });
+    setReviewInfo({ ...(info || reviewInfoFromHeaders(headers)), you, ...extra });
     setActiveOpening(null); setQuizOpening(null); setActivePuzzle(null);
     setSpectateMode(false); spectateModeRef.current = false;
     setSelected(-1); setTargets([]); setPromo(null); setHintMove(null); setInfo(null);
@@ -2230,6 +2230,17 @@ export default function ZlegendsBot() {
   const reviewPastedGame = (text) => {
     const r = finishReviewLoad(loadPgnText(text));
     track("review_run", { source: "pasted", ok: r.ok });
+    return r;
+  };
+  /* A game picked from a Chess.com or Lichess player's list (or fetched from
+     a link): it opens from that player's side, and keeps the site's own
+     accuracy, when it has one, to show beside ours. */
+  const reviewImportedGame = (game) => {
+    const r = finishReviewLoad(loadPgnText(game.pgn, {
+      side: game.color ?? null,
+      extra: { siteAccuracy: game.siteAccuracy ? { ...game.siteAccuracy, site: game.site === "chesscom" ? "Chess.com" : "Lichess" } : null },
+    }));
+    track("review_run", { source: game.site, ok: r.ok });
     return r;
   };
   /* Saved games know which side the player was on, so they open from that
@@ -2421,7 +2432,7 @@ export default function ZlegendsBot() {
      this screen (ExploreDock/BottomNav only render in the play view). */
   const playerAdvantageCp = playerColor === 1 ? evalCp : -evalCp;
   const analysisContent = (
-    <AnalysisPanel activePuzzle={activePuzzle} missedAttempt={missedAttempt} puzzleSolved={puzzleSolved} puzzleFeedback={puzzleFeedback} eng={eng} rushMode={rushMode} rushResult={rushResult} toggleAnalyze={toggleAnalyze} analyzing={analyzing} analysisBusy={analysisBusy} pz={pz} rushBandIdx={rushBandIdx} quizOpening={quizOpening} moveList={moveList} quizFeedback={quizFeedback} activeOpening={activeOpening} replayIndex={replayIndex} grading={grading} gradeProgress={gradeProgress} reviewing={reviewing} moveGrades={moveGrades} mode={mode} pastedGame={pastedGame} playerColor={playerColor} gradeDetail={gradeDetail} reviewIndex={reviewIndex} setReviewIndex={setReviewIndex} practiceQueue={practiceQueue} practice={practice} startPractice={startPractice} info={info} evalLabel={evalLabel} sweetheart={sweetheart} uiT={uiT} playerAdvantageCp={playerAdvantageCp} />
+    <AnalysisPanel siteAccuracy={pastedGame ? reviewInfo?.siteAccuracy : null} activePuzzle={activePuzzle} missedAttempt={missedAttempt} puzzleSolved={puzzleSolved} puzzleFeedback={puzzleFeedback} eng={eng} rushMode={rushMode} rushResult={rushResult} toggleAnalyze={toggleAnalyze} analyzing={analyzing} analysisBusy={analysisBusy} pz={pz} rushBandIdx={rushBandIdx} quizOpening={quizOpening} moveList={moveList} quizFeedback={quizFeedback} activeOpening={activeOpening} replayIndex={replayIndex} grading={grading} gradeProgress={gradeProgress} reviewing={reviewing} moveGrades={moveGrades} mode={mode} pastedGame={pastedGame} playerColor={playerColor} gradeDetail={gradeDetail} reviewIndex={reviewIndex} setReviewIndex={setReviewIndex} practiceQueue={practiceQueue} practice={practice} startPractice={startPractice} info={info} evalLabel={evalLabel} sweetheart={sweetheart} uiT={uiT} playerAdvantageCp={playerAdvantageCp} />
   );
 
   const inChk = eng.inCheckNow() && !result;
@@ -2751,6 +2762,7 @@ export default function ZlegendsBot() {
       <GameReviewPage
         onBack={() => setSiteView(reviewReturnRef.current)}
         onReview={reviewPastedGame}
+        onImport={reviewImportedGame}
         onOpenSaved={reviewSavedGame}
         onHistory={() => enterMode("history")}
         hasLiveGame={hasLiveGame}

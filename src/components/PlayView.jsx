@@ -475,7 +475,7 @@ export default function PlayView({ mateFxProps, rechecking, betterMoveLine, rank
                 </select>
               )}
               {liveGame && (
-                <button className="btn ghost" onClick={() => (eng.plyCount() > 4 ? setNewGameConfirm("quit") : onQuit())}>Quit</button>
+                <button className="btn ghost" onClick={() => setNewGameConfirm("quit")}>Quit</button>
               )}
               {result && <button className="btn gold" onClick={() => newGame(playerColor)}>Rematch!</button>}
               {shareToast && <div className="toast">{shareToast}</div>}
