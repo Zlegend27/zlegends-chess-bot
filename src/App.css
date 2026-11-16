@@ -301,6 +301,9 @@
    needs the same plate the boxed sections get. */
 .rushThemeBox .rushCounterRow{ background:var(--sh-plate); border:1px solid #F06BAE26;
   border-radius:var(--r-sm); padding:9px 11px; }
+/* Its Reset button sits on that dark plate in both themes, so it takes the
+   plate's light text (the light theme's ghost-button colour is for paper). */
+.rushThemeBox .rushCounterRow .btn.ghost{ color:var(--sh-text); border-color:#F06BAE66; }
 .rushEndRatingNum{ font-family:var(--font-mono); font-weight:700; font-size:18px; color:var(--sh-rose); }
 /* Was --sh-dim (a muted mauve) at 10px -- too low-contrast for a button's
    own caption to actually read as part of the button. --sh-text (the
@@ -487,6 +490,9 @@
 .bang{ font-family:var(--font-display); background:#0E2E38; color:var(--cyan);
   border:2px solid var(--cyan); border-radius:12px 12px 12px 2px; padding:1px 9px; font-size:15px;
   text-shadow:0 0 8px var(--cyan); box-shadow:0 0 12px #3EE7F566; animation:blink 1s infinite; }
+/* The badge keeps its dark plate on the light theme, so its text keeps the
+   bright gold too (the theme's own gold is a dark one, for paper). */
+:root[data-theme="sweetheart"] .replayBadge{ color:#F5D93E; }
 .replayBadge{ font-family:var(--font-display); background:#3A1560; color:var(--yellow);
   border:2px solid var(--yellow); border-radius:var(--r-md); padding:2px 10px; font-size:12px;
   letter-spacing:.06em; text-transform:uppercase; }

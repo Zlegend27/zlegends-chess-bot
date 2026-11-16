@@ -360,3 +360,25 @@ of combining moves; data: 3,000 Chess.com scores, half held back):
 - Move labels are still unvalidated: Chess.com publishes no label data.
   Its help page says Great and Brilliant are given more generously to
   lower-rated players; ours ignore rating.
+
+## 2026-11-17 (later): bug sweep
+
+Walked 16 pages at phone and desktop size in both themes, plus a daily
+puzzle, a ranked puzzle, a Rush run, a full bot game to checkmate, the
+history page and every Tactica mode's first screen. No crashes. Fixed
+(not pushed yet):
+- The Analysis tab showed the bot's expected line as square codes
+  ("d8h4") for the Stockfish levels and Rank Bot; it now reads "Qh4#".
+- Two accounts on one device: the second to sign in could be handed the
+  first one's rating, and it would then be saved to their account. The
+  device now remembers whose rating it holds.
+- The 1v1 lobby had two page headings (one hidden); now one.
+- Rush picker: the Reset button was hard to read on its dark plate in the
+  light theme. The "Move N/N" badge too.
+- The leaderboard's browser-tab title said "Puzzle Rush leaderboard"; it
+  holds both boards now, so "Leaderboards".
+Not covered: real phones, two-player 1v1, playing Tactica's modes through
+(only their first screens), sign-in flows.
+
+Chess Tactica: a plan for the next version is in tactica-design/game-plan.md
+(private). Nothing built; waiting on the creator's decisions.

@@ -36,7 +36,6 @@ const HIDDEN_HEADINGS = {
   ranked: "Ranked puzzles",
   rush: "Puzzle Rush",
   profile: "Your profile",
-  lobby: "1v1 lobby",
 };
 export const hiddenHeadingFor = (view) => HIDDEN_HEADINGS[view] ?? null;
 
@@ -44,7 +43,7 @@ export const hiddenHeadingFor = (view) => HIDDEN_HEADINGS[view] ?? null;
    say where they lead. */
 const SITE = "Zlegend's Chess Bot";
 const TITLES = {
-  playHub: "Play", play: "Game", puzzlesHome: "Puzzles", leaderboard: "Puzzle Rush leaderboard", review: "Game Review",
+  playHub: "Play", play: "Game", puzzlesHome: "Puzzles", leaderboard: "Leaderboards", review: "Game Review",
   lessons: "Learn", openings: "Openings", watch: "Watch bots play", ranked: "Ranked puzzles", rush: "Puzzle Rush",
   profile: "Profile", avatar: "Your avatar", history: "Game History", lobby: "1v1 lobby", tactica: "Chess Tactica",
   privacy: "Privacy Policy", terms: "Terms of Service",

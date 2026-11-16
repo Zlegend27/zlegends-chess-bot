@@ -459,14 +459,21 @@ export default function ZlegendsBot() {
   const signedInAs = session?.user?.id;
   useEffect(() => {
     if (!signedInAs) return undefined;
-    if (savedRating && savedRatingAt > ratingAt) {
-      setRankBotAssessedElo(savedRating.assessed);
-      saveSetting("rankBotAssessedElo", savedRating.assessed);
-      const pvp = { change: savedRating.change, games: savedRating.games };
+    /* Whose rating this device is holding. If a different account signs in
+       here, the numbers on the device are someone else's: they must not be
+       saved onto this account, so its own copy (or none) replaces them. */
+    const owner = loadSetting("ratingOwner", null);
+    const someoneElses = owner != null && owner !== signedInAs;
+    saveSetting("ratingOwner", signedInAs);
+    if (someoneElses || (savedRating && savedRatingAt > ratingAt)) {
+      const theirs = savedRating ?? { assessed: null, change: 0, games: 0, at: 0 };
+      setRankBotAssessedElo(theirs.assessed);
+      saveSetting("rankBotAssessedElo", theirs.assessed);
+      const pvp = { change: theirs.change, games: theirs.games };
       setPvpRating(pvp);
       saveSetting("pvpRating", pvp);
-      setRatingAt(savedRatingAt);
-      saveSetting("ratingAt", savedRatingAt);
+      setRatingAt(theirs.at);
+      saveSetting("ratingAt", theirs.at);
       return undefined;
     }
     if (ratingAt <= savedRatingAt) return undefined;
@@ -1019,6 +1026,23 @@ export default function ZlegendsBot() {
     setRechecking(false);
   };
 
+  /* Stockfish names moves by their squares ("d8h4"); the Analysis tab shows
+     the expected line in chess notation like everything else. */
+  const sanLine = (fen, uciMoves) => {
+    const probe = createEngine();
+    const out = [];
+    try {
+      probe.loadFen(fen);
+      for (const uci of uciMoves || []) {
+        const m = probe.moveFromUci(uci);
+        if (!m) break;
+        out.push(probe.sanOf(m));
+        probe.make(m);
+      }
+    } catch { /* a line that doesn't fit the position is just cut short */ }
+    return out;
+  };
+
   /* Stockfish tiers report score/depth/nodes/time/pv the same shape the
      homemade engine's worker does, so the .then() handler below can stay
      identical either way -- see stockfishEngine.js for why Stockfish was
@@ -1039,7 +1063,7 @@ export default function ZlegendsBot() {
         move, san: eng.sanOf(move),
         score, depth: info ? info.depth : 0,
         nodes: info ? info.nodes : 0, time: info ? info.time : (diff.moveTimeMs || 1000),
-        pv: info ? info.pv : [], book: false,
+        pv: info ? sanLine(fen, info.pv) : [], book: false,
       };
     });
   }, [eng]);
@@ -1051,7 +1075,8 @@ export default function ZlegendsBot() {
     ]);
     shadowStateRef.current ??= newGameState(loadSetting("rankBotProfile", {}));
     const ply = eng.plyCount();
-    const res = await chooseShadowMove(eng.fen(), ply, shadowStateRef.current);
+    const fen = eng.fen();
+    const res = await chooseShadowMove(fen, ply, shadowStateRef.current);
     const move = res && eng.moveFromUci(res.uci);
     if (!move) return null;
     const { recent, peakElo } = shadowStateRef.current;
@@ -1068,7 +1093,7 @@ export default function ZlegendsBot() {
     await new Promise((r) => setTimeout(r, Math.max(0, SHADOW_MIN_THINK_MS - (Date.now() - started))));
     return {
       move, san, score: res.score,
-      depth: res.info.depth, nodes: res.info.nodes, time: res.note.totalMs, pv: res.info.pv, book: false,
+      depth: res.info.depth, nodes: res.info.nodes, time: res.note.totalMs, pv: sanLine(fen, res.info.pv), book: false,
     };
   }, [eng]);
 
