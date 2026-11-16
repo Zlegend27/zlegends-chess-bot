@@ -691,10 +691,8 @@ select:hover{ border-color:var(--cyan); }
   color:var(--liliac); box-shadow:none; transition:border-color .15s ease, color .15s ease, background .15s ease; }
 .leaderboardBtn:hover, .promoBox .leaderboardBtn:hover{ border-color:var(--cyan); color:var(--cyan); background:#3EE7F511; }
 .toast{ font-family:var(--font-mono); font-size:11px; color:var(--cyan); margin-top:6px; }
-/* Inline "abandon this game?" step before New wipes real progress --
-   deliberately not a modal (see App.jsx's newGameConfirm), just a
-   warm-toned strip under the controls row so it can't be missed but
-   also can't block anything else on the screen. */
+/* A warm-toned strip under the controls row for a small question that
+   shouldn't block the screen (how a Rank Bot game felt). */
 .newGameConfirm{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:8px;
   padding:8px 10px; border-radius:var(--r-xs); border:1px solid #F5D93E4D; background:#F5D93E14;
   font-size:12px; color:var(--yellow); }
@@ -855,6 +853,16 @@ select:hover{ border-color:var(--cyan); }
     margin-left:calc(-14px - env(safe-area-inset-left)); margin-right:calc(-14px - env(safe-area-inset-right)); }
   .root.noEval .board{ width:100%; border:0; outline:0; border-radius:0; box-shadow:none; }
 }
+/* On a phone itself the board gets its size in plain numbers. Left to work
+   its height out from its width, the iPhone gave the board's box too little
+   room, so the board drew over the player card, the status line and the
+   buttons under it. */
+@media (max-width:700px) and (orientation:portrait) and (hover:none) and (pointer:coarse){
+  .root.noEval .board{ width:100vw; height:100vw; aspect-ratio:auto; flex:none; }
+}
+/* The game screen (PlayView adds the class): scrolling only, no pinch or
+   double-tap zoom. */
+html.noPinch, html.noPinch body{ touch-action:pan-x pan-y; }
 /* A small phone held sideways: keep the board within the screen's height. */
 @media (max-width:700px) and (orientation:landscape){
   .board, .root.noEval .board{ width:min(calc(100vw - 28px), 460px, calc(100dvh - 32px)); }

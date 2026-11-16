@@ -1,10 +1,12 @@
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { WN, WB, WR, WQ, WK, mPromo } from "../engine/chessEngine";
 import PixelAvatar, { ZPAL, ZPIX } from "../components/PixelAvatar";
 import StarField from "../components/StarField";
 import Confetti from "../components/Confetti";
 import KingShatter from "./KingShatter";
 import Modal from "../components/Modal";
+import ConfirmModal from "../components/ConfirmModal";
+import AccountAvatar from "../components/AccountAvatar";
 import GamePanel from "../components/GamePanel";
 import BotBubble from "../components/BotBubble";
 import MoodImg from "./MoodImg";
@@ -35,7 +37,23 @@ function RankFeel({ outcome }) {
 /* The game screen: the board, the bot card, the move list and the controls
    for a live game, a puzzle, a review or a rush. Loaded when a game starts
    (see App.jsx). Everything it reads or does comes in as a prop. */
-export default function PlayView({ mateFxProps, rechecking, betterMoveLine, rankTestNote, RushThemeArt, Tray, activeOpening, activePuzzle, analysisBusy, analysisContent, analysisLabel, analysisMove, analyzing, arrowLine, beginRestartCountdown, bestArrow, boardColorId, boardRef, boardVars, botColor, botLine, botMood, botTaken, colorPick, curMoveIdx, difficultyIdx, difficultyRef, displayName, dragCellSize, dragFrom, dragPos, eng, evalLabel, evalPawns, exitMissedAttempt, exitPractice, exitPuzzle, exitReplay, exitRush, endRush, formatClock, gameStyle, gradeDetail, gradeProgress, grading, hideEvalBar, hideRushSummary, hinting, inChk, liveOpening, missedAttempt, missedStepIdx, mode, moveGrades, moveList, nameDraft, nameEditOpen, newGame, newGameConfirm, nextPuzzle, onCopyPgn, onDifficultyChange, onHint, onMissedSwipeEnd, onMissedSwipeStart, openLeaderboard, openReviewPage, pairs, pastedGame, pauseSpectate, pgnToast, pieceImgSrc, pieceSetId, playMove, playerAdvantageCp, playerColor, playerShare, practice, practiceMove, practiceNext, practiceReveal, promo, puzzleBand, puzzleFeedback, puzzleMove, puzzleSolved, pz, quizDoneToast, quizMove, quizOpening, rankBotAssessedElo, rankBotGames, playerRating, replayFull, replayIndex, replayPlaying, replayStep, restartCountdown, result, resumeSpectate, reviewIndex, reviewInfo, reviewMissedPuzzle, reviewing, rows, rushBandIdx, rushBestMap, rushDuration, rushLifetime, rushMilestone, rushMissed, rushMistakes, rushMode, rushResult, rushSolved, rushSummaryOpen, rushTimeLeft, saveDisplayName, setBotLine, setColorPick, setMissedStepIdx, setNameDraft, setNameEditOpen, setNewGameConfirm, setPlayerColor, setPromo, setReplayIndex, setReviewIndex, setRushSummaryOpen, setShareLinkFallback, setShareToast, setSiteView, shareLinkFallback, shareToast, spectateBlackIdx, spectateMode, spectateOpeningId, spectatePaused, spectateWhiteIdx, startPuzzle, startQuiz, startSpectate, status, stopSpectate, sweetheart, thinking, toggleAnalyze, toggleReplayPlay, uiT, undo, youDiff, youTaken }) {
+export default function PlayView({ mateFxProps, rechecking, betterMoveLine, rankTestNote, RushThemeArt, Tray, activeOpening, activePuzzle, analysisBusy, analysisContent, analysisLabel, analysisMove, analyzing, arrowLine, beginRestartCountdown, bestArrow, boardColorId, boardRef, boardVars, botColor, botLine, botMood, botTaken, colorPick, curMoveIdx, difficultyIdx, difficultyRef, displayName, dragCellSize, dragFrom, dragPos, eng, evalLabel, evalPawns, exitMissedAttempt, exitPractice, exitPuzzle, exitReplay, exitRush, endRush, formatClock, gameStyle, gradeDetail, gradeProgress, grading, hideEvalBar, hideRushSummary, hinting, inChk, liveOpening, missedAttempt, missedStepIdx, mode, moveGrades, moveList, nameDraft, nameEditOpen, newGame, newGameConfirm, nextPuzzle, onCopyPgn, onDifficultyChange, onHint, onMissedSwipeEnd, onMissedSwipeStart, openLeaderboard, openReviewPage, pairs, pastedGame, pauseSpectate, pgnToast, pieceImgSrc, pieceSetId, playMove, playerAdvantageCp, playerColor, playerShare, practice, practiceMove, practiceNext, practiceReveal, promo, puzzleBand, puzzleFeedback, puzzleMove, puzzleSolved, pz, quizDoneToast, quizMove, quizOpening, rankBotAssessedElo, rankBotGames, playerRating, replayFull, replayIndex, replayPlaying, replayStep, restartCountdown, result, resumeSpectate, reviewIndex, reviewInfo, reviewMissedPuzzle, reviewing, rows, rushBandIdx, rushBestMap, rushDuration, rushLifetime, rushMilestone, rushMissed, rushMistakes, rushMode, rushResult, rushSolved, rushSummaryOpen, rushTimeLeft, saveDisplayName, setBotLine, setColorPick, setMissedStepIdx, setNameDraft, setNameEditOpen, setNewGameConfirm, setPlayerColor, setPromo, setReplayIndex, setReviewIndex, setRushSummaryOpen, setShareLinkFallback, setShareToast, setSiteView, shareLinkFallback, shareToast, spectateBlackIdx, spectateMode, spectateOpeningId, spectatePaused, spectateWhiteIdx, startPuzzle, startQuiz, startSpectate, status, stopSpectate, sweetheart, thinking, toggleAnalyze, toggleReplayPlay, uiT, undo, youDiff, youTaken, onQuit, profile, accountAvatar }) {
+  /* No pinch or double-tap zoom on the game screen: a stray two-finger touch
+     beside the board used to zoom the whole page mid-game. Scrolling still
+     works. The gesture events are Safari's own, for iPhones that ignore the
+     style. */
+  useEffect(() => {
+    const stop = (e) => e.preventDefault();
+    document.documentElement.classList.add("noPinch");
+    document.addEventListener("gesturestart", stop);
+    document.addEventListener("gesturechange", stop);
+    return () => {
+      document.documentElement.classList.remove("noPinch");
+      document.removeEventListener("gesturestart", stop);
+      document.removeEventListener("gesturechange", stop);
+    };
+  }, []);
+  const liveGame = mode === "play" && !result && moveList.length > 0;
   return (
     <div className={"root" + (hideEvalBar ? " noEval" : "") + (boardColorId === "standard" ? " theme-standard" : "")} style={boardVars}>
       <StarField sweetheart={sweetheart} />
@@ -177,7 +195,7 @@ export default function PlayView({ mateFxProps, rechecking, betterMoveLine, rank
                   </div>
                 )}
                 {colorPick && (
-                  <div className="promoOv">
+                  <div className="promoOv" onClick={(e) => { if (e.target === e.currentTarget) setColorPick(false); }}>
                     <div className="promoBox pieceBox">
                       <button onClick={() => { setColorPick(false); newGame(1); }} title="Play as White" aria-label="Play as White">
                         <img className="pc w" style={{ width: 44, height: 44 }} src={pieceImgSrc(1, true)} alt="" draggable="false" />
@@ -207,7 +225,9 @@ export default function PlayView({ mateFxProps, rechecking, betterMoveLine, rank
             <div className="avatarBox">
               {pastedGame
                 ? <img src={pieceImgSrc(WK, playerColor === 1)} alt="" className="reviewAvatarPc" />
-                : <img src="/you-avatar.webp" alt="You (Challenger)" className="youAvatarImg" />}
+                : profile
+                  ? <AccountAvatar profile={profile} avatar={accountAvatar} size={36} />
+                  : <img src="/you-avatar.webp" alt="You (Challenger)" className="youAvatarImg" />}
             </div>
             <div className="cardMeta">
               <div className="cardName you" style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -441,7 +461,7 @@ export default function PlayView({ mateFxProps, rechecking, betterMoveLine, rank
           {mode === "play" && !activePuzzle && !spectateMode && !pastedGame && (
             <div className="ctrls playCtrls">
               <button className="btn" onClick={() => {
-                if (!result && eng.plyCount() > 4) setNewGameConfirm(true);
+                if (!result && eng.plyCount() > 4) setNewGameConfirm("new");
                 else { setPromo(null); setColorPick(true); }
               }}>New</button>
               <button className="btn" onClick={undo} disabled={thinking || !!result || eng.plyCount() === 0}>Undo</button>
@@ -454,6 +474,9 @@ export default function PlayView({ mateFxProps, rechecking, betterMoveLine, rank
                   {DIFFICULTIES.map((d, i) => <option key={i} value={i}>{d.adaptive ? d.label : "Level: " + d.label}</option>)}
                 </select>
               )}
+              {liveGame && (
+                <button className="btn ghost" onClick={() => (eng.plyCount() > 4 ? setNewGameConfirm("quit") : onQuit())}>Quit</button>
+              )}
               {result && <button className="btn gold" onClick={() => newGame(playerColor)}>Rematch!</button>}
               {shareToast && <div className="toast">{shareToast}</div>}
               {quizDoneToast && <div className="toast">{quizDoneToast}</div>}
@@ -462,15 +485,19 @@ export default function PlayView({ mateFxProps, rechecking, betterMoveLine, rank
           {mode === "play" && result && !pastedGame && !activePuzzle && !spectateMode && difficultyRef.current.id === "rank" && (
             <RankFeel key={moveList.length} outcome={result.winner === playerColor ? "won" : result.winner ? "lost" : "draw"} />
           )}
-          {newGameConfirm && (
-            <div className="newGameConfirm">
-              <span>Abandon this game?</span>
-              <button className="btn gold" style={{ minHeight: 30, padding: "5px 12px", fontSize: 11 }}
-                onClick={() => { setNewGameConfirm(false); setPromo(null); setColorPick(true); }}>Yes, start new</button>
-              <button className="btn ghost" style={{ minHeight: 30, padding: "5px 12px", fontSize: 11 }}
-                onClick={() => setNewGameConfirm(false)}>Cancel</button>
-            </div>
-          )}
+          <ConfirmModal
+            open={!!newGameConfirm}
+            title={newGameConfirm === "quit" ? "Quit this game?" : "Start a new game?"}
+            text="The game on the board will be left unfinished."
+            yesLabel={newGameConfirm === "quit" ? "Yes, quit" : "Yes, new game"}
+            onYes={() => {
+              const quit = newGameConfirm === "quit";
+              setNewGameConfirm(false);
+              if (quit) onQuit();
+              else { setPromo(null); setColorPick(true); }
+            }}
+            onCancel={() => setNewGameConfirm(false)}
+          />
 
           {spectateMode && (
             <div className="ctrls playCtrls">

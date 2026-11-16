@@ -50,7 +50,7 @@ export default function TacticaPage({ pieceImgSrc, sweetheart, player, start = n
   else if (screen === "run") page = <RunMode pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} best={runBest} onBest={recordRunBest} onExit={toMenu} />;
   else if (screen === "bot") page = <BotMode pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={toMenu} />;
   else if (screen === "versus") page = <VersusMode {...player} pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={toMenu} />;
-  else if (screen === "blitz") page = <BlitzMode sweetheart={sweetheart} best={blitzBest} onBest={recordBest} onExit={leave("blitz")} exitLabel={start === "blitz" ? "Back to Puzzles" : undefined} />;
+  else if (screen === "blitz") page = <BlitzMode sweetheart={sweetheart} best={blitzBest} displayName={player?.displayName} onBest={recordBest} onExit={leave("blitz")} exitLabel={start === "blitz" ? "Back to Puzzles" : undefined} />;
   else page = <MenuScreen onPick={setScreen} onExit={onExit} blitzBest={blitzBest} sweetheart={sweetheart} />;
   return <div className="tactica" onPointerDownCapture={onPointerDown} onClickCapture={unlock} onTouchEndCapture={unlock}>{page}</div>;
 }

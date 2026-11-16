@@ -8,7 +8,7 @@ import { getUiTheme } from "../utils/uiTheme";
  *  It uses the site's own cards (the same ones as the Play page) so it reads
  *  as part of the site; Sweetheart, whose corner this is, sits small in the
  *  heading rather than filling the screen. Chess Tactica's option opens its
- *  puzzle mode (Blitz in the Bin) directly. */
+ *  puzzle mode (Puzzle Rush Tactica) directly. */
 const ICONS = {
   daily: "M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11z",
   ranked: "M12 2 2 12l10 10 10-10L12 2z",
@@ -24,10 +24,10 @@ export default function PuzzlesHomePage({ onBack, onDaily, onRanked, onRush, onT
 
   const T = getUiTheme(sweetheart);
   const modes = [
-    { id: "daily", name: "Daily puzzle", desc: dailySolved ? "Solved today ✓" : "One a day, the same for everyone", onClick: onDaily, needsPuzzles: true },
-    { id: "ranked", name: "Ranked puzzles", desc: "Pick your level, Beginner to Expert", onClick: onRanked, needsPuzzles: true },
+    { id: "daily", name: "Daily puzzle", desc: dailySolved ? "Solved today ✓" : null, onClick: onDaily, needsPuzzles: true },
+    { id: "ranked", name: "Ranked puzzles", desc: null, onClick: onRanked, needsPuzzles: true },
     { id: "rush", name: "Puzzle Rush", desc: "Solve as many as you can on the clock", onClick: onRush, needsPuzzles: true },
-    { id: "tactica", name: "Chess Tactica", desc: "Blitz in the Bin: puzzles on the 3D board", onClick: onTactica },
+    { id: "tactica", name: "Chess Tactica", desc: "Puzzle Rush Tactica", onClick: onTactica },
   ];
 
   return (
@@ -49,7 +49,7 @@ export default function PuzzlesHomePage({ onBack, onDaily, onRanked, onRush, onT
               type="button"
               onClick={m.onClick}
               disabled={m.needsPuzzles && !puzzlesReady}
-              className={`flex min-h-[132px] flex-col gap-2 rounded-2xl border ${T.cardBorder} ${T.panelBg} p-4 text-left backdrop-blur-sm transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 ${T.ring} disabled:cursor-default disabled:opacity-50`}
+              className={`flex min-h-[104px] flex-col gap-2 rounded-2xl border ${T.cardBorder} ${T.panelBg} p-4 text-left backdrop-blur-sm transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 ${T.ring} disabled:cursor-default disabled:opacity-50`}
             >
               {m.id === "tactica" ? (
                 <PixelAvatar rows={TPIX} pal={TPAL} size={32} />
@@ -59,12 +59,12 @@ export default function PuzzlesHomePage({ onBack, onDaily, onRanked, onRush, onT
                 </span>
               )}
               <span className={"text-base font-bold " + T.ink}>{m.name}</span>
-              <span className={"text-xs leading-relaxed " + T.dimText}>{m.desc}</span>
+              {m.desc && <span className={"text-xs leading-relaxed " + T.dimText}>{m.desc}</span>}
             </button>
           ))}
         </div>
 
-        <button type="button" className="btn ghost" style={{ width: "100%" }} onClick={onLeaderboard}>Rush leaderboard</button>
+        <button type="button" className="btn ghost" style={{ width: "100%" }} onClick={onLeaderboard}>Leaderboards</button>
         {!puzzlesReady && <p className={"m-0 text-center text-xs " + T.dimText} role="status">Loading puzzles…</p>}
       </div>
     </div>

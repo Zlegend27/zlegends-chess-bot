@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import StarField from "./StarField";
-import { fetchLeaderboard } from "../utils/leaderboard";
+import { fetchLeaderboard, TACTICA_RUSH_SECONDS } from "../utils/leaderboard";
 import { RUSH_DURATIONS } from "../utils/rushDurations";
 import { getUiTheme } from "../utils/uiTheme";
 import { overlayOpen } from "../utils/routes";
@@ -11,7 +11,10 @@ const getRankAccent = (sweetheart) => ({
   3: { text: sweetheart ? "text-[#8A5A2B]" : "text-[#E0A968]", medal: "🥉" },
 });
 
-/** Puzzle Rush leaderboard, as its own page rather than a modal -- every
+const BOARDS = [{ id: "rush", label: "Puzzle Rush", name: "Puzzle Rush" }, { id: "tactica", label: "Tactica Rush", name: "Puzzle Rush Tactica" }];
+
+/** The two Rush leaderboards (Puzzle Rush, and Puzzle Rush Tactica, which
+ *  is always three minutes), as its own page rather than a modal -- every
  *  "View Leaderboard" trigger in the app should navigate here (see
  *  App.jsx's openLeaderboard) instead of opening an overlay, so this is
  *  the one place that pattern lives. Self-contained: owns its own
@@ -21,7 +24,8 @@ const getRankAccent = (sweetheart) => ({
  *  AppNav.jsx) instead of the raw inline `style={{...}}` this page
  *  started with -- .rows/.btn/.pv are the older hand-CSS pattern used
  *  elsewhere for modals, which this page isn't. */
-export default function LeaderboardPage({ initialDuration = 60, onBack, sweetheart }) {
+export default function LeaderboardPage({ initialDuration = 60, initialBoard = "rush", onBack, sweetheart }) {
+  const [board, setBoard] = useState(initialBoard);
   const [duration, setDuration] = useState(initialDuration);
   const [rows, setRows] = useState(null);
   const T = getUiTheme(sweetheart);
@@ -29,8 +33,10 @@ export default function LeaderboardPage({ initialDuration = 60, onBack, sweethea
 
   useEffect(() => {
     setRows(null);
-    fetchLeaderboard(duration).then(setRows);
-  }, [duration]);
+    let current = true;
+    fetchLeaderboard(board === "tactica" ? TACTICA_RUSH_SECONDS : duration, 10, board).then((r) => { if (current) setRows(r); });
+    return () => { current = false; };
+  }, [duration, board]);
 
   useEffect(() => {
     const onKeyDown = (e) => { if (e.key === "Escape" && !overlayOpen()) onBack(); };
@@ -57,10 +63,17 @@ export default function LeaderboardPage({ initialDuration = 60, onBack, sweethea
           </svg>
           Leaderboard
         </h1>
-        <div className="sub">Puzzle Rush · top solvers</div>
+        <div className="sub">{BOARDS.find((b) => b.id === board).name} · top solvers</div>
       </div>
 
-      <div className="mt-5 flex gap-2">
+      <div className="mt-5 flex gap-2" role="group" aria-label="Which leaderboard">
+        {BOARDS.map((b) => (
+          <button key={b.id} className={"btn" + (board === b.id ? "" : " ghost")} aria-pressed={board === b.id}
+            onClick={() => setBoard(b.id)}>{b.label}</button>
+        ))}
+      </div>
+
+      {board === "rush" && <div className="mt-3 flex gap-2">
         {/* No Timer isn't a leaderboard category (unlimited time makes
            "most solved" meaningless as a comparison, and those runs are
            never submitted) -- filtered out here rather than duplicating
@@ -69,7 +82,7 @@ export default function LeaderboardPage({ initialDuration = 60, onBack, sweethea
           <button key={d.seconds} className={"btn" + (duration === d.seconds ? "" : " ghost")}
             onClick={() => setDuration(d.seconds)}>{d.label}</button>
         ))}
-      </div>
+      </div>}
 
       <div className={`mt-4 w-full max-w-md overflow-hidden rounded-2xl border ${T.cardBorder} ${T.panelBg} backdrop-blur-sm`}>
         {rows === null ? (
@@ -79,7 +92,7 @@ export default function LeaderboardPage({ initialDuration = 60, onBack, sweethea
             <svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor" className={T.mutedIcon} aria-hidden="true">
               <path d="M7 4V2h10v2h4v3c0 2.21-1.79 4-4 4h-.08A6.007 6.007 0 0 1 13 15.92V18h3v2H8v-2h3v-2.08A6.007 6.007 0 0 1 7.08 9H7c-2.21 0-4-1.79-4-4V4h4zm-2 2v1c0 1.1.9 2 2 2V6H5zm12 0v3c1.1 0 2-.9 2-2V6h-2z" />
             </svg>
-            <p className={"text-sm " + T.dimText}>No scores yet for this duration — be the first!</p>
+            <p className={"text-sm " + T.dimText}>No scores yet here. Be the first!</p>
           </div>
         ) : (
           <div className={"divide-y " + T.divide}>

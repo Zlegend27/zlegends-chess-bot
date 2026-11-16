@@ -24,7 +24,7 @@ const STEPS = [
   { id: "capture", title: "Attack", text: "A red square holds an enemy you can attack. Take one and watch your character's attack." },
   { id: "turn", title: "Turn the view", text: "Drag sideways across the map in the top corner to turn the view around your character." },
   { id: "map", title: "Back to the map", text: "Tap the map to see the whole board again. Tap a character to go back in close." },
-  { id: "done", title: "You're ready", text: "That's every control. Puzzles in Bin Run and Blitz are played exactly like this." },
+  { id: "done", title: "You're ready", text: "That's every control. Puzzles in Bin Run and Puzzle Rush Tactica are played exactly like this." },
 ];
 
 const sqOf = (sq120) => M120TO64[sq120];

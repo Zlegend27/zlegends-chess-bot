@@ -287,3 +287,39 @@ Still open: keyboard play on the board, server-checked ranked results,
 uptime monitor, real-phone tests, deleting the old music folders in
 Supabase, Rank Bot v3 vs v2 comparison (needs the service key in .env),
 the supporter tier.
+
+## 2026-11-16 (late): owner's phone round, service key added
+
+Owner did: deleted the music folders in Supabase; added SUPABASE_SERVICE_KEY
+to .env on this computer. First full backup run: backups/2026-11-16/ (135
+games, 14 players, 44 rush scores, 2,099 Rank Bot moves, 160 events).
+
+Rank Bot v3 vs v2 (item 20): NOT YET COMPARABLE. v3 has 3 finished games
+from one player (0 wins, 2 losses, 1 draw); v2 had 28 games, 0 player wins,
+8 abandoned. Re-run `node scripts/review-lab/rankbot-live.mjs` after 30+
+v3 games. Nobody has answered the "how did that feel" question yet.
+
+Built (not pushed; checked at phone size in the desktop browser only):
+- iPhone bug: the board's box was too short, so the board drew over the
+  player card, "Your move" and the buttons (captured pieces seemed to float
+  on the board). On touch phones the board now gets a plain width and
+  height. NOT CONFIRMED on a real iPhone: the bug doesn't show in Chrome.
+- No pinch or double-tap zoom on the game screen (scrolling still works).
+- Quit button on the game screen, and "Quit game" beside Resume Game on
+  the Play page. Quit and New ask in a popup (yes or cancel) once the game
+  is past move 2. After quitting there is nothing to resume.
+- A game only counts as "in progress" once the player has moved (as Black
+  the bot's first move alone no longer makes Resume Game appear).
+- The player card shows the account's picture when signed in.
+- "Blitz in the Bin" is now "Puzzle Rush Tactica". Puzzles page: no
+  description on Daily and Ranked; Chess Tactica says "Puzzle Rush Tactica".
+- Tactica Rush leaderboard: one "Leaderboards" button on the Puzzles page
+  opens the leaderboard page, which has a Puzzle Rush / Tactica Rush switch. NEEDS supabase/009_tactica_leaderboard.sql
+  run by the owner; until then Tactica scores are not saved and that board
+  is empty. Puzzle Rush is unaffected either way. Tested locally only.
+
+Item 17 (keyboard play): already there. Every square can be reached with
+Tab and played with Enter or Space, and is read out by name.
+
+Still open: server-checked ranked results, share cards, supporter tier,
+uptime monitor (owner), real-phone tests incl. two signed-in players.

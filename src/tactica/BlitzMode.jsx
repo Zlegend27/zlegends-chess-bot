@@ -9,16 +9,17 @@ import { dressTrashBin } from "./sets/trashBin";
 import { BrassButton } from "./ui";
 import { play as playSound } from "./sound";
 import { track } from "../utils/track";
+import { submitRushScore, TACTICA_RUSH_SECONDS } from "../utils/leaderboard";
 import { loadBonds, levelsOf, recordMove, levelUpText } from "./bonds";
 
-/* Blitz in the Bin: three minutes to solve as many puzzles as you can.
+/* Puzzle Rush Tactica: three minutes to solve as many puzzles as you can.
    Puzzles start easy and climb. A wrong move costs time and ends the combo;
    every few in a row gives a little time back. The board is seen whole;
    moves are quick slides and captures play each piece's attack at triple
    speed, so the show stays without slowing
    the chess. One tap on a glowing square plays it. Correct moves grow the
-   piece's bond. */
-export const BLITZ_SECONDS = 180;
+   piece's bond. A finished run goes on the Tactica Rush leaderboard. */
+export const BLITZ_SECONDS = TACTICA_RUSH_SECONDS;
 const WRONG_PENALTY_S = 10;
 const COMBO_EVERY = 5, COMBO_BONUS_S = 3;
 const START_RATING = 650, RATING_STEP = 45;
@@ -42,7 +43,7 @@ const clock = (ms) => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 };
 
-export default function BlitzMode({ sweetheart, best, onBest, onExit, exitLabel = "Back to the menu" }) {
+export default function BlitzMode({ sweetheart, best, onBest, displayName, onExit, exitLabel = "Back to the menu" }) {
   const canvasRef = useRef(null);
   const sceneRef = useRef(null);
   const engRef = useRef(createEngine());
@@ -172,6 +173,7 @@ export default function BlitzMode({ sweetheart, best, onBest, onExit, exitLabel 
     if (phase !== "done") return;
     setSelected(null);
     track("tactica_blitz_end", { score });
+    if (score > 0) submitRushScore({ duration: BLITZ_SECONDS, solved: score, displayName, mode: "tactica" });
     if (score > (best || 0)) { setNewBest(true); onBest(score); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, score]);
@@ -315,7 +317,7 @@ export default function BlitzMode({ sweetheart, best, onBest, onExit, exitLabel 
         <div className="tc-scrim absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
           {phase === "ready" ? (
             <>
-              <h2 className="tc-title m-0 text-[28px]">Blitz in the Bin</h2>
+              <h2 className="tc-title m-0 text-[28px]">Puzzle Rush Tactica</h2>
               <p className="m-0 max-w-[30ch] text-base text-[var(--tc-cream-dim)]">Three minutes. Puzzles get harder as you go. A wrong move costs {WRONG_PENALTY_S} seconds; every {COMBO_EVERY} in a row gives {COMBO_BONUS_S} back.</p>
               {best ? <p className="tc-label m-0">Your best · {best}</p> : null}
             </>

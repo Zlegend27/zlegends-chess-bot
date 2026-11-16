@@ -16,6 +16,7 @@ import { PGlite } from "@electric-sql/pglite";
 const FILES = [
   "../supabase_setup.sql", "001_link_accounts.sql", "002_ios_sign_in_handoff.sql", "003_rank_bot_detail.sql",
   "004_delete_account.sql", "005_events.sql", "006_leaderboard_safety.sql", "007_private_data.sql", "008_lobby_access.sql",
+  "009_tactica_leaderboard.sql",
 ];
 const ALICE = "11111111-1111-4111-8111-111111111111";
 const BOB = "22222222-2222-4222-8222-222222222222";
@@ -148,7 +149,7 @@ describe("the Rush leaderboard", () => {
       await db.query("insert into rush_scores (client_id, display_name, duration_seconds, solved) values ('browser-a', 'Zed', 180, 12)");
       const board = await rows("select * from rush_leaderboard where duration_seconds = 180");
       expect(board).toHaveLength(1);
-      expect(Object.keys(board[0]).sort()).toEqual(["created_at", "display_name", "duration_seconds", "player_key", "solved"]);
+      expect(Object.keys(board[0]).sort()).toEqual(["created_at", "display_name", "duration_seconds", "mode", "player_key", "solved"]);
       expect(board[0].player_key).not.toBe("browser-a");
       expect(await rows("select * from rush_scores")).toHaveLength(0);
     });
@@ -161,6 +162,17 @@ describe("the Rush leaderboard", () => {
     await expect(add(45, 5)).rejects.toThrow();
     await expect(add(60, 5, "x".repeat(25))).rejects.toThrow();
     await add(60, 60);
+  });
+
+  test("keeps Puzzle Rush Tactica scores on their own board", async () => {
+    await as(null, async () => {
+      await db.query("insert into rush_scores (client_id, display_name, duration_seconds, solved, mode) values ('tactica-a', 'Tia', 180, 9, 'tactica')");
+      expect(await rows("select display_name from rush_leaderboard where mode = 'tactica'")).toEqual([{ display_name: "Tia" }]);
+      expect(await rows("select 1 from rush_leaderboard where mode = 'rush' and display_name = 'Tia'")).toHaveLength(0);
+      /* Tactica is three minutes only, and there are just the two games. */
+      await expect(db.query("insert into rush_scores (client_id, duration_seconds, solved, mode) values ('tactica-a', 60, 9, 'tactica')")).rejects.toThrow();
+      await expect(db.query("insert into rush_scores (client_id, duration_seconds, solved, mode) values ('tactica-a', 180, 9, 'other')")).rejects.toThrow();
+    });
   });
 
   test("stops a flood from one browser", async () => {

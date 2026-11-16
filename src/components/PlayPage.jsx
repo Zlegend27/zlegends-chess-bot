@@ -2,6 +2,7 @@ import { useState } from "react";
 import StarField from "./StarField";
 import PixelAvatar, { ZPAL, ZPIX, TPAL, TPIX } from "./PixelAvatar";
 import { getUiTheme } from "../utils/uiTheme";
+import ConfirmModal from "./ConfirmModal";
 
 const OTHER_MODES = [
   { id: "blind", label: "Blind Chess", desc: "Play a full game by voice, with no board." },
@@ -10,9 +11,10 @@ const OTHER_MODES = [
 
 /** Where a new game starts. `levels` are the bots in the order to offer them,
  *  each with its index in DIFFICULTIES. Picking one starts a game. */
-export default function PlayPage({ levels, hasLiveGame, onPick, onResume, onMode, onLobby, onTactica, sweetheart }) {
+export default function PlayPage({ levels, hasLiveGame, onPick, onResume, onQuit, onMode, onLobby, onTactica, sweetheart }) {
   const T = getUiTheme(sweetheart);
   const [open, setOpen] = useState(false);
+  const [quitting, setQuitting] = useState(false);
   const card = `rounded-2xl border ${T.cardBorder} ${T.panelBg} backdrop-blur-sm`;
   const focus = `focus-visible:outline-none focus-visible:ring-2 ${T.ring}`;
 
@@ -21,8 +23,19 @@ export default function PlayPage({ levels, hasLiveGame, onPick, onResume, onMode
       <StarField sweetheart={sweetheart} />
       <div className="relative z-10 flex w-full max-w-md flex-col gap-3">
         {hasLiveGame && (
-          <button type="button" className="btn gold" style={{ width: "100%" }} onClick={onResume}>Resume Game</button>
+          <div className="flex gap-2">
+            <button type="button" className="btn gold" style={{ flex: 1 }} onClick={onResume}>Resume Game</button>
+            <button type="button" className="btn ghost" onClick={() => setQuitting(true)}>Quit game</button>
+          </div>
         )}
+        <ConfirmModal
+          open={quitting}
+          title="Quit this game?"
+          text="The game you have in progress will be left unfinished."
+          yesLabel="Yes, quit"
+          onYes={() => { setQuitting(false); onQuit(); }}
+          onCancel={() => setQuitting(false)}
+        />
 
         <div className={card}>
           <button
