@@ -3,7 +3,8 @@ Chess Tactica 3D models
 Poly Haven (polyhaven.com), public domain (CC0 1.0), downloaded by
 scripts/fetch-tactica-art.mjs; textures shrunk to 512 px:
   trashbag, can_rusted, plastic_bottle_gallon, cardboard_box_01,
-  russian_food_cans_01                          (the bin)
+  russian_food_cans_01, long_life_food, cigarette_pack, wine_bottles_01,
+  bleach_bottle, spray_paint_bottles, cement_bag (the bin)
   rock_07, rock_09, moon_rock_01, moon_rock_02,
   moon_rock_03, moon_rock_05                    (the lake and the volcano)
   gothic_statue, bull_head, antique_estoc, antique_katana_01,

@@ -65,6 +65,18 @@ const AXES = ["wooden_axe_02", "hatchet"];
 /* Models that come handle-down: turned over so the point goes in. */
 const FLIP = new Set(["antique_estoc", "antique_katana_01", "wooden_handle_saber", "wooden_axe_02", "hatchet"]);
 
+/* A candle flame: a teardrop, white-hot at the root, orange above. */
+function flameTexture() {
+  const c = document.createElement("canvas");
+  c.width = 32; c.height = 64;
+  const g = c.getContext("2d");
+  const grad = g.createRadialGradient(16, 46, 1, 16, 40, 30);
+  grad.addColorStop(0, "rgba(255,250,220,1)"); grad.addColorStop(0.35, "rgba(255,190,90,0.9)"); grad.addColorStop(1, "rgba(255,90,20,0)");
+  g.fillStyle = grad;
+  g.beginPath(); g.moveTo(16, 2); g.quadraticCurveTo(30, 38, 24, 54); g.quadraticCurveTo(16, 64, 8, 54); g.quadraticCurveTo(2, 38, 16, 2); g.fill();
+  return new THREE.CanvasTexture(c);
+}
+
 export function dressDemonRealm(ts) {
   const scene = ts.scene;
   const SKY = "#0b0810", SKY_RAGE = "#1a0508";
@@ -143,6 +155,45 @@ export function dressDemonRealm(ts) {
     w.rotation.set((r() - 0.5) * 0.5, r() * 6, (r() - 0.5) * 0.5);
     w.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     set.add(w);
+  }
+
+  /* Candles on iron stands round the circle, in twos and threes, burning
+     low, wax run down their sides. Their flames are glow only (no lights),
+     to stay light on phones. */
+  const iron = new THREE.MeshStandardMaterial({ color: "#2a2628", roughness: 0.55, metalness: 0.8 });
+  const wax = new THREE.MeshStandardMaterial({ color: "#d9cdb0", roughness: 0.6, emissive: "#3a2008", emissiveIntensity: 0.6 });
+  const standGeo = new THREE.LatheGeometry([[0, 0], [0.22, 0], [0.24, 0.05], [0.08, 0.12], [0.05, 0.6], [0.09, 0.66], [0.16, 0.7], [0.16, 0.74], [0, 0.74]].map(([x, y]) => new THREE.Vector2(x, y)), 12);
+  const flameMat = new THREE.SpriteMaterial({ map: flameTexture(), color: "#ffb35a", transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  const haloMat = new THREE.SpriteMaterial({ map: softDot(), color: "#ff7a2a", transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.35 });
+  const flames = [];
+  for (let c = 0; c < 9; c++) {
+    const a = (c / 9) * Math.PI * 2 + 0.17, d = 6.55;
+    const cluster = new THREE.Group();
+    cluster.position.set(Math.cos(a) * d, -0.42, Math.sin(a) * d);
+    cluster.rotation.y = r() * 6;
+    const n = 2 + (c % 2);
+    for (let k = 0; k < n; k++) {
+      const stand = new THREE.Group();
+      const h = 0.55 + r() * 0.6;
+      stand.position.set((k - (n - 1) / 2) * 0.42, 0, (r() - 0.5) * 0.3);
+      const base = new THREE.Mesh(standGeo, iron);
+      base.scale.set(1, 0.8 + r() * 0.5, 1);
+      const top = 0.74 * base.scale.y;
+      const candle = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, h, 10), wax);
+      candle.position.y = top + h / 2;
+      const drip = new THREE.Mesh(new THREE.CapsuleGeometry(0.025, h * 0.4, 3, 6), wax);
+      drip.position.set(0.07, top + h * 0.55, 0);
+      const flame = new THREE.Sprite(flameMat);
+      flame.position.y = top + h + 0.14;
+      flame.scale.set(0.16, 0.3, 1);
+      const halo = new THREE.Sprite(haloMat);
+      halo.position.y = top + h + 0.12;
+      halo.scale.setScalar(0.9);
+      stand.add(base, candle, drip, flame, halo);
+      cluster.add(stand);
+      flames.push({ flame, halo, ph: r() * 6 });
+    }
+    set.add(cluster);
   }
 
   /* Two old statues standing in the dark behind the board, and horned heads
@@ -228,6 +279,7 @@ export function dressDemonRealm(ts) {
       top.emissiveIntensity = 1.1 + 0.4 * Math.sin(t * 1.7) + (intense ? 0.5 : 0);
       runeLight.intensity = 8 + 3 * Math.sin(t * 1.7);
       for (const f of floaters) { f.mesh.position.y = f.base + Math.sin(t * 0.4 + f.ph) * 0.6; f.mesh.rotation.y += dt * f.spin; }
+      for (const f of flames) { const k = 0.85 + 0.15 * Math.sin(t * 11 + f.ph) * Math.sin(t * 6.3 + f.ph * 2); f.flame.scale.set(0.16 * (2 - k), 0.3 * k, 1); f.halo.material.opacity = 0.3 * k; }
       for (const c of chains) c.chain.rotation.z = Math.sin(t * 0.6 + c.ph) * 0.04;
       for (const c of clouds) { const a = c.a + t * (intense ? 0.05 : 0.02); c.s.position.set(Math.cos(a) * c.d, c.h, Math.sin(a) * c.d - 10); }
       moonUp += ((intense ? 1 : 0) - moonUp) * Math.min(1, dt * 0.4);

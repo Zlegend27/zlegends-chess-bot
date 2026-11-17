@@ -76,20 +76,30 @@ function crackOnly() {
   return t;
 }
 
-/* Ripples for the water: soft noise used as a bump map, scrolled slowly. */
-function waterBump() {
-  const c = document.createElement("canvas");
-  c.width = c.height = 256;
-  const g = c.getContext("2d");
-  g.fillStyle = "#808080"; g.fillRect(0, 0, 256, 256);
-  const r = rng(17);
-  for (let i = 0; i < 160; i++) {
-    g.fillStyle = r() < 0.5 ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.18)";
-    g.beginPath(); g.ellipse(r() * 256, r() * 256, 8 + r() * 30, 2 + r() * 6, 0, 0, Math.PI * 2); g.fill();
+/* Ripples for the water: wind-stretched swells drawn as heights, then
+   turned into a tiling normal map, so the sky's light breaks up on it. */
+function waterNormals(repeat) {
+  const S = 256, r = rng(17);
+  const h = new Float32Array(S * S);
+  /* A sum of waves at different angles and sizes, all tiling. */
+  const waves = Array.from({ length: 9 }, (_, i) => ({ kx: Math.round(1 + r() * 5) * (r() < 0.5 ? -1 : 1), ky: Math.round(1 + r() * 9), amp: 1 / (1 + i * 0.6), ph: r() * 6.28 }));
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    let v = 0;
+    for (const w of waves) v += Math.sin(((x * w.kx + y * w.ky) / S) * Math.PI * 2 + w.ph) * w.amp;
+    h[y * S + x] = v;
   }
+  const c = document.createElement("canvas");
+  c.width = c.height = S;
+  const g = c.getContext("2d"), img = g.createImageData(S, S);
+  const H = (x, y) => h[((y + S) % S) * S + ((x + S) % S)];
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const dx = (H(x + 1, y) - H(x - 1, y)) * 0.6, dy = (H(x, y + 1) - H(x, y - 1)) * 0.6, k = 1 / Math.hypot(dx, dy, 1), i = (y * S + x) * 4;
+    img.data[i] = (-dx * k * 0.5 + 0.5) * 255; img.data[i + 1] = (-dy * k * 0.5 + 0.5) * 255; img.data[i + 2] = (k * 0.5 + 0.5) * 255; img.data[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.repeat.set(14, 14);
+  t.repeat.set(repeat, repeat);
   return t;
 }
 
@@ -166,8 +176,10 @@ export function dressIcyLake(ts) {
   }
 
   /* The lake. */
-  const bump = waterBump();
-  const water = new THREE.Mesh(new THREE.CircleGeometry(160, 64), new THREE.MeshStandardMaterial({ color: "#0f2433", roughness: 0.18, metalness: 0.35, bumpMap: bump, bumpScale: 0.6 }));
+  /* Dark, cold water that mirrors the snowy sky, broken up by two layers
+     of ripples drifting different ways. */
+  const bump = waterNormals(18), bump2 = waterNormals(7);
+  const water = new THREE.Mesh(new THREE.CircleGeometry(160, 64), new THREE.MeshPhysicalMaterial({ color: "#081822", roughness: 0.06, metalness: 0, normalMap: bump, normalScale: new THREE.Vector2(0.45, 0.45), clearcoat: 1, clearcoatRoughness: 0.12, clearcoatNormalMap: bump2, clearcoatNormalScale: new THREE.Vector2(0.3, 0.3), envMapIntensity: 1.4 }));
   water.rotation.x = -Math.PI / 2;
   water.position.y = -1.55;
   set.add(water);
@@ -266,7 +278,8 @@ export function dressIcyLake(ts) {
         pos[i * 3 + 2] = f.z;
       }
       snowGeo.attributes.position.needsUpdate = true;
-      bump.offset.x = t * 0.01; bump.offset.y = t * 0.006;
+      bump.offset.x = t * 0.012; bump.offset.y = t * 0.007;
+      bump2.offset.x = -t * 0.004; bump2.offset.y = t * 0.009;
       for (const fl of floes) {
         fl.m.position.y = fl.base.y + Math.sin(t * 0.8 + fl.ph) * 0.06;
         fl.m.rotation.z = Math.sin(t * 0.6 + fl.ph) * 0.02;

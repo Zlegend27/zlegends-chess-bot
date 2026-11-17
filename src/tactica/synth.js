@@ -76,16 +76,18 @@ function voice(ac, out, at, contour, { peak = 0.06, formants = [800, 1250], pan 
 export const SYNTHS = {
   /* The pieces cheering: a swell of crowd under a scatter of small high
      "yay!"s and "woo!"s. */
-  cheer(ac, out, at, volume, { dur = 2.2, size = 16 } = {}) {
-    noiseBurst(ac, out, at, { dur, freq: 1300, q: 0.7, attack: 0.25, release: 0.9, peak: 0.22 * volume });
-    noiseBurst(ac, out, at, { dur: dur * 0.8, freq: 2600, q: 1.2, attack: 0.2, release: 0.6, peak: 0.08 * volume });
-    for (let i = 0; i < size; i++) {
-      const t = at + rand(0, dur * 0.7), base = rand(420, 760), len = rand(0.28, 0.6);
-      const woo = Math.random() < 0.4;
-      voice(ac, out, t, woo
-        ? [[0, base * 0.8], [len * 0.4, base * 1.5], [len, base * 1.1]]
-        : [[0, base], [len * 0.3, base * 1.35], [len, base * 0.9]],
-      { peak: 0.05 * volume, formants: woo ? [700, 1100] : [900, 1700], pan: rand(-0.8, 0.8) });
+  cheer(ac, out, at, volume, { dur = 1.8 } = {}) {
+    /* Mostly applause: many small claps, thinning out, over a soft low
+       swell of crowd. Only a few voices, rounded (not buzzy), well back. */
+    noiseBurst(ac, out, at, { dur, freq: 700, type: "lowpass", q: 0.5, attack: 0.2, release: 0.8, peak: 0.07 * volume });
+    const claps = Math.round(dur * 26);
+    for (let i = 0; i < claps; i++) {
+      const u = Math.pow(Math.random(), 1.6), t = at + u * dur;
+      noiseBurst(ac, out, t, { dur: 0.035, freq: rand(1200, 2600), q: 1.1, attack: 0.002, release: 0.03, peak: rand(0.05, 0.11) * volume * (1 - u * 0.6), pan: rand(-0.7, 0.7) });
+    }
+    for (let i = 0; i < 4; i++) {
+      const t = at + rand(0.05, dur * 0.5), base = rand(380, 560), len = rand(0.3, 0.5);
+      voice(ac, out, t, [[0, base], [len * 0.35, base * 1.25], [len, base * 0.95]], { peak: 0.018 * volume, formants: [700, 1100], pan: rand(-0.6, 0.6), wave: "triangle" });
     }
   },
   /* A gasp from the crowd: "ooh!" sliding up. */

@@ -106,7 +106,7 @@ const tinted = new Map();
  *  its longest side is `size`, at `at`, turned by `rot`. `tint` multiplies
  *  its colours (snow on rocks, soot in the volcano). Returns the holder at
  *  once, so it can be moved before the model arrives. */
-export function prop(ts, parent, id, { size = 1, at = [0, 0, 0], rot = [0, 0, 0], tint = null, sink = 0, upright = false, flip = false } = {}) {
+export function prop(ts, parent, id, { size = 1, at = [0, 0, 0], rot = [0, 0, 0], tint = null, sink = 0, upright = false, flip = false, part = null, env = null } = {}) {
   const holder = new THREE.Group();
   holder.position.set(...at);
   holder.rotation.set(...rot);
@@ -114,6 +114,9 @@ export function prop(ts, parent, id, { size = 1, at = [0, 0, 0], rot = [0, 0, 0]
   model(id).then((tpl) => {
     if (!tpl) return;
     const copy = tpl.clone(true);
+    /* `part`: some files hold several variants in one spot (four bottles,
+       four tins); keep only the one named. */
+    if (part) copy.traverse((o) => { if (o.isMesh && !o.name.startsWith(part)) o.visible = false; });
     const s = tpl.userData.size, long = Math.max(s.x, s.y, s.z);
     copy.scale.setScalar(size / long);
     /* `upright` stands its longest side up (a sword); `flip` turns it over. */
@@ -125,11 +128,18 @@ export function prop(ts, parent, id, { size = 1, at = [0, 0, 0], rot = [0, 0, 0]
     wrap.updateMatrixWorld(true);
     const b = new THREE.Box3().setFromObject(wrap);
     copy.position.set(-(b.min.x + b.max.x) / 2, -b.min.y - sink * size, -(b.min.z + b.max.z) / 2);
-    if (tint) {
+    /* `tint` multiplies its colours; `env` sets how strongly it reflects the
+       sky (a dark bin wants its rubbish dull, not chrome). */
+    if (tint || env != null) {
       copy.traverse((o) => {
         if (!o.isMesh) return;
-        const key = o.material.uuid + tint;
-        if (!tinted.has(key)) { const m = o.material.clone(); m.color.multiply(new THREE.Color(tint)); tinted.set(key, m); }
+        const key = `${o.material.uuid}|${tint}|${env}`;
+        if (!tinted.has(key)) {
+          const m = o.material.clone();
+          if (tint) m.color.multiply(new THREE.Color(tint));
+          if (env != null) m.envMapIntensity = env;
+          tinted.set(key, m);
+        }
         o.material = tinted.get(key);
       });
     }

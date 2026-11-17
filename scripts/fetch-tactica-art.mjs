@@ -42,6 +42,7 @@ const ACG = [
 const MODELS = [
   // the bin's rubbish
   "trashbag", "can_rusted", "plastic_bottle_gallon", "cardboard_box_01", "russian_food_cans_01",
+  "long_life_food", "cigarette_pack", "wine_bottles_01", "bleach_bottle", "spray_paint_bottles", "cement_bag",
   // rocks for the lake (snowed on) and the volcano (burnt)
   "rock_09", "rock_07", "moon_rock_01", "moon_rock_02", "moon_rock_03", "moon_rock_05",
   // the demon's realm

@@ -665,7 +665,7 @@ export const SHOTS = {
   },
   /* Yes: a burst of gold, and weapons in their hands. */
   bonded: {
-    dur: 3, next: "arenaIn", cues: [[0.05, "chime", 1], [0.2, "cheer", 0.8], [0.9, "shimmer", 1], [1.0, "draw", 0.8], [1.15, "metal", 0.6], [1.3, "cheer", 0.7]],
+    dur: 3, next: "arenaIn", cues: [[0.05, "chime", 1], [0.2, "cheer", 0.8], [0.9, "shimmer", 1], [1.0, "draw", 0.8], [1.15, "metal", 0.6]],
     draw(ctx, lt) {
       const armed = lt >= 1.0;
       crowd(ctx, lt, (c, i, t) => ({ y: c.sy - Math.abs(Math.sin(t * 7 + i)) * 12, squashY: 1, eyes: 1, look: 0, arms: 1, pose: armed ? "raise" : "up", weapon: armed, weaponAngle: -0.1, aura: 0.5 * (1 - span(lt, 1.6, 3)) }));
@@ -677,7 +677,7 @@ export const SHOTS = {
   },
   /* The rest of the set lines the board: an arena. */
   arenaIn: {
-    dur: 3, next: "duel0", cues: [[0.1, "cheer", 1], [0.2, "coins", 0.6], [1.2, "chime", 0.5], [1.6, "cheer", 0.8]],
+    dur: 3, next: "duel0", cues: [[0.1, "cheer", 0.8], [0.2, "coins", 0.6], [1.2, "chime", 0.5]],
     draw(ctx, lt) {
       const push = lerp(0.82, 1, ease(lt / 3));
       ctx.save(); ctx.translate(W / 2, 520); ctx.scale(push, push); ctx.translate(-W / 2, -520);
@@ -696,12 +696,12 @@ export const SHOTS = {
       rook: [[0.1, "brass", 0.6], [0.75, "cloth1", 0.6], [0.95, "cloth2", 0.6], [1.15, "cloth3", 0.6], [1.3, "swish", 1], [1.45, "punch", 1]],
       queen: [[0.1, "brass", 0.6], [0.7, "charge", 0.7], [1.2, "zap", 1], [1.42, "zap", 1], [1.64, "zap", 1], [2.0, "shimmer", 0.6], [2.3, "poof", 0.9]],
       king: [[0.1, "brass", 0.6], [1.0, "bell", 0.8], [1.3, "draw", 0.7], [1.95, "chop", 1], [2.5, "drop", 0.9]],
-    }[kind].map(([at, name, volume], n) => [n === 0 ? at : at + LEAD, name, volume]).concat([[0.05, "cheer", 0.45], [0.72, "swish", 0.5], [0.8, "heartbeat", 0.6], [LEAD + HIT[kind] + 0.05, "ooh", 0.8], [LEAD + 2.35, "cheer", 1], [LEAD + 2.4, "coins", 0.7]]).sort((x, y) => x[0] - y[0]),
+    }[kind].map(([at, name, volume], n) => [n === 0 ? at : at + LEAD, name, volume]).concat([[0.72, "swish", 0.5], [0.8, "heartbeat", 0.6], [LEAD + HIT[kind] + 0.05, "ooh", 0.8], [LEAD + 2.35, "cheer", 0.55], [LEAD + 2.4, "coins", 0.7]]).sort((x, y) => x[0] - y[0]),
     draw(ctx, lt) { duel(ctx, lt, kind); },
   }])),
   /* Armed, together: the six strike a pose, and the title lands. */
   finale: {
-    dur: 6.4, end: "yes", cues: [[0.15, "chime", 1], [0.2, "cheer", 1], [0.4, "coins", 0.8], [0.5, "landHeavy", 0.6], [0.75, "landHeavy", 0.6], [1.0, "landHeavy", 0.7], [1.2, "draw", 0.7], [2.9, "punchHeavy", 1], [2.95, "bell", 0.8], [3.0, "shimmer", 0.9], [3.1, "cheer", 1], [4.2, "cheer", 0.8]],
+    dur: 6.4, end: "yes", cues: [[0.15, "chime", 1], [0.4, "coins", 0.8], [0.5, "landHeavy", 0.6], [0.75, "landHeavy", 0.6], [1.0, "landHeavy", 0.7], [1.2, "draw", 0.7], [2.9, "punchHeavy", 1], [2.95, "bell", 0.8], [3.0, "shimmer", 0.9], [3.1, "cheer", 0.9]],
     draw(ctx, lt) {
       const push = lerp(1.25, 1, easeOut(lt / 1.6)), title = lt >= 2.9;
       ctx.save();

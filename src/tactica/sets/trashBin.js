@@ -12,6 +12,7 @@ import { dress, sky, prop } from "./art.js";
 const BIN_R = 10.5, BIN_BOTTOM = -4.2, BIN_TOP = 12;
 const HOLE = new THREE.Vector3(-1.4, 5.4, -BIN_R + 0.45);
 const BOARD_HALF = 4.6;
+const HOLE_LIGHT = 150;
 
 function rng(seed) {
   return () => {
@@ -52,7 +53,7 @@ function wallTexture() {
       g.fillRect(x, y, wd, len);
     }
     g.strokeStyle = "#a8adb2";
-    for (let i = 0; i < 120; i++) {
+    for (let i = 0; i < 80; i++) {
       g.globalAlpha = 0.1 + r() * 0.2; g.lineWidth = 0.5 + r();
       const x = r() * w, y = r() * h;
       g.beginPath(); g.moveTo(x, y); g.lineTo(x + (r() - 0.5) * 60, y + (r() - 0.5) * 20); g.stroke();
@@ -113,30 +114,6 @@ function buildMound() {
   const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: debris, bumpMap: debris, bumpScale: 1.5, roughness: 0.7 }));
   mesh.receiveShadow = true;
   return mesh;
-}
-
-/* A full bin bag: a lumpy, glossy black blob with its tied neck. */
-function binBag(r, s, mat) {
-  const geo = new THREE.SphereGeometry(1, 32, 24);
-  const p = geo.getAttribute("position");
-  for (let i = 0; i < p.count; i++) {
-    const v = new THREE.Vector3().fromBufferAttribute(p, i);
-    const k = 1 + 0.12 * Math.sin(v.x * 7 + s * 3) * Math.sin(v.y * 6) + 0.08 * Math.sin(v.z * 9 + s);
-    v.multiplyScalar(k);
-    v.y *= v.y < 0 ? 0.55 : 0.8;
-    p.setXYZ(i, v.x, v.y, v.z);
-  }
-  geo.computeVertexNormals();
-  const bag = new THREE.Group();
-  const body = new THREE.Mesh(geo, mat);
-  body.castShadow = body.receiveShadow = true;
-  bag.add(body);
-  const neck = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.6, 10), mat);
-  neck.position.y = 0.95;
-  neck.rotation.z = 0.3;
-  bag.add(neck);
-  bag.scale.setScalar(r);
-  return bag;
 }
 
 /* ---------- The garbage ----------
@@ -214,24 +191,6 @@ function peelTexture() {
   });
 }
 
-/* Wrinkles for plastic: streaks of light and dark used as a bump map. */
-function wrinkleTexture(seed) {
-  const r = rng(seed);
-  return tex(512, 512, (g, w, h) => {
-    g.fillStyle = "#808080"; g.fillRect(0, 0, w, h);
-    for (let i = 0; i < 220; i++) {
-      g.globalAlpha = 0.15 + r() * 0.35;
-      g.strokeStyle = r() < 0.5 ? "#ffffff" : "#000000";
-      g.lineWidth = 1 + r() * 4;
-      const x = r() * w, y = r() * h, a = r() * Math.PI, len = 30 + r() * 140;
-      g.beginPath(); g.moveTo(x, y);
-      g.quadraticCurveTo(x + Math.cos(a) * len * 0.5 + (r() - 0.5) * 30, y + Math.sin(a) * len * 0.5 + (r() - 0.5) * 30, x + Math.cos(a) * len, y + Math.sin(a) * len);
-      g.stroke();
-    }
-    g.globalAlpha = 1;
-  }, [2, 2]);
-}
-
 /* Compacted junk for the pile's surface: dark, with flecks of paper and
    plastic, and darker wet patches. */
 function debrisTexture() {
@@ -257,8 +216,8 @@ function debrisTexture() {
 function rubbishMaterials() {
   const flat = { flatShading: true };
   return {
-    paper: new THREE.MeshStandardMaterial({ map: newsprintTexture(), roughness: 0.92, ...flat }),
-    plainPaper: new THREE.MeshStandardMaterial({ color: "#efeadf", roughness: 0.95, ...flat }),
+    paper: new THREE.MeshStandardMaterial({ map: newsprintTexture(), color: "#b8b2a6", roughness: 0.92 }),
+    plainPaper: new THREE.MeshStandardMaterial({ color: "#a8a196", roughness: 0.95 }),
     card: new THREE.MeshStandardMaterial({ map: cardboardTexture(), roughness: 0.95 }),
     cans: [["#b3141e", "#f2f2f2"], ["#1d4f9c", "#9fd0ff"], ["#1f7a3a", "#e6d34a"], ["#2a2a2a", "#e0592a"]].map(([b, s], i) =>
       new THREE.MeshStandardMaterial({ map: canTexture(b, s, 40 + i), color: "#a8a097", metalness: 0.6, roughness: 0.45 })),
@@ -271,13 +230,13 @@ function rubbishMaterials() {
     cupRed: new THREE.MeshStandardMaterial({ color: "#c94f3b", roughness: 0.7, side: THREE.DoubleSide }),
     lid: new THREE.MeshStandardMaterial({ color: "#f3f1ec", roughness: 0.5 }),
     sleeve: new THREE.MeshStandardMaterial({ color: "#8a6440", roughness: 0.9 }),
-    peel: new THREE.MeshStandardMaterial({ map: peelTexture(), roughness: 0.75 }),
+    peel: new THREE.MeshStandardMaterial({ map: peelTexture(), color: "#8a7a52", roughness: 0.75 }),
     crust: new THREE.MeshStandardMaterial({ color: "#b8823f", roughness: 0.85 }),
     eggshell: new THREE.MeshStandardMaterial({ color: "#efe6d8", roughness: 0.7, side: THREE.DoubleSide }),
     core: new THREE.MeshStandardMaterial({ color: "#e9d8a6", roughness: 0.8 }),
     rot: new THREE.MeshStandardMaterial({ color: "#6b4a22", roughness: 0.8 }),
-    foilPacket: new THREE.MeshStandardMaterial({ color: "#7a3550", metalness: 0.5, roughness: 0.42 }),
-    foilPacket2: new THREE.MeshStandardMaterial({ color: "#9a7a2a", metalness: 0.5, roughness: 0.42 }),
+    foilPacket: new THREE.MeshStandardMaterial({ color: "#5a2a3e", metalness: 0.45, roughness: 0.5 }),
+    foilPacket2: new THREE.MeshStandardMaterial({ color: "#5e4c26", metalness: 0.45, roughness: 0.5 }),
     shopBag: new THREE.MeshStandardMaterial({ color: "#f4f4f4", roughness: 0.35, transparent: true, opacity: 0.82, side: THREE.DoubleSide, ...flat }),
     spill: new THREE.MeshStandardMaterial({ color: "#2a1608", roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.85 }),
   };
@@ -403,8 +362,10 @@ function makeRubbish(M) {
 }
 
 /* Everything that may sit between the camera and the board is flat. */
-const FLAT = ["paperSheet", "cardboard", "canCrushed", "packet", "peel", "crust", "eggshell"];
-const TALL = ["paperBall", "canStanding", "canLying", "bottle", "cup", "takeout", "shoppingBag", "appleCore"];
+/* Cans, bottles, cups and boxes come from photographed models now (below);
+   the drawn mix keeps the paper, card and food scraps that fill the gaps. */
+const FLAT = ["paperSheet", "cardboard", "packet", "peel", "crust", "eggshell"];
+const TALL = ["paperBall", "paperBall", "shoppingBag", "appleCore"];
 
 /* Builds the heaps, then bakes every small piece into one mesh per
    material. */
@@ -422,7 +383,7 @@ function fillWithRubbish(set) {
   }
   for (let i = 0; i < 120; i++) {
     let x, z;
-    if (i < 95) {
+    if (i < 64) {
       const [cx, cz] = centres[i % centres.length];
       x = cx + (r() - 0.5) * 3.4; z = cz + (r() - 0.5) * 3.4;
     } else {
@@ -445,7 +406,7 @@ function fillWithRubbish(set) {
     const under = placed.filter(([px, pz]) => Math.hypot(px - x, pz - z) < 1.6).length;
     holder.position.set(x, moundHeight(x, z) + lift + Math.min(under, 4) * 0.22 - 0.1, z);
     holder.rotation.set((r() - 0.5) * 0.5, r() * Math.PI * 2, (r() - 0.5) * 0.5);
-    holder.scale.setScalar(0.85 + r() * 0.3);
+    holder.scale.setScalar(0.6 + r() * 0.25);
     loose.add(holder);
     placed.push([x, z]);
   }
@@ -479,37 +440,39 @@ function fillWithRubbish(set) {
     m.receiveShadow = true;
     set.add(m);
   }
-  /* Bin bags against the back and sides, real size, wrinkled and glossy. */
-  const bagMat = new THREE.MeshStandardMaterial({ color: "#111216", roughness: 0.22, metalness: 0.1, bumpMap: wrinkleTexture(61), bumpScale: 2.2 });
-  [-1.75, -1.05, -0.35, 0.35, 1.05, 1.75].forEach((a0, i) => {
-    const a = a0 + Math.PI;
-    const size = 2.5 + r() * 0.7;
-    const d = BIN_R - size * 0.8;
-    const bag = binBag(size, i, bagMat);
-    const x = Math.sin(a) * d, z = Math.cos(a) * d;
-    bag.position.set(x, moundHeight(x, z) + 1.2, z);
-    bag.rotation.y = r() * 6;
-    set.add(bag);
-  });
 }
 
-/* Photographed rubbish (Poly Haven), laid on as it loads: behind the board
-   and out to the sides, where tall things may stand. [model, size, x, z,
-   turn, lying on its side] */
+/* Photographed rubbish (Poly Haven), laid on as it loads. Tall things
+   stand behind the board and out to the sides; only low things (a pack, a
+   flat tin, a lying can) sit on the player's side. Dull reflections, so
+   nothing shines like chrome in the dark. [model, size, x, z, turn, how,
+   part] where how is "lie" (on its side) or "stand". */
 const REAL_RUBBISH = [
-  ["trashbag", 5.4, -6.2, -5.8, 0.4],
-  ["trashbag", 4.8, 6.8, -5.2, 2.1],
-  ["cardboard_box_01", 4.6, -7.9, -0.6, 0.5],
-  ["plastic_bottle_gallon", 4.2, 4.2, -7.6, 0.9],
-  ["can_rusted", 2.7, -2.6, -7.9, 0.3],
-  ["can_rusted", 2.7, 7.9, 1.6, 1.2, true],
-  ["russian_food_cans_01", 1.7, 1.4, -7.3, 0],
-  ["russian_food_cans_01", 1.7, -7.4, 3.4, 2],
+  /* Bin bags piled round the back and sides. */
+  ["trashbag", 5.6, -6.3, -6.0, 0.4], ["trashbag", 5.2, -2.0, -8.6, 2.2], ["trashbag", 5.0, 2.6, -8.4, 1.1],
+  ["trashbag", 5.4, 6.6, -5.6, 2.1], ["trashbag", 4.8, -8.6, -1.6, 3.0], ["trashbag", 4.6, 8.7, -0.8, 0.7],
+  ["cement_bag", 5.4, -7.6, 2.6, 0.9, "lie"],
+  ["cardboard_box_01", 4.4, 7.7, 3.2, 0.5],
+  ["plastic_bottle_gallon", 4.2, 4.6, -7.4, 0.9],
+  ["bleach_bottle", 4.6, -4.4, -7.8, 2.6, "lie"],
+  ["wine_bottles_01", 5.6, 7.9, -3.2, 1.9, "lie", "wine_bottles_01_bordeaux"],
+  ["wine_bottles_01", 5.4, -8.2, 0.6, 0.4, "lie", "wine_bottles_01_burgundy"],
+  ["spray_paint_bottles", 4.0, -6.9, 4.6, 1.3, "lie", "spray_paint_bottles_dirty"],
+  ["long_life_food", 4.0, 0.6, -7.6, 0.2, "stand", "long_life_food_milk"],
+  ["long_life_food", 2.6, -3.0, -7.4, 0.7, "stand", "long_life_food_beans"],
+  ["can_rusted", 2.7, 8.0, 1.4, 1.2, "lie"],
+  ["russian_food_cans_01", 1.7, 1.6, -7.2, 0],
+  /* Low things on the player's side. */
+  ["long_life_food", 2.4, 5.6, 6.6, 1.4, "lie", "long_life_food_tomatoes"],
+  ["long_life_food", 1.6, -5.2, 6.8, 0.3, "stand", "long_life_food_sardines"],
+  ["cigarette_pack", 1.9, 2.4, 7.4, 0.8, "lie"],
+  ["can_rusted", 2.5, -2.4, 7.6, 2.0, "lie"],
 ];
 function placeRealRubbish(ts, set) {
-  for (const [id, size, x, z, turn, lying] of REAL_RUBBISH) {
-    const y = moundHeight(x, z) + (lying ? size * 0.4 : -0.1);
-    prop(ts, set, id, { size, at: [x, y, z], rot: lying ? [0, turn, Math.PI / 2] : [0.08, turn, -0.06], tint: "#b8b0a6" });
+  for (const [id, size, x, z, turn, how, part] of REAL_RUBBISH) {
+    const lying = how === "lie";
+    const y = moundHeight(x, z) + (lying ? size * 0.22 : -0.1);
+    prop(ts, set, id, { size, at: [x, y, z], rot: lying ? [0, turn, Math.PI / 2] : [0.08, turn, -0.06], tint: "#b8b0a6", env: 0.25, part, sink: lying ? 0 : 0.02 });
   }
 }
 
@@ -568,7 +531,9 @@ function buildHole(scene, target) {
   glow.scale.setScalar(3.6);
   group.add(glow);
 
-  const light = new THREE.SpotLight("#ffe7c2", 260, 40, 0.3, 0.55, 1.6);
+  /* Strong enough to light the board, soft enough at its middle that the
+     light wood there does not burn out to white. */
+  const light = new THREE.SpotLight("#ffe7c2", HOLE_LIGHT, 40, 0.36, 0.85, 1.6);
   light.position.copy(HOLE).add(inward.clone().multiplyScalar(0.3));
   light.target.position.copy(target);
   light.castShadow = true;
@@ -588,7 +553,7 @@ function buildHole(scene, target) {
   coneGeo.translate(0, -len / 2, 0);
   const shaftMat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
-    uniforms: { color: { value: new THREE.Color("#ffe2b0") }, strength: { value: 0.42 } },
+    uniforms: { color: { value: new THREE.Color("#ffe2b0") }, strength: { value: 0.32 } },
     vertexShader: `varying float vAlong; varying vec3 vN; varying vec3 vView;
       void main() { vAlong = -position.y; vec4 mv = modelViewMatrix * vec4(position, 1.0);
         vN = normalize(normalMatrix * normal); vView = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }`,
@@ -834,14 +799,14 @@ export function dressTrashBin(ts) {
   scene.add(flyGroup);
   const flies = buildFlies(flyGroup);
   /* The bin's look: warm, with the light through the hole glowing. */
-  const BIN_LOOK = { glow: 0.38, glowFrom: 1.0, vignette: 0.5, tint: "#fff3e4" };
+  const BIN_LOOK = { glow: 0.32, glowFrom: 1.2, vignette: 0.5, tint: "#fff3e4" };
   const SNOW_LOOK = { glow: 0.2, glowFrom: 1.3, vignette: 0.45, tint: "#e6eeff" };
   ts.setLook?.(BIN_LOOK);
   const hemi = [];
   scene.traverse((o) => { if (o.isHemisphereLight) hemi.push(o); });
   /* From the bin's sixth floor something has woken in it: the air turns
      sickly and the light through the hole gutters. */
-  const INTENSE_LOOK = { glow: 0.4, glowFrom: 1.0, vignette: 0.64, tint: "#eef2d2" };
+  const INTENSE_LOOK = { glow: 0.34, glowFrom: 1.2, vignette: 0.64, tint: "#eef2d2" };
   let snow = null, snowing = false, intense = false, monster = null;
   const look = () => ts.setLook?.(snowing ? SNOW_LOOK : intense ? INTENSE_LOOK : BIN_LOOK);
   /* Pieces cast shadows in the light from the hole; pieces added later
@@ -860,7 +825,7 @@ export function dressTrashBin(ts) {
       t += dt;
       hole.updateDust(t);
       monster?.update(dt);
-      if (intense && !snowing) hole.light.intensity = 260 * (0.8 + 0.2 * Math.sin(t * 13) * Math.sin(t * 7.3));
+      if (intense && !snowing) hole.light.intensity = HOLE_LIGHT * (0.8 + 0.2 * Math.sin(t * 13) * Math.sin(t * 7.3));
       if (snowing) snow.update(t, dt);
       else flies(t, dt);
       castAll();
@@ -869,7 +834,7 @@ export function dressTrashBin(ts) {
     setIntense(on) {
       if (on === intense) return;
       intense = on;
-      if (!on && !snowing) hole.light.intensity = 260;
+      if (!on && !snowing) hole.light.intensity = HOLE_LIGHT;
       look();
       ts.wake?.();
     },
@@ -911,7 +876,7 @@ export function dressTrashBin(ts) {
     /** How much light comes through the hole: 0 is the shut bin in the
      *  dark (the opening), 1 is the bin as played in. */
     setLight(k) {
-      hole.light.intensity = 260 * k;
+      hole.light.intensity = HOLE_LIGHT * k;
       hole.shaftMat.uniforms.strength.value = 0.42 * k;
       hole.glow.material.opacity = k;
       hole.dust.material.opacity = 0.8 * k;
@@ -927,7 +892,7 @@ export function dressTrashBin(ts) {
       if (on && !snow) { snow = buildSnow(); scene.add(snow.group); }
       if (snow) snow.group.visible = on;
       flyGroup.visible = !on;
-      hole.light.intensity = on ? 45 : 260;
+      hole.light.intensity = on ? 45 : HOLE_LIGHT;
       fill.intensity = on ? 30 : 60;
       for (const h of hemi) { h.intensity = on ? 0.42 : 0.3; h.color.set(on ? "#e6efff" : "#fff6ea"); }
       scene.background = new THREE.Color(on ? "#141a24" : "#060507");
