@@ -5,6 +5,7 @@
    sound after a touch, so nothing loads or plays until unlock() is called
    from one. One on/off switch for all of it, remembered on this device. */
 import { loadSetting, saveSetting } from "../utils/storage";
+import { SYNTHS } from "./synth.js";
 
 const NAMES = [
   "tap", "land", "landHeavy", "step", "plank", "brass", "ghost", "swish", "slice", "draw", "chop",
@@ -70,8 +71,13 @@ export function unlock() {
 
 /** Plays a sound: `volume` 0..1, `rate` (pitch and speed), `delay` in
  *  seconds, `pan` -1 (left) .. 1 (right). */
-export function play(name, { volume = 1, rate = 1, delay = 0, pan = 0 } = {}) {
+export function play(name, { volume = 1, rate = 1, delay = 0, pan = 0, ...rest } = {}) {
   if (!ctx || !enabled || ctx.state !== "running") return;
+  /* Sounds made in code (synth.js): the crowd, the cat, birds, a drone... */
+  if (SYNTHS[name] && name !== "wind") {
+    try { SYNTHS[name](ctx, master, ctx.currentTime + delay, volume, rest); } catch { /* skip this one */ }
+    return;
+  }
   const buf = buffers.get(name);
   if (!buf) return;
   try {
@@ -138,6 +144,53 @@ function scheduleFly() {
   clearTimeout(flyTimer);
   if (!fliesWanted) return;
   flyTimer = setTimeout(() => { buzz(); scheduleFly(); }, 8000 + Math.random() * 14000);
+}
+
+/* Music. A track is a file in public/tactica/music/ (see the README
+   there); if there isn't one, nothing plays and nothing breaks. One track
+   at a time; starting another fades the last one out. */
+let music = null;
+/** Plays `name` (for example "opening"), looping if `loop`. */
+export function playMusic(name, { volume = 0.55, loop = false, fade = 1.2 } = {}) {
+  stopMusic(fade);
+  if (!ctx) return;
+  const mine = (music = { name, gain: null, src: null });
+  fetch(`/tactica/music/${name}.mp3`)
+    .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error("none"))))
+    .then((data) => ctx.decodeAudioData(data))
+    .then((buf) => {
+      if (music !== mine) return;
+      mine.src = ctx.createBufferSource();
+      mine.src.buffer = buf;
+      mine.src.loop = loop;
+      mine.gain = ctx.createGain();
+      mine.gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      mine.gain.gain.exponentialRampToValueAtTime(volume, ctx.currentTime + fade);
+      mine.src.connect(mine.gain).connect(master);
+      mine.src.start();
+    })
+    .catch(() => { /* no track there: silence */ });
+}
+/** Fades the music out over `fade` seconds. */
+export function stopMusic(fade = 1.2) {
+  const old = music;
+  music = null;
+  if (!old?.src || !ctx) return;
+  try {
+    old.gain.gain.cancelScheduledValues(ctx.currentTime);
+    old.gain.gain.setValueAtTime(Math.max(0.0001, old.gain.gain.value), ctx.currentTime);
+    old.gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + fade);
+    old.src.stop(ctx.currentTime + fade + 0.05);
+  } catch { /* already stopped */ }
+}
+
+/* Wind, for outdoors and the blizzard, until it is turned off. */
+let stopWindNow = null;
+export function setWind(on, volume = 1) {
+  stopWindNow?.(1.2);
+  stopWindNow = null;
+  if (!on || !ctx || !enabled || ctx.state !== "running") return;
+  try { stopWindNow = SYNTHS.wind(ctx, master, ctx.currentTime, volume); } catch { /* no wind */ }
 }
 
 /** The flies in the bin buzz past every so often while `on`. */

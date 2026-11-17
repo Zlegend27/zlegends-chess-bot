@@ -1,0 +1,26 @@
+Chess Tactica 3D models
+
+Poly Haven (polyhaven.com), public domain (CC0 1.0), downloaded by
+scripts/fetch-tactica-art.mjs; textures shrunk to 512 px:
+  trashbag, can_rusted, plastic_bottle_gallon, cardboard_box_01,
+  russian_food_cans_01                          (the bin)
+  rock_07, rock_09, moon_rock_01, moon_rock_02,
+  moon_rock_03, moon_rock_05                    (the lake and the volcano)
+  gothic_statue, bull_head, antique_estoc, antique_katana_01,
+  wooden_handle_saber, wooden_axe_02, hatchet   (the demon's realm)
+
+polar_bear/bear.glb
+  "Polar Bear" by kenchoo on Sketchfab, licensed CC BY 4.0
+  (https://creativecommons.org/licenses/by/4.0/)
+  https://sketchfab.com/3d-models/none-deeb7f4add9f4c36abaacdb73ce3e553
+  Changes: textures shrunk to 1024 px, the specular map removed; in the
+  game a jaw, teeth, tongue and eye glints are added to it in code.
+  Credited in the game under Chess Tactica > Settings > Credits.
+
+pizza/pizza.glb
+  "Pizza" by gatoperdido on Sketchfab, licensed CC BY 4.0
+  (https://creativecommons.org/licenses/by/4.0/)
+  https://sketchfab.com/3d-models/pizza-f1c67907a3d847f6a9d8a578314fc8cf
+  Changes: textures turned from PNG into JPEG; in the game it is scaled up
+  as the pizza monster's body, with eyes, brows, a mouth and arms added in
+  code. Credited in the game under Chess Tactica > Settings > Credits.

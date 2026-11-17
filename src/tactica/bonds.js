@@ -4,6 +4,7 @@
    show on the board as a glow and trim on your own characters. Saved on
    this device. */
 import { loadSetting, saveSetting } from "../utils/storage";
+import { loadStory, bondsOpen, redEyes } from "./story.js";
 
 export const BOND_KINDS = ["pawn", "knight", "bishop", "rook", "queen", "king"];
 export const KIND_NAMES = { pawn: "Pawn", knight: "Knight", bishop: "Bishop", rook: "Rook", queen: "Queen", king: "King" };
@@ -60,6 +61,14 @@ export function levelsOf(bonds) {
   return Object.fromEntries(BOND_KINDS.map((k) => [k, levelFor(bonds[k] ?? 0)]));
 }
 
+/** Dresses a scene for where the player stands with the pieces: their bond
+ *  looks (none while the bond is refused) and red eyes in hard mode. */
+export function applyStory(scene) {
+  const story = loadStory();
+  scene.setBonds(bondsOpen(story) ? levelsOf(loadBonds()) : {});
+  scene.setRedEyes(redEyes(story));
+}
+
 export function loadBonds() {
   const saved = loadSetting(KEY, {});
   return saved && typeof saved === "object" ? saved : {};
@@ -70,7 +79,8 @@ export function loadBonds() {
 export function recordMove(type, { capture = false, final = false } = {}) {
   const kind = kindOfType(type);
   const bonds = loadBonds();
-  if (!kind) return { bonds, kind: null, levelUp: null };
+  /* No bond grows while the bond is refused. */
+  if (!kind || !bondsOpen(loadStory())) return { bonds, kind: null, levelUp: null };
   const res = award(bonds, kind, xpForMove({ capture, final }));
   saveSetting(KEY, res.bonds);
   return { bonds: res.bonds, kind, levelUp: res.levelUp };

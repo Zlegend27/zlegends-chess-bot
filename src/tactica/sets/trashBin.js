@@ -5,6 +5,9 @@
    list. */
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { play as playSound } from "../sound.js";
+import { buildPizzaMonster } from "./pizzaMonster.js";
+import { dress, sky, prop } from "./art.js";
 
 const BIN_R = 10.5, BIN_BOTTOM = -4.2, BIN_TOP = 12;
 const HOLE = new THREE.Vector3(-1.4, 5.4, -BIN_R + 0.45);
@@ -77,7 +80,9 @@ function buildWall() {
     p.setX(i, Math.sin(th) * r); p.setZ(i, Math.cos(th) * r);
   }
   geo.computeVertexNormals();
-  const mat = new THREE.MeshStandardMaterial({ map: wallTexture(), metalness: 0.55, roughness: 0.6, side: THREE.BackSide });
+  const mat = new THREE.MeshStandardMaterial({ map: wallTexture(), metalness: 0.45, roughness: 0.7, side: THREE.BackSide });
+  /* Rusty corrugated iron, laid on when it arrives (the drawn one stands in). */
+  dress(mat, "bin", "wall", { repeat: [10, 4], normal: 1.6, tint: "#d8c8b8" });
   const wall = new THREE.Mesh(geo, mat);
   wall.receiveShadow = true;
   const floor = new THREE.Mesh(new THREE.CircleGeometry(BIN_R, 64), new THREE.MeshStandardMaterial({ color: "#1b1712", roughness: 1 }));
@@ -256,7 +261,7 @@ function rubbishMaterials() {
     plainPaper: new THREE.MeshStandardMaterial({ color: "#efeadf", roughness: 0.95, ...flat }),
     card: new THREE.MeshStandardMaterial({ map: cardboardTexture(), roughness: 0.95 }),
     cans: [["#b3141e", "#f2f2f2"], ["#1d4f9c", "#9fd0ff"], ["#1f7a3a", "#e6d34a"], ["#2a2a2a", "#e0592a"]].map(([b, s], i) =>
-      new THREE.MeshStandardMaterial({ map: canTexture(b, s, 40 + i), metalness: 0.75, roughness: 0.38 })),
+      new THREE.MeshStandardMaterial({ map: canTexture(b, s, 40 + i), color: "#a8a097", metalness: 0.6, roughness: 0.45 })),
     tin: new THREE.MeshStandardMaterial({ color: "#c9ced3", metalness: 0.9, roughness: 0.3 }),
     glassGreen: new THREE.MeshStandardMaterial({ color: "#2e6a3a", roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.72 }),
     glassBrown: new THREE.MeshStandardMaterial({ color: "#5a3414", roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.78 }),
@@ -271,8 +276,8 @@ function rubbishMaterials() {
     eggshell: new THREE.MeshStandardMaterial({ color: "#efe6d8", roughness: 0.7, side: THREE.DoubleSide }),
     core: new THREE.MeshStandardMaterial({ color: "#e9d8a6", roughness: 0.8 }),
     rot: new THREE.MeshStandardMaterial({ color: "#6b4a22", roughness: 0.8 }),
-    foilPacket: new THREE.MeshStandardMaterial({ color: "#d63a8a", metalness: 0.6, roughness: 0.3, ...flat }),
-    foilPacket2: new THREE.MeshStandardMaterial({ color: "#f0b21f", metalness: 0.6, roughness: 0.3, ...flat }),
+    foilPacket: new THREE.MeshStandardMaterial({ color: "#7a3550", metalness: 0.5, roughness: 0.42 }),
+    foilPacket2: new THREE.MeshStandardMaterial({ color: "#9a7a2a", metalness: 0.5, roughness: 0.42 }),
     shopBag: new THREE.MeshStandardMaterial({ color: "#f4f4f4", roughness: 0.35, transparent: true, opacity: 0.82, side: THREE.DoubleSide, ...flat }),
     spill: new THREE.MeshStandardMaterial({ color: "#2a1608", roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.85 }),
   };
@@ -488,6 +493,26 @@ function fillWithRubbish(set) {
   });
 }
 
+/* Photographed rubbish (Poly Haven), laid on as it loads: behind the board
+   and out to the sides, where tall things may stand. [model, size, x, z,
+   turn, lying on its side] */
+const REAL_RUBBISH = [
+  ["trashbag", 5.4, -6.2, -5.8, 0.4],
+  ["trashbag", 4.8, 6.8, -5.2, 2.1],
+  ["cardboard_box_01", 4.6, -7.9, -0.6, 0.5],
+  ["plastic_bottle_gallon", 4.2, 4.2, -7.6, 0.9],
+  ["can_rusted", 2.7, -2.6, -7.9, 0.3],
+  ["can_rusted", 2.7, 7.9, 1.6, 1.2, true],
+  ["russian_food_cans_01", 1.7, 1.4, -7.3, 0],
+  ["russian_food_cans_01", 1.7, -7.4, 3.4, 2],
+];
+function placeRealRubbish(ts, set) {
+  for (const [id, size, x, z, turn, lying] of REAL_RUBBISH) {
+    const y = moundHeight(x, z) + (lying ? size * 0.4 : -0.1);
+    prop(ts, set, id, { size, at: [x, y, z], rot: lying ? [0, turn, Math.PI / 2] : [0.08, turn, -0.06], tint: "#b8b0a6" });
+  }
+}
+
 /* The flattened pizza box the board rests on, grease stains and all. */
 function pizzaBox() {
   const top = canvasTexture(512, 512, (g, w, h) => {
@@ -607,7 +632,7 @@ function buildHole(scene, target) {
     dustGeo.attributes.position.needsUpdate = true;
   };
   scene.add(group);
-  return { updateDust, light };
+  return { updateDust, light, shaftMat, glow, dust };
 }
 
 /* A housefly: dark iridescent body, red eyes, two see-through wings that
@@ -678,13 +703,95 @@ function buildFlies(scene, count = 7) {
   };
 }
 
+/* Snow, for the bin's last two floors: the lid is open, so cold daylight
+   falls straight down, snow drifts in on a light wind and has settled on
+   the board's frame, the pizza box and the garbage. Built the first time
+   it's needed. Returns { group, light, update(t, dt) }. */
+function buildSnow() {
+  const group = new THREE.Group();
+  const r = rng(71);
+  /* Falling flakes. */
+  const N = 1500, TOP = 11, SPREAD = 9.5;
+  const pos = new Float32Array(N * 3), flakes = [];
+  for (let i = 0; i < N; i++) {
+    const a = r() * Math.PI * 2, d = Math.sqrt(r()) * SPREAD;
+    flakes.push({ x: Math.sin(a) * d, z: Math.cos(a) * d, y: r() * TOP, fall: 0.5 + r() * 0.9, sway: 0.15 + r() * 0.35, ph: r() * 6.28 });
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  const flakeTex = canvasTexture(32, 32, (g, w) => {
+    const grad = g.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2);
+    grad.addColorStop(0, "rgba(255,255,255,1)"); grad.addColorStop(0.5, "rgba(255,255,255,0.7)"); grad.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = grad; g.fillRect(0, 0, w, w);
+  });
+  const points = new THREE.Points(geo, new THREE.PointsMaterial({ map: flakeTex, size: 0.085, transparent: true, depthWrite: false, color: "#dfe8f6", opacity: 0.8 }));
+  points.frustumCulled = false;
+  group.add(points);
+
+  /* Settled snow: soft white mounds, one draw call. Along the board's frame
+     (never on a square), on the pizza box round it, and in drifts on the
+     garbage. */
+  const spots = [];
+  for (let i = 0; i < 46; i++) {
+    const along = (r() - 0.5) * 8.6, edge = 4.18 + r() * 0.12, side = Math.floor(r() * 4);
+    const x = side === 0 ? along : side === 1 ? along : side === 2 ? edge : -edge;
+    const z = side === 0 ? edge : side === 1 ? -edge : along;
+    spots.push({ x, y: 0.0, z, s: 0.16 + r() * 0.14, flat: 0.45 });
+  }
+  for (let i = 0; i < 60; i++) {
+    const a = r() * Math.PI * 2, d = 4.6 + r() * 0.5;
+    spots.push({ x: Math.sin(a) * d * 1.02, y: -0.42, z: Math.cos(a) * d * 1.02, s: 0.22 + r() * 0.22, flat: 0.3 });
+  }
+  for (let i = 0; i < 120; i++) {
+    const a = r() * Math.PI * 2, d = 5.6 + r() * 4.2;
+    const x = Math.sin(a) * d, z = Math.cos(a) * d;
+    spots.push({ x, y: moundHeight(x, z), z, s: 0.4 + r() * 0.6, flat: 0.28 });
+  }
+  const snowMat = new THREE.MeshStandardMaterial({ color: "#dfe5ec", roughness: 1, metalness: 0, envMapIntensity: 0.2 });
+  dress(snowMat, "bin", "snow", { maps: ["diff", "nor"], repeat: 0.5, tint: "#e2e8ee" });
+  const drifts = new THREE.InstancedMesh(crumple(new THREE.SphereGeometry(1, 12, 8), 0.12, 83), snowMat, spots.length);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
+  spots.forEach((p, i) => {
+    e.set(0, r() * 6.28, 0);
+    m.compose(new THREE.Vector3(p.x, p.y, p.z), q.setFromEuler(e), new THREE.Vector3(p.s * (0.9 + r() * 0.5), p.s * p.flat, p.s * (0.9 + r() * 0.5)));
+    drifts.setMatrixAt(i, m);
+  });
+  drifts.receiveShadow = true;
+  group.add(drifts);
+
+  /* Cold daylight from the open top, casting the pieces' shadows down. */
+  const light = new THREE.DirectionalLight("#dbe8ff", 0.9);
+  light.position.set(2.5, 12, 3.5);
+  light.castShadow = true;
+  light.shadow.mapSize.set(1024, 1024);
+  Object.assign(light.shadow.camera, { left: -7, right: 7, top: 7, bottom: -7, near: 2, far: 24 });
+  light.shadow.bias = -0.0006;
+  light.shadow.normalBias = 0.02;
+  group.add(light, light.target);
+
+  const update = (t, dt) => {
+    for (let i = 0; i < N; i++) {
+      const f = flakes[i];
+      f.y -= f.fall * dt;
+      if (f.y < -0.6) f.y += TOP;
+      pos[i * 3] = f.x + Math.sin(t * 0.6 + f.ph) * f.sway + t * 0.0;
+      pos[i * 3 + 1] = f.y;
+      pos[i * 3 + 2] = f.z + Math.cos(t * 0.45 + f.ph) * f.sway;
+    }
+    geo.attributes.position.needsUpdate = true;
+  };
+  return { group, update };
+}
+
 export function dressTrashBin(ts) {
   const scene = ts.scene;
   /* Dark inside the bin: dim the scene's own lights and reflections. */
   scene.background = new THREE.Color("#060507");
   scene.fog = new THREE.FogExp2("#060507", 0.022);
-  /* Enough room reflection for the polish to catch light on dark wood. */
+  /* Enough room reflection for the polish to catch light on dark wood, from
+     a real dim garage once it has loaded. */
   scene.environmentIntensity = 0.32;
+  sky(ts, "bin");
   scene.traverse((o) => {
     if (o.isHemisphereLight) o.intensity = 0.3;
     else if (o.isDirectionalLight) o.intensity *= 0.12;
@@ -717,12 +824,26 @@ export function dressTrashBin(ts) {
   const set = new THREE.Group();
   set.add(buildWall(), buildMound(), pizzaBox());
   fillWithRubbish(set);
+  placeRealRubbish(ts, set);
   scene.add(set);
   /* The stronger room reflections are for the pieces' polish; the bin and
      its rubbish keep the dim reflections they had, so the bin stays dark. */
   set.traverse((o) => { if (o.isMesh && o.material && "envMapIntensity" in o.material) o.material.envMapIntensity = 0.35; });
   const hole = buildHole(scene, new THREE.Vector3(0.3, 0, 0.8));
-  const flies = buildFlies(scene);
+  const flyGroup = new THREE.Group();
+  scene.add(flyGroup);
+  const flies = buildFlies(flyGroup);
+  /* The bin's look: warm, with the light through the hole glowing. */
+  const BIN_LOOK = { glow: 0.38, glowFrom: 1.0, vignette: 0.5, tint: "#fff3e4" };
+  const SNOW_LOOK = { glow: 0.2, glowFrom: 1.3, vignette: 0.45, tint: "#e6eeff" };
+  ts.setLook?.(BIN_LOOK);
+  const hemi = [];
+  scene.traverse((o) => { if (o.isHemisphereLight) hemi.push(o); });
+  /* From the bin's sixth floor something has woken in it: the air turns
+     sickly and the light through the hole gutters. */
+  const INTENSE_LOOK = { glow: 0.4, glowFrom: 1.0, vignette: 0.64, tint: "#eef2d2" };
+  let snow = null, snowing = false, intense = false, monster = null;
+  const look = () => ts.setLook?.(snowing ? SNOW_LOOK : intense ? INTENSE_LOOK : BIN_LOOK);
   /* Pieces cast shadows in the light from the hole; pieces added later
      (after a promotion, say) are picked up as they appear. */
   const castAll = () => {
@@ -738,8 +859,81 @@ export function dressTrashBin(ts) {
     update(dt) {
       t += dt;
       hole.updateDust(t);
-      flies(t, dt);
+      monster?.update(dt);
+      if (intense && !snowing) hole.light.intensity = 260 * (0.8 + 0.2 * Math.sin(t * 13) * Math.sin(t * 7.3));
+      if (snowing) snow.update(t, dt);
+      else flies(t, dt);
       castAll();
+    },
+    /** The harder second half of the bin (floors 6 to 10). */
+    setIntense(on) {
+      if (on === intense) return;
+      intense = on;
+      if (!on && !snowing) hole.light.intensity = 260;
+      look();
+      ts.wake?.();
+    },
+    /** Something hits the bin from outside: everything in it jumps. Resolves
+     *  when it has settled. */
+    jolt() {
+      playSound("punchHeavy", { volume: 1 });
+      playSound("rumble", { volume: 0.9 });
+      playSound("crack", { volume: 0.5, delay: 0.15 });
+      return new Promise((resolve) => ts.tween(1500, (k) => {
+        ts.shake = 0.3 * (1 - k);
+        set.position.y = Math.sin(k * 34) * 0.14 * (1 - k);
+        set.rotation.z = Math.sin(k * 21) * 0.012 * (1 - k);
+      }, () => { ts.shake = 0; set.position.y = 0; set.rotation.z = 0; resolve(); }));
+    },
+    /** The bin's sixth floor: something strikes the bin, everything jumps,
+     *  and two eyes show over the far edge, then sink away. */
+    async omen() {
+      await this.jolt();
+      this.setBoss(1);
+      await new Promise((r) => setTimeout(r, 2300));
+      this.setBoss(0);
+      await new Promise((r) => setTimeout(r, 700));
+    },
+    /** Where the camera looks for the omen. */
+    omenView: [[0, 2.6, 8.6], [0, 1.2, -5]],
+    /** Where the camera looks when the boss makes his entrance. */
+    bossView: [[0, 2.8, 9.2], [0, 2.2, -5]],
+    /** The pizza monster, made the first time he's needed. */
+    get monster() { monster ??= buildPizzaMonster(ts); return monster; },
+    /** How much of him shows: 0 none, 1 his eyes over the far edge, 2 risen. */
+    setBoss(level) {
+      if (level === 0 && !monster) return;
+      this.monster.setRise(level);
+      const k = level === 2 ? 0.25 : 1;
+      hole.shaftMat.uniforms.strength.value = 0.42 * k;
+      hole.glow.material.opacity = k;
+    },
+    /** How much light comes through the hole: 0 is the shut bin in the
+     *  dark (the opening), 1 is the bin as played in. */
+    setLight(k) {
+      hole.light.intensity = 260 * k;
+      hole.shaftMat.uniforms.strength.value = 0.42 * k;
+      hole.glow.material.opacity = k;
+      hole.dust.material.opacity = 0.8 * k;
+      fill.intensity = 60 * (0.12 + 0.88 * k);
+      ts.wake?.();
+    },
+    /** The bin's last two floors: the lid comes off and it snows. Daylight
+     *  from above takes over from the light through the hole, the dark lifts
+     *  to a cold grey, and the flies are gone. */
+    setSnow(on) {
+      if (on === snowing) return;
+      snowing = on;
+      if (on && !snow) { snow = buildSnow(); scene.add(snow.group); }
+      if (snow) snow.group.visible = on;
+      flyGroup.visible = !on;
+      hole.light.intensity = on ? 45 : 260;
+      fill.intensity = on ? 30 : 60;
+      for (const h of hemi) { h.intensity = on ? 0.42 : 0.3; h.color.set(on ? "#e6efff" : "#fff6ea"); }
+      scene.background = new THREE.Color(on ? "#141a24" : "#060507");
+      scene.fog = new THREE.FogExp2(on ? "#1b2330" : "#060507", on ? 0.03 : 0.022);
+      look();
+      ts.wake?.();
     },
   };
 }
@@ -762,6 +956,48 @@ function junkMaterials() {
     stain: new THREE.MeshBasicMaterial({ color: "#1a0e05", transparent: true, opacity: 0.55, depthWrite: false }),
   };
   return junkMats;
+}
+
+/* What blocks a square in the other worlds: a chunk of ice with snow on it,
+   a black rock with a glowing seam, a stone with a red rune. */
+let worldJunkKit = null;
+function worldJunk(seed, theme) {
+  worldJunkKit ??= {
+    ice: new THREE.MeshStandardMaterial({ color: "#bfe0f5", roughness: 0.12, metalness: 0.05, transparent: true, opacity: 0.88, flatShading: true }),
+    snow: new THREE.MeshStandardMaterial({ color: "#eef4fa", roughness: 1 }),
+    rock: new THREE.MeshStandardMaterial({ color: "#241a16", roughness: 1, flatShading: true }),
+    ember: new THREE.MeshBasicMaterial({ color: "#ff8a2a" }),
+    stone: new THREE.MeshStandardMaterial({ color: "#1c1820", roughness: 0.8, metalness: 0.2, flatShading: true }),
+    rune: new THREE.MeshBasicMaterial({ color: "#ff2a2a" }),
+  };
+  const K = worldJunkKit, r = rng(seed), g = new THREE.Group();
+  const lump = crumple(new THREE.IcosahedronGeometry(0.42, 1), 0.28, seed);
+  if (theme === "ice") {
+    const block = new THREE.Mesh(lump, K.ice);
+    block.scale.set(1, 0.85 + r() * 0.3, 1);
+    block.position.y = 0.32;
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.34, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), K.snow);
+    cap.position.y = 0.6;
+    cap.scale.set(1, 0.45, 1);
+    g.add(block, cap);
+  } else if (theme === "volcano") {
+    const rock = new THREE.Mesh(lump, K.rock);
+    rock.position.y = 0.3;
+    const seam = new THREE.Mesh(new THREE.TorusGeometry(0.36, 0.025, 4, 18), K.ember);
+    seam.position.y = 0.3;
+    seam.rotation.set(Math.PI / 2 + (r() - 0.5) * 0.8, 0, r() * 3);
+    g.add(rock, seam);
+  } else {
+    const stone = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.38, 0.75, 6), K.stone);
+    stone.position.y = 0.37;
+    stone.rotation.z = (r() - 0.5) * 0.3;
+    const rune = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.32), K.rune);
+    rune.position.set(0, 0.42, 0.33);
+    g.add(stone, rune);
+  }
+  g.rotation.y = r() * Math.PI * 2;
+  g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  return g;
 }
 
 /** One piece of square-sized garbage, seeded so a level always looks the same. */
@@ -827,8 +1063,17 @@ function heapAssets() {
   };
   return heapKit;
 }
-/* Bin bag black, newsprint grey, cardboard brown, a dirty cream. */
-const HEAP_COLOURS = ["#1b1a1c", "#232125", "#8d8a82", "#7a5a34", "#cfc7b4"].map((c) => new THREE.Color(c));
+/* What closes in, by world: bin bags and rubbish, snow and ice, black rock
+   and cinders, dark stone. Two colours for the heaps, three for what's on top. */
+const HEAP_COLOURS = {
+  bin: ["#1b1a1c", "#232125", "#8d8a82", "#7a5a34", "#cfc7b4"],
+  ice: ["#dfeaf3", "#c9dbe8", "#9cc6e2", "#eef5fb", "#b7d3e8"],
+  volcano: ["#1d1513", "#2a1d18", "#ff7a2a", "#3a2a24", "#e0471a"],
+  demon: ["#141118", "#1d1922", "#3a2f3c", "#ff2a2a", "#2a2230"],
+};
+const heapColours = (theme) => (HEAP_COLOURS[theme] ?? HEAP_COLOURS.bin).map((c) => new THREE.Color(c));
+/* The light to reach, by world. */
+const LIGHT_COLOURS = { bin: ["255,240,200", "255,210,130", "255,230,180"], ice: ["225,245,255", "160,215,255", "200,235,255"], volcano: ["200,235,255", "120,190,255", "170,215,255"], demon: ["235,220,255", "190,150,255", "215,195,255"] };
 const DROP_S = 0.45;
 
 /** Puts garbage on `squares` and marks `light`, the square the light from the
@@ -836,10 +1081,12 @@ const DROP_S = 0.45;
  *  warn(squares), bury(squares), dispose() }; call update from everyFrame.
  *  warn() marks squares about to be buried (pulsing red); bury() drops a
  *  heap of garbage onto them. */
-export function placeEscapeProps(ts, squares, light) {
+export function placeEscapeProps(ts, squares, light, theme = "bin") {
   const group = new THREE.Group();
+  const colours = heapColours(theme);
+  const [lc0, lc1, lc2] = LIGHT_COLOURS[theme] ?? LIGHT_COLOURS.bin;
   for (const sq of squares) {
-    const junk = squareJunk(sq * 131 + 7);
+    const junk = theme === "bin" ? squareJunk(sq * 131 + 7) : worldJunk(sq * 131 + 7, theme);
     junk.position.copy(ts.worldOf(sq));
     group.add(junk);
   }
@@ -850,9 +1097,9 @@ export function placeEscapeProps(ts, squares, light) {
     glowCanvas.width = glowCanvas.height = 128;
     const c = glowCanvas.getContext("2d");
     const grad = c.createRadialGradient(64, 64, 0, 64, 64, 64);
-    grad.addColorStop(0, "rgba(255,240,200,1)");
-    grad.addColorStop(0.5, "rgba(255,210,130,0.5)");
-    grad.addColorStop(1, "rgba(255,200,120,0)");
+    grad.addColorStop(0, `rgba(${lc0},1)`);
+    grad.addColorStop(0.5, `rgba(${lc1},0.5)`);
+    grad.addColorStop(1, `rgba(${lc1},0)`);
     c.fillStyle = grad;
     c.fillRect(0, 0, 128, 128);
     const glowTex = new THREE.CanvasTexture(glowCanvas);
@@ -866,8 +1113,8 @@ export function placeEscapeProps(ts, squares, light) {
     colCanvas.width = 4; colCanvas.height = 128;
     const cc = colCanvas.getContext("2d");
     const vg = cc.createLinearGradient(0, 128, 0, 0);
-    vg.addColorStop(0, "rgba(255,230,180,0.85)");
-    vg.addColorStop(1, "rgba(255,230,180,0)");
+    vg.addColorStop(0, `rgba(${lc2},0.85)`);
+    vg.addColorStop(1, `rgba(${lc2},0)`);
     cc.fillStyle = vg;
     cc.fillRect(0, 0, 4, 128);
     const colTex = new THREE.CanvasTexture(colCanvas);
@@ -934,8 +1181,8 @@ export function placeEscapeProps(ts, squares, light) {
       const spin = squares.map((sq) => (sq * 2.399) % (Math.PI * 2));
       const size = squares.map((sq) => 0.85 + ((sq * 37) % 30) / 100);
       squares.forEach((sq, i) => {
-        heap.setColorAt(i, HEAP_COLOURS[(sq * 7) % 2]);
-        ball.setColorAt(i, HEAP_COLOURS[2 + ((sq * 5) % 3)]);
+        heap.setColorAt(i, colours[(sq * 7) % 2]);
+        ball.setColorAt(i, colours[2 + ((sq * 5) % 3)]);
       });
       heap.castShadow = ball.castShadow = true;
       heap.receiveShadow = true;

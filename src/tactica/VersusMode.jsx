@@ -11,7 +11,7 @@ import { dressTrashBin } from "./sets/trashBin";
 import { BrassButton, MapButton, MenuButton, PromotionPicker, useViewSource } from "./ui";
 import { track } from "../utils/track";
 import { play as playSound } from "./sound";
-import { loadBonds, levelsOf } from "./bonds";
+import { applyStory } from "./bonds";
 import { friendlySquares } from "./BotMode";
 
 /* 1v1 in the bin: a game against another person on the 3D board.
@@ -234,7 +234,7 @@ function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, on
       onView: (v) => viewSource.set(v),
     });
     sceneRef.current = scene;
-    scene.setBonds(levelsOf(loadBonds()));
+    applyStory(scene);
     const bin = dressTrashBin(scene);
     scene.everyFrame.push((dt) => bin.update(dt));
     scene.setFlipped(myColor === -1);

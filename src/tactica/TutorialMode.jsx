@@ -4,7 +4,7 @@ import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
 import { BrassButton, MapButton, MenuButton, useViewSource } from "./ui";
 import { play as playSound } from "./sound";
-import { loadBonds, levelsOf } from "./bonds";
+import { applyStory } from "./bonds";
 
 /* Chess Tactica tutorial: the controls, one step at a time, on a practice
    board in the bin. No story (that comes with the opening cutscene, which
@@ -24,7 +24,7 @@ const STEPS = [
   { id: "capture", title: "Attack", text: "A red square holds an enemy you can attack. Take one and watch your character's attack." },
   { id: "turn", title: "Turn the view", text: "Drag sideways across the map in the top corner to turn the view around your character." },
   { id: "map", title: "Back to the map", text: "Tap the map to see the whole board again. Tap a character to go back in close." },
-  { id: "done", title: "You're ready", text: "That's every control. Puzzles in Bin Run and Puzzle Rush Tactica are played exactly like this." },
+  { id: "done", title: "You're ready", text: "That's every control. Puzzles in Rogue Chess Run and Puzzle Rush Tactica are played exactly like this." },
 ];
 
 const sqOf = (sq120) => M120TO64[sq120];
@@ -103,7 +103,7 @@ export default function TutorialMode({ pieceImgSrc, sweetheart, onExit }) {
       onView: (v) => viewSource.set(v),
     });
     sceneRef.current = scene;
-    scene.setBonds(levelsOf(loadBonds()));
+    applyStory(scene);
     scene.setPieces(piecesNow());
     const bin = dressTrashBin(scene);
     scene.everyFrame.push((dt) => bin.update(dt));

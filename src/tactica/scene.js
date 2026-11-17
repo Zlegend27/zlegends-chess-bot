@@ -5,7 +5,12 @@
    can't be affected by anything drawn here. */
 import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import { woodTexture } from "./pieces/pawn.js";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
+import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
+import { woodTexture, makeMats } from "./pieces/pawn.js";
 import { KINDS, BUILD, clipsFor, reactionFor, attackEffects, PAWN_ATTACK_END } from "./pieces/attacks.js";
 import { play as playSound, ATTACK_CUES } from "./sound.js";
 
@@ -16,6 +21,21 @@ const PIECE_SCALE = 0.78;
 const TAP_HEIGHT = { pawn: 1.1, knight: 1.4, bishop: 1.55, rook: 1.25, queen: 1.65, king: 1.75 };
 /* The chess set's colours (Dubrovnik II): squares and the board frame. */
 export const SET_BOARD = { light: "#EED6B0", dark: "#8A5229", frame: "#5C3317" };
+/* The finishing pass over every frame: the picture darkens toward its
+   corners so the eye stays on the board, and takes a slight colour cast
+   from the world it's in (warm in the bin, cold in the snow). */
+const GRADE_SHADER = {
+  uniforms: { tDiffuse: { value: null }, vignette: { value: 0.45 }, tint: { value: new THREE.Color("#ffffff") }, contrast: { value: 1.06 } },
+  vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float vignette; uniform vec3 tint; uniform float contrast; varying vec2 vUv;
+    void main() {
+      vec4 c = texture2D(tDiffuse, vUv);
+      float edge = smoothstep(0.35, 0.95, length((vUv - 0.5) * vec2(1.0, 1.15)) * 1.25);
+      c.rgb *= tint * (1.0 - vignette * edge);
+      c.rgb = max(vec3(0.0), (c.rgb - 0.18) * contrast + 0.18);
+      gl_FragColor = c;
+    }`,
+};
 /* Idle breathing only needs about 30 frames a second. */
 const IDLE_FRAME_MS = 33;
 const SWIPE_PX = 50;
@@ -193,6 +213,7 @@ export class TacticaScene {
     this.hoverMark = new THREE.Group();
     this.colors = colors;
     this.frameTimes = [];
+    this.setupPost();
     this.buildBoard();
     this.scene.add(this.marks, this.hoverMark);
 
@@ -206,6 +227,38 @@ export class TacticaScene {
     this.lastFrame = performance.now();
     this.loop = this.loop.bind(this);
     requestAnimationFrame(this.loop);
+  }
+
+  /** The finishing passes: bright things glow (the light through the hole,
+   *  lava, lightning, glowing squares), then the grade above. If the phone
+   *  can't set this up, or later can't keep up (see adaptResolution), the
+   *  scene is drawn plainly, as it always was. */
+  setupPost() {
+    this.post = false;
+    try {
+      const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 });
+      this.composer = new EffectComposer(this.renderer, target);
+      this.composer.addPass(new RenderPass(this.scene, this.camera));
+      this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.45, 0.7, 0.9);
+      this.composer.addPass(this.bloom);
+      this.grade = new ShaderPass(GRADE_SHADER);
+      this.composer.addPass(this.grade);
+      this.composer.addPass(new OutputPass());
+      this.post = true;
+    } catch {
+      this.composer = null;
+    }
+  }
+
+  /** A world's look: how much bright things glow, how dark the corners go,
+   *  and the colour cast. Anything left out keeps its value. */
+  setLook({ glow, glowFrom, vignette, tint } = {}) {
+    if (!this.composer) return;
+    if (glow != null) this.bloom.strength = glow;
+    if (glowFrom != null) this.bloom.threshold = glowFrom;
+    if (vignette != null) this.grade.uniforms.vignette.value = vignette;
+    if (tint != null) this.grade.uniforms.tint.value.set(tint);
+    this.wake();
   }
 
   /** The square under a world point, or null off the board. */
@@ -316,6 +369,26 @@ export class TacticaScene {
     this.wake();
   }
 
+  /** Hard mode: the player's own characters have glowing red eyes. */
+  setRedEyes(on) {
+    this.redEyes = !!on;
+    for (const entry of this.pieces.values()) this.decorate(entry);
+    this.wake();
+  }
+
+  /** Gives a character its eyes for the mode: red and glowing for the
+   *  player's side in hard mode (or for anyone, with `force`), its own
+   *  otherwise. */
+  paintEyes(entry, force = false) {
+    const red = force || (this.redEyes && entry.colour === this.nearColour);
+    const own = makeMats(entry.colour).iris;
+    this.redIris ??= new THREE.MeshStandardMaterial({ color: "#ff3a22", emissive: "#ff2010", emissiveIntensity: 4, roughness: 0.4 });
+    entry.model.traverse((o) => {
+      if (!o.isMesh || (o.material !== own && o.material !== this.redIris)) return;
+      o.material = red ? this.redIris : own;
+    });
+  }
+
   /** Shared meshes' geometry and materials for the bond looks, made once. */
   bondAssets() {
     if (this.bondKit) return this.bondKit;
@@ -358,11 +431,22 @@ export class TacticaScene {
   /** Puts a character's bond look on it, or takes it off: only the player's
    *  side shows bonds, so this runs again when the board turns. */
   decorate(entry) {
+    this.paintEyes(entry);
     for (const part of entry.bondParts ?? []) part.removeFromParent();
     entry.bondParts = [];
+    const kit = this.bondAssets();
+    /* Hard mode: the player's own characters are seen from behind, where
+       their red eyes don't show, so a red glow burns at their feet too. */
+    if (this.redEyes && entry.colour === this.nearColour) {
+      this.redGlow ??= new THREE.MeshBasicMaterial({ map: kit.glow[2].map, color: "#ff2a12", transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.75 });
+      const ember = new THREE.Mesh(kit.glowGeometry, this.redGlow);
+      ember.position.y = 0.03;
+      ember.renderOrder = 1;
+      entry.group.add(ember);
+      entry.bondParts.push(ember);
+    }
     const level = entry.colour === this.nearColour ? this.bonds?.[entry.kind] ?? 1 : 1;
     if (level < 2) return;
-    const kit = this.bondAssets();
     const glow = new THREE.Mesh(kit.glowGeometry, kit.glow[level]);
     glow.position.y = 0.025;
     glow.renderOrder = 1;
@@ -702,6 +786,13 @@ export class TacticaScene {
   }
 
   /** Strategic view: the whole board. */
+  /** Makes room in the whole-board view for a boss (0 none, 1 full). */
+  setBossRoom(k) {
+    if ((this.bossRoom ?? 0) === k) return;
+    this.bossRoom = k;
+    if (this.inBoardView) this.showBoard();
+  }
+
   showBoard() {
     if (this.holdCamera(() => this.showBoard())) return;
     /* The whole-board view always faces the board from the player's side. */
@@ -718,7 +809,11 @@ export class TacticaScene {
    *  (frame included) fit across the screen and between the bars at the top
    *  and bottom, so a narrow phone doesn't cut the near corners off. */
   boardFit() {
-    const look = new THREE.Vector3(0, 0, 0.6);
+    /* With a boss standing over the board (`bossRoom` 1), the view looks
+       further back and keeps the board in the lower part of the screen, so
+       he is in the picture too. */
+    const lift = this.bossRoom ?? 0;
+    const look = new THREE.Vector3(0, lift * 1.4, 0.6 - lift * 3.2);
     const away = new THREE.Vector3(0, 11, 8).sub(look);
     const probe = this.probe ??= new THREE.PerspectiveCamera();
     probe.fov = this.camera.fov; probe.aspect = this.camera.aspect; probe.near = 0.1; probe.far = 100;
@@ -732,7 +827,7 @@ export class TacticaScene {
       probe.updateMatrixWorld();
       const fits = corners.every((c) => {
         const p = c.clone().project(probe);
-        return Math.abs(p.x) <= 0.95 && p.y >= -0.8 && p.y <= 0.74;
+        return Math.abs(p.x) <= 0.95 && p.y >= -0.8 && p.y <= 0.74 - lift * 0.5;
       });
       if (fits) break;
     }
@@ -1612,6 +1707,10 @@ export class TacticaScene {
     const w = parent.clientWidth, h = parent.clientHeight;
     if (!w || !h) return;
     this.renderer.setSize(w, h, false);
+    if (this.composer) {
+      this.composer.setPixelRatio(this.renderer.getPixelRatio());
+      this.composer.setSize(w, h);
+    }
     this.camera.aspect = w / h;
     this.camera.fov = w < h ? 62 : 45;
     this.camera.updateProjectionMatrix();
@@ -1622,9 +1721,11 @@ export class TacticaScene {
 
   /** Keeps motion smooth on slower phones: if frames while something moves
    *  average slower than about 40 a second, the 3D view renders at a lower
-   *  resolution, a step at a time down to 1x; with plenty of headroom it
-   *  steps back up toward the screen's own. Checked every ~1.5 seconds of
-   *  motion, never more than once every 3 seconds. */
+   *  resolution, a step at a time down to 1x; if it is still slow there, the
+   *  finishing passes (glow and grade) are dropped for the rest of the
+   *  visit. With plenty of headroom the resolution steps back up toward the
+   *  screen's own. Checked every ~1.5 seconds of motion, never more than
+   *  once every 3 seconds. */
   adaptResolution(dt, now) {
     const a = (this.adapt ??= { sum: 0, n: 0, changedAt: 0, max: Math.min(window.devicePixelRatio || 1, 2) });
     a.sum += dt;
@@ -1638,7 +1739,10 @@ export class TacticaScene {
     let next = ratio;
     if (avg > 25 && ratio > 1) next = Math.max(1, ratio - 0.25);
     else if (avg < 15 && ratio < a.max) next = Math.min(a.max, ratio + 0.25);
-    if (next === ratio) return;
+    if (next === ratio) {
+      if (avg > 25 && ratio <= 1 && this.post) { this.post = false; a.changedAt = now; }
+      return;
+    }
     a.changedAt = now;
     this.renderer.setPixelRatio(next);
     this.resize();
@@ -1648,7 +1752,7 @@ export class TacticaScene {
   stats() {
     const times = this.frameTimes;
     const avg = times.length ? times.reduce((a, b) => a + b, 0) / times.length : 0;
-    return { fps: avg ? Math.round(1000 / avg) : null, pixelRatio: this.renderer.getPixelRatio() };
+    return { fps: avg ? Math.round(1000 / avg) : null, pixelRatio: this.renderer.getPixelRatio(), post: this.post };
   }
 
   /* Draws only while something is changing, to spare phone batteries. Set
@@ -1709,7 +1813,8 @@ export class TacticaScene {
       this.camera.lookAt(this.camLook);
       this.updateFades(since);
       this.reportView();
-      this.renderer.render(this.scene, this.camera);
+      if (this.post) this.composer.render();
+      else this.renderer.render(this.scene, this.camera);
       if (busy && dt < 200) this.adaptResolution(dt, now);
     }
     this.lastFrame = now;
@@ -1726,6 +1831,7 @@ export class TacticaScene {
     this.canvas.removeEventListener("pointercancel", this.onCancel);
     this.canvas.removeEventListener("lostpointercapture", this.onLostCapture);
     this.canvas.removeEventListener("webglcontextlost", this.onLostEvent);
+    this.composer?.dispose();
     this.renderer.dispose();
     /* Hand the WebGL context back now rather than whenever the browser gets
        round to it: phones allow only a few at once, and every screen makes

@@ -8,7 +8,7 @@ import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
 import { BrassButton, MapButton, MenuButton, PromotionPicker, useViewSource } from "./ui";
 import { play as playSound } from "./sound";
-import { loadBonds, levelsOf } from "./bonds";
+import { applyStory } from "./bonds";
 
 /* Regular Chess in the bin: a full game on the 3D board against the site's own
    bots (the 1000, 1500 and 2000 Elo Stockfish levels and the homemade
@@ -143,7 +143,7 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
       onView: (v) => viewSource.set(v),
     });
     sceneRef.current = scene;
-    scene.setBonds(levelsOf(loadBonds()));
+    applyStory(scene);
     const bin = dressTrashBin(scene);
     scene.everyFrame.push((dt) => bin.update(dt));
     eng.reset();

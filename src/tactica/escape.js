@@ -1,4 +1,4 @@
-/* Escape to the light: the Bin Run's bonus floor, after floors 3, 8, 13...
+/* Escape to the light: the Rogue Chess Run's bonus floor, after a world's third and eighth floors.
    One or two of your characters must reach the square lit by the hole in
    the bin before the garbage closes in. Garbage sits on some squares and
    blocks moves like a wall (a knight still jumps it). As the timer runs,

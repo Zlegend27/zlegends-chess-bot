@@ -1,0 +1,23 @@
+Chess Tactica textures and skies
+
+Every file in this folder is public domain (CC0 1.0), downloaded at 1K
+size by scripts/fetch-tactica-art.mjs:
+
+Poly Haven (polyhaven.com), CC0
+  bin/wall_*        rusty_corrugated_iron
+  bin/snow_*        snow_02
+  bin/sky.hdr       abandoned_garage
+  ice/snow_*        snow_02
+  ice/cliff_*       marble_cliff_01
+  ice/sky.hdr       snow_field_2_puresky
+  volcano/ground_*  burned_ground_01
+  volcano/rock_*    rock_face_03
+  volcano/sky.hdr   industrial_sunset_puresky
+  demon/floor_*     castle_wall_slates
+  demon/pillar_*    castle_brick_07
+  demon/armor_*     metal_plate_02
+  demon/sky.hdr     qwantani_night_puresky
+
+ambientCG (ambientcg.com), CC0
+  ice/ice_*         Ice002
+  volcano/lava_*    Lava004

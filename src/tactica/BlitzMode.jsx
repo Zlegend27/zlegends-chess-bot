@@ -10,7 +10,8 @@ import { BrassButton } from "./ui";
 import { play as playSound } from "./sound";
 import { track } from "../utils/track";
 import { submitRushScore, TACTICA_RUSH_SECONDS } from "../utils/leaderboard";
-import { loadBonds, levelsOf, recordMove, levelUpText } from "./bonds";
+import { levelsOf, recordMove, levelUpText, applyStory } from "./bonds";
+import { poolNear, expandPuzzle, warmPool } from "./puzzlePool";
 
 /* Puzzle Rush Tactica: three minutes to solve as many puzzles as you can.
    Puzzles start easy and climb. A wrong move costs time and ends the combo;
@@ -29,11 +30,20 @@ const KNIGHT = 2, QUEEN = 5;
 const sqOf = (sq120) => M120TO64[sq120];
 
 /** A puzzle near `rating` not used this game, preferring ones not seen in
- *  recent Blitz games (remembered on this device), so games don't repeat. */
-function pickPuzzle(rating, used) {
+ *  recent games (remembered on this device), so games don't repeat. It comes
+ *  from the big pool, or from the small set bundled with the site if that
+ *  can't be fetched. */
+async function pickPuzzle(rating, used) {
   const saved = loadSetting("tacticaBlitzSeen", []);
   const seen = Array.isArray(saved) ? saved : [];
-  const p = pickFrom(PUZZLES, rating, used, null, Math.random, { seen });
+  const big = await poolNear(rating);
+  let p = null;
+  for (let tries = 0; big.length && !p && tries < 4; tries++) {
+    const row = pickFrom(big, rating, used, null, Math.random, { seen });
+    p = expandPuzzle(row);
+    if (!p) used.add(row.id);
+  }
+  p ??= pickFrom(PUZZLES, rating, used, null, Math.random, { seen });
   saveSetting("tacticaBlitzSeen", rememberSeen(seen, [p.id]));
   return p;
 }
@@ -88,6 +98,9 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
     return list;
   };
 
+  /* The first puzzles start loading as soon as the mode opens. */
+  useEffect(() => { warmPool(START_RATING); }, []);
+
   /* The scene, in the bin, seen whole. */
   useEffect(() => {
     const scene = new TacticaScene(canvasRef.current, {
@@ -102,7 +115,7 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
       onDrop: (sq) => dropRef.current(sq),
     });
     sceneRef.current = scene;
-    scene.setBonds(levelsOf(loadBonds()));
+    applyStory(scene);
     const bin = dressTrashBin(scene);
     scene.everyFrame.push((dt) => bin.update(dt));
     scene.setPieces([]);
@@ -110,9 +123,12 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
     return () => { scene.dispose(); sceneRef.current = null; };
   }, [sweetheart]);
 
-  /** Sets up the next puzzle, about RATING_STEP harder than the last. */
-  const loadNext = (solvedCount) => {
-    const next = pickPuzzle(START_RATING + solvedCount * RATING_STEP, usedRef.current);
+  /** Sets up the next puzzle, about RATING_STEP harder than the last. The
+   *  enemy's opening move isn't shown here: this mode is against the clock. */
+  const loadNext = async (solvedCount) => {
+    const game = gameIdRef.current;
+    const next = await pickPuzzle(START_RATING + solvedCount * RATING_STEP, usedRef.current);
+    if (game !== gameIdRef.current) return;
     usedRef.current.add(next.id);
     eng.loadFen(next.fen);
     setPuzzle(next);
@@ -241,7 +257,7 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
         }
         else say("good", bondNote ?? "Solved");
         await new Promise((r) => setTimeout(r, NEXT_PUZZLE_MS));
-        if (game === gameIdRef.current && deadlineRef.current - performance.now() > 0) loadNext(newScore);
+        if (game === gameIdRef.current && deadlineRef.current - performance.now() > 0) await loadNext(newScore);
         return;
       }
       await new Promise((r) => setTimeout(r, REPLY_DELAY_MS));

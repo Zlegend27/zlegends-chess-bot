@@ -6,6 +6,8 @@ import { BOND_KINDS, KIND_NAMES, LOOKS, MAX_LEVEL, loadBonds, levelsOf, progress
 import { Medal } from "./ui";
 import { cburnettPieceSvgUrl } from "../utils/cburnettPieceSvg";
 import { soundOn, setSoundOn, onSoundChange } from "./sound";
+import { loadSetting } from "../utils/storage";
+import { loadStory, saveStory, bondsOpen, redEyes, isHard, hardLocked, canSwitchHard, setHardSwitch, resetBond } from "./story";
 
 /* Chess Tactica's front screen: the title and the modes over a standoff in
    the bin. One of your pawns faces the enemy queen, king and knight,
@@ -14,18 +16,25 @@ import { soundOn, setSoundOn, onSoundChange } from "./sound";
    has grown. */
 const PAWN = 28, QUEEN_SQ = 35, KING_SQ = 36, KNIGHT_SQ = 37; // e4 against d5, e5, f5
 const CIRCLE_SPEED = 0.08; // radians per second
-/* The modes, then Exit. Bonds is the round button in the top corner. */
+/* The modes, then Exit. Bonds and Settings are the round buttons in the
+   top corners; Settings holds sound, hard mode, and asking the bond
+   question again. */
 const MODES = [
-  { id: "run", name: "Bin Run", piece: 4 },
+  { id: "run", name: "Rogue Chess Run", piece: 4 },
   { id: "blitz", name: "Puzzle Rush Tactica", piece: 2 },
   { id: "bot", name: "Regular Chess", piece: 6 },
   { id: "versus", name: "1v1", piece: 5 },
   { id: "tutorial", name: "Tutorial", piece: 1 },
 ];
 
-export default function MenuScreen({ onPick, onExit, blitzBest, sweetheart }) {
+export default function MenuScreen({ onPick, onExit, onOpening, blitzBest, sweetheart }) {
   const canvasRef = useRef(null);
-  const [page, setPage] = useState("modes"); // modes | bonds
+  const [page, setPage] = useState("modes"); // modes | bonds | settings
+  const [story, setStory] = useState(loadStory);
+  const change = (next) => setStory(saveStory(next));
+  /* The furthest world reached in the run (0 is the bin). */
+  const reached = Number(loadSetting("tacticaRunReached", 0)) || 0;
+  const [confirmReset, setConfirmReset] = useState(false);
   const [bonds] = useState(loadBonds);
   const [sound, setSound] = useState(soundOn);
   useEffect(() => onSoundChange(setSound), []);
@@ -38,7 +47,8 @@ export default function MenuScreen({ onPick, onExit, blitzBest, sweetheart }) {
         highlight: "#3EE7F5", target: "#F5D93E", attack: "#F05348", select: "#3EE7F5",
       },
     });
-    scene.setBonds(levelsOf(bonds));
+    scene.setBonds(bondsOpen(story) ? levelsOf(bonds) : {});
+    scene.setRedEyes(redEyes(story));
     scene.setPieces([
       { sq: PAWN, type: 1, white: true },
       { sq: QUEEN_SQ, type: 5, white: false },
@@ -59,7 +69,7 @@ export default function MenuScreen({ onPick, onExit, blitzBest, sweetheart }) {
       scene.everyFrame.push((dt) => scene.spinBy(dt * CIRCLE_SPEED));
     }
     return () => { stop(); scene.dispose(); };
-  }, [sweetheart, bonds]);
+  }, [sweetheart, bonds, story]);
 
   return (
     <div className="relative mx-auto w-full max-w-[480px] overflow-hidden" style={{ height: "calc(100dvh - var(--headerH))" }}>
@@ -68,21 +78,16 @@ export default function MenuScreen({ onPick, onExit, blitzBest, sweetheart }) {
       <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/70 to-transparent px-16 pt-7 pb-14 text-center">
         <h1 className="tc-title m-0 leading-tight whitespace-nowrap" style={{ fontSize: "clamp(22px, calc((100vw - 136px) / 10), 32px)" }}>Chess Tactica</h1>
       </div>
-      {/* Sound on and off, in the other top corner. */}
+      {/* Settings (sound, hard mode, the bond) behind a cog in the other top corner. */}
       <button
         type="button"
         className="tc-round absolute top-3 left-3"
-        onClick={() => setSoundOn(!sound)}
-        aria-label={sound ? "Turn sound off" : "Turn sound on"}
-        aria-pressed={sound}
-        title={sound ? "Sound on" : "Sound off"}
+        onClick={() => setPage((p) => (p === "settings" ? "modes" : "settings"))}
+        aria-label="Settings"
+        aria-pressed={page === "settings"}
+        title="Settings"
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
-          <path fill="currentColor" d="M3 9h4l5-4v14l-5-4H3z" />
-          {sound
-            ? <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" />
-            : <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" d="M16 9l6 6M22 9l-6 6" />}
-        </svg>
+        <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7 7 0 0 0-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.48.48 0 0 0-.48.41l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.87a.48.48 0 0 0 .12.61l2.03 1.58c-.05.3-.07.63-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61zM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2z" /></svg>
       </button>
       {/* Bonds: a round wood and brass button in the top corner. */}
       <button
@@ -114,6 +119,58 @@ export default function MenuScreen({ onPick, onExit, blitzBest, sweetheart }) {
             Exit
           </button>
         </nav>
+      ) : page === "settings" ? (
+        <section aria-labelledby="tacticaSettingsTitle" className="absolute inset-x-0 bottom-0 flex max-h-[82%] flex-col gap-3 overflow-y-auto bg-gradient-to-t from-black/95 via-black/80 to-transparent px-4 pt-16 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+          <h2 id="tacticaSettingsTitle" className="tc-title m-0 text-2xl">Settings</h2>
+          <div className="tc-panel flex flex-col gap-4 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <span className="tc-display text-sm">Sound</span>
+              <button type="button" className="tc-plank tc-center tc-small" style={{ width: 96 }} aria-pressed={sound} onClick={() => setSoundOn(!sound)}>{sound ? "On" : "Off"}</button>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between gap-3">
+                <span className="tc-display text-sm">Hard mode</span>
+                <button
+                  type="button" className="tc-plank tc-center tc-small" style={{ width: 96 }}
+                  aria-pressed={isHard(story)}
+                  disabled={hardLocked(story) || !canSwitchHard(reached)}
+                  onClick={() => change(setHardSwitch(story, !story.hardSwitch))}
+                >{isHard(story) ? "On" : "Off"}</button>
+              </div>
+              <p className="m-0 text-xs text-[var(--tc-cream-dim)]">
+                {hardLocked(story)
+                  ? "You refused the bond, so hard mode stays on until you beat the run or ask the question again."
+                  : canSwitchHard(reached)
+                    ? "Harder puzzles on every floor, no rewards, and the pieces' eyes glow red."
+                    : "Unlocks when you reach the second world."}
+              </p>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <span className="tc-display text-sm">The bond</span>
+              <p className="m-0 text-xs text-[var(--tc-cream-dim)]">
+                {story.bond === "yes" ? "You are bonded with the pieces." : story.bond === "refused" ? "You refused the pieces. They haven't forgotten." : "The pieces haven't asked you yet."}
+              </p>
+              {confirmReset ? (
+                <div className="flex gap-2">
+                  <button type="button" className="tc-plank tc-center tc-small flex-1" onClick={() => { change(resetBond(story)); onOpening(); }}>Yes, ask me again</button>
+                  <button type="button" className="tc-plank tc-center tc-small flex-1" onClick={() => setConfirmReset(false)}>Cancel</button>
+                </div>
+              ) : (
+                <button type="button" className="tc-plank tc-center tc-small" onClick={() => setConfirmReset(true)}>Ask the bond question again</button>
+              )}
+              {confirmReset && <p className="m-0 text-xs text-[var(--tc-cream-dim)]">The opening plays again and you answer afresh. Your bond levels are kept.</p>}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <span className="tc-display text-sm">Credits</span>
+              <p className="m-0 text-xs text-[var(--tc-cream-dim)]">
+                Polar bear model: &ldquo;Polar Bear&rdquo; by kenchoo (Sketchfab), CC BY 4.0, mouth added.
+                Pizza monster&apos;s slice: &ldquo;Pizza&rdquo; by gatoperdido (Sketchfab), CC BY 4.0, face added.
+                Textures, skies and props: Poly Haven and ambientCG, public domain.
+              </p>
+            </div>
+          </div>
+          <button type="button" className="tc-plank tc-center tc-small" onClick={() => { setConfirmReset(false); setPage("modes"); }}>Back</button>
+        </section>
       ) : (
         <section aria-labelledby="tacticaBondsTitle" className="absolute inset-x-0 bottom-0 flex max-h-[78%] flex-col gap-3 overflow-y-auto bg-gradient-to-t from-black/95 via-black/80 to-transparent px-4 pt-16 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
           <div>
