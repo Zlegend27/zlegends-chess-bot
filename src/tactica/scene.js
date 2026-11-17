@@ -356,7 +356,30 @@ export class TacticaScene {
       const entry = { group, holder, model, hit, kind, colour, mixer, idle };
       this.pieces.set(piece.sq, entry);
       this.decorate(entry);
+      this.spiritLook(entry);
     }
+  }
+
+  /** Memories: every character becomes a ghost of an old master's piece,
+   *  pale and see-through, glowing faintly blue. Pieces added later too. */
+  setSpirits(on) {
+    this.spirits = !!on;
+    for (const entry of this.pieces.values()) this.spiritLook(entry);
+    this.wake();
+  }
+  spiritLook(entry) {
+    if (!this.spirits || entry.spirit) return;
+    entry.spirit = true;
+    const pale = new THREE.Color("#d6ebff");
+    entry.model.traverse((o) => {
+      if (!o.isMesh || !o.material || Array.isArray(o.material)) return;
+      const m = o.material.clone();
+      m.transparent = true;
+      m.opacity = 0.58;
+      if (m.color) m.color.lerp(pale, 0.65);
+      if (m.emissive) { m.emissive.set("#5fa8ff"); m.emissiveIntensity = 0.45; }
+      o.material = m;
+    });
   }
 
   /** Bond levels by kind ({ pawn: 1..5, ... }). They show on the player's

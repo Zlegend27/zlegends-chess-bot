@@ -89,4 +89,4 @@ export function recordMove(type, { capture = false, final = false } = {}) {
 }
 
 /** The note shown when a bond grows. */
-export const levelUpText = (kind, level) => `${KIND_NAMES[kind]} bond ${level}: ${LOOKS[level - 1].toLowerCase()}`;
+export const levelUpText = (kind, level) => `${KIND_NAMES[kind]} bond ${level}: ${LOOKS[level - 1].toLowerCase()}${level === 3 ? " · a memory wakes" : ""}`;

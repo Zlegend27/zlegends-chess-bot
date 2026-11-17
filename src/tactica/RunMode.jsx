@@ -13,13 +13,14 @@ import { makeEscape, movesOf, apply, escaped, strikerOf, piecesOf, fenOf, escape
 import { loadSetting, saveSetting } from "../utils/storage";
 import { noteTacticaChange } from "./accountSync.js";
 import { submitRunScore } from "../utils/leaderboard";
+import { wakeMemory, openMemories, lessonBefore } from "./memories";
 import {
   START_HEALTH, wrongMoveDamage, phasesForFloor, isStoryFloor, timerSeconds, ratingFor,
   rushDamage, pickPuzzle, effectFloors, offer, choose, floorScore, maxPliesFor, minPliesFor, rememberSeen, isBonusAfter, HARD_MODE_RATING,
 } from "./binRun";
 import { loadStory, saveStory, isHard, beatStory } from "./story";
-import { WORLDS, BOSS_STORY, LAST_FLOOR, worldIndex, worldOf, floorInWorld, firstFloorOf, isWorldStart, isBossFloor, isSnowFloor, isIntense, isIntensify } from "./worlds";
-import { levelsOf, recordMove, levelUpText, applyStory } from "./bonds";
+import { WORLDS, BOSS_STORY, WORLD_STORY, LAST_FLOOR, worldIndex, worldOf, floorInWorld, firstFloorOf, isWorldStart, isBossFloor, isSnowFloor, isIntense, isIntensify } from "./worlds";
+import { levelsOf, loadBonds, recordMove, levelUpText, applyStory } from "./bonds";
 import { poolNear, expandPuzzle, warmPool } from "./puzzlePool";
 
 /* The Rogue Chess Run: forty floors across four worlds (worlds.js), and
@@ -500,7 +501,11 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
     const boss = bossOn(f);
     if (boss) {
       const lines = BOSS_STORY[worldOf(f).id];
-      if (lines) { await showCard(worldOf(f).boss, lines.intro); if (run !== runIdRef.current) return; }
+      /* The pieces face each boss with what the last memory taught them. */
+      const open = openMemories({ reached, beaten: loadStory().beaten, levels: levelsOf(loadBonds()) });
+      const lesson = lessonBefore(worldIndex(f), open);
+      const recall = lesson ? [`The pieces remember ${lesson.title}: ${lesson.motto}.`] : [];
+      if (lines) { await showCard(worldOf(f).boss, [...lines.intro, ...recall]); if (run !== runIdRef.current) return; }
       setStage("playing");
       busyRef.current = true;
       setBusy(true);
@@ -614,6 +619,14 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
       if (fell !== runIdRef.current) return;
       const lines = BOSS_STORY[worldOf(floor).id];
       if (lines) { await showCard(`${worldOf(floor).boss} is beaten`, lines.won); if (fell !== runIdRef.current) return; }
+      /* Beating a boss wakes a memory (memories.js). */
+      const memory = wakeMemory(worldIndex(floor));
+      if (memory) {
+        noteTacticaChange();
+        playSound("shimmer", { volume: 0.8 });
+        await showCard("A memory wakes", [`Your pieces remember ${memory.title}, ${memory.where}.`, "Play it from Memories, in the menu, when the run is done."]);
+        if (fell !== runIdRef.current) return;
+      }
     }
     let eff = effect;
     if (eff) {
@@ -1140,6 +1153,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
           {/* Where each world's entry cutscene and its halfway animation will play. */}
           <p className="tc-label m-0">{isWorldStart(floor) ? `World ${worldIndex(floor) + 1} of ${WORLDS.length}` : `${worldOf(floor).name} · floor ${floor}`}</p>
           <h2 className="tc-title m-0 text-[30px]">{isWorldStart(floor) ? worldOf(floor).name : "It gets harder from here"}</h2>
+          {isWorldStart(floor) && WORLD_STORY[worldOf(floor).id] && <p className="m-0 max-w-[32ch] text-base italic text-[var(--tc-cream)]">{WORLD_STORY[worldOf(floor).id]}</p>}
           <p className="m-0 max-w-[30ch] text-base text-[var(--tc-cream-dim)]">
             {isWorldStart(floor)
               ? `Floors ${floor} to ${floor + 9}.${worldOf(floor).boss ? ` ${worldOf(floor).boss} waits on the last one.` : ""}`

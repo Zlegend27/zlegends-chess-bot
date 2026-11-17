@@ -9,6 +9,7 @@ import RunMode from "./RunMode";
 import BotMode from "./BotMode";
 import VersusMode from "./VersusMode";
 import OpeningScene from "./OpeningScene";
+import MemoryMode from "./MemoryMode";
 import { loadStory, saveStory, afterOpening } from "./story";
 import { unlock, play, setFlies } from "./sound";
 import "./tactica.css";
@@ -86,6 +87,7 @@ function TacticaPageInner({ pieceImgSrc, sweetheart, player, start = null, onExi
   if (screen === "opening") page = <OpeningScene sweetheart={sweetheart} skippable={(rewatch || seenNow) && loadStory().seen} onDone={openingDone} />;
   else if (screen === "tutorial") page = <TutorialMode pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={toMenu} />;
   else if (screen === "run") page = <RunMode pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} best={runBest} onBest={recordRunBest} displayName={player?.displayName} onExit={toMenu} />;
+  else if (screen === "memories") page = <MemoryMode onExit={toMenu} />;
   else if (screen === "bot") page = <BotMode pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={toMenu} />;
   else if (screen === "versus") page = <VersusMode {...player} pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={toMenu} />;
   else if (screen === "blitz") page = <BlitzMode sweetheart={sweetheart} best={blitzBest} displayName={player?.displayName} onBest={recordBest} onExit={leave("blitz")} exitLabel={start === "blitz" ? "Back to Puzzles" : undefined} />;

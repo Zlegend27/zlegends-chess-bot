@@ -35,8 +35,16 @@ export const BOSS_STORY = {
     omen: "The storm breaks, and the red moon rises",
     peek: "The demon raises his weapons.",
     intro: ["Every weapon stuck in this ground belonged to someone who reached him.", "None of them won. He has been waiting for you since the bin."],
-    won: ["His armour breaks apart, and the demon blows away as ash.", "The storm is gone. For the first time since the shelf, the pieces are home.", "You made it out. Together."],
+    won: ["His armour breaks apart, and the demon blows away as ash.", "The storm is gone. The pieces remember every game they ever played with you, and now they understand: the soul of chess was never in the pieces. It was in playing them together.", "You made it out. Together."],
   },
+};
+
+/* A line on each world's opening card: the journey, as the pieces see it. */
+export const WORLD_STORY = {
+  bin: "Thrown away in the dark. All the pieces have now is each other, and you.",
+  ice: "Out of the bin and into the snow. The pieces have never seen the sky before.",
+  volcano: "The snow turns to ash. Somewhere ahead, the ground is burning.",
+  demon: "Past the fire the world goes dark. This is where lost pieces end up.",
 };
 
 export const WORLDS = [

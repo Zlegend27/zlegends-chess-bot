@@ -1,6 +1,6 @@
 /* Chess Tactica's progress follows the signed-in account: the story (opening
    seen, the bond, hard mode, beaten), bonds, the furthest world reached and
-   the bests. It rides on the account's own data (user_metadata.zl_tactica,
+   the bests and the memories woken. It rides on the account's own data (user_metadata.zl_tactica,
    like the rating's zl_rating), so no database table is needed. The lists
    of puzzles already seen stay on the device: they only stop repeats.
 
@@ -13,7 +13,9 @@ import { loadSetting, saveSetting } from "../utils/storage.js";
 import { getSupabase } from "../utils/supabase.js";
 
 const OWNER = "tacticaOwner";
-const FRESH = { story: { seen: false, bond: null, hardSwitch: false, beaten: false }, bonds: {}, reached: 0, runBest: 0, blitzBest: 0, at: 0 };
+const FRESH = { story: { seen: false, bond: null, hardSwitch: false, beaten: false }, bonds: {}, reached: 0, runBest: 0, blitzBest: 0, memories: [], at: 0 };
+/* Memory ids (memories.js): short words only. */
+const memoryIds = (list) => (Array.isArray(list) ? [...new Set(list.filter((id) => typeof id === "string" && /^[a-z]{2,20}$/.test(id)))] : []);
 const BOND_LEVELS = (bonds) => Object.fromEntries(Object.entries(bonds ?? {}).filter(([, v]) => Number.isFinite(v) && v >= 0).map(([k, v]) => [k, Math.round(v)]));
 
 /** This device's progress, as saved to the account. `at` says when it last
@@ -26,6 +28,7 @@ export function deviceProgress() {
     reached: Math.max(0, Number(loadSetting("tacticaRunReached", 0)) || 0),
     runBest: Math.max(0, Number(loadSetting("tacticaRunBest", 0)) || 0),
     blitzBest: Math.max(0, Number(loadSetting("tacticaBlitzBest", 0)) || 0),
+    memories: memoryIds(loadSetting("tacticaMemories", [])),
     at: Number(loadSetting("tacticaAt", 0)) || 0,
   };
 }
@@ -41,6 +44,7 @@ export function accountProgress(session) {
     reached: Math.max(0, Math.round(Number(p.reached) || 0)),
     runBest: Math.max(0, Math.round(Number(p.runBest) || 0)),
     blitzBest: Math.max(0, Math.round(Number(p.blitzBest) || 0)),
+    memories: memoryIds(p.memories),
     at: Number(p.at) || 0,
   };
 }
@@ -64,6 +68,7 @@ export function mergeProgress(a, b) {
     reached: Math.max(a.reached, b.reached),
     runBest: Math.max(a.runBest, b.runBest),
     blitzBest: Math.max(a.blitzBest, b.blitzBest),
+    memories: [...new Set([...(a.memories ?? []), ...(b.memories ?? [])])],
     at: Math.max(a.at, b.at),
   };
 }
@@ -76,6 +81,7 @@ function writeDevice(p) {
   saveSetting("tacticaRunReached", p.reached);
   saveSetting("tacticaRunBest", p.runBest);
   saveSetting("tacticaBlitzBest", p.blitzBest);
+  saveSetting("tacticaMemories", p.memories ?? []);
   saveSetting("tacticaAt", p.at);
 }
 
