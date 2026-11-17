@@ -251,6 +251,70 @@ const DEMON = {
   },
 };
 
+/* ---------------- The ending ---------------- */
+const ENDING = {
+  dawn: {
+    dur: 5.0, next: "home",
+    cues: [[0.3, "shimmer", 0.6], [1.8, "chime", 0.5], [3.4, "chirp", 0.5]],
+    line: () => ({ text: "The storm was gone. For the first time since the shelf, the sky was getting light." }),
+    draw(ctx, t) {
+      const k = span(t, 0, 4.5);
+      gradient(ctx, [[0, lerpColor("#0c0a18", "#3a5a8a", k)], [0.55, lerpColor("#1c0e1a", "#f2a86a", k)], [1, lerpColor("#070507", "#5a3a2a", k)]]);
+      /* The sun coming up over the ridge. */
+      const sy = lerp(H * 0.62, H * 0.5, k);
+      glow(ctx, W * 0.5, sy, 340, "rgba(255,200,120,0.7)", k);
+      ctx.fillStyle = `rgba(255,226,160,${k})`; ctx.beginPath(); ctx.arc(W * 0.5, sy, 46, 0, Math.PI * 2); ctx.fill();
+      hills(ctx, [[H * 0.6, lerpColor("#09060a", "#3a2418", k), 16], [H * 0.72, lerpColor("#050305", "#24160f", k), 10]], 6);
+      /* The old swords, falling one by one. */
+      const r = rng(31);
+      ctx.strokeStyle = `rgba(30,20,20,${1 - k * 0.5})`; ctx.lineWidth = 3; ctx.lineCap = "round";
+      for (let i = 0; i < 14; i++) { const x = r() * W, y = H * (0.73 + r() * 0.15), fallen = clamp((t - r() * 3) * 0.8); const a = (r() - 0.5) * 0.4 + fallen * 1.3; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.sin(a) * 50, y - Math.cos(a) * 50); ctx.stroke(); }
+      march(ctx, t * 0.5, { y: H * 0.86, s: 42, x0: W * 0.25, speed: 30, sil: k < 0.5 });
+    },
+  },
+  home: {
+    dur: 5.4, next: "thanks",
+    cues: [[0.4, "chirp", 0.5], [2.6, "cloth2", 0.6], [3.3, "land", 0.7], [3.6, "chime", 0.6]],
+    line: () => ({ text: "They found their way back to a board, in a window, in the sun. And someone sat down to play." }),
+    draw(ctx, t) {
+      gradient(ctx, [[0, "#8fb7dc"], [0.55, "#e8d2b0"], [1, "#a77c52"]]);
+      /* A window: sky, a frame, warm light falling in. */
+      ctx.fillStyle = "#c7e2f5"; ctx.fillRect(W * 0.1, H * 0.06, W * 0.8, H * 0.36);
+      ctx.strokeStyle = "#6e4a2c"; ctx.lineWidth = 12; ctx.strokeRect(W * 0.1, H * 0.06, W * 0.8, H * 0.36);
+      ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(W * 0.5, H * 0.06); ctx.lineTo(W * 0.5, H * 0.42); ctx.moveTo(W * 0.1, H * 0.24); ctx.lineTo(W * 0.9, H * 0.24); ctx.stroke();
+      glow(ctx, W * 0.5, H * 0.5, 380, "rgba(255,230,170,0.5)", 0.9);
+      /* The board on the sill, the pieces standing ready. */
+      ctx.fillStyle = "#5a3a1e"; ctx.fillRect(-10, H * 0.66, W + 20, H * 0.4);
+      ctx.fillStyle = "#3b2414"; ctx.fillRect(W * 0.08, H * 0.62, W * 0.84, 22);
+      ctx.fillStyle = "#6b4527"; ctx.beginPath(); ctx.moveTo(W * 0.08, H * 0.62); ctx.lineTo(W * 0.16, H * 0.5); ctx.lineTo(W * 0.84, H * 0.5); ctx.lineTo(W * 0.92, H * 0.62); ctx.closePath(); ctx.fill();
+      const pawnMove = span(t, 2.6, 3.4);
+      ["rook", "knight", "bishop", "queen", "king", "bishop", "knight", "rook"].forEach((kind, i) => drawPiece(ctx, kind, W * 0.2 + i * W * 0.085, H * 0.585, 30, { white: true, eyes: 1, arms: 0.4, pose: "down" }));
+      for (let i = 0; i < 8; i++) {
+        const lift = i === 4 ? pawnMove : 0;
+        drawPiece(ctx, "pawn", W * 0.18 + i * W * 0.09, H * 0.62 - lift * 24, 34, { white: true, eyes: 1, arms: 0.5, pose: lift > 0 && lift < 1 ? "up" : "down" });
+      }
+      /* A hand reaching in to play the first move. */
+      const reach = span(t, 1.6, 2.6) * (1 - span(t, 3.6, 4.6));
+      ctx.fillStyle = "#e0b48c";
+      ctx.beginPath(); ctx.ellipse(W * 0.56, lerp(H * 1.05, H * 0.66, reach), 34, 52, -0.3, 0, Math.PI * 2); ctx.fill();
+      ctx.fillRect(W * 0.52, lerp(H * 1.1, H * 0.71, reach), 40, H * 0.4);
+    },
+  },
+  thanks: {
+    dur: 5.0, end: true,
+    cues: [[0.3, "cheer", 0.5], [1.5, "shimmer", 0.8], [3.0, "chime", 0.6]],
+    line: (t) => ({ text: t < 2.4 ? "The soul of chess was never in the pieces. It was in playing them together." : "Thank you for playing with us." }),
+    draw(ctx, t) {
+      gradient(ctx, [[0, "#f1d9b0"], [1, "#b98a5c"]]);
+      glow(ctx, W / 2, H * 0.6, 360, "rgba(255,240,200,0.6)", 1);
+      ["pawn", "knight", "bishop", "queen", "king", "rook"].forEach((kind, i) => {
+        const x = W / 2 + (i - 2.5) * 60, hop = Math.abs(Math.sin(t * 4 + i)) * 8 * span(t, 0.2, 1);
+        drawPiece(ctx, kind, x, H * 0.78 - hop, 66, { white: i % 2 === 0, eyes: 1, arms: 1, pose: t > 1.4 && i % 2 ? "up" : "down", look: (W / 2 - x) / 300, aura: span(t, 1.2, 2.4), auraColor: "rgba(255,210,120,0.9)" });
+      });
+    },
+  },
+};
+
 function lerpColor(a, b, k) {
   const pa = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16)), pb = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16));
   return "#" + pa.map((v, i) => Math.round(lerp(v, pb[i], clamp(k))).toString(16).padStart(2, "0")).join("");
@@ -260,5 +324,6 @@ export const ENTRY_FILMS = {
   ice: { first: "climb", shots: ICE, mood: "wonder" },
   volcano: { first: "ash", shots: VOLCANO, mood: "action" },
   demon: { first: "swords", shots: DEMON, mood: "action" },
+  ending: { first: "dawn", shots: ENDING, mood: "wonder" },
 };
 export { finish, W, H };

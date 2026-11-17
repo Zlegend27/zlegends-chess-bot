@@ -134,7 +134,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
      can't open a reward screen over "Run over". */
   const runIdRef = useRef(0);
 
-  const [stage, setStage] = useState("intro"); // intro | arrive | omen | story | bossCard | playing | choice | cursed | defeat | over
+  const [stage, setStage] = useState("intro"); // intro | arrive | ending | omen | story | bossCard | playing | choice | cursed | defeat | over
   /* How the run ended: null while it's on, then "won" (floor 40 cleared),
      "lost" (health ran out) or "quit". */
   const [ending, setEnding] = useState(null);
@@ -642,7 +642,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
     await wait(900);
     if (run !== runIdRef.current) return;
     /* The last floor: the run is won. */
-    if (floor >= LAST_FLOOR) { saveStory(beatStory(loadStory())); endRun("won"); return; }
+    if (floor >= LAST_FLOOR) { saveStory(beatStory(loadStory())); setStage("ending"); return; }
     const proceed = () => {
       if (!eff && effectFloors(floor) > 0) {
         setChoices(offer(Math.random, hard));
@@ -1153,6 +1153,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
       )}
 
       {stage === "arrive" && <EntryFilm world={worldOf(floor).id} onDone={() => setStage("story")} />}
+      {stage === "ending" && <EntryFilm world="ending" onDone={() => endRun("won")} />}
       {stage === "story" && (
         <div className="tc-scrim absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
           {/* Where each world's entry cutscene and its halfway animation will play. */}
