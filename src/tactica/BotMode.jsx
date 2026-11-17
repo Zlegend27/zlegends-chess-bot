@@ -9,6 +9,7 @@ import { dressTrashBin } from "./sets/trashBin";
 import { BrassButton, MapButton, MenuButton, PromotionPicker, useViewSource } from "./ui";
 import { play as playSound } from "./sound";
 import { applyStory } from "./bonds";
+import { useBestMove, scoreLabel } from "../utils/useBestMove";
 
 /* Regular Chess in the bin: a full game on the 3D board against the site's own
    bots (the 1000, 1500 and 2000 Elo Stockfish levels and the homemade
@@ -16,7 +17,13 @@ import { applyStory } from "./bonds";
    in the bin isn't rated. Same controls as the tutorial; a pawn reaching
    the last rank asks which piece it becomes. A game in progress is saved
    on the device after every move and can be resumed; the menu can take
-   back your last move, and lists the moves so far. */
+   back your last move, and lists the moves so far.
+
+   With `self` it is Play with yourself instead: no bot, you move both sides
+   to try out ideas, the board turns to whoever is to move, and Analysis
+   draws Stockfish's best move as an arrow on the board. Either way, a
+   finished game can be stepped through with the best move drawn for every
+   position (Analyse the game). */
 const BOTS = DIFFICULTIES.filter((d) => d.id !== "rank");
 const KNIGHT = 2, QUEEN = 5;
 const sqOf = (sq120) => M120TO64[sq120];
@@ -26,6 +33,9 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const MIN_THINK_MS = 400;
 /* The game in progress, saved after every move: { bot, side, moves }. */
 const SAVE = "tacticaBotGame";
+const SELF_SAVE = "tacticaSelfGame";
+/* Analysis arrows: the engine's best move, and the move actually played. */
+const BEST_COLOR = "#3FE07A", PLAYED_COLOR = "#5AA8FF";
 const loadSaved = () => {
   const g = loadSetting(SAVE, null);
   return g && Array.isArray(g.moves) && (g.side === 1 || g.side === -1) && Number.isInteger(g.bot) ? g : null;
@@ -86,7 +96,7 @@ async function searchFor(eng, moveList, bot) {
   return eng.legalMoves().find((m) => eng.sanOf(m) === res.san) ?? null;
 }
 
-export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
+export default function BotMode({ pieceImgSrc, sweetheart, onExit, self = false }) {
   const canvasRef = useRef(null);
   const sceneRef = useRef(null);
   const engRef = useRef(createEngine());
@@ -97,7 +107,7 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
   /* Bumped for every new game, so a bot reply from an old game is dropped. */
   const gameIdRef = useRef(0);
 
-  const [stage, setStage] = useState("setup"); // setup | playing | over
+  const [stage, setStage] = useState(self ? "playing" : "setup"); // setup | playing | over | review
   const [botIdx, setBotIdx] = useState(() => Math.min(BOTS.length - 1, Math.max(0, loadSetting("tacticaBotIdx", 0))));
   const [colourPick, setColourPick] = useState(() => loadSetting("tacticaBotColour", "white"));
   const [side, setSide] = useState(1);
@@ -118,12 +128,20 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
   const gameRef = useRef({ bot: 0, side: 1 });
   /* What the camera sees, for the map's view cone. */
   const viewSource = useViewSource();
+  /* Play with yourself: the best-move arrow on, and the board turning to
+     whoever is to move. */
+  const [analysing, setAnalysing] = useState(false);
+  const [turnBoard, setTurnBoard] = useState(() => loadSetting("tacticaSelfTurn", true));
+  /* Analysing a finished game: how many of its moves are on the board. */
+  const [reviewIdx, setReviewIdx] = useState(0);
   /* Regular Chess always plays the full attacks. */
   const pace = "full";
   const bot = BOTS[botIdx];
 
-  const myTurn = stage === "playing" && eng.getSide() === side && !thinking;
-  const friends = stage === "playing" ? friendlySquares(eng, side) : [];
+  /* Whose characters you move: in Play with yourself, whoever is to move. */
+  const mover = self ? eng.getSide() : side;
+  const myTurn = stage === "playing" && eng.getSide() === mover && !thinking;
+  const friends = stage === "playing" ? friendlySquares(eng, mover) : [];
   const selected = friends[Math.min(selectedIdx, friends.length - 1)];
   const legal = myTurn ? eng.legalMoves() : [];
   const movesFrom = legal.filter((m) => sqOf(mFrom(m)) === selected);
@@ -139,6 +157,22 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
     }
     return list;
   };
+
+  /* ---- Analysis ---- */
+  const fen = eng.fen();
+  const reviewing = stage === "review";
+  const best = useBestMove(fen, reviewing || (self && analysing && stage === "playing" && !gameResult(eng)));
+  /* The move that was played from this position, while stepping through. */
+  const playedSan = reviewing ? moveList[reviewIdx] ?? null : null;
+  const played = playedSan ? eng.legalMoves().find((m) => eng.sanOf(m) === playedSan) : undefined;
+  const hints = [];
+  if (best && !best.none && (reviewing || (analysing && stage === "playing" && !busy))) hints.push({ from: sqOf(best.from), to: sqOf(best.to), color: BEST_COLOR });
+  if (played !== undefined && !(best && best.san === playedSan)) hints.push({ from: sqOf(mFrom(played)), to: sqOf(mTo(played)), color: PLAYED_COLOR });
+  const hintKey = hints.map((h) => `${h.from}-${h.to}-${h.color}`).join(",");
+  useEffect(() => {
+    sceneRef.current?.setHints(hints);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hintKey]);
 
   /* ---- The scene ---- */
   useEffect(() => {
@@ -249,8 +283,8 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
   };
 
   /** Saves the game in progress after a move; a finished one is forgotten. */
-  const remember = (moves) => saveSetting(SAVE, { ...gameRef.current, moves });
-  const forget = () => { saveSetting(SAVE, null); setSaved(null); };
+  const remember = (moves) => (self ? saveSetting(SELF_SAVE, moves) : saveSetting(SAVE, { ...gameRef.current, moves }));
+  const forget = () => { saveSetting(self ? SELF_SAVE : SAVE, null); setSaved(null); };
 
   /** Picks up a saved game where it was left. */
   const resume = () => {
@@ -290,21 +324,24 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
     if (busyRef.current || !canTakeBack) return;
     gameIdRef.current++;
     setThinking(false);
-    /* On your turn: your move and the bot's answer. While it thinks: yours. */
-    const plies = eng.getSide() === side ? 2 : 1;
+    /* On your turn: your move and the bot's answer. While it thinks: yours.
+       Playing yourself: just the last move. */
+    const plies = self ? 1 : eng.getSide() === side ? 2 : 1;
     for (let i = 0; i < plies; i++) eng.unmake();
     const list = moveList.slice(0, moveList.length - plies);
     setMoveList(list);
     remember(list);
     setChosen(null);
     setMenuOpen(false);
+    if (self && turnBoard) sceneRef.current?.setFlipped(eng.getSide() === -1);
     sceneRef.current?.setPieces(piecesNow());
     sceneRef.current?.showBoard();
+    setSelectedIdx(0);
     setView("board");
     playSound("swish", { volume: 0.5 });
   };
   /* Whether there is a move of yours to take back. */
-  const canTakeBack = stage === "playing" && !busy && moveList.length >= (eng.getSide() === side ? 2 : 1) && (side === 1 || moveList.length > 1);
+  const canTakeBack = stage === "playing" && !busy && (self ? moveList.length > 0 : moveList.length >= (eng.getSide() === side ? 2 : 1) && (side === 1 || moveList.length > 1));
 
   const start = () => {
     gameIdRef.current++;
@@ -329,6 +366,80 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
     if (s === -1) botTurn([]);
   };
 
+  /** Play with yourself: a fresh board, or `moves` already played on it. */
+  const startSelf = (moves = []) => {
+    gameIdRef.current++;
+    eng.reset();
+    const played = [];
+    for (const san of moves) {
+      const move = eng.legalMoves().find((m) => eng.sanOf(m) === san);
+      if (!move) break;
+      eng.make(move);
+      played.push(san);
+    }
+    gameRef.current = { bot: 0, side: 1 };
+    setSide(1);
+    setMoveList(played);
+    remember(played);
+    setSelectedIdx(0);
+    setChosen(null);
+    setResult(null);
+    setView("board");
+    setThinking(false);
+    setStage("playing");
+    const scene = sceneRef.current;
+    scene?.setFlipped(turnBoard && eng.getSide() === -1);
+    scene?.setPieces(piecesNow());
+    scene?.showBoard();
+    if (gameResult(eng)) checkOver();
+  };
+  /* Play with yourself opens straight onto the board, where you left it. */
+  useEffect(() => {
+    if (!self) return;
+    const moves = loadSetting(SELF_SAVE, []);
+    startSelf(Array.isArray(moves) ? moves : []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [self, sweetheart]);
+
+  /** Steps a finished game to `i` moves in, for Analyse the game. */
+  const reviewTo = (i) => {
+    const idx = Math.max(0, Math.min(moveList.length, i));
+    eng.reset();
+    for (const san of moveList.slice(0, idx)) {
+      const move = eng.legalMoves().find((m) => eng.sanOf(m) === san);
+      if (!move) break;
+      eng.make(move);
+    }
+    setReviewIdx(idx);
+    const scene = sceneRef.current;
+    scene?.setPieces(piecesNow());
+    scene?.showBoard();
+  };
+  const startReview = () => {
+    gameIdRef.current++;
+    setMenuOpen(false);
+    setStage("review");
+    sceneRef.current?.setMarks({});
+    reviewTo(moveList.length);
+  };
+  /** Back from the review to the result, with the final position. */
+  const endReview = () => {
+    reviewTo(moveList.length);
+    setStage(result ? "over" : "playing");
+  };
+  /* Arrow keys step through the review, like the site's Game Review. */
+  useEffect(() => {
+    if (!reviewing) return undefined;
+    const onKey = (e) => {
+      const step = { ArrowLeft: -1, ArrowRight: 1 }[e.key];
+      if (step) { e.preventDefault(); reviewTo(reviewIdx + step); }
+      else if (e.key === "Escape") endReview();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviewing, reviewIdx, moveList]);
+
   const play = async (target, piece = null) => {
     if (busyRef.current || !myTurn) return;
     const found = movesFrom.filter((m) => sqOf(mTo(m)) === target);
@@ -348,13 +459,20 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
       list = [...moveList, san];
       setMoveList(list);
       remember(list);
-      const stillHere = friendlySquares(eng, side).indexOf(target);
-      setSelectedIdx((i) => (stillHere >= 0 ? stillHere : Math.min(i, friendlySquares(eng, side).length - 1)));
+      if (self) {
+        /* The other side's turn: back to the whole board, turned to them. */
+        setSelectedIdx(0);
+        setView("board");
+        if (turnBoard) sceneRef.current?.setFlipped(eng.getSide() === -1);
+      } else {
+        const stillHere = friendlySquares(eng, side).indexOf(target);
+        setSelectedIdx((i) => (stillHere >= 0 ? stillHere : Math.min(i, friendlySquares(eng, side).length - 1)));
+      }
     } finally {
       busyRef.current = false;
       setBusy(false);
     }
-    if (game === gameIdRef.current && !checkOver()) botTurn(list);
+    if (game === gameIdRef.current && !checkOver() && !self) botTurn(list);
   };
 
   const resign = () => {
@@ -414,7 +532,7 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
   const squareName = (sq) => `${"abcdefgh"[sq % 8]}${((sq / 8) | 0) + 1}`;
   const pieceName = (sq) => ["", "Pawn", "Knight", "Bishop", "Rook", "Queen", "King"][Math.abs(eng.pieceAt(sq))] + ` on ${squareName(sq)}`;
   const isAttack = chosen != null && captures.includes(chosen);
-  const inCheck = stage === "playing" && eng.getSide() === side && eng.inCheckNow();
+  const inCheck = stage === "playing" && eng.getSide() === mover && eng.inCheckNow();
   const hint = thinking ? `${bot.label} is thinking…` : busy ? "…"
     : view === "board" ? "Tap a character to take a closer look"
     : !targets.length ? "This one can't move"
@@ -432,16 +550,24 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
             <div className="flex items-center gap-2.5">
               <MenuButton open={menuOpen} onClick={() => setMenuOpen((o) => !o)} />
               <div>
-                <div className="tc-label">vs {bot.label}</div>
-                <div className="tc-display text-[15px]" aria-live="polite">{inCheck ? "Check!" : thinking ? "Bot to move" : "Your move"}</div>
+                <div className="tc-label">{self ? "Play with yourself" : `vs ${bot.label}`}</div>
+                <div className="tc-display text-[15px]" aria-live="polite">{inCheck ? "Check!" : self ? `${mover === 1 ? "White" : "Black"} to move` : thinking ? "Bot to move" : "Your move"}</div>
                 {lastMove && <div className="text-sm text-[var(--tc-cream-dim)]" style={{ fontFamily: "var(--font-mono)" }}>{lastMove}</div>}
+                {self && (
+                  <div className="pointer-events-auto mt-1.5 flex items-center gap-2">
+                    <button type="button" className="tc-plank tc-center tc-small" style={{ width: 112 }} aria-pressed={analysing} onClick={() => setAnalysing((a) => !a)}>
+                      {analysing ? "Analysis on" : "Analysis"}
+                    </button>
+                    {analysing && <span className="text-sm text-[var(--tc-gold-hi)]" aria-live="polite">{!best ? "Thinking…" : best.none ? "" : `${best.san} · ${scoreLabel(best.score)}`}</span>}
+                  </div>
+                )}
               </div>
             </div>
             <MapButton
               fen={eng.fen()}
               pieceImgSrc={pieceImgSrc}
               size={88}
-              flipped={side === -1}
+              flipped={self ? turnBoard && mover === -1 : side === -1}
               view={view}
               selected={selected}
               viewSource={viewSource}
@@ -455,8 +581,22 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
               <button type="button" aria-label="Close the menu" className="absolute inset-0 cursor-default border-0 bg-transparent" onClick={() => setMenuOpen(false)} />
               <div className="tc-panel absolute top-16 left-3 flex w-56 flex-col gap-3 p-3">
                 <button type="button" className="tc-plank tc-center tc-small" onClick={() => setMenuOpen(false)}>Resume</button>
-                <button type="button" className="tc-plank tc-center tc-small" onClick={takeBack} disabled={!canTakeBack}>Take back my move</button>
-                <button type="button" className="tc-plank tc-center tc-small" onClick={resign}>Resign</button>
+                <button type="button" className="tc-plank tc-center tc-small" onClick={takeBack} disabled={!canTakeBack}>{self ? "Take back a move" : "Take back my move"}</button>
+                {self ? (
+                  <>
+                    <button type="button" className="tc-plank tc-center tc-small" aria-pressed={turnBoard} onClick={() => {
+                      const on = !turnBoard;
+                      setTurnBoard(on);
+                      saveSetting("tacticaSelfTurn", on);
+                      sceneRef.current?.setFlipped(on && eng.getSide() === -1);
+                      sceneRef.current?.showBoard();
+                    }}>Turn the board: {turnBoard ? "On" : "Off"}</button>
+                    <button type="button" className="tc-plank tc-center tc-small" onClick={startReview} disabled={!moveList.length}>Step through the moves</button>
+                    <button type="button" className="tc-plank tc-center tc-small" onClick={() => { setMenuOpen(false); forget(); startSelf([]); }}>Start over</button>
+                  </>
+                ) : (
+                  <button type="button" className="tc-plank tc-center tc-small" onClick={resign}>Resign</button>
+                )}
                 {moveList.length > 0 && (
                   <div>
                     <div className="tc-label mb-1">Moves</div>
@@ -479,7 +619,7 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
           <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/80 to-transparent px-3 pt-10 pb-[calc(0.9rem+env(safe-area-inset-bottom))]">
             <button type="button" className="tc-round" onClick={() => cycle(-1)} disabled={busy} aria-label="Previous character">‹</button>
             <div className="flex min-w-0 flex-1 flex-col items-center gap-0.5 text-center">
-              <span className="tc-display truncate text-[15px]">{selected != null && view === "close" ? pieceName(selected) : `You play ${side === 1 ? "White" : "Black"}`}</span>
+              <span className="tc-display truncate text-[15px]">{selected != null && view === "close" ? pieceName(selected) : self ? `${mover === 1 ? "White" : "Black"}'s characters` : `You play ${side === 1 ? "White" : "Black"}`}</span>
               <span className={"truncate text-sm " + (isAttack ? "font-bold text-[var(--tc-gold-hi)]" : "text-[var(--tc-cream-dim)]")} aria-live="polite">{hint}</span>
             </div>
             <button type="button" className="tc-round" onClick={() => cycle(1)} disabled={busy} aria-label="Next character">›</button>
@@ -527,15 +667,53 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
       {stage === "over" && result && (
         <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 bg-gradient-to-t from-black/90 via-black/70 to-transparent px-5 pt-20 pb-[calc(1.25rem+env(safe-area-inset-bottom))] text-center">
           <h2 className="tc-title m-0 text-[28px]">
-            {result.resigned ? "You resigned" : result.winner === side ? "You win!" : result.winner ? `${bot.label} wins` : "Draw"}
+            {self ? (result.winner ? `${result.winner === 1 ? "White" : "Black"} wins` : "Draw")
+              : result.resigned ? "You resigned" : result.winner === side ? "You win!" : result.winner ? `${bot.label} wins` : "Draw"}
           </h2>
-          <p className="m-0 text-base text-[var(--tc-cream-dim)]">{result.resigned ? `${result.text}` : `${resultSentence(result, side)} ${result.text}`} · {Math.ceil(moveList.length / 2)} {Math.ceil(moveList.length / 2) === 1 ? "move" : "moves"}</p>
-          <BrassButton onClick={start}>Play again</BrassButton>
+          <p className="m-0 text-base text-[var(--tc-cream-dim)]">{self ? `${result.reason}. ${result.text}` : result.resigned ? `${result.text}` : `${resultSentence(result, side)} ${result.text}`} · {Math.ceil(moveList.length / 2)} {Math.ceil(moveList.length / 2) === 1 ? "move" : "moves"}</p>
+          <div className="flex flex-wrap justify-center gap-3">
+            {moveList.length > 0 && <button type="button" className="tc-plank tc-center tc-small" style={{ width: 170 }} onClick={startReview}>Analyse the game</button>}
+            <BrassButton onClick={self ? () => { forget(); startSelf([]); } : start}>{self ? "New board" : "Play again"}</BrassButton>
+          </div>
           <div className="flex gap-4">
-            <button type="button" className="tc-link" onClick={() => setStage("setup")}>Change bot</button>
+            {!self && <button type="button" className="tc-link" onClick={() => setStage("setup")}>Change bot</button>}
             <button type="button" className="tc-link" onClick={onExit}>Back to the menu</button>
           </div>
         </div>
+      )}
+
+      {reviewing && (
+        <>
+          <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col gap-1 bg-gradient-to-b from-black/80 to-transparent p-3 pb-10">
+            <div className="tc-label">Analysing the game</div>
+            <div className="tc-display text-[15px]" aria-live="polite">
+              {reviewIdx === 0 ? "The starting position" : `After ${Math.ceil(reviewIdx / 2)}${reviewIdx % 2 ? "." : "…"} ${moveList[reviewIdx - 1]}`}
+            </div>
+            <div className="text-sm text-[var(--tc-cream-dim)]" aria-live="polite">
+              {reviewIdx >= moveList.length ? (result ? `${result.reason}. ${result.text}` : "The last move")
+                : !best ? "Thinking…"
+                : best.none ? ""
+                : best.san === playedSan ? `${playedSan} was the best move · ${scoreLabel(best.score)}`
+                : `Best: ${best.san} · ${scoreLabel(best.score)}`}
+            </div>
+            {reviewIdx < moveList.length && best && !best.none && best.san !== playedSan && (
+              <div className="flex gap-3 text-xs text-[var(--tc-cream-dim)]">
+                <span><i className="mr-1 inline-block size-2.5 rounded-full align-middle" style={{ background: BEST_COLOR }} />Best move</span>
+                <span><i className="mr-1 inline-block size-2.5 rounded-full align-middle" style={{ background: PLAYED_COLOR }} />Played: {playedSan}</span>
+              </div>
+            )}
+          </div>
+          <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 bg-gradient-to-t from-black/85 to-transparent px-3 pt-10 pb-[calc(0.9rem+env(safe-area-inset-bottom))]">
+            <div className="flex w-full items-center justify-between gap-2">
+              <button type="button" className="tc-round" onClick={() => reviewTo(0)} disabled={reviewIdx === 0} aria-label="To the start">«</button>
+              <button type="button" className="tc-round" onClick={() => reviewTo(reviewIdx - 1)} disabled={reviewIdx === 0} aria-label="Previous move">‹</button>
+              <span className="tc-display flex-1 text-center text-sm">{reviewIdx} / {moveList.length}</span>
+              <button type="button" className="tc-round" onClick={() => reviewTo(reviewIdx + 1)} disabled={reviewIdx >= moveList.length} aria-label="Next move">›</button>
+              <button type="button" className="tc-round" onClick={() => reviewTo(moveList.length)} disabled={reviewIdx >= moveList.length} aria-label="To the end">»</button>
+            </div>
+            <button type="button" className="tc-plank tc-center tc-small" style={{ width: 200 }} onClick={endReview}>Done</button>
+          </div>
+        </>
       )}
     </div>
   );

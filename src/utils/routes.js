@@ -16,6 +16,7 @@ const VIEW_PATHS = {
   rush: "/rush",
   tactica: "/tactica",
   lobby: "/lobby",
+  practice: "/practice",
   history: "/history",
   avatar: "/avatar",
   privacy: "/privacy",
@@ -45,7 +46,7 @@ const SITE = "Zlegend's Chess Bot";
 const TITLES = {
   playHub: "Play", play: "Game", puzzlesHome: "Puzzles", leaderboard: "Leaderboards", review: "Game Review",
   lessons: "Learn", openings: "Openings", watch: "Watch bots play", ranked: "Ranked puzzles", rush: "Puzzle Rush",
-  profile: "Profile", avatar: "Your avatar", history: "Game History", lobby: "1v1 lobby", tactica: "Chess Tactica",
+  profile: "Profile", avatar: "Your avatar", history: "Game History", lobby: "1v1 lobby", practice: "Play with yourself", tactica: "Chess Tactica",
   privacy: "Privacy Policy", terms: "Terms of Service",
 };
 export const titleFor = (view) => (TITLES[view] ? `${TITLES[view]} · ${SITE}` : `${SITE} — can you beat it?`);
@@ -63,7 +64,7 @@ export function sectionForView({ siteView, rushMode, activePuzzle, pastedGame })
   if (siteView === "review") return "review";
   if (siteView === "home") return "home";
   if (["profile", "avatar", "history", "privacy", "terms"].includes(siteView)) return "";
-  if (["playHub", "watch", "tactica", "lobby"].includes(siteView)) return "play";
+  if (["playHub", "watch", "tactica", "lobby", "practice"].includes(siteView)) return "play";
   if (rushMode || activePuzzle) return "puzzles";
   return pastedGame ? "review" : "play";
 }

@@ -4,7 +4,6 @@ import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
 import { BOND_KINDS, KIND_NAMES, LOOKS, MAX_LEVEL, loadBonds, levelsOf, progress } from "./bonds";
 import { Medal } from "./ui";
-import { cburnettPieceSvgUrl } from "../utils/cburnettPieceSvg";
 import { soundOn, setSoundOn, onSoundChange, soundLevel, setSoundLevel, canVibrate, vibrateOn, setVibrateOn, buzz, play } from "./sound";
 import { loadSetting } from "../utils/storage";
 import { loadStory, saveStory, bondsOpen, redEyes, isHard, hardLocked, canSwitchHard, setHardSwitch, resetBond } from "./story";
@@ -16,21 +15,49 @@ import { loadStory, saveStory, bondsOpen, redEyes, isHard, hardLocked, canSwitch
    has grown. */
 const PAWN = 28, QUEEN_SQ = 35, KING_SQ = 36, KNIGHT_SQ = 37; // e4 against d5, e5, f5
 const CIRCLE_SPEED = 0.08; // radians per second
-/* The modes, then Exit. Bonds and Settings are the round buttons in the
-   top corners; Settings holds sound, hard mode, and asking the bond
-   question again. */
+/* The modes, then Exit. Settings is the round button top left; Bonds and,
+   under it, Memories are top right. Settings holds sound, hard mode, and
+   asking the bond question again. Regular Chess opens its own short list:
+   1v1, the bots, or playing yourself. */
 const MODES = [
   { id: "run", name: "Rogue Chess Run", piece: 4 },
   { id: "blitz", name: "Puzzle Rush Tactica", piece: 2 },
-  { id: "bot", name: "Regular Chess", piece: 6 },
-  { id: "versus", name: "1v1", piece: 5 },
-  { id: "memories", name: "Memories", piece: 3 },
+  { id: "regular", name: "Regular Chess", piece: 6 },
   { id: "tutorial", name: "Tutorial", piece: 1 },
 ];
+const REGULAR = [
+  { id: "versus", name: "1v1", piece: 5 },
+  { id: "bot", name: "Play the bots", piece: 6 },
+  { id: "self", name: "Play with yourself", piece: 1 },
+];
+
+/* Bonds: two links of a chain, one cream, one gold, held together. */
+function BondIcon() {
+  return (
+    <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true" fill="none" strokeWidth="2.4" strokeLinecap="round">
+      <rect x="2.2" y="8.4" width="11.6" height="7.2" rx="3.6" transform="rotate(-35 8 12)" stroke="currentColor" />
+      <rect x="10.2" y="8.4" width="11.6" height="7.2" rx="3.6" transform="rotate(-35 16 12)" stroke="var(--tc-gold-hi)" />
+    </svg>
+  );
+}
+/* Memories: a ghostly pawn inside an arrow turning back in time. */
+function MemoryIcon() {
+  return (
+    <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4.6 12a7.4 7.4 0 1 0 2.2-5.25" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M3.6 3.9v4.2h4.2" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <g fill="var(--tc-gold-hi)" opacity="0.8">
+        <circle cx="12" cy="9.3" r="2" />
+        <path d="M10.3 11.6h3.4l1 4.1h-5.4z" />
+        <rect x="8.8" y="15.9" width="6.4" height="1.6" rx="0.6" />
+      </g>
+    </svg>
+  );
+}
 
 export default function MenuScreen({ onPick, onExit, onOpening, blitzBest, sweetheart }) {
   const canvasRef = useRef(null);
-  const [page, setPage] = useState("modes"); // modes | bonds | settings
+  const [page, setPage] = useState("modes"); // modes | regular | bonds | settings
   const [story, setStory] = useState(loadStory);
   const change = (next) => setStory(saveStory(next));
   /* The furthest world reached in the run (0 is the bin). */
@@ -101,12 +128,22 @@ export default function MenuScreen({ onPick, onExit, onOpening, blitzBest, sweet
         aria-pressed={page === "bonds"}
         title="Bonds"
       >
-        <img src={cburnettPieceSvgUrl(5, true)} alt="" width="26" height="26" />
+        <BondIcon />
+      </button>
+      {/* Memories: famous games played with ghost pieces, under Bonds. */}
+      <button
+        type="button"
+        className="tc-round absolute top-16 right-3"
+        onClick={() => onPick("memories")}
+        aria-label="Memories"
+        title="Memories"
+      >
+        <MemoryIcon />
       </button>
       {page === "modes" ? (
         <nav aria-label="Tactica modes" className="absolute inset-x-0 bottom-0 flex flex-col gap-2.5 bg-gradient-to-t from-black/90 via-black/65 to-transparent px-4 pt-14 pb-[calc(1rem+env(safe-area-inset-bottom))]">
           {MODES.map((m) => (
-            <button key={m.id} type="button" className="tc-plank tc-menu" onClick={() => onPick(m.id)}>
+            <button key={m.id} type="button" className="tc-plank tc-menu" onClick={() => (m.id === "regular" ? setPage("regular") : onPick(m.id))}>
               <Medal type={m.piece} />
               <span className="flex flex-1 items-baseline justify-between gap-2">
                 {m.name}
@@ -121,6 +158,17 @@ export default function MenuScreen({ onPick, onExit, onOpening, blitzBest, sweet
             </span>
             Exit
           </button>
+        </nav>
+      ) : page === "regular" ? (
+        <nav aria-label="Regular Chess" className="absolute inset-x-0 bottom-0 flex flex-col gap-2.5 bg-gradient-to-t from-black/90 via-black/65 to-transparent px-4 pt-14 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+          <h2 className="tc-title m-0 text-2xl">Regular Chess</h2>
+          {REGULAR.map((m) => (
+            <button key={m.id} type="button" className="tc-plank tc-menu" onClick={() => onPick(m.id)}>
+              <Medal type={m.piece} />
+              {m.name}
+            </button>
+          ))}
+          <button type="button" className="tc-plank tc-center tc-small" onClick={() => setPage("modes")}>Back</button>
         </nav>
       ) : page === "settings" ? (
         <section aria-labelledby="tacticaSettingsTitle" className="absolute inset-x-0 bottom-0 flex max-h-[82%] flex-col gap-3 overflow-y-auto bg-gradient-to-t from-black/95 via-black/80 to-transparent px-4 pt-16 pb-[calc(1rem+env(safe-area-inset-bottom))]">

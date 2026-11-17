@@ -3,6 +3,7 @@ import StarField from "./StarField";
 import PixelAvatar, { ZPAL, ZPIX, TPAL, TPIX } from "./PixelAvatar";
 import { getUiTheme } from "../utils/uiTheme";
 import ConfirmModal from "./ConfirmModal";
+import { cburnettPieceSvgUrl } from "../utils/cburnettPieceSvg";
 
 const OTHER_MODES = [
   { id: "blind", label: "Blind Chess", desc: "Play a full game by voice, with no board." },
@@ -11,7 +12,7 @@ const OTHER_MODES = [
 
 /** Where a new game starts. `levels` are the bots in the order to offer them,
  *  each with its index in DIFFICULTIES. Picking one starts a game. */
-export default function PlayPage({ levels, hasLiveGame, onPick, onResume, onQuit, onMode, onLobby, onTactica, sweetheart }) {
+export default function PlayPage({ levels, hasLiveGame, onPick, onResume, onQuit, onMode, onLobby, onTactica, onSelf, sweetheart }) {
   const T = getUiTheme(sweetheart);
   const [open, setOpen] = useState(false);
   const [quitting, setQuitting] = useState(false);
@@ -83,12 +84,25 @@ export default function PlayPage({ levels, hasLiveGame, onPick, onResume, onQuit
           <span className={"flex-1 text-base font-bold " + T.ink}>Chess Tactica</span>
         </button>
 
-        <button type="button" onClick={onLobby} className={`${card} cursor-pointer p-4 text-left`}>
-          <span className="flex items-center justify-between gap-2">
-            <span className={"text-sm font-bold " + T.ink}>Player vs Player</span>
-            <span className={"text-xs font-bold " + T.interactiveText}>Lobby</span>
+        {/* 1v1: Zlegend squaring up to a pawn. Opens the lobby. */}
+        <button type="button" onClick={onLobby} className={`${card} flex w-full cursor-pointer items-center gap-3 p-4 text-left transition hover:-translate-y-0.5 ${focus}`}>
+          <span className="flex shrink-0 items-center" aria-hidden="true">
+            <PixelAvatar rows={ZPIX} pal={ZPAL} size={40} />
+            <svg width="18" height="18" viewBox="0 0 24 24" className={"-mx-0.5 " + T.accentText} fill="currentColor">
+              <path d="M3 3l7.5 7.5-1.4 1.4-1.6-1.6L5 12.8 3.6 11.4l2.5-2.5L3 5.8zm18 0v2.8l-9.3 9.3 1.6 1.6-1.4 1.4-1.6-1.6-2.5 2.5-1.4-1.4 2.5-2.5-1.6-1.6 1.4-1.4 1.6 1.6L18.2 3zM6.1 16.1l1.4 1.4L5 20H3v-2z" />
+            </svg>
+            <img src={cburnettPieceSvgUrl(1, false)} alt="" width="36" height="36" style={{ transform: "scaleX(-1)" }} />
           </span>
-          <span className={"mt-1 block text-xs leading-relaxed " + T.dimText}>Join the lobby, sit at a table, and play a real person.</span>
+          <span className={"flex-1 text-base font-bold " + T.ink}>1v1</span>
+        </button>
+
+        {/* Play with yourself: move both sides to try out ideas. */}
+        <button type="button" onClick={onSelf} className={`${card} flex w-full cursor-pointer items-center gap-3 p-4 text-left transition hover:-translate-y-0.5 ${focus}`}>
+          <span className="relative block shrink-0" style={{ width: 40, height: 40 }} aria-hidden="true">
+            <img src={cburnettPieceSvgUrl(6, true)} alt="" width="30" height="30" className="absolute top-0 left-0" />
+            <img src={cburnettPieceSvgUrl(6, false)} alt="" width="30" height="30" className="absolute right-0 bottom-0" />
+          </span>
+          <span className={"flex-1 text-base font-bold " + T.ink}>Play with yourself</span>
         </button>
 
         {OTHER_MODES.map((m) => (

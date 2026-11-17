@@ -89,6 +89,7 @@ function TacticaPageInner({ pieceImgSrc, sweetheart, player, start = null, onExi
   else if (screen === "run") page = <RunMode pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} best={runBest} onBest={recordRunBest} displayName={player?.displayName} onLeaderboard={onLeaderboard ? () => onLeaderboard("run") : null} onExit={toMenu} />;
   else if (screen === "memories") page = <MemoryMode onExit={toMenu} />;
   else if (screen === "bot") page = <BotMode pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={toMenu} />;
+  else if (screen === "self") page = <BotMode key="self" self pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={leave("self")} />;
   else if (screen === "versus") page = <VersusMode {...player} pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={toMenu} />;
   else if (screen === "blitz") page = <BlitzMode sweetheart={sweetheart} best={blitzBest} displayName={player?.displayName} onBest={recordBest} onExit={leave("blitz")} exitLabel={start === "blitz" ? "Back to Puzzles" : undefined} />;
   else page = <MenuScreen onPick={(id) => setScreen(id === "tutorial" ? "opening" : id)} onOpening={() => setScreen("opening")} onExit={onExit} blitzBest={blitzBest} sweetheart={sweetheart} />;

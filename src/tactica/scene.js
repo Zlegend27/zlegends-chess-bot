@@ -248,11 +248,14 @@ export class TacticaScene {
     this.pieces = new Map();
     this.marks = new THREE.Group();
     this.hoverMark = new THREE.Group();
+    /* Analysis arrows, kept apart from the move highlights so picking a
+       character doesn't wipe them. */
+    this.hints = new THREE.Group();
     this.colors = colors;
     this.frameTimes = [];
     this.setupPost();
     this.buildBoard();
-    this.scene.add(this.marks, this.hoverMark);
+    this.scene.add(this.marks, this.hoverMark, this.hints);
 
     this.onLostEvent = (e) => { e.preventDefault(); onLost?.(); };
     canvas.addEventListener("webglcontextlost", this.onLostEvent);
@@ -827,7 +830,17 @@ export class TacticaScene {
     return this.beamTexture;
   }
 
-  addArrow(from, to, color, opacity) {
+  /** Analysis arrows: [{ from, to, color }] as 0-63 squares; [] clears. */
+  setHints(arrows = []) {
+    for (const m of this.hints.children) { m.material?.dispose(); m.geometry?.dispose(); }
+    this.hints.clear();
+    /* Drawn over everything, like the x-ray square outlines: from a low
+       camera the board surface and the characters would hide them. */
+    for (const a of arrows) this.addArrow(this.worldOf(a.from), this.worldOf(a.to), a.color, 0.85, this.hints, 0.05, true);
+    this.wake();
+  }
+
+  addArrow(from, to, color, opacity, into = this.marks, y = 0.025, onTop = false) {
     const dir = new THREE.Vector3().subVectors(to, from);
     const length = dir.length() - 0.35;
     if (length <= 0.2) return;
@@ -835,14 +848,17 @@ export class TacticaScene {
     const w = 0.07, head = 0.24;
     shape.moveTo(-w, 0); shape.lineTo(w, 0); shape.lineTo(w, length - head); shape.lineTo(head * 0.8, length - head);
     shape.lineTo(0, length); shape.lineTo(-head * 0.8, length - head); shape.lineTo(-w, length - head); shape.closePath();
-    const mesh = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide }));
+    const mesh = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, depthTest: !onTop, side: THREE.DoubleSide }));
     mesh.userData.ownGeometry = true;
+    if (onTop) mesh.renderOrder = 9;
+    /* The shape points along its own +y; lying flat, that turns to
+       (-sin z, 0, -cos z), so this aims it from `from` to `to`. */
     mesh.rotation.x = -Math.PI / 2;
-    mesh.rotation.z = Math.atan2(-dir.x, -dir.z) + Math.PI;
-    mesh.position.copy(from).setY(0.025);
+    mesh.rotation.z = Math.atan2(-dir.x, -dir.z);
+    mesh.position.copy(from).setY(y);
     const start = dir.clone().normalize().multiplyScalar(0.25);
     mesh.position.add(start);
-    this.marks.add(mesh);
+    into.add(mesh);
   }
 
   /** Strategic view: the whole board. */

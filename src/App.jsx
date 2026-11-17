@@ -49,6 +49,7 @@ const WelcomeSheet = lazy(() => import("./components/WelcomeSheet"));
 const GameHistoryPage = lazy(() => import("./components/GameHistoryPage"));
 const AvatarBuilderPage = lazy(() => import("./components/AvatarBuilderPage"));
 const LobbyPage = lazy(() => import("./pvp/LobbyPage"));
+const SelfPlayPage = lazy(() => import("./components/SelfPlayPage"));
 const PlayView = lazy(() => import("./components/PlayView"));
 import { syncRankBotToSupabase, fetchRankBotFromSupabase, logRankBotMove } from "./utils/rankBot";
 import { ENGINE_VERSION } from "./utils/version";
@@ -87,6 +88,9 @@ const PLAY_LEVELS = DIFFICULTIES
 const formatClock = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 /* Matches the .15s used for the app's other quick UI transitions. */
 const PIECE_SLIDE_MS = 150;
+/* The board part of the engine's FEN: which position an analysis arrow
+   was worked out for. */
+const posKey = (eng) => eng.fen().split(" ").slice(0, 2).join(" ");
 /* Puzzle Rush difficulty ramp: climb one rating band every 3 solves in a
    row, drop back one band on a miss so a rough patch doesn't strand the
    player facing puzzles far above what they just missed. */
@@ -750,6 +754,13 @@ export default function ZlegendsBot() {
     setAnalyzing(false); setBestArrow(null); setAnalysisExtra([]);
   }, [canAnalyze]);
 
+  /* A new puzzle (or leaving a missed-puzzle attempt) swaps the position
+     under the board while analysis can stay available, so exploratory
+     moves and the old arrow belong to a position that's gone. */
+  useEffect(() => {
+    setAnalysisExtra([]); setBestArrow(null);
+  }, [missedAttempt, activePuzzle]);
+
   /* analysis mode: while reviewing or browsing a replay, continuously
      suggest the engine's best move as an arrow */
   useEffect(() => {
@@ -765,7 +776,7 @@ export default function ZlegendsBot() {
       const move = probe.legalMoves().find((m) => probe.sanOf(m) === knownBest);
       if (move !== undefined) {
         const score = gradeDetail.scores[reviewIndex];
-        setBestArrow({ from: mFrom(move), to: mTo(move), san: knownBest });
+        setBestArrow({ from: mFrom(move), to: mTo(move), san: knownBest, at: posKey(eng) });
         setEvalCp(probe.getSide() === 1 ? score : -score);
         setAnalysisBusy(false);
         return;
@@ -775,8 +786,12 @@ export default function ZlegendsBot() {
     setAnalysisBusy(true);
     let cancelled = false;
     const fullLine = (reviewing ? moveList.slice(0, reviewIndex) : moveList).concat(analysisExtra);
+    const at = posKey(eng);
     runSearch(fullLine, 800, 0, { personality: BALANCED, useBook: false }).then((res) => {
       if (cancelled) return;
+      /* The board moved on while the engine thought: drop the answer
+         rather than draw it on the wrong position. */
+      if (posKey(eng) !== at) { setAnalysisBusy(false); return; }
       if (res && res.move) {
         /* SAN of the suggestion, for the "Best: Nf3" text next to the
            board -- on a phone the arrow alone is easy to misread. eng is
@@ -785,7 +800,7 @@ export default function ZlegendsBot() {
            move mid-search, so treat the label as best-effort. */
         let san = null;
         try { san = eng.sanOf(res.move); } catch { /* stale position */ }
-        setBestArrow({ from: mFrom(res.move), to: mTo(res.move), san });
+        setBestArrow({ from: mFrom(res.move), to: mTo(res.move), san, at });
         const whiteScore = eng.getSide() === 1 ? -res.score : res.score;
         setInfo({ depth: res.depth, score: whiteScore, nodes: res.nodes, time: res.time, pv: res.pv });
       } else {
@@ -2536,7 +2551,10 @@ export default function ZlegendsBot() {
   }, [lastMove]);
   /* Shared with the lesson boards; see utils/arrowGeometry.js. */
   const arrowGeometry = (arrow) => arrowGeometryFor(arrow, flipped);
-  const arrowLine = arrowGeometry(bestArrow);
+  /* Drawn only while analysis is on, and only on the position it was
+     worked out for: every arrow carries its position, so a stale one can
+     never sit on the pieces after the board changes. */
+  const arrowLine = canAnalyze && analyzing && bestArrow && bestArrow.at === posKey(eng) ? arrowGeometry(bestArrow) : null;
   /* Reviewing a slip, the move that should have been played, drawn on the
      position it was played in. */
   const mateFxProps = showMateFx ? {
@@ -2551,7 +2569,7 @@ export default function ZlegendsBot() {
     const played = reviewIndex - 1;
     const grade = moveGrades?.[played];
     const best = gradeDetail?.bestSans?.[played];
-    if (!reviewing || practice || !["inaccuracy", "mistake", "blunder", "miss"].includes(grade)) return null;
+    if (!reviewing || practice || analysisExtra.length || !["inaccuracy", "mistake", "blunder", "miss"].includes(grade)) return null;
     if (!best || best === moveList[played] || !gradeDetail.fens) return null;
     const probe = createEngine();
     probe.loadFen(gradeDetail.fens[played]);
@@ -2671,8 +2689,23 @@ export default function ZlegendsBot() {
         onMode={enterMode}
         onLobby={() => setSiteView("lobby")}
         onTactica={() => { setTacticaStart(null); setSiteView("tactica"); }}
+        onSelf={() => setSiteView("practice")}
         sweetheart={sweetheart}
       />
+    );
+  }
+
+  if (siteView === "practice") {
+    return (
+      <Suspense fallback={null}>
+        <SelfPlayPage
+          pieceSetId={pieceSetId}
+          boardVars={boardVars}
+          sweetheart={sweetheart}
+          onBack={() => setSiteView("playHub")}
+          onTactica={() => { setTacticaStart("self"); setSiteView("tactica"); }}
+        />
+      </Suspense>
     );
   }
 
@@ -2708,7 +2741,7 @@ export default function ZlegendsBot() {
       <Suspense fallback={null}>
         <TacticaPage
           pieceImgSrc={pieceImgSrc} sweetheart={sweetheart}
-          start={tacticaStart} onExit={() => onSection(tacticaStart ? "puzzles" : "play")}
+          start={tacticaStart} onExit={() => (tacticaStart === "self" ? setSiteView("practice") : onSection(tacticaStart ? "puzzles" : "play"))}
           onLeaderboard={(board) => openLeaderboard(180, board)}
           player={{ session, profile, displayName, avatar: avatarFromSession(session), onSignIn: openSignIn, rating: playerRating, onRated }}
         />
