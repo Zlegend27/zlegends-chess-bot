@@ -85,7 +85,13 @@ function writeDevice(p) {
   saveSetting("tacticaAt", p.at);
 }
 
+/* On the development copy of the site, testing (jumping floors, clearing
+   bosses) must never land on a real account: nothing is saved to the
+   account there unless switched on with localStorage "tacticaSyncInDev". */
+const devBlocked = () => import.meta.env.DEV && !loadSetting("tacticaSyncInDev", false);
+
 async function writeAccount(p) {
+  if (devBlocked()) return;
   const supabase = await getSupabase();
   await supabase?.auth.updateUser({ data: { zl_tactica: p } }).catch(() => {});
 }

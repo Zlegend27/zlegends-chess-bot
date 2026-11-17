@@ -139,7 +139,7 @@ export function dressIcyLake(ts) {
   const floeSnow = new THREE.MeshStandardMaterial({ color: "#eaf3fa", roughness: 0.6 });
   dress(floeSnow, "ice", "snow", { repeat: 1, tint: "#dce6ee", normal: 1 });
   /* The cracks of the second half lie over the snow, on their own layer. */
-  const crackLayer = new THREE.Mesh(new THREE.CircleGeometry(6.6, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: crackOnly(), transparent: true, depthWrite: false, opacity: 0 }));
+  const crackLayer = new THREE.Mesh(new THREE.CircleGeometry(5.7, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: crackOnly(), transparent: true, depthWrite: false, opacity: 0 }));
   crackLayer.position.y = -0.19;
   /* A thick floe of old ice: flat under the board, snow drifted up toward
      its broken edge, a wall of blue ice with ledges dropping into the

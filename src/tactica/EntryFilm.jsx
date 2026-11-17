@@ -8,8 +8,10 @@ import { play as playSound, setScore, setWind } from "./sound";
 export default function EntryFilm({ world, onDone }) {
   const canvasRef = useRef(null);
   const [line, setLine] = useState(null);
-  const doneRef = useRef(onDone);
-  doneRef.current = onDone;
+  /* Done only once, whether the film ends or is tapped away at the same moment. */
+  const finished = useRef(false);
+  const doneRef = useRef(null);
+  doneRef.current = () => { if (finished.current) return; finished.current = true; onDone(); };
   const film = ENTRY_FILMS[world];
 
   useEffect(() => {
