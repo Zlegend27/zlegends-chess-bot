@@ -3,9 +3,11 @@
    touch of random pitch so repeats don't sound mechanical, plus a fly buzz
    synthesized in code that drifts past now and then. Phones only allow
    sound after a touch, so nothing loads or plays until unlock() is called
-   from one. One on/off switch for all of it, remembered on this device. */
+   from one. An on/off switch and a volume level for all of it, and a
+   vibration switch for hits, remembered on this device. */
 import { loadSetting, saveSetting } from "../utils/storage";
 import { SYNTHS } from "./synth.js";
+import { startScore } from "./score.js";
 
 const NAMES = [
   "tap", "land", "landHeavy", "step", "plank", "brass", "ghost", "swish", "slice", "draw", "chop",
@@ -31,6 +33,9 @@ export const ATTACK_CUES = {
 let ctx = null, master = null;
 const buffers = new Map();
 let enabled = loadSetting(KEY, true) !== false;
+let level = Math.min(1, Math.max(0, Number(loadSetting("tacticaVolume", 1)) || 0));
+let vibrate = loadSetting("tacticaVibrate", true) !== false;
+const gainNow = () => (enabled ? MASTER * level : 0);
 let flyTimer = null, fliesWanted = false;
 const listeners = new Set();
 
@@ -41,8 +46,26 @@ export function onSoundChange(fn) { listeners.add(fn); return () => listeners.de
 export function setSoundOn(on) {
   enabled = on;
   saveSetting(KEY, on);
-  if (master) master.gain.value = on ? MASTER : 0;
+  if (master) master.gain.value = gainNow();
   listeners.forEach((fn) => fn(on));
+}
+
+/** The volume level, 0 to 1. */
+export const soundLevel = () => level;
+export function setSoundLevel(v) {
+  level = Math.min(1, Math.max(0, Number(v) || 0));
+  saveSetting("tacticaVolume", level);
+  if (master) master.gain.value = gainNow();
+}
+
+/** Vibration on hits, where the phone can (Android; iPhones can't). */
+export const canVibrate = () => typeof navigator !== "undefined" && typeof navigator.vibrate === "function";
+export const vibrateOn = () => vibrate;
+export function setVibrateOn(on) { vibrate = !!on; saveSetting("tacticaVibrate", vibrate); }
+/** A short buzz (ms, or a pattern) if vibration is on. */
+export function buzz(pattern = 60) {
+  if (!vibrate || !canVibrate()) return;
+  try { navigator.vibrate(pattern); } catch { /* not allowed right now */ }
 }
 
 /** Starts audio from inside a touch or click (phones require it) and loads
@@ -54,7 +77,7 @@ export function unlock() {
       if (!AC) return;
       ctx = new AC();
       master = ctx.createGain();
-      master.gain.value = enabled ? MASTER : 0;
+      master.gain.value = gainNow();
       master.connect(ctx.destination);
       for (const name of NAMES) {
         fetch(`/tactica/sfx/${name}.mp3`)
@@ -99,7 +122,7 @@ export function play(name, { volume = 1, rate = 1, delay = 0, pan = 0, ...rest }
 
 /** A single fly buzzing past: a reedy hum that wobbles, swells and fades
  *  while it drifts from one side to the other. Made in code. */
-function buzz() {
+function flyBuzz() {
   if (!ctx || !enabled || ctx.state !== "running") return;
   try {
     const now = ctx.currentTime, len = 0.9 + Math.random() * 1.1;
@@ -143,7 +166,7 @@ function buzz() {
 function scheduleFly() {
   clearTimeout(flyTimer);
   if (!fliesWanted) return;
-  flyTimer = setTimeout(() => { buzz(); scheduleFly(); }, 8000 + Math.random() * 14000);
+  flyTimer = setTimeout(() => { flyBuzz(); scheduleFly(); }, 8000 + Math.random() * 14000);
 }
 
 /* Music. A track is a file in public/tactica/music/ (see the README
@@ -168,9 +191,24 @@ export function playMusic(name, { volume = 0.55, loop = false, fade = 1.2 } = {}
       mine.gain.gain.exponentialRampToValueAtTime(volume, ctx.currentTime + fade);
       mine.src.connect(mine.gain).connect(master);
       mine.src.start();
+      /* A real track replaces the music made in code. */
+      setScore(null);
     })
     .catch(() => { /* no track there: silence */ });
 }
+/* The music made in code (score.js), for when there's no real track. */
+let stopScore = null, scoreMoodNow = null;
+/** Plays the code-made music in `mood` ("wonder", "action"), or stops it
+ *  with null. Never plays over a real track. */
+export function setScore(mood) {
+  if (mood === scoreMoodNow) return;
+  scoreMoodNow = mood;
+  stopScore?.();
+  stopScore = null;
+  if (!mood || !ctx || !enabled || music?.src) return;
+  stopScore = startScore(ctx, master, mood, { volume: 0.5 });
+}
+
 /** Fades the music out over `fade` seconds. */
 export function stopMusic(fade = 1.2) {
   const old = music;

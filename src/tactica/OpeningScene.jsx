@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { SHOTS, FIRST, finish, W, H } from "./opening/film";
-import { play as playSound, playMusic, stopMusic, setFlies, setWind } from "./sound";
+import { play as playSound, playMusic, stopMusic, setFlies, setWind, setScore } from "./sound";
+
+/* Which code-made music goes under each shot (until a real track is added):
+   wonder while the pieces wake and ask, action from the bond to the end. */
+const scoreFor = (shot) => (/^duel|^bonded$|^arenaIn$|^finale$/.test(shot) ? "action" : /^awaken$|^ask1$|^huddle$|^beg$|^ask2$/.test(shot) ? "wonder" : null);
 import { BrassButton } from "./ui";
 
 /* The opening, as a 2D film drawn on one canvas (opening/film.js holds the
@@ -28,7 +32,7 @@ export default function OpeningScene({ skippable = false, onDone }) {
     playMusic("opening", { loop: true });
     let id = FIRST, began = performance.now(), fired = 0, over = false, asked = false, shown = null, frame = 0;
     const filmBegan = began;
-    const go = (next) => { id = next; began = performance.now(); fired = 0; asked = false; const w = !!SHOTS[next]?.wind; if (w !== windOn) { windOn = w; setWind(w, SHOTS[next]?.wind ?? 0); } };
+    const go = (next) => { id = next; began = performance.now(); fired = 0; asked = false; setScore(scoreFor(next)); const w = !!SHOTS[next]?.wind; if (w !== windOn) { windOn = w; setWind(w, SHOTS[next]?.wind ?? 0); } };
     let windOn = false;
     const end = (answer) => { if (over) return; over = true; doneRef.current(answer); };
     /* A tap jumps to the shot's next beat (the next narrator line). */
@@ -76,7 +80,7 @@ export default function OpeningScene({ skippable = false, onDone }) {
       }
     };
     frame = requestAnimationFrame(draw);
-    return () => { over = true; cancelAnimationFrame(frame); hurryRef.current = null; stopMusic(1.5); setWind(false); setFlies(true); };
+    return () => { over = true; cancelAnimationFrame(frame); hurryRef.current = null; stopMusic(1.5); setScore(null); setWind(false); setFlies(true); };
   }, [stage]);
 
   return (

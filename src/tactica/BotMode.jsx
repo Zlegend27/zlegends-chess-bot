@@ -14,7 +14,9 @@ import { applyStory } from "./bonds";
    bots (the 1000, 1500 and 2000 Elo Stockfish levels and the homemade
    Engine). Rank Bot is left out here: its games feed your rank, and a game
    in the bin isn't rated. Same controls as the tutorial; a pawn reaching
-   the last rank asks which piece it becomes. */
+   the last rank asks which piece it becomes. A game in progress is saved
+   on the device after every move and can be resumed; the menu can take
+   back your last move, and lists the moves so far. */
 const BOTS = DIFFICULTIES.filter((d) => d.id !== "rank");
 const KNIGHT = 2, QUEEN = 5;
 const sqOf = (sq120) => M120TO64[sq120];
@@ -22,6 +24,12 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 /* A bot never answers faster than this, so its move doesn't land before
    yours has finished. */
 const MIN_THINK_MS = 400;
+/* The game in progress, saved after every move: { bot, side, moves }. */
+const SAVE = "tacticaBotGame";
+const loadSaved = () => {
+  const g = loadSetting(SAVE, null);
+  return g && Array.isArray(g.moves) && (g.side === 1 || g.side === -1) && Number.isInteger(g.bot) ? g : null;
+};
 
 /** Your characters, front rank first, left to right as you look at the board. */
 export function friendlySquares(eng, side) {
@@ -103,6 +111,11 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
   const [menuOpen, setMenuOpen] = useState(false);
   /* The square a pawn is promoting on, while the player picks the piece. */
   const [promoting, setPromoting] = useState(null);
+  /* A game left unfinished, offered on the setup screen. */
+  const [saved, setSaved] = useState(loadSaved);
+  /* Who this game is against and which side you play, for saving it (a ref,
+     so a bot move finishing later saves the right game). */
+  const gameRef = useRef({ bot: 0, side: 1 });
   /* What the camera sees, for the map's view cone. */
   const viewSource = useViewSource();
   /* Regular Chess always plays the full attacks. */
@@ -203,13 +216,15 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
       return false;
     }
     playSound(res.winner === side ? "confirm" : res.winner ? "error" : "chime", { volume: 0.8 });
+    forget();
     setResult(res);
     setStage("over");
     sceneRef.current?.setMarks({});
     return true;
   };
 
-  const botTurn = async (list) => {
+  const botTurn = (list) => botTurnWith(list, bot);
+  const botTurnWith = async (list, bot) => {
     const game = gameIdRef.current;
     setThinking(true);
     const started = performance.now();
@@ -222,8 +237,9 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
     try {
       const san = await animate(move, true);
       if (game !== gameIdRef.current) return;
-      setMoveList([...list, san]);
-      checkOver();
+      const next = [...list, san];
+      setMoveList(next);
+      if (!checkOver()) remember(next);
     } finally {
       /* Your turn starts once the bot's move has finished playing out. */
       setThinking(false);
@@ -232,11 +248,71 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
     }
   };
 
+  /** Saves the game in progress after a move; a finished one is forgotten. */
+  const remember = (moves) => saveSetting(SAVE, { ...gameRef.current, moves });
+  const forget = () => { saveSetting(SAVE, null); setSaved(null); };
+
+  /** Picks up a saved game where it was left. */
+  const resume = () => {
+    const g = saved;
+    if (!g) return;
+    gameIdRef.current++;
+    eng.reset();
+    const played = [];
+    for (const san of g.moves) {
+      const move = eng.legalMoves().find((m) => eng.sanOf(m) === san);
+      if (!move) break;
+      eng.make(move);
+      played.push(san);
+    }
+    const idx = Math.min(BOTS.length - 1, Math.max(0, g.bot));
+    gameRef.current = { bot: idx, side: g.side };
+    setBotIdx(idx);
+    setSide(g.side);
+    setMoveList(played);
+    setSelectedIdx(0);
+    setChosen(null);
+    setResult(null);
+    setView("board");
+    setThinking(false);
+    setStage("playing");
+    const scene = sceneRef.current;
+    scene?.setFlipped(g.side === -1);
+    scene?.setPieces(piecesNow());
+    scene?.showBoard();
+    if (gameResult(eng)) { checkOver(); return; }
+    /* Left while the bot was to move: it moves now. */
+    if (eng.getSide() !== g.side) botTurnWith(played, BOTS[idx]);
+  };
+
+  /** Takes back your last move (and the bot's answer to it). */
+  const takeBack = () => {
+    if (busyRef.current || !canTakeBack) return;
+    gameIdRef.current++;
+    setThinking(false);
+    /* On your turn: your move and the bot's answer. While it thinks: yours. */
+    const plies = eng.getSide() === side ? 2 : 1;
+    for (let i = 0; i < plies; i++) eng.unmake();
+    const list = moveList.slice(0, moveList.length - plies);
+    setMoveList(list);
+    remember(list);
+    setChosen(null);
+    setMenuOpen(false);
+    sceneRef.current?.setPieces(piecesNow());
+    sceneRef.current?.showBoard();
+    setView("board");
+    playSound("swish", { volume: 0.5 });
+  };
+  /* Whether there is a move of yours to take back. */
+  const canTakeBack = stage === "playing" && !busy && moveList.length >= (eng.getSide() === side ? 2 : 1) && (side === 1 || moveList.length > 1);
+
   const start = () => {
     gameIdRef.current++;
+    forget();
     saveSetting("tacticaBotIdx", botIdx);
     saveSetting("tacticaBotColour", colourPick);
     const s = colourPick === "random" ? (Math.random() < 0.5 ? 1 : -1) : colourPick === "black" ? -1 : 1;
+    gameRef.current = { bot: botIdx, side: s };
     eng.reset();
     setSide(s);
     setMoveList([]);
@@ -271,6 +347,7 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
       if (game !== gameIdRef.current) return;
       list = [...moveList, san];
       setMoveList(list);
+      remember(list);
       const stillHere = friendlySquares(eng, side).indexOf(target);
       setSelectedIdx((i) => (stillHere >= 0 ? stillHere : Math.min(i, friendlySquares(eng, side).length - 1)));
     } finally {
@@ -282,6 +359,7 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
 
   const resign = () => {
     gameIdRef.current++;
+    forget();
     setMenuOpen(false);
     setThinking(false);
     setResult({ text: side === 1 ? "0–1" : "1–0", reason: "Resigned", winner: -side, resigned: true });
@@ -377,7 +455,22 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
               <button type="button" aria-label="Close the menu" className="absolute inset-0 cursor-default border-0 bg-transparent" onClick={() => setMenuOpen(false)} />
               <div className="tc-panel absolute top-16 left-3 flex w-56 flex-col gap-3 p-3">
                 <button type="button" className="tc-plank tc-center tc-small" onClick={() => setMenuOpen(false)}>Resume</button>
+                <button type="button" className="tc-plank tc-center tc-small" onClick={takeBack} disabled={!canTakeBack}>Take back my move</button>
                 <button type="button" className="tc-plank tc-center tc-small" onClick={resign}>Resign</button>
+                {moveList.length > 0 && (
+                  <div>
+                    <div className="tc-label mb-1">Moves</div>
+                    <ol className="m-0 grid max-h-40 list-none grid-cols-[auto_1fr_1fr] gap-x-2 overflow-y-auto p-0 text-sm" style={{ fontFamily: "var(--font-mono)" }}>
+                      {Array.from({ length: Math.ceil(moveList.length / 2) }, (_, i) => (
+                        <li key={i} className="contents">
+                          <span className="text-[var(--tc-cream-dim)]">{i + 1}.</span>
+                          <span>{moveList[i * 2]}</span>
+                          <span>{moveList[i * 2 + 1] ?? ""}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
                 <button type="button" className="tc-plank tc-center tc-small" onClick={() => { gameIdRef.current++; onExit(); }}>Back to the menu</button>
               </div>
             </>
@@ -420,7 +513,13 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
               ))}
             </div>
           </fieldset>
-          <BrassButton className="self-center" onClick={start}>Start the game</BrassButton>
+          {saved && saved.moves.length > 0 && (
+            <div className="tc-panel flex flex-col items-center gap-2 p-3 text-center">
+              <span className="text-sm text-[var(--tc-cream-dim)]">Unfinished game vs {BOTS[Math.min(BOTS.length - 1, Math.max(0, saved.bot))].label}, {Math.ceil(saved.moves.length / 2)} moves in, you play {saved.side === 1 ? "White" : "Black"}</span>
+              <BrassButton onClick={resume}>Resume that game</BrassButton>
+            </div>
+          )}
+          <BrassButton className="self-center" onClick={start}>{saved && saved.moves.length > 0 ? "Start a new game" : "Start the game"}</BrassButton>
           <button type="button" className="tc-link self-center" onClick={onExit}>Back to the menu</button>
         </div>
       )}
@@ -430,7 +529,7 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit }) {
           <h2 className="tc-title m-0 text-[28px]">
             {result.resigned ? "You resigned" : result.winner === side ? "You win!" : result.winner ? `${bot.label} wins` : "Draw"}
           </h2>
-          <p className="m-0 text-base text-[var(--tc-cream-dim)]">{result.resigned ? `${result.text}` : `${resultSentence(result, side)} ${result.text}`} · {Math.ceil(moveList.length / 2)} moves</p>
+          <p className="m-0 text-base text-[var(--tc-cream-dim)]">{result.resigned ? `${result.text}` : `${resultSentence(result, side)} ${result.text}`} · {Math.ceil(moveList.length / 2)} {Math.ceil(moveList.length / 2) === 1 ? "move" : "moves"}</p>
           <BrassButton onClick={start}>Play again</BrassButton>
           <div className="flex gap-4">
             <button type="button" className="tc-link" onClick={() => setStage("setup")}>Change bot</button>

@@ -73,3 +73,53 @@ export async function fetchLeaderboard(duration, limit = 10, mode = "rush") {
     return [];
   }
 }
+
+/** A finished Rogue Chess Run (Chess Tactica), started from floor 1. Its
+ *  score is floors cleared, a challenged floor counting double. Saved only
+ *  once supabase/010_run_leaderboard.sql has been run; quietly dropped
+ *  before that. Never throws. */
+export async function submitRunScore({ score, floor, won = false, hard = false, displayName }) {
+  const supabase = await getSupabase();
+  if (!supabase) return;
+  try {
+    await supabase.from("run_scores").insert({
+      client_id: getClientId(),
+      display_name: (displayName || "").trim().slice(0, 24) || null,
+      score: Math.max(0, Math.min(100, Math.round(score))),
+      floor: Math.max(1, Math.min(40, Math.round(floor))),
+      won: !!won && floor >= 40,
+      hard: !!hard,
+    });
+  } catch {
+    /* a nice-to-have, like the Rush leaderboard */
+  }
+}
+
+/** The top Rogue Chess Run players: best score first, then the furthest
+ *  floor, then whoever got there first; one row per player (their best).
+ *  [] on any failure, or before 010 has been run. */
+export async function fetchRunLeaderboard(limit = 10) {
+  const supabase = await getSupabase();
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase
+      .from("run_leaderboard")
+      .select("player_key, display_name, score, floor, won, hard, created_at")
+      .order("score", { ascending: false })
+      .order("floor", { ascending: false })
+      .order("created_at", { ascending: true })
+      .limit(limit * 10);
+    if (error || !data) return [];
+    const seen = new Set();
+    const best = [];
+    for (const row of data) {
+      if (seen.has(row.player_key)) continue;
+      seen.add(row.player_key);
+      best.push({ display_name: cleanName(row.display_name), solved: row.score, floor: row.floor, won: row.won, hard: row.hard, created_at: row.created_at });
+      if (best.length >= limit) break;
+    }
+    return best;
+  } catch {
+    return [];
+  }
+}

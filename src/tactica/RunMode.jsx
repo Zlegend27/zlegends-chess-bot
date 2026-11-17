@@ -7,10 +7,12 @@ import { judgePuzzleMove } from "../utils/puzzleSession";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin, placeEscapeProps } from "./sets/trashBin";
 import { BrassButton, MapButton, MenuButton, useViewSource } from "./ui";
-import { play as playSound } from "./sound";
+import { play as playSound, buzz } from "./sound";
 import { track } from "../utils/track";
 import { makeEscape, movesOf, apply, escaped, strikerOf, piecesOf, fenOf, escapeClock, closeRing, outerRing, ringSquares, allStuck } from "./escape";
 import { loadSetting, saveSetting } from "../utils/storage";
+import { noteTacticaChange } from "./accountSync.js";
+import { submitRunScore } from "../utils/leaderboard";
 import {
   START_HEALTH, wrongMoveDamage, phasesForFloor, isStoryFloor, timerSeconds, ratingFor,
   rushDamage, pickPuzzle, effectFloors, offer, choose, floorScore, maxPliesFor, minPliesFor, rememberSeen, isBonusAfter, HARD_MODE_RATING,
@@ -70,7 +72,42 @@ function Cracks() {
   );
 }
 
-export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit }) {
+/** Gold sparks flying out from the middle of the screen, once. */
+function SparkBurst() {
+  return (
+    <div className="tc-burst pointer-events-none absolute inset-0 z-10" aria-hidden="true">
+      {Array.from({ length: 22 }, (_, i) => (
+        <span key={i} style={{ "--a": `${(i / 22) * 360 + (i % 3) * 7}deg`, "--d": `${90 + (i % 5) * 28}px`, "--t": `${0.7 + (i % 4) * 0.12}s` }} />
+      ))}
+    </div>
+  );
+}
+
+/** How the run went, in four numbers. */
+function RunSummary({ run, hard }) {
+  const mins = Math.max(0, Math.round((Date.now() - (run.startedAt ?? Date.now())) / 60000));
+  const items = [
+    [run.cleared ?? 0, (run.cleared ?? 0) === 1 ? "floor cleared" : "floors cleared"],
+    [run.bosses ?? 0, (run.bosses ?? 0) === 1 ? "boss beaten" : "bosses beaten"],
+    [run.wrong ?? 0, (run.wrong ?? 0) === 1 ? "mistake" : "mistakes"],
+    [mins < 1 ? "<1" : mins, mins === 1 ? "minute" : "minutes"],
+  ];
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <ul className="tc-panel m-0 grid list-none grid-cols-2 gap-x-6 gap-y-2 px-5 py-3">
+        {items.map(([n, label]) => (
+          <li key={label} className="flex flex-col items-center">
+            <span className="tc-display text-2xl">{n}</span>
+            <span className="text-xs text-[var(--tc-cream-dim)]">{label}</span>
+          </li>
+        ))}
+      </ul>
+      {hard && <span className="tc-label" style={{ color: "var(--tc-danger)" }}>Hard mode</span>}
+    </div>
+  );
+}
+
+export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, displayName, onExit }) {
   const canvasRef = useRef(null);
   const sceneRef = useRef(null);
   /* The current world's scenery (the bin, the lake...), so the run can
@@ -115,6 +152,10 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
   /* Which world's scenery is built and ready, so a battle never starts on
      a scene that is about to be replaced. */
   const builtKindRef = useRef(null);
+  /* Which world's scenery is built, for the loading veil. */
+  const [builtKind, setBuiltKind] = useState(null);
+  /* A burst of sparks when a floor is cleared (its id restarts it). */
+  const [burst, setBurst] = useState(0);
   /* Bumped when a world's scenery has finished loading. */
   const [setReady, setSetReady] = useState(0);
   const [phase, setPhase] = useState(0);
@@ -221,6 +262,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
       bin = make(scene);
       binRef.current = bin;
       builtKindRef.current = setKind;
+      setBuiltKind(setKind);
       scene.everyFrame.push((dt) => bin.update(dt));
       setSetReady((n) => n + 1);
     };
@@ -250,7 +292,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
     sceneRef.current?.setBossRoom(live && isBossFloor(floor) && w > 0 ? 1 : 0);
   }, [floor, stage, setKind, setReady]);
   /* For checking a floor while building: jump straight to it. */
-  if (import.meta.env.DEV) window.__run = { floor: (f) => { runIdRef.current++; usedRef.current = new Set(); runRef.current = { from: f, wrong: 0, rushes: 0 }; setHealth(START_HEALTH); beginFloor(f, null); }, bin: () => binRef.current, scene: () => sceneRef.current, lose: () => endRunRef.current?.("lost"), clear: () => nextRef.current?.() };
+  if (import.meta.env.DEV) window.__run = { floor: (f) => { runIdRef.current++; usedRef.current = new Set(); runRef.current = { from: f, wrong: 0, rushes: 0, cleared: 0, bosses: 0, startedAt: Date.now() }; setHealth(START_HEALTH); beginFloor(f, null); }, bin: () => binRef.current, scene: () => sceneRef.current, lose: () => endRunRef.current?.("lost"), clear: () => nextRef.current?.() };
   /** The bin's boss, if this is his floor. */
   const bossOn = (f) => (isBossFloor(f) ? binRef.current?.monster ?? null : null);
   /** Shows a boss's card and waits for Continue. */
@@ -360,7 +402,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
   const startRun = (from = 0) => {
     runIdRef.current++;
     usedRef.current = new Set();
-    runRef.current = { from: firstFloorOf(from), wrong: 0, rushes: 0 };
+    runRef.current = { from: firstFloorOf(from), wrong: 0, rushes: 0, cleared: 0, bosses: 0, startedAt: Date.now() };
     setEnding(null);
     setHealth(START_HEALTH);
     setEffect(null);
@@ -371,7 +413,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
   const beginFloor = (f, eff) => {
     setFloor(f);
     /* Reaching a new world unlocks starting there. */
-    if (worldIndex(f) > reached) { setReached(worldIndex(f)); saveSetting("tacticaRunReached", worldIndex(f)); }
+    if (worldIndex(f) > reached) { setReached(worldIndex(f)); saveSetting("tacticaRunReached", worldIndex(f)); noteTacticaChange(); }
     if (isStoryFloor(f)) {
       /* A story floor ends any reward or challenge. */
       setEffect(null);
@@ -556,6 +598,9 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
       return;
     }
     /* Floor cleared. */
+    runRef.current.cleared++;
+    setBurst((n) => n + 1);
+    if (bossOn(floor)) runRef.current.bosses++;
     const gained = floorScore(effect);
     const newScore = score + gained;
     setScore(newScore);
@@ -662,6 +707,8 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
       wrong: runRef.current.wrong, rushes: runRef.current.rushes, challenge: effect?.kind === "challenge" ? effect.id : null,
     });
     if (beat) onBest(score);
+    /* Full runs go on the Rogue Chess Run leaderboard. */
+    if (fullRun && score > 0) submitRunScore({ score, floor, won: ending === "won", hard, displayName });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage]);
 
@@ -800,6 +847,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
         }
         const cost = wrongMoveDamage(floor);
         runRef.current.wrong++;
+        buzz(70);
         const left = takeDamage(cost);
         if (left <= 0) { say("A guard struck · −" + cost + "%", "bad"); await wait(700); endRun(); return; }
         ending = [false, "A guard struck · −" + cost + "% · no bonus"];
@@ -847,9 +895,10 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
           }
         }
         playSound("error", { volume: 0.6 });
-        if (bossOn(floor) && sceneRef.current) { await bossOn(floor).slam(sceneRef.current.worldOf(sqOf(mTo(move)))); if (gone()) return; }
+        if (bossOn(floor) && sceneRef.current) { await bossOn(floor).slam(sceneRef.current.worldOf(sqOf(mTo(move)))); buzz([90, 40, 140]); if (gone()) return; }
         const cost = wrongMoveDamage(floor);
         runRef.current.wrong++;
+        buzz(70);
         say(`${verdict.san} was punished · −${cost}%`, "bad");
         const left = takeDamage(cost);
         if (left <= 0) { await wait(700); if (!gone()) endRun(); return; }
@@ -1134,6 +1183,13 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
         </div>
       )}
 
+      {burst > 0 && <SparkBurst key={burst} />}
+      {builtKind !== setKind && (
+        <div className="tc-scrim pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 text-center" role="status">
+          <p className="tc-label m-0">Floor {floor}</p>
+          <p className="tc-title tc-pulse m-0 text-2xl">Entering {worldOf(floor).name.toLowerCase()}…</p>
+        </div>
+      )}
       {stage === "over" && (
         <div className="tc-scrim absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
           <h2 className="tc-title m-0 text-[30px]">{ending === "won" ? "You made it out" : newBest ? "New best!" : "Run over"}</h2>
@@ -1142,6 +1198,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, onExit 
             score · {ending === "won" ? `all ${LAST_FLOOR} floors cleared` : `reached floor ${floor}, ${worldOf(floor).name}`}
             {fullRun ? ` · your best ${Math.max(best || 0, score)}` : " · started partway, so it doesn't count for your best"}
           </p>
+          <RunSummary run={runRef.current} hard={hard} />
           <BrassButton onClick={() => startRun(0)}>Run again from floor 1</BrassButton>
           {ending !== "won" && worldIndex(floor) > 0 && (
             <button type="button" className="tc-plank tc-center tc-small" onClick={() => startRun(worldIndex(floor))}>Try {worldOf(floor).name} again · floor {firstFloorOf(worldIndex(floor))}</button>

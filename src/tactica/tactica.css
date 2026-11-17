@@ -141,3 +141,28 @@
 
 /* Menu planks: a little shorter, so six fit under the scene on a small phone. */
 .tactica .tc-plank.tc-menu { min-height: 46px; padding-top: 6px; padding-bottom: 6px; }
+
+/* A slow breathing pulse, for "Entering ..." while a world builds. */
+@keyframes tc-pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+.tactica .tc-pulse { animation: tc-pulse 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .tactica .tc-pulse { animation: none; } }
+
+/* The volume slider: a brass thumb on a dark groove. */
+.tactica .tc-range { appearance: none; height: 6px; border-radius: 3px; background: rgba(0, 0, 0, 0.45); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6); }
+.tactica .tc-range:disabled { opacity: 0.4; }
+.tactica .tc-range::-webkit-slider-thumb { appearance: none; width: 22px; height: 22px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #ffe7a8, #c9922e 60%, #7a5214); border: 1px solid #4a3008; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5); cursor: pointer; }
+.tactica .tc-range::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #ffe7a8, #c9922e 60%, #7a5214); border: 1px solid #4a3008; cursor: pointer; }
+.tactica .tc-range:focus-visible { outline: 2px solid var(--tc-gold, #e3b453); outline-offset: 4px; }
+
+/* A floor cleared: gold sparks fly out from the middle and fade. */
+.tactica .tc-burst span {
+  position: absolute; left: 50%; top: 46%; width: 7px; height: 7px; margin: -3.5px;
+  border-radius: 50%; background: radial-gradient(circle, #fff6d0, #f2b53a 55%, rgba(242, 181, 58, 0));
+  box-shadow: 0 0 8px #f2b53a; opacity: 0;
+  animation: tc-spark var(--t, 0.8s) cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+@keyframes tc-spark {
+  0% { opacity: 1; transform: rotate(var(--a)) translateX(0) scale(1.4); }
+  100% { opacity: 0; transform: rotate(var(--a)) translateX(var(--d)) scale(0.4); }
+}
+@media (prefers-reduced-motion: reduce) { .tactica .tc-burst { display: none; } }

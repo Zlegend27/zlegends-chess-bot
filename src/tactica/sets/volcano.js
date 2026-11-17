@@ -11,6 +11,7 @@ import * as THREE from "three";
 import { setFlies, setWind, play as playSound } from "../sound.js";
 import { buildFireGiant } from "./fireGiant.js";
 import { dress, sky, skyMood, art, prop } from "./art.js";
+import { buildLandform } from "./landform.js";
 
 function rng(seed) {
   let s = seed % 2147483647;
@@ -18,14 +19,6 @@ function rng(seed) {
   return () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
 }
 
-function slabShape(radius, seed, wobble) {
-  const r = rng(seed), pts = [];
-  for (let i = 0; i < 22; i++) {
-    const a = (i / 22) * Math.PI * 2, rr = radius * (1 - wobble + r() * wobble * 2);
-    pts.push(new THREE.Vector2(Math.cos(a) * rr, Math.sin(a) * rr));
-  }
-  return new THREE.Shape(pts);
-}
 
 /* Black rock with glowing seams, for the slab's top. */
 function rockTextures() {
@@ -54,6 +47,30 @@ function rockTextures() {
 }
 
 /* Lava: slow-moving bright flows under a darker cooling crust. */
+/* The photographed lava, made to flow: a second, larger copy of it turned
+   and drifting the other way breaks up the repeat, and slow waves of heat
+   run across it, so the crust darkens and the flows brighten in turn. */
+function flowingLava(map, glow, time) {
+  const m = new THREE.MeshStandardMaterial({ map, emissiveMap: glow, emissive: "#ffffff", emissiveIntensity: 1.1, roughness: 0.85 });
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = time;
+    const second = (uv) => `(mat2(0.8, -0.6, 0.6, 0.8) * (${uv} * 0.37) + vec2(uTime * -0.003, uTime * 0.002))`;
+    shader.fragmentShader = "uniform float uTime;\n" + shader.fragmentShader
+      .replace("#include <map_fragment>", `#ifdef USE_MAP
+        vec4 lavaA = texture2D(map, vMapUv);
+        vec4 lavaB = texture2D(map, ${second("vMapUv")});
+        diffuseColor *= mix(lavaA, lavaB, 0.45);
+      #endif`)
+      .replace("#include <emissivemap_fragment>", `#ifdef USE_EMISSIVEMAP
+        vec3 hotA = texture2D(emissiveMap, vEmissiveMapUv).rgb;
+        vec3 hotB = texture2D(emissiveMap, ${second("vEmissiveMapUv")}).rgb;
+        float heatWave = 0.72 + 0.38 * sin(vEmissiveMapUv.x * 0.31 + uTime * 0.45) * sin(vEmissiveMapUv.y * 0.23 - uTime * 0.33);
+        totalEmissiveRadiance *= max(hotA, hotB * 0.95) * heatWave;
+      #endif`);
+  };
+  return m;
+}
+
 const LAVA_SHADER = {
   uniforms: { time: { value: 0 }, heat: { value: 1 } },
   vertexShader: `varying vec2 vUv; varying vec3 vPos;
@@ -117,14 +134,15 @@ export function dressVolcano(ts) {
   /* The slab the board stands on. */
   const tex = rockTextures();
   const slabTop = new THREE.MeshStandardMaterial({ map: tex.map, roughness: 0.95, emissive: "#ff6a1a", emissiveMap: tex.glow, emissiveIntensity: 1.2 });
-  const slabSide = new THREE.MeshStandardMaterial({ color: "#1b1310", roughness: 1, flatShading: true, emissive: "#ff4a10", emissiveMap: tex.glow, emissiveIntensity: 0.6 });
-  dress(slabTop, "volcano", "ground", { repeat: 2, tint: "#9a8a82", normal: 1.4 });
-  dress(slabSide, "volcano", "rock", { maps: ["diff", "nor"], repeat: [5, 1], tint: "#6a5a54" });
-  const slabGeo = new THREE.ExtrudeGeometry(slabShape(7.1, 5, 0.08), { depth: 3, bevelEnabled: true, bevelSize: 0.3, bevelThickness: 0.3, bevelSegments: 2, curveSegments: 3 });
-  slabGeo.rotateX(Math.PI / 2);
-  const slab = new THREE.Mesh(slabGeo, [slabTop, slabSide]);
-  slab.position.y = -0.41;
-  slab.receiveShadow = true;
+  const slabSide = new THREE.MeshStandardMaterial({ color: "#1b1310", roughness: 1, emissive: "#ff4a10", emissiveMap: tex.glow, emissiveIntensity: 0.6 });
+  /* Its textures are mapped in world units here (landform.js), so one
+     repeat is one tile of rock. */
+  dress(slabTop, "volcano", "ground", { repeat: 1, tint: "#9a8a82", normal: 1.4 });
+  dress(slabSide, "volcano", "rock", { maps: ["diff", "nor"], repeat: 1, tint: "#6a5a54", normal: 1.6 });
+  /* A lump of black rock: flat under the board, broken toward its edge, a
+     ledged cliff dropping into the lava. */
+  const slab = buildLandform({ radius: 7.3, flat: 5.3, depth: 2.6, bumps: 0.45, flare: 0.3, seed: 5, texScale: 3.5, topMaterial: slabTop, sideMaterial: slabSide });
+  slab.position.y = -0.11;
   set.add(slab);
   /* Jagged rocks round its edge. */
   const rockMat = new THREE.MeshStandardMaterial({ color: "#1e1512", roughness: 1, flatShading: true });
@@ -153,10 +171,11 @@ export function dressVolcano(ts) {
   const lava = new THREE.Mesh(new THREE.CircleGeometry(150, 80), lavaMat);
   /* Once the photographed lava has loaded it replaces the drawn one. */
   let lavaMaps = null;
+  const lavaTime = { value: 0 };
   Promise.all([art("volcano", "lava_diff", 40), art("volcano", "lava_glow", 40, true)]).then(([map, glow]) => {
     if (!map || !glow) return;
     lavaMaps = [map, glow];
-    lava.material = new THREE.MeshStandardMaterial({ map, emissiveMap: glow, emissive: "#ffffff", emissiveIntensity: 1.1, roughness: 0.85 });
+    lava.material = flowingLava(map, glow, lavaTime);
   });
   lava.rotation.x = -Math.PI / 2;
   lava.position.y = -2.6;
@@ -223,7 +242,7 @@ export function dressVolcano(ts) {
       heat += (heatGoal - heat) * Math.min(1, dt * 0.8);
       lavaMat.uniforms.time.value = t;
       lavaMat.uniforms.heat.value = heat;
-      if (lavaMaps) { for (const m of lavaMaps) { m.offset.x = t * 0.004; m.offset.y = t * 0.006; } lava.material.emissiveIntensity = 0.8 + 0.4 * heat + 0.1 * Math.sin(t * 1.3); }
+      if (lavaMaps) { for (const m of lavaMaps) { m.offset.x = t * 0.004; m.offset.y = t * 0.006; } lavaTime.value = t; lava.material.emissiveIntensity = 0.8 + 0.4 * heat + 0.1 * Math.sin(t * 1.3); }
       for (const [i, l] of glows.entries()) l.intensity = (9 + 5 * heat) * (0.85 + 0.15 * Math.sin(t * 2.3 + i * 1.7));
       slabTop.emissiveIntensity = (0.7 + 0.3 * Math.sin(t * 1.3)) * heat;
       craterGlow.material.opacity = 0.6 + 0.3 * Math.sin(t * 2) * heat;

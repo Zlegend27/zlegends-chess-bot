@@ -4,6 +4,7 @@
    show on the board as a glow and trim on your own characters. Saved on
    this device. */
 import { loadSetting, saveSetting } from "../utils/storage";
+import { noteTacticaChange } from "./accountSync.js";
 import { loadStory, bondsOpen, redEyes } from "./story.js";
 
 export const BOND_KINDS = ["pawn", "knight", "bishop", "rook", "queen", "king"];
@@ -83,6 +84,7 @@ export function recordMove(type, { capture = false, final = false } = {}) {
   if (!kind || !bondsOpen(loadStory())) return { bonds, kind: null, levelUp: null };
   const res = award(bonds, kind, xpForMove({ capture, final }));
   saveSetting(KEY, res.bonds);
+  noteTacticaChange();
   return { bonds: res.bonds, kind, levelUp: res.levelUp };
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import StarField from "./StarField";
-import { fetchLeaderboard, TACTICA_RUSH_SECONDS } from "../utils/leaderboard";
+import { fetchLeaderboard, fetchRunLeaderboard, TACTICA_RUSH_SECONDS } from "../utils/leaderboard";
 import { RUSH_DURATIONS } from "../utils/rushDurations";
 import { getUiTheme } from "../utils/uiTheme";
 import { overlayOpen } from "../utils/routes";
@@ -11,7 +11,11 @@ const getRankAccent = (sweetheart) => ({
   3: { text: sweetheart ? "text-[#8A5A2B]" : "text-[#E0A968]", medal: "🥉" },
 });
 
-const BOARDS = [{ id: "rush", label: "Puzzle Rush", name: "Puzzle Rush" }, { id: "tactica", label: "Tactica Rush", name: "Puzzle Rush Tactica" }];
+const BOARDS = [
+  { id: "rush", label: "Puzzle Rush", name: "Puzzle Rush", sub: "top solvers" },
+  { id: "tactica", label: "Tactica Rush", name: "Puzzle Rush Tactica", sub: "top solvers" },
+  { id: "run", label: "Rogue Run", name: "Rogue Chess Run", sub: "best runs from floor 1" },
+];
 
 /** The two Rush leaderboards (Puzzle Rush, and Puzzle Rush Tactica, which
  *  is always three minutes), as its own page rather than a modal -- every
@@ -34,7 +38,7 @@ export default function LeaderboardPage({ initialDuration = 60, initialBoard = "
   useEffect(() => {
     setRows(null);
     let current = true;
-    fetchLeaderboard(board === "tactica" ? TACTICA_RUSH_SECONDS : duration, 10, board).then((r) => { if (current) setRows(r); });
+    (board === "run" ? fetchRunLeaderboard(10) : fetchLeaderboard(board === "tactica" ? TACTICA_RUSH_SECONDS : duration, 10, board)).then((r) => { if (current) setRows(r); });
     return () => { current = false; };
   }, [duration, board]);
 
@@ -63,10 +67,10 @@ export default function LeaderboardPage({ initialDuration = 60, initialBoard = "
           </svg>
           Leaderboard
         </h1>
-        <div className="sub">{BOARDS.find((b) => b.id === board).name} · top solvers</div>
+        <div className="sub">{BOARDS.find((b) => b.id === board).name} · {BOARDS.find((b) => b.id === board).sub}</div>
       </div>
 
-      <div className="mt-5 flex gap-2" role="group" aria-label="Which leaderboard">
+      <div className="mt-5 flex flex-wrap justify-center gap-2" role="group" aria-label="Which leaderboard">
         {BOARDS.map((b) => (
           <button key={b.id} className={"btn" + (board === b.id ? "" : " ghost")} aria-pressed={board === b.id}
             onClick={() => setBoard(b.id)}>{b.label}</button>
@@ -105,7 +109,14 @@ export default function LeaderboardPage({ initialDuration = 60, initialBoard = "
                     <span className="w-6 text-right tabular-nums">{accent ? accent.medal : `#${rank}`}</span>
                     {row.display_name || "Anonymous"}
                   </span>
-                  <b className={accent ? accent.text : T.ink}>{row.solved}</b>
+                  <span className="flex items-baseline gap-2">
+                    {board === "run" && (
+                      <span className={"text-xs " + T.dimText}>
+                        {row.won ? "all 40 floors" : `floor ${row.floor}`}{row.hard ? " · hard" : ""}
+                      </span>
+                    )}
+                    <b className={accent ? accent.text : T.ink}>{row.solved}</b>
+                  </span>
                 </div>
               );
             })}

@@ -5,7 +5,7 @@ import { dressTrashBin } from "./sets/trashBin";
 import { BOND_KINDS, KIND_NAMES, LOOKS, MAX_LEVEL, loadBonds, levelsOf, progress } from "./bonds";
 import { Medal } from "./ui";
 import { cburnettPieceSvgUrl } from "../utils/cburnettPieceSvg";
-import { soundOn, setSoundOn, onSoundChange } from "./sound";
+import { soundOn, setSoundOn, onSoundChange, soundLevel, setSoundLevel, canVibrate, vibrateOn, setVibrateOn, buzz, play } from "./sound";
 import { loadSetting } from "../utils/storage";
 import { loadStory, saveStory, bondsOpen, redEyes, isHard, hardLocked, canSwitchHard, setHardSwitch, resetBond } from "./story";
 
@@ -37,6 +37,8 @@ export default function MenuScreen({ onPick, onExit, onOpening, blitzBest, sweet
   const [confirmReset, setConfirmReset] = useState(false);
   const [bonds] = useState(loadBonds);
   const [sound, setSound] = useState(soundOn);
+  const [volume, setVolume] = useState(() => Math.round(soundLevel() * 100));
+  const [vibes, setVibes] = useState(vibrateOn);
   useEffect(() => onSoundChange(setSound), []);
 
   useEffect(() => {
@@ -127,6 +129,23 @@ export default function MenuScreen({ onPick, onExit, onOpening, blitzBest, sweet
               <span className="tc-display text-sm">Sound</span>
               <button type="button" className="tc-plank tc-center tc-small" style={{ width: 96 }} aria-pressed={sound} onClick={() => setSoundOn(!sound)}>{sound ? "On" : "Off"}</button>
             </div>
+            <label className="flex items-center justify-between gap-3">
+              <span className="tc-display text-sm">Volume</span>
+              <input
+                type="range" min="0" max="100" step="5" value={volume} disabled={!sound}
+                className="tc-range flex-1" aria-valuetext={`${volume}%`}
+                onChange={(e) => { const v = Number(e.target.value); setVolume(v); setSoundLevel(v / 100); }}
+                onPointerUp={() => play("tap", { volume: 0.8 })}
+              />
+              <span className="w-10 text-right text-xs tabular-nums text-[var(--tc-cream-dim)]">{volume}%</span>
+            </label>
+            {canVibrate() && (
+              <div className="flex items-center justify-between gap-3">
+                <span className="tc-display text-sm">Vibration on hits</span>
+                <button type="button" className="tc-plank tc-center tc-small" style={{ width: 96 }} aria-pressed={vibes}
+                  onClick={() => { const on = !vibes; setVibes(on); setVibrateOn(on); if (on) buzz(60); }}>{vibes ? "On" : "Off"}</button>
+              </div>
+            )}
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between gap-3">
                 <span className="tc-display text-sm">Hard mode</span>
@@ -165,6 +184,7 @@ export default function MenuScreen({ onPick, onExit, onOpening, blitzBest, sweet
               <p className="m-0 text-xs text-[var(--tc-cream-dim)]">
                 Polar bear model: &ldquo;Polar Bear&rdquo; by kenchoo (Sketchfab), CC BY 4.0, mouth added.
                 Pizza monster&apos;s slice: &ldquo;Pizza&rdquo; by gatoperdido (Sketchfab), CC BY 4.0, face added.
+                Demon lord: &ldquo;Demon Lord &ndash; Ember-Cracked Corrupted Armor&rdquo; by Pigcraft (Sketchfab), CC BY 4.0, simplified.
                 Textures, skies and props: Poly Haven and ambientCG, public domain.
               </p>
             </div>

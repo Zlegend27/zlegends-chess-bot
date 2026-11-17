@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { Component, useEffect, useState } from "react";
 import { loadSetting, saveSetting } from "../utils/storage";
+import { noteTacticaChange } from "./accountSync.js";
 import { track } from "../utils/track";
 import MenuScreen from "./MenuScreen";
 import TutorialMode from "./TutorialMode";
@@ -25,7 +26,33 @@ import "./tactica.css";
    The opening plays the first time Tactica's menu would be shown, and leads
    into the Tutorial. After that it never plays by itself: picking Tutorial
    plays it again, now with a Skip. It is never put in front of a run. */
-export default function TacticaPage({ pieceImgSrc, sweetheart, player, start = null, onExit }) {
+/* If the 3D can't start (the phone ran out of graphics memory, or too many
+   tabs hold 3D views), Tactica says so in its own words with a way out,
+   instead of the whole site's error screen. */
+class TacticaGuard extends Component {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch(error) { track("tactica_error", { message: String(error?.message ?? error).slice(0, 200) }); }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div className="tactica">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center" style={{ background: "radial-gradient(circle at 50% 40%, #2a1a10, #0c0806)" }}>
+          <h2 className="tc-title m-0 text-2xl">The board wouldn't open</h2>
+          <p className="m-0 max-w-xs text-sm text-[var(--tc-cream-dim)]">Chess Tactica's 3D couldn't start on this device just now. Closing other tabs or apps and trying again usually fixes it.</p>
+          <button type="button" className="tc-plank tc-center tc-small" style={{ width: 200 }} onClick={() => window.location.reload()}>Try again</button>
+          <button type="button" className="tc-plank tc-center tc-small" style={{ width: 200 }} onClick={this.props.onExit}>Leave Chess Tactica</button>
+        </div>
+      </div>
+    );
+  }
+}
+
+export default function TacticaPage(props) {
+  return <TacticaGuard onExit={props.onExit}><TacticaPageInner {...props} /></TacticaGuard>;
+}
+
+function TacticaPageInner({ pieceImgSrc, sweetheart, player, start = null, onExit }) {
   /* A 1v1 game still on (a refresh mid-game) goes straight back to it. */
   const [screen, setScreen] = useState(() => (loadSetting("tacticaPvpActive", null) ? "versus" : start ?? (loadStory().seen ? "menu" : "opening")));
   /* Whether the opening on screen is a rewatch (so it can be skipped). */
@@ -35,9 +62,9 @@ export default function TacticaPage({ pieceImgSrc, sweetheart, player, start = n
   const [blitzBest, setBlitzBest] = useState(() => loadSetting("tacticaBlitzBest", 0));
   const toMenu = () => setScreen("menu");
   const leave = (mode) => (start === mode ? onExit : toMenu);
-  const recordBest = (score) => { setBlitzBest(score); saveSetting("tacticaBlitzBest", score); };
+  const recordBest = (score) => { setBlitzBest(score); saveSetting("tacticaBlitzBest", score); noteTacticaChange(); };
   const [runBest, setRunBest] = useState(() => loadSetting("tacticaRunBest", 0));
-  const recordRunBest = (score) => { setRunBest(score); saveSetting("tacticaRunBest", score); };
+  const recordRunBest = (score) => { setRunBest(score); saveSetting("tacticaRunBest", score); noteTacticaChange(); };
 
   useEffect(() => { if (screen !== "menu") track("tactica_mode", { mode: screen }); }, [screen]);
   useEffect(() => {
@@ -58,7 +85,7 @@ export default function TacticaPage({ pieceImgSrc, sweetheart, player, start = n
   let page;
   if (screen === "opening") page = <OpeningScene sweetheart={sweetheart} skippable={(rewatch || seenNow) && loadStory().seen} onDone={openingDone} />;
   else if (screen === "tutorial") page = <TutorialMode pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={toMenu} />;
-  else if (screen === "run") page = <RunMode pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} best={runBest} onBest={recordRunBest} onExit={toMenu} />;
+  else if (screen === "run") page = <RunMode pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} best={runBest} onBest={recordRunBest} displayName={player?.displayName} onExit={toMenu} />;
   else if (screen === "bot") page = <BotMode pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={toMenu} />;
   else if (screen === "versus") page = <VersusMode {...player} pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={toMenu} />;
   else if (screen === "blitz") page = <BlitzMode sweetheart={sweetheart} best={blitzBest} displayName={player?.displayName} onBest={recordBest} onExit={leave("blitz")} exitLabel={start === "blitz" ? "Back to Puzzles" : undefined} />;

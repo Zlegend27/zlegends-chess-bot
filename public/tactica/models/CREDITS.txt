@@ -25,3 +25,12 @@ pizza/pizza.glb
   Changes: textures turned from PNG into JPEG; in the game it is scaled up
   as the pizza monster's body, with eyes, brows, a mouth and arms added in
   code. Credited in the game under Chess Tactica > Settings > Credits.
+
+demon_lord/demon.glb
+  "Demon Lord – Ember-Cracked Corrupted Armor" by Pigcraft on Sketchfab,
+  licensed CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+  https://sketchfab.com/3d-models/demon-lord-ember-cracked-corrupted-armor-d85e2bf7adba4c69aa6c7eb24e3aa71a
+  Changes: simplified from 1.9 million to about 54 thousand triangles
+  (meshoptimizer), textures turned into 1024 px JPEGs; in the game it
+  breathes and sways, glows when angry, and fades away when beaten.
+  Credited in the game under Chess Tactica > Settings > Credits.

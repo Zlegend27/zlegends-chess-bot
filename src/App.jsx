@@ -10,6 +10,7 @@ import { nextStreak, utcDay } from "./utils/dailyStreak";
 import { historyStep, pathForView, sectionForView, viewForPath, hiddenHeadingFor, titleFor } from "./utils/routes";
 import { pickPostGameLine } from "./utils/botLines";
 import { signOut, watchAuthState, accountProfile, accountInfo, saveAccountName, accountRating, saveAccountRating } from "./utils/auth";
+import { syncTacticaAccount } from "./tactica/accountSync";
 import { openSignIn } from "./utils/signInPrompt";
 import { UNRATED_ELO } from "./utils/lobby";
 import { track } from "./utils/track";
@@ -454,6 +455,10 @@ export default function ZlegendsBot() {
   /* The rating follows the account: signing in on another device brings the
      newer copy along, and a change here is saved to the account a moment
      later. */
+  /* Chess Tactica's progress follows the account the same way (its own
+     merge rules in tactica/accountSync.js). */
+  useEffect(() => { syncTacticaAccount(session); // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user?.id]);
   const savedRating = accountRating(session);
   const savedRatingAt = savedRating?.at ?? 0;
   const signedInAs = session?.user?.id;

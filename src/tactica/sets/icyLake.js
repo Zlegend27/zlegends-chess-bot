@@ -11,22 +11,12 @@ import * as THREE from "three";
 import { setFlies, setWind, play as playSound } from "../sound.js";
 import { buildPolarBear } from "./polarBear.js";
 import { dress, sky, skyMood, prop } from "./art.js";
+import { buildLandform } from "./landform.js";
 
 function rng(seed) {
   let s = seed % 2147483647;
   if (s <= 0) s += 2147483646;
   return () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
-}
-
-/* A floe's outline: a rough circle, its edge broken into chips. */
-function floeShape(radius, seed, wobble = 0.12) {
-  const r = rng(seed), pts = [];
-  const n = 26;
-  for (let i = 0; i < n; i++) {
-    const a = (i / n) * Math.PI * 2, rr = radius * (1 - wobble + r() * wobble * 2);
-    pts.push(new THREE.Vector2(Math.cos(a) * rr, Math.sin(a) * rr));
-  }
-  return new THREE.Shape(pts);
 }
 
 /* Cracks and frost painted on the floe's top. `cracks` 0 to 1. */
@@ -139,19 +129,23 @@ export function dressIcyLake(ts) {
   scene.add(set);
 
   /* The floe the board sits on. */
-  const floeGeo = new THREE.ExtrudeGeometry(floeShape(6.9, 3, 0.06), { depth: 1.3, bevelEnabled: true, bevelSize: 0.25, bevelThickness: 0.2, bevelSegments: 3, curveSegments: 4 });
-  floeGeo.rotateX(Math.PI / 2);
   const topTex = iceTexture(0);
   const floeTop = new THREE.MeshStandardMaterial({ map: topTex, roughness: 0.35, metalness: 0.02 });
   const floeSide = new THREE.MeshStandardMaterial({ color: "#7fb2d4", roughness: 0.15, metalness: 0.05, emissive: "#0d3a58", emissiveIntensity: 0.25 });
-  dress(floeTop, "ice", "snow", { repeat: 2.5, tint: "#b9c8d6", normal: 1.2 });
-  dress(floeSide, "ice", "ice", { repeat: [6, 1], tint: "#9fc8e6" });
+  /* Mapped in world units (landform.js): one repeat per tile. */
+  dress(floeTop, "ice", "snow", { repeat: 1, tint: "#b9c8d6", normal: 1.2 });
+  dress(floeSide, "ice", "ice", { repeat: 1, tint: "#9fc8e6" });
+  /* The other floes' snow, one material for all of them. */
+  const floeSnow = new THREE.MeshStandardMaterial({ color: "#eaf3fa", roughness: 0.6 });
+  dress(floeSnow, "ice", "snow", { repeat: 1, tint: "#dce6ee", normal: 1 });
   /* The cracks of the second half lie over the snow, on their own layer. */
   const crackLayer = new THREE.Mesh(new THREE.CircleGeometry(6.6, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: crackOnly(), transparent: true, depthWrite: false, opacity: 0 }));
-  crackLayer.position.y = -0.4;
-  const floe = new THREE.Mesh(floeGeo, [floeTop, floeSide]);
-  floe.position.y = -0.41;
-  floe.receiveShadow = true;
+  crackLayer.position.y = -0.19;
+  /* A thick floe of old ice: flat under the board, snow drifted up toward
+     its broken edge, a wall of blue ice with ledges dropping into the
+     water. */
+  const floe = buildLandform({ radius: 7.0, flat: 5.3, depth: 2.2, bumps: 0.3, flare: 0.12, seed: 3, texScale: 3, topMaterial: floeTop, sideMaterial: floeSide });
+  floe.position.y = -0.21;
   set.add(floe, crackLayer);
   /* Icicles hanging off its edge into the water, and snow banked against the board. */
   const r = rng(41);
@@ -193,10 +187,8 @@ export function dressIcyLake(ts) {
   const floes = [];
   for (let i = 0; i < 16; i++) {
     const rad = 1.2 + r() * 3.2, a = r() * Math.PI * 2, d = 11 + r() * 30;
-    const geo = new THREE.ExtrudeGeometry(floeShape(rad, 100 + i, 0.18), { depth: 0.6, bevelEnabled: true, bevelSize: 0.12, bevelThickness: 0.1, bevelSegments: 2, curveSegments: 3 });
-    geo.rotateX(Math.PI / 2);
-    const m = new THREE.Mesh(geo, [new THREE.MeshStandardMaterial({ color: "#eaf3fa", roughness: 0.5 }), floeSide]);
-    m.position.set(Math.cos(a) * d, -1.3, Math.sin(a) * d - 6);
+    const m = buildLandform({ radius: rad, flat: 0, depth: 0.9, bumps: 0.15, flare: 0.1, seed: 100 + i, texScale: 3, topMaterial: floeSnow, sideMaterial: floeSide, detail: 0.28 });
+    m.position.set(Math.cos(a) * d, -1.2, Math.sin(a) * d - 6);
     m.rotation.y = r() * 6;
     set.add(m);
     floes.push({ m, ph: r() * 6.28, base: m.position.clone(), drift: (r() - 0.5) * 0.12 });
@@ -208,12 +200,12 @@ export function dressIcyLake(ts) {
     prop(ts, set, ROCKS[k], { size: sz, at: [x, -0.05, z], rot: [0, x + z, 0], tint: "#c9d6e2", sink: 0.15 });
   }
   /* The bear's floe, out across the water. */
-  const bearFloe = new THREE.Mesh(new THREE.ExtrudeGeometry(floeShape(7, 9, 0.15), { depth: 0.8, bevelEnabled: false }).rotateX(Math.PI / 2), [new THREE.MeshStandardMaterial({ color: "#eef5fb", roughness: 0.5 }), floeSide]);
+  const bearFloe = buildLandform({ radius: 7, flat: 3, depth: 1.4, bumps: 0.2, flare: 0.12, seed: 9, texScale: 3, topMaterial: floeSnow, sideMaterial: floeSide, detail: 0.5 });
   bearFloe.position.set(-9, -0.55, -34);
   set.add(bearFloe);
   /* A bridge of ice from his floe toward ours, so he has a way across. */
   for (let i = 0; i < 6; i++) {
-    const m = new THREE.Mesh(new THREE.ExtrudeGeometry(floeShape(2.6, 300 + i, 0.2), { depth: 0.7, bevelEnabled: false }).rotateX(Math.PI / 2), [new THREE.MeshStandardMaterial({ color: "#e6f0f8", roughness: 0.5 }), floeSide]);
+    const m = buildLandform({ radius: 2.6, flat: 0, depth: 1.1, bumps: 0.12, flare: 0.1, seed: 300 + i, texScale: 3, topMaterial: floeSnow, sideMaterial: floeSide, detail: 0.3 });
     m.position.set(-9 + i * 2.4, -0.6, -29 + i * 3.6);
     set.add(m);
   }

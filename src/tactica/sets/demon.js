@@ -12,6 +12,16 @@
 import * as THREE from "three";
 import { play as playSound } from "../sound.js";
 import { dress } from "./art.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+
+/* The demon lord himself: a photographed armoured figure ("Demon Lord –
+   Ember-Cracked Corrupted Armor" by Pigcraft, CC BY 4.0, cut down from 1.9
+   million triangles to about 54 thousand; credited in Settings). He has no
+   skeleton, so he is moved whole (breathing, leaning, swaying) and his
+   lightning orb does the work his hands can't. The drawn demon stays as
+   the fallback if the file doesn't load. */
+const REAL_DEMON = "/tactica/models/demon_lord/demon.glb";
+const REAL_HEIGHT = 7.2;
 
 const ease = (t) => t * t * (3 - 2 * t);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -138,6 +148,36 @@ export function buildDemon(ts, zap) {
   });
 
   root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+
+  /* The real demon, laid in when he loads. */
+  let real = null;
+  new GLTFLoader().loadAsync(REAL_DEMON).then((gltf) => {
+    const model = gltf.scene;
+    const box = new THREE.Box3().setFromObject(model);
+    const k = REAL_HEIGHT / (box.max.y - box.min.y);
+    model.scale.setScalar(k);
+    model.updateMatrixWorld(true);
+    box.setFromObject(model);
+    model.position.set(-(box.min.x + box.max.x) / 2, -box.min.y, -(box.min.z + box.max.z) / 2);
+    const holder = new THREE.Group();
+    holder.add(model);
+    const mats = [];
+    model.traverse((o) => {
+      if (!o.isMesh) return;
+      o.castShadow = true;
+      o.material.emissive?.set("#ff5a20");
+      if (o.material.map) { o.material.emissiveMap = o.material.map; o.material.emissiveIntensity = 0.14; }
+      mats.push(o.material);
+    });
+    /* Everything drawn goes, except his lightning orb. */
+    const keep = new Set();
+    orb.traverse((o) => keep.add(o));
+    body.traverse((o) => { if ((o.isMesh || o.isSprite) && !keep.has(o)) o.visible = false; });
+    body.add(holder);
+    real = { holder, mats };
+    ts.wake?.();
+  }).catch(() => {});
+
   root.position.copy(SPOTS[0].pos);
   root.scale.setScalar(SPOTS[0].scale);
   ts.scene.add(root);
@@ -160,6 +200,13 @@ export function buildDemon(ts, zap) {
       }
       rage += (rageGoal - rage) * Math.min(1, dt * 5);
       body.position.y = Math.sin(t * 0.8) * 0.06;
+      if (real) {
+        /* Breathing, a slow sway, and leaning in when angry. */
+        real.holder.rotation.x = 0.04 + rage * 0.1 + Math.sin(t * 0.8) * 0.012;
+        real.holder.rotation.y = Math.sin(t * 0.33) * 0.08;
+        real.holder.scale.set(1 + Math.sin(t * 0.8) * 0.006, 1 + Math.sin(t * 0.8) * 0.01, 1);
+        for (const m of real.mats) m.emissiveIntensity = 0.14 + rage * 0.25 + 0.04 * Math.sin(t * 4);
+      }
       torso.rotation.x = 0.12 + Math.sin(t * 0.8) * 0.02 - rage * 0.15;
       head.rotation.y = Math.sin(t * 0.33) * 0.25;
       head.rotation.x = 0.15 - rage * 0.3;
@@ -227,7 +274,9 @@ export function buildDemon(ts, zap) {
       await wait(120);
       playSound(a.name === "axe" ? "chop" : a.name === "spear" ? "metal" : "slice", { volume: 1 });
       playSound("punchHeavy", { volume: 0.9 });
-      zap(toolTip(a), point.clone());
+      /* His weapons are drawn only on the old demon; the real one calls the
+         lightning down from the storm. */
+      zap(real ? point.clone().add(new THREE.Vector3((Math.random() - 0.5) * 3, 26, -4)) : toolTip(a), point.clone());
       ts.shake = 0.24;
       ts.tween(520, (k) => { ts.shake = 0.24 * (1 - k); }, () => { ts.shake = 0; });
       await wait(300);
@@ -269,8 +318,13 @@ export function buildDemon(ts, zap) {
         ts.scene.add(mesh);
         shards.push({ mesh, v: new THREE.Vector3((Math.random() - 0.5) * 6, 2 + Math.random() * 4, (Math.random() - 0.5) * 6), spin: (Math.random() - 0.5) * 6 });
       });
-      body.visible = false;
-      await new Promise((resolve) => ts.tween(2000, (k) => { breaking = k; }, resolve));
+      body.visible = !real ? false : body.visible;
+      if (real) for (const m of real.mats) { m.transparent = true; m.needsUpdate = true; }
+      await new Promise((resolve) => ts.tween(2000, (k) => {
+        breaking = k;
+        if (real) { for (const m of real.mats) { m.opacity = 1 - k; m.emissiveIntensity = 0.6 * (1 - k); } real.holder.position.y = -k * 2; }
+      }, resolve));
+      if (real) { body.visible = false; real.holder.position.y = 0; for (const m of real.mats) { m.opacity = 1; m.transparent = false; m.needsUpdate = true; } }
       for (const s of shards) ts.scene.remove(s.mesh);
       shards.length = 0;
       root.visible = false;

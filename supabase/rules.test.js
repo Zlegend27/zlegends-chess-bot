@@ -16,7 +16,7 @@ import { PGlite } from "@electric-sql/pglite";
 const FILES = [
   "../supabase_setup.sql", "001_link_accounts.sql", "002_ios_sign_in_handoff.sql", "003_rank_bot_detail.sql",
   "004_delete_account.sql", "005_events.sql", "006_leaderboard_safety.sql", "007_private_data.sql", "008_lobby_access.sql",
-  "009_tactica_leaderboard.sql",
+  "009_tactica_leaderboard.sql", "010_run_leaderboard.sql",
 ];
 const ALICE = "11111111-1111-4111-8111-111111111111";
 const BOB = "22222222-2222-4222-8222-222222222222";
@@ -184,6 +184,44 @@ describe("the Rush leaderboard", () => {
   });
 });
 
+describe("the Rogue Chess Run leaderboard", () => {
+  test("anyone can add a run; the board shows it without the browser's id; the table stays closed", async () => {
+    await as(null, async () => {
+      await db.query("insert into run_scores (client_id, display_name, score, floor) values ('runner-pc-1', 'Rae', 23, 17)");
+      await expect(db.query("select * from run_scores")).rejects.toThrow(/permission denied/);
+      const board = await rows("select * from run_leaderboard where display_name = 'Rae'");
+      expect(board).toHaveLength(1);
+      expect(board[0]).toMatchObject({ score: 23, floor: 17, won: false, hard: false });
+      expect(board[0].client_id).toBeUndefined();
+      expect(board[0].player_key).toMatch(/^[0-9a-f]{32}$/);
+    });
+  });
+
+  test("impossible runs are refused", async () => {
+    await as(null, async () => {
+      for (const [score, floor, won] of [[101, 40, true], [-1, 1, false], [5, 41, false], [5, 0, false], [30, 20, true]]) {
+        await expect(db.query("insert into run_scores (client_id, score, floor, won) values ('runner-pc-2', $1, $2, $3)", [score, floor, won])).rejects.toThrow();
+      }
+      await expect(db.query("insert into run_scores (client_id, display_name, score, floor) values ('runner-pc-2', $1, 1, 1)", ["x".repeat(25)])).rejects.toThrow();
+    });
+  });
+
+  test("a signed-in player's run is theirs, and they can't post one as someone else", async () => {
+    await as(ALICE, async () => {
+      await db.query("insert into run_scores (client_id, score, floor, won) values ('alice-pc', 80, 40, true)");
+      await expect(db.query("insert into run_scores (client_id, user_id, score, floor) values ('alice-pc', $1, 1, 1)", [BOB])).rejects.toThrow();
+    });
+    expect(await rows("select user_id from run_scores where client_id = 'alice-pc'")).toEqual([{ user_id: ALICE }]);
+  });
+
+  test("floods are refused", async () => {
+    await as(null, async () => {
+      for (let i = 0; i < 20; i++) await db.query("insert into run_scores (client_id, score, floor) values ('flood-runner', 1, 2)");
+      await expect(db.query("insert into run_scores (client_id, score, floor) values ('flood-runner', 1, 2)")).rejects.toThrow(/too many/);
+    });
+  });
+});
+
 describe("the 1v1 lobby and matches (private channels)", () => {
   /* Supabase sets the topic being joined; realtime.topic() reads it. */
   const join = (uid, topic) => as(uid, async () => {
@@ -234,10 +272,11 @@ describe("deleting an account", () => {
   test("removes that player's games, scores, rating, events and account, and nobody else's", async () => {
     await as(BOB, async () => {
       await db.query("insert into rush_scores (client_id, user_id, duration_seconds, solved) values ('bob-pc', $1, 60, 3)", [BOB]);
+      await db.query("insert into run_scores (client_id, score, floor) values ('bob-browser', 12, 9)");
       await db.query("select delete_my_account()");
     });
     const left = async (table) => Number((await rows(`select count(*) as n from ${table} where user_id = $1`, [BOB]))[0].n);
-    for (const table of ["games", "rush_scores", "players", "events"]) expect(await left(table)).toBe(0);
+    for (const table of ["games", "rush_scores", "players", "events", "run_scores"]) expect(await left(table)).toBe(0);
     expect(await rows("select 1 from auth.users where id = $1", [BOB])).toHaveLength(0);
     /* Alice is untouched. */
     expect(await rows("select 1 from auth.users where id = $1", [ALICE])).toHaveLength(1);

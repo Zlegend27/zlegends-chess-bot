@@ -9,9 +9,10 @@
      everyone, with the same red eyes; bonds still work with it.
    - Beating the story mends a broken bond.
 
-   Everything is kept on the device. The functions here are pure (state in,
+   Kept on the device, and on the account when signed in (accountSync.js). The functions here are pure (state in,
    state out); loadStory and saveStory do the reading and writing. */
 import { loadSetting, saveSetting } from "../utils/storage.js";
+import { noteTacticaChange } from "./accountSync.js";
 
 const KEY = "tacticaStory";
 /** bond: null (never asked), "yes" or "refused". */
@@ -27,7 +28,7 @@ export function loadStory() {
     beaten: saved.beaten === true,
   };
 }
-export const saveStory = (story) => { saveSetting(KEY, story); return story; };
+export const saveStory = (story) => { saveSetting(KEY, story); noteTacticaChange(); return story; };
 
 /** The opening has been watched (or skipped on a rewatch): `answer` is
  *  "yes", "refused", or null when it was skipped, which changes nothing. */
