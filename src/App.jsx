@@ -2709,6 +2709,7 @@ export default function ZlegendsBot() {
         <TacticaPage
           pieceImgSrc={pieceImgSrc} sweetheart={sweetheart}
           start={tacticaStart} onExit={() => onSection(tacticaStart ? "puzzles" : "play")}
+          onLeaderboard={(board) => openLeaderboard(180, board)}
           player={{ session, profile, displayName, avatar: avatarFromSession(session), onSignIn: openSignIn, rating: playerRating, onRated }}
         />
       </Suspense>

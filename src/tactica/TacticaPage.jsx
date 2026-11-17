@@ -53,7 +53,7 @@ export default function TacticaPage(props) {
   return <TacticaGuard onExit={props.onExit}><TacticaPageInner {...props} /></TacticaGuard>;
 }
 
-function TacticaPageInner({ pieceImgSrc, sweetheart, player, start = null, onExit }) {
+function TacticaPageInner({ pieceImgSrc, sweetheart, player, start = null, onExit, onLeaderboard = null }) {
   /* A 1v1 game still on (a refresh mid-game) goes straight back to it. */
   const [screen, setScreen] = useState(() => (loadSetting("tacticaPvpActive", null) ? "versus" : start ?? (loadStory().seen ? "menu" : "opening")));
   /* Whether the opening on screen is a rewatch (so it can be skipped). */
@@ -86,7 +86,7 @@ function TacticaPageInner({ pieceImgSrc, sweetheart, player, start = null, onExi
   let page;
   if (screen === "opening") page = <OpeningScene sweetheart={sweetheart} skippable={(rewatch || seenNow) && loadStory().seen} onDone={openingDone} />;
   else if (screen === "tutorial") page = <TutorialMode pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={toMenu} />;
-  else if (screen === "run") page = <RunMode pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} best={runBest} onBest={recordRunBest} displayName={player?.displayName} onExit={toMenu} />;
+  else if (screen === "run") page = <RunMode pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} best={runBest} onBest={recordRunBest} displayName={player?.displayName} onLeaderboard={onLeaderboard ? () => onLeaderboard("run") : null} onExit={toMenu} />;
   else if (screen === "memories") page = <MemoryMode onExit={toMenu} />;
   else if (screen === "bot") page = <BotMode pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={toMenu} />;
   else if (screen === "versus") page = <VersusMode {...player} pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={toMenu} />;

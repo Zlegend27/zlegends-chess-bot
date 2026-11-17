@@ -13,6 +13,7 @@ import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { woodTexture, makeMats } from "./pieces/pawn.js";
 import { KINDS, BUILD, clipsFor, reactionFor, attackEffects, PAWN_ATTACK_END } from "./pieces/attacks.js";
 import { play as playSound, ATTACK_CUES } from "./sound.js";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 /* Pieces are modelled about one square wide; this leaves a gap around them. */
 const PIECE_SCALE = 0.78;
@@ -133,8 +134,44 @@ const reducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce
 const templates = new Map();
 function modelFor(kind, colour) {
   const key = kind + colour;
-  if (!templates.has(key)) templates.set(key, BUILD[kind](colour));
+  if (!templates.has(key)) templates.set(key, bakeStill(BUILD[kind](colour)));
   return templates.get(key).clone(true);
+}
+
+/* Each character is built from dozens of small meshes; drawn one by one, a
+   full board is well over a thousand draw calls, which is what slows phones.
+   Within each part that moves as one (body, head, an arm: whatever the
+   animations move), the plain meshes that share a material are merged into
+   one. Named meshes stay as they are: code finds them by name (eyes,
+   weapons, glows) and animations can only move named parts. */
+function bakeStill(root) {
+  root.updateMatrixWorld(true);
+  const parents = [];
+  root.traverse((o) => { if (o.children.length > 1) parents.push(o); });
+  for (const parent of parents) {
+    const groups = new Map();
+    for (const child of parent.children) {
+      if (!child.isMesh || child.isSkinnedMesh || child.isInstancedMesh || child.name || child.children.length || Array.isArray(child.material) || child.morphTargetInfluences) continue;
+      const g = child.geometry;
+      const sig = [child.material.uuid, g.index ? "i" : "n", ...Object.keys(g.attributes).sort(), child.castShadow, child.receiveShadow, child.visible, child.renderOrder].join("|");
+      if (!groups.has(sig)) groups.set(sig, []);
+      groups.get(sig).push(child);
+    }
+    for (const list of groups.values()) {
+      if (list.length < 2) continue;
+      const geos = list.map((m) => { m.updateMatrix(); const g = m.geometry.clone(); g.applyMatrix4(m.matrix); return g; });
+      const merged = mergeGeometries(geos, false);
+      if (!merged) continue;
+      const first = list[0];
+      const mesh = new THREE.Mesh(merged, first.material);
+      mesh.castShadow = first.castShadow;
+      mesh.receiveShadow = first.receiveShadow;
+      mesh.renderOrder = first.renderOrder;
+      for (const m of list) parent.remove(m);
+      parent.add(mesh);
+    }
+  }
+  return root;
 }
 const idleClips = new Map();
 function idleFor(kind) {
@@ -1194,6 +1231,49 @@ export class TacticaScene {
     });
   }
 
+  /** A burst of sparks where a piece is taken: thrown up and out, falling
+   *  back and fading in about two thirds of a second. */
+  sparks(at, color = "#ffcf6a") {
+    if (!this.sparkMap) {
+      const c = document.createElement("canvas");
+      c.width = c.height = 32;
+      const g = c.getContext("2d"), grad = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+      grad.addColorStop(0, "rgba(255,255,255,1)"); grad.addColorStop(0.4, "rgba(255,255,255,0.6)"); grad.addColorStop(1, "rgba(255,255,255,0)");
+      g.fillStyle = grad; g.fillRect(0, 0, 32, 32);
+      this.sparkMap = new THREE.CanvasTexture(c);
+    }
+    const N = 26, pos = new Float32Array(N * 3), vel = [];
+    for (let i = 0; i < N; i++) {
+      const a = Math.random() * Math.PI * 2, out = 1.2 + Math.random() * 2.2;
+      vel.push([Math.cos(a) * out, 1.5 + Math.random() * 2.5, Math.sin(a) * out]);
+      pos[i * 3] = at.x; pos[i * 3 + 1] = at.y + 0.5; pos[i * 3 + 2] = at.z;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    const mat = new THREE.PointsMaterial({ map: this.sparkMap, color, size: 0.16, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    const points = new THREE.Points(geo, mat);
+    points.frustumCulled = false;
+    this.scene.add(points);
+    let life = 0;
+    const step = (dt) => {
+      life += dt;
+      for (let i = 0; i < N; i++) {
+        vel[i][1] -= dt * 7;
+        pos[i * 3] += vel[i][0] * dt; pos[i * 3 + 1] += vel[i][1] * dt; pos[i * 3 + 2] += vel[i][2] * dt;
+      }
+      geo.attributes.position.needsUpdate = true;
+      mat.opacity = Math.max(0, 1 - life / 0.7);
+      this.wake();
+      if (life >= 0.7) {
+        this.everyFrame = this.everyFrame.filter((x) => x !== step);
+        this.scene.remove(points);
+        geo.dispose(); mat.dispose();
+      }
+    };
+    this.everyFrame.push(step);
+    this.wake();
+  }
+
   /** A character buried by garbage on a bonus floor: it sinks halfway in,
    *  tilts, and its bond glow goes out. It stays like that. */
   sink(sq) {
@@ -1401,6 +1481,7 @@ export class TacticaScene {
         if (!current()) { resolve(); return; }
         if (!victim) { playSound(leap ? "landHeavy" : "land", { volume: quick ? 0.6 : 0.8 }); resolve(); return; }
         playSound("poof", { volume: 0.7 });
+        if (!fast) this.sparks(b);
         this.tween(fast ? 0 : quick ? QUICK_CAPTURE_MS : CAPTURE_MS, (t) => { if (current()) victim.group.scale.setScalar(Math.max(0.001, 1 - t)); }, resolve);
       });
     }).then(finish);

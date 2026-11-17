@@ -14,6 +14,7 @@ import { loadSetting, saveSetting } from "../utils/storage";
 import { noteTacticaChange } from "./accountSync.js";
 import { submitRunScore } from "../utils/leaderboard";
 import { wakeMemory, openMemories, lessonBefore } from "./memories";
+import EntryFilm from "./EntryFilm";
 import {
   START_HEALTH, wrongMoveDamage, phasesForFloor, isStoryFloor, timerSeconds, ratingFor,
   rushDamage, pickPuzzle, effectFloors, offer, choose, floorScore, maxPliesFor, minPliesFor, rememberSeen, isBonusAfter, HARD_MODE_RATING,
@@ -108,7 +109,7 @@ function RunSummary({ run, hard }) {
   );
 }
 
-export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, displayName, onExit }) {
+export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, displayName, onLeaderboard, onExit }) {
   const canvasRef = useRef(null);
   const sceneRef = useRef(null);
   /* The current world's scenery (the bin, the lake...), so the run can
@@ -133,7 +134,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
      can't open a reward screen over "Run over". */
   const runIdRef = useRef(0);
 
-  const [stage, setStage] = useState("intro"); // intro | omen | story | bossCard | playing | choice | cursed | defeat | over
+  const [stage, setStage] = useState("intro"); // intro | arrive | omen | story | bossCard | playing | choice | cursed | defeat | over
   /* How the run ended: null while it's on, then "won" (floor 40 cleared),
      "lost" (health ran out) or "quit". */
   const [ending, setEnding] = useState(null);
@@ -299,6 +300,9 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
   /** Shows a boss's card and waits for Continue. */
   const showCard = (title, lines) => new Promise((resolve) => { setBossCard({ title, lines }); setStage("bossCard"); cardRef.current = resolve; });
 
+  /* Arriving in a new world: its short film (EntryFilm, opening/entries.js)
+     plays while the world's scenery builds behind it, then the world's
+     card. A tap skips the film. */
   /* The bin's sixth floor opens with an omen: something strikes the bin,
      everything in it jumps, and two eyes show over the far edge. Then the
      card, and from here the bin is a worse place. */
@@ -418,7 +422,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
     if (isStoryFloor(f)) {
       /* A story floor ends any reward or challenge. */
       setEffect(null);
-      setStage(isIntensify(f) ? "omen" : "story");
+      setStage(isIntensify(f) ? "omen" : isWorldStart(f) && f > 1 ? "arrive" : "story");
       return;
     }
     startBattle(f, eff);
@@ -1148,6 +1152,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
         </div>
       )}
 
+      {stage === "arrive" && <EntryFilm world={worldOf(floor).id} onDone={() => setStage("story")} />}
       {stage === "story" && (
         <div className="tc-scrim absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
           {/* Where each world's entry cutscene and its halfway animation will play. */}
@@ -1217,6 +1222,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
           {ending !== "won" && worldIndex(floor) > 0 && (
             <button type="button" className="tc-plank tc-center tc-small" onClick={() => startRun(worldIndex(floor))}>Try {worldOf(floor).name} again · floor {firstFloorOf(worldIndex(floor))}</button>
           )}
+          {fullRun && onLeaderboard && <button type="button" className="tc-link" onClick={onLeaderboard}>See the Rogue Run leaderboard</button>}
           <button type="button" className="tc-link" onClick={onExit}>Back to the menu</button>
         </div>
       )}
