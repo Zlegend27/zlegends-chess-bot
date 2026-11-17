@@ -10,6 +10,7 @@ import { BrassButton, MapButton, MenuButton, PromotionPicker, useViewSource } fr
 import { play as playSound } from "./sound";
 import { applyStory } from "./bonds";
 import { useBestMove, scoreLabel } from "../utils/useBestMove";
+import GameReview, { BEST_COLOR } from "./GameReview";
 
 /* Regular Chess in the bin: a full game on the 3D board against the site's own
    bots (the 1000, 1500 and 2000 Elo Stockfish levels and the homemade
@@ -34,8 +35,7 @@ const MIN_THINK_MS = 400;
 /* The game in progress, saved after every move: { bot, side, moves }. */
 const SAVE = "tacticaBotGame";
 const SELF_SAVE = "tacticaSelfGame";
-/* Analysis arrows: the engine's best move, and the move actually played. */
-const BEST_COLOR = "#3FE07A", PLAYED_COLOR = "#5AA8FF";
+
 const loadSaved = () => {
   const g = loadSetting(SAVE, null);
   return g && Array.isArray(g.moves) && (g.side === 1 || g.side === -1) && Number.isInteger(g.bot) ? g : null;
@@ -132,8 +132,6 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit, self = false 
      whoever is to move. */
   const [analysing, setAnalysing] = useState(false);
   const [turnBoard, setTurnBoard] = useState(() => loadSetting("tacticaSelfTurn", true));
-  /* Analysing a finished game: how many of its moves are on the board. */
-  const [reviewIdx, setReviewIdx] = useState(0);
   /* Regular Chess always plays the full attacks. */
   const pace = "full";
   const bot = BOTS[botIdx];
@@ -161,18 +159,15 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit, self = false 
   /* ---- Analysis ---- */
   const fen = eng.fen();
   const reviewing = stage === "review";
-  const best = useBestMove(fen, reviewing || (self && analysing && stage === "playing" && !gameResult(eng)));
-  /* The move that was played from this position, while stepping through. */
-  const playedSan = reviewing ? moveList[reviewIdx] ?? null : null;
-  const played = playedSan ? eng.legalMoves().find((m) => eng.sanOf(m) === playedSan) : undefined;
-  const hints = [];
-  if (best && !best.none && (reviewing || (analysing && stage === "playing" && !busy))) hints.push({ from: sqOf(best.from), to: sqOf(best.to), color: BEST_COLOR });
-  if (played !== undefined && !(best && best.san === playedSan)) hints.push({ from: sqOf(mFrom(played)), to: sqOf(mTo(played)), color: PLAYED_COLOR });
-  const hintKey = hints.map((h) => `${h.from}-${h.to}-${h.color}`).join(",");
+  /* The live arrow while playing yourself; the review draws its own. */
+  const live = self && analysing && stage === "playing" && !gameResult(eng);
+  const best = useBestMove(fen, live);
+  const hints = best && !best.none && live && !busy ? [{ from: sqOf(best.from), to: sqOf(best.to), color: BEST_COLOR }] : [];
+  const hintKey = hints.map((h) => `${h.from}-${h.to}`).join(",");
   useEffect(() => {
-    sceneRef.current?.setHints(hints);
+    if (!reviewing) sceneRef.current?.setHints(hints);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hintKey]);
+  }, [hintKey, reviewing]);
 
   /* ---- The scene ---- */
   useEffect(() => {
@@ -401,44 +396,19 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit, self = false 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [self, sweetheart]);
 
-  /** Steps a finished game to `i` moves in, for Analyse the game. */
-  const reviewTo = (i) => {
-    const idx = Math.max(0, Math.min(moveList.length, i));
-    eng.reset();
-    for (const san of moveList.slice(0, idx)) {
-      const move = eng.legalMoves().find((m) => eng.sanOf(m) === san);
-      if (!move) break;
-      eng.make(move);
-    }
-    setReviewIdx(idx);
-    const scene = sceneRef.current;
-    scene?.setPieces(piecesNow());
-    scene?.showBoard();
-  };
+  /** Analyse the game: the review steps through its own copy of it. */
   const startReview = () => {
     gameIdRef.current++;
     setMenuOpen(false);
     setStage("review");
-    sceneRef.current?.setMarks({});
-    reviewTo(moveList.length);
   };
-  /** Back from the review to the result, with the final position. */
+  /** Back from the review to the result (or the board), as it was. */
   const endReview = () => {
-    reviewTo(moveList.length);
+    const scene = sceneRef.current;
+    scene?.setPieces(piecesNow());
+    scene?.showBoard();
     setStage(result ? "over" : "playing");
   };
-  /* Arrow keys step through the review, like the site's Game Review. */
-  useEffect(() => {
-    if (!reviewing) return undefined;
-    const onKey = (e) => {
-      const step = { ArrowLeft: -1, ArrowRight: 1 }[e.key];
-      if (step) { e.preventDefault(); reviewTo(reviewIdx + step); }
-      else if (e.key === "Escape") endReview();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reviewing, reviewIdx, moveList]);
 
   const play = async (target, piece = null) => {
     if (busyRef.current || !myTurn) return;
@@ -682,39 +652,7 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit, self = false 
         </div>
       )}
 
-      {reviewing && (
-        <>
-          <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col gap-1 bg-gradient-to-b from-black/80 to-transparent p-3 pb-10">
-            <div className="tc-label">Analysing the game</div>
-            <div className="tc-display text-[15px]" aria-live="polite">
-              {reviewIdx === 0 ? "The starting position" : `After ${Math.ceil(reviewIdx / 2)}${reviewIdx % 2 ? "." : "…"} ${moveList[reviewIdx - 1]}`}
-            </div>
-            <div className="text-sm text-[var(--tc-cream-dim)]" aria-live="polite">
-              {reviewIdx >= moveList.length ? (result ? `${result.reason}. ${result.text}` : "The last move")
-                : !best ? "Thinking…"
-                : best.none ? ""
-                : best.san === playedSan ? `${playedSan} was the best move · ${scoreLabel(best.score)}`
-                : `Best: ${best.san} · ${scoreLabel(best.score)}`}
-            </div>
-            {reviewIdx < moveList.length && best && !best.none && best.san !== playedSan && (
-              <div className="flex gap-3 text-xs text-[var(--tc-cream-dim)]">
-                <span><i className="mr-1 inline-block size-2.5 rounded-full align-middle" style={{ background: BEST_COLOR }} />Best move</span>
-                <span><i className="mr-1 inline-block size-2.5 rounded-full align-middle" style={{ background: PLAYED_COLOR }} />Played: {playedSan}</span>
-              </div>
-            )}
-          </div>
-          <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 bg-gradient-to-t from-black/85 to-transparent px-3 pt-10 pb-[calc(0.9rem+env(safe-area-inset-bottom))]">
-            <div className="flex w-full items-center justify-between gap-2">
-              <button type="button" className="tc-round" onClick={() => reviewTo(0)} disabled={reviewIdx === 0} aria-label="To the start">«</button>
-              <button type="button" className="tc-round" onClick={() => reviewTo(reviewIdx - 1)} disabled={reviewIdx === 0} aria-label="Previous move">‹</button>
-              <span className="tc-display flex-1 text-center text-sm">{reviewIdx} / {moveList.length}</span>
-              <button type="button" className="tc-round" onClick={() => reviewTo(reviewIdx + 1)} disabled={reviewIdx >= moveList.length} aria-label="Next move">›</button>
-              <button type="button" className="tc-round" onClick={() => reviewTo(moveList.length)} disabled={reviewIdx >= moveList.length} aria-label="To the end">»</button>
-            </div>
-            <button type="button" className="tc-plank tc-center tc-small" style={{ width: 200 }} onClick={endReview}>Done</button>
-          </div>
-        </>
-      )}
+      {reviewing && <GameReview sceneRef={sceneRef} moves={moveList} ending={result ? `${result.reason}. ${result.text}` : null} onDone={endReview} />}
     </div>
   );
 }

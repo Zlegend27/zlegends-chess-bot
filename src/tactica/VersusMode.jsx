@@ -13,6 +13,7 @@ import { track } from "../utils/track";
 import { play as playSound } from "./sound";
 import { applyStory } from "./bonds";
 import { friendlySquares } from "./BotMode";
+import GameReview from "./GameReview";
 
 /* 1v1 in the bin: a game against another person on the 3D board.
 
@@ -196,6 +197,8 @@ function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, on
   const [view, setView] = useState("board");
   const [menuOpen, setMenuOpen] = useState(false);
   const viewSource = useViewSource();
+  /* Analyse the game, once it's over. */
+  const [reviewing, setReviewing] = useState(false);
 
   const caughtUp = shownPly === moves.length;
   const busy = !caughtUp;
@@ -294,6 +297,13 @@ function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, on
 
   /* The end of the game, once the board has caught up with it. */
   const over = !!result && caughtUp;
+  /* A rematch starting (or anything that reopens the game) ends the review. */
+  useEffect(() => { if (!over) setReviewing(false); }, [over]);
+  const endReview = () => {
+    setReviewing(false);
+    sceneRef.current?.setPieces(piecesNow());
+    sceneRef.current?.showBoard();
+  };
   const overSound = useRef(false);
   useEffect(() => {
     if (!over || overSound.current) return;
@@ -408,7 +418,7 @@ function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, on
     <div className="relative mx-auto w-full max-w-[480px] overflow-hidden" style={{ height: "calc(100dvh - var(--headerH))" }}>
       <canvas ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-black/80 to-transparent p-3 pb-10">
+      {!reviewing && <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-black/80 to-transparent p-3 pb-10">
         <div className="flex min-w-0 items-center gap-2.5">
           <MenuButton open={menuOpen} onClick={() => setMenuOpen((o) => !o)} />
           <PlayerSprite avatar={opponent.avatar} discordUrl={opponent.discordUrl} size={34} />
@@ -432,7 +442,7 @@ function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, on
           onToggle={toggleView}
           onSpin={(a) => sceneRef.current?.spinBy(a)}
         />
-      </div>
+      </div>}
 
       {menuOpen && (
         <>
@@ -482,7 +492,11 @@ function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, on
         </div>
       )}
 
-      {over && (
+      {reviewing && over && (
+        <GameReview sceneRef={sceneRef} moves={moves} ending={`${result.reason}. ${result.text}`} onDone={endReview} />
+      )}
+
+      {over && !reviewing && (
         <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 bg-gradient-to-t from-black/90 via-black/70 to-transparent px-5 pt-20 pb-[calc(1.25rem+env(safe-area-inset-bottom))] text-center">
           <h2 className="tc-title m-0 text-[28px]">
             {result.reason === "Aborted" ? "Game aborted" : won ? "You win!" : lost ? `${opponent.name} wins` : "Draw"}
@@ -494,6 +508,9 @@ function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, on
             </p>
           )}
           {game.rematch === "received" && <p className="m-0 text-sm text-[var(--tc-gold-hi)]" role="status">{opponent.name} wants a rematch.</p>}
+          {result.reason !== "Aborted" && moves.length > 0 && (
+            <button type="button" className="tc-plank tc-center tc-small" style={{ width: 200 }} onClick={() => { setMenuOpen(false); setReviewing(true); }}>Analyse the game</button>
+          )}
           {result.reason !== "Aborted" ? (
             <BrassButton onClick={game.offerRematch} disabled={game.rematch === "sent"}>
               {game.rematch === "sent" ? "Waiting for them…" : game.rematch === "received" ? "Accept rematch" : "Rematch"}

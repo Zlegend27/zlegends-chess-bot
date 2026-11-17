@@ -70,6 +70,10 @@ function SelfBoard({ pieceSetId, boardVars, sweetheart, onBack }) {
   const [analysing, setAnalysing] = useState(false);
   /* A pawn waiting on its last rank: { from, to } 120-squares. */
   const [promo, setPromo] = useState(null);
+  /* A piece being dragged: { from (0-63), x, y, moved }. A press that never
+     moves is left to the tap handling. */
+  const [drag, setDrag] = useState(null);
+  const boardRef = useRef(null);
 
   const fen = eng.fen();
   const result = gameResult(eng);
@@ -104,6 +108,46 @@ function SelfBoard({ pieceSetId, boardVars, sweetheart, onBack }) {
       setTargets(legal.filter((m) => mFrom(m) === sq120).map((m) => M120TO64[mTo(m)]));
     } else clearPick();
   };
+
+  /** The 0-63 square under a screen point, or -1 off the board. */
+  const squareAt = (x, y) => {
+    const r = boardRef.current?.getBoundingClientRect();
+    if (!r) return -1;
+    const col = Math.floor(((x - r.left) / r.width) * 8), row = Math.floor(((y - r.top) / r.height) * 8);
+    if (col < 0 || col > 7 || row < 0 || row > 7) return -1;
+    return (flipped ? row : 7 - row) * 8 + (flipped ? 7 - col : col);
+  };
+  const onPointerDown = (e) => {
+    if (promo || result || e.button > 0) return;
+    const sq = squareAt(e.clientX, e.clientY);
+    const p = sq >= 0 ? eng.pieceAt(sq) : 0;
+    if (p === 0 || Math.sign(p) !== eng.getSide()) return;
+    setDrag({ from: sq, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, moved: false });
+  };
+  const onPointerMove = (e) => {
+    if (!drag) return;
+    const moved = drag.moved || Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 6;
+    if (moved && !drag.moved) {
+      /* Picked up: show where it can go. */
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+      const from120 = M64TO120[drag.from];
+      setSelected(drag.from);
+      setTargets(eng.legalMoves().filter((m) => mFrom(m) === from120).map((m) => M120TO64[mTo(m)]));
+    }
+    setDrag({ ...drag, x: e.clientX, y: e.clientY, moved });
+  };
+  const onPointerUp = (e) => {
+    if (!drag) return;
+    const d = drag;
+    setDrag(null);
+    if (!d.moved) return;
+    const to = squareAt(e.clientX, e.clientY);
+    const found = to >= 0 ? eng.legalMoves().filter((m) => mFrom(m) === M64TO120[d.from] && mTo(m) === M64TO120[to]) : [];
+    if (found.length > 1) setPromo({ from: M64TO120[d.from], to: M64TO120[to] });
+    else if (found.length === 1) make(found[0]);
+    else clearPick();
+  };
+  const dragPiece = drag?.moved ? eng.pieceAt(drag.from) : 0;
 
   const promote = (piece) => {
     const move = eng.legalMoves().find((m) => mFrom(m) === promo.from && mTo(m) === promo.to && mPromo(m) === piece);
@@ -152,9 +196,17 @@ function SelfBoard({ pieceSetId, boardVars, sweetheart, onBack }) {
           <span className={"text-base font-bold " + T.ink} aria-live="polite">{status}</span>
           {analysisLine && <span className={"text-sm font-bold " + T.interactiveText} aria-live="polite">{analysisLine}</span>}
         </div>
-        <div style={{ position: "relative" }}>
+        <div ref={boardRef} style={{ position: "relative", touchAction: "none" }}
+          onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={() => { setDrag(null); clearPick(); }}>
           <LessonBoard eng={eng} orientation={flipped ? "black" : "white"} selected={selected} targets={targets}
             lastMove={lastMove} onSquare={onSquare} pieceSetId={pieceSetId} arrows={arrows} />
+          {dragPiece !== 0 && (() => {
+            const r = boardRef.current.getBoundingClientRect(), size = r.width / 8;
+            return (
+              <img src={getPieceSet(pieceSetId).svgUrl(Math.abs(dragPiece), dragPiece > 0)} alt="" draggable="false"
+                style={{ position: "absolute", left: drag.x - r.left - size / 2, top: drag.y - r.top - size / 2, width: size, height: size, pointerEvents: "none", zIndex: 8 }} />
+            );
+          })()}
           {promo && (
             <div className="promoOv">
               <div className="promoBox pieceBox" role="dialog" aria-label="Promote to">
