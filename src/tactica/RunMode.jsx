@@ -333,7 +333,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
   /* Leaving the run stops whatever was playing. */
   useEffect(() => () => setMusicMood(null), []);
 
-  /* Arriving in a new world: its short film (EntryFilm, opening/entries.js)
+  /* Arriving in a new world: its short film (EntryFilm, film3d/worldFilms.js)
      plays while the world's scenery builds behind it, then the world's
      card. A tap skips the film. */
   /* The bin's sixth floor opens with an omen: something strikes the bin,
@@ -1251,8 +1251,8 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
         </div>
       )}
 
-      {stage === "arrive" && <EntryFilm world={worldOf(floor).id} onDone={() => setStage("story")} />}
-      {stage === "ending" && <EntryFilm world="ending" onDone={() => setStage("credits")} />}
+      {stage === "arrive" && <EntryFilm world={worldOf(floor).id} sceneRef={sceneRef} setRef={binRef} ready={builtKind === setKind && setReady > 0} onDone={() => setStage("story")} />}
+      {stage === "ending" && <EntryFilm world="ending" sceneRef={sceneRef} setRef={binRef} ready={builtKind === setKind && setReady > 0} onDone={() => setStage("credits")} />}
       {stage === "credits" && <CreditsRoll onDone={() => endRun("won")} />}
       {stage === "story" && (
         <div className="tc-scrim absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">

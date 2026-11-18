@@ -58,7 +58,7 @@ function cobweb(size, seed = 1) {
 }
 
 /* A hand, cel-shaded and inked: palm, four fingers, a thumb. `side` -1 left. */
-function buildHand(side) {
+export function buildHand(side) {
   const skin = new THREE.MeshStandardMaterial({ color: "#e2b48e", roughness: 0.8 });
   const sleeve = new THREE.MeshStandardMaterial({ color: "#3a3f52", roughness: 0.9 });
   const hand = new THREE.Group();

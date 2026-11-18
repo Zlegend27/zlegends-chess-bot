@@ -247,6 +247,8 @@ export function buildDemon(ts, zap) {
       ts.wake?.();
     },
     get risen() { return stage === 2; },
+    /** Gone from the scene (the ending film, after he is beaten). */
+    hide() { root.visible = false; },
     /** His empty hand reaches over the board. */
     async reach(point) {
       const a = armBy("hand");

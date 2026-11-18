@@ -763,7 +763,8 @@ export class TacticaScene {
     if (!this.seeThrough?.size) return;
     const eye = this.camera.position;
     const targets = [];
-    for (const e of this.pieces.values()) targets.push(e.group.position.clone().setY((TAP_HEIGHT[e.kind] ?? 1.4) * 0.55));
+    /* A film (film3d/kit.js) frames its own shots: nothing fades. */
+    if (!this.seeThroughOff) for (const e of this.pieces.values()) targets.push(e.group.position.clone().setY((TAP_HEIGHT[e.kind] ?? 1.4) * 0.55));
     const sphere = this._seeSphere ??= new THREE.Sphere(), ray = this._seeRay ??= new THREE.Ray(), hitAt = this._seeHit ??= new THREE.Vector3();
     const k = 1 - Math.exp(-10 * dt);
     for (const root of this.seeThrough) {
