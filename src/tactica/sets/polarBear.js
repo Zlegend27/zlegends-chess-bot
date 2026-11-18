@@ -8,6 +8,7 @@
      carry(arm, point, ms), rest(), slam(point), roar(), melt() (beaten: the
      ice gives way under him and he goes into the water). */
 import * as THREE from "three";
+import { track } from "./art.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { play as playSound } from "../sound.js";
 
@@ -282,7 +283,7 @@ export function buildPolarBear(ts) {
 
   /* The real bear, laid in when (and if) he loads. */
   let real = null;
-  new GLTFLoader().loadAsync(REAL_BEAR).then((gltf) => {
+  track(new GLTFLoader().loadAsync(REAL_BEAR)).then((gltf) => {
     const model = gltf.scene;
     model.rotation.y = REAL.turn;
     const box = new THREE.Box3().setFromObject(model);

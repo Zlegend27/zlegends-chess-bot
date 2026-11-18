@@ -7,6 +7,25 @@ import { HDRLoader } from "three/examples/jsm/loaders/HDRLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 const textureLoader = new THREE.TextureLoader();
+
+/* Everything still loading, so a scene can wait for its art before it is
+   shown: a texture that arrives after the first frame makes its material
+   rebuild its shader, a visible hitch on a phone. */
+const inflight = new Set();
+/** Counts `promise` as art still loading until it settles. */
+export function track(promise) {
+  inflight.add(promise);
+  promise.catch(() => {}).finally(() => inflight.delete(promise));
+  return promise;
+}
+/** Resolves once nothing is loading (or after `ms`, whichever is first). */
+export async function artSettled(ms = 6000) {
+  const end = performance.now() + ms;
+  while (inflight.size && performance.now() < end) {
+    await Promise.race([Promise.allSettled([...inflight]), new Promise((r) => setTimeout(r, Math.max(0, end - performance.now())))]);
+    await new Promise((r) => setTimeout(r, 0));
+  }
+}
 const textures = new Map();
 
 /** A texture from a world's folder ("bin", "ice", ...), tiled `repeat`
@@ -16,7 +35,7 @@ const textures = new Map();
 export function art(world, name, repeat = 1, color = name.endsWith("_diff")) {
   const url = `/tactica/env/${world}/${name}.jpg`;
   if (!textures.has(url)) textures.set(url, textureLoader.loadAsync(url).catch(() => null));
-  return textures.get(url).then((base) => {
+  return track(textures.get(url).then((base) => {
     if (!base) return null;
     const t = base.clone();
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -26,7 +45,7 @@ export function art(world, name, repeat = 1, color = name.endsWith("_diff")) {
     t.anisotropy = 4;
     t.needsUpdate = true;
     return t;
-  });
+  }));
 }
 
 /** Lays a texture set ("wall" -> wall_diff, wall_nor, wall_rough) on a
@@ -34,14 +53,14 @@ export function art(world, name, repeat = 1, color = name.endsWith("_diff")) {
 export function dress(material, world, prefix, { repeat = 1, maps = ["diff", "nor", "rough"], normal = 1, tint = null } = {}) {
   const slots = { diff: "map", nor: "normalMap", rough: "roughnessMap", glow: "emissiveMap" };
   for (const m of maps) {
-    art(world, `${prefix}_${m}`, repeat, m === "diff" || m === "glow").then((t) => {
+    track(art(world, `${prefix}_${m}`, repeat, m === "diff" || m === "glow").then((t) => {
       if (!t) return;
       material[slots[m]] = t;
       if (m === "diff") material.color.set(tint ?? "#ffffff");
       if (m === "nor") material.normalScale.set(normal, normal);
       if (m === "rough") material.roughness = 1;
       material.needsUpdate = true;
-    });
+    }));
   }
   return material;
 }
@@ -52,7 +71,7 @@ const skies = new Map();
 export function sky(ts, world, { background = false, intensity = 1, blur = 0 } = {}) {
   const url = `/tactica/env/${world}/sky.hdr`;
   if (!skies.has(url)) skies.set(url, new HDRLoader().loadAsync(url).catch(() => null));
-  return skies.get(url).then((hdr) => {
+  return track(skies.get(url).then((hdr) => {
     if (!hdr || !ts.renderer) return;
     hdr.mapping = THREE.EquirectangularReflectionMapping;
     const pmrem = new THREE.PMREMGenerator(ts.renderer);
@@ -64,7 +83,7 @@ export function sky(ts, world, { background = false, intensity = 1, blur = 0 } =
       ts.scene.backgroundBlurriness = blur;
     }
     ts.wake?.();
-  });
+  }));
 }
 
 const gltfLoader = new GLTFLoader();
@@ -113,7 +132,7 @@ export function prop(ts, parent, id, { size = 1, at = [0, 0, 0], rot = [0, 0, 0]
   holder.position.set(...at);
   holder.rotation.set(...rot);
   parent.add(holder);
-  model(id).then((tpl) => {
+  track(model(id).then((tpl) => {
     if (!tpl) return;
     const copy = tpl.clone(true);
     /* `part`: some files hold several variants in one spot (four bottles,
@@ -147,7 +166,7 @@ export function prop(ts, parent, id, { size = 1, at = [0, 0, 0], rot = [0, 0, 0]
     }
     holder.add(wrap);
     ts.wake?.();
-  });
+  }));
   return holder;
 }
 

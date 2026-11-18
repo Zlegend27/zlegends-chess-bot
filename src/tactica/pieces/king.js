@@ -5,7 +5,7 @@
    the enemy, draws a finger across his own neck, and the enemy's head falls
    off and rolls away. Same axes as the pawn: front +Z, up +Y. */
 import * as THREE from "three";
-import { buildArm, chaikin, makeEye, makeMats, shadowed } from "./pawn.js";
+import { LATHE, buildArm, chaikin, makeEye, makeMats, shadowed } from "./pawn.js";
 
 const BODY_PROFILE = [
   [0.0, 0.03], [0.47, 0.03], [0.5, 0.05], [0.505, 0.09], [0.49, 0.115],
@@ -36,7 +36,7 @@ export function buildKing(colour = "white") {
   king.add(body);
 
   const turned = (pts) => chaikin(pts, 2).map(([r, y]) => new THREE.Vector2(Math.max(r, 0), y));
-  body.add(shadowed(new THREE.Mesh(new THREE.LatheGeometry(turned(BODY_PROFILE), 96), mats.wood)));
+  body.add(shadowed(new THREE.Mesh(new THREE.LatheGeometry(turned(BODY_PROFILE), LATHE), mats.wood)));
   const felt = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.475, 0.475, 0.03, 64), mats.felt));
   felt.position.y = 0.015;
   body.add(felt);
@@ -44,7 +44,7 @@ export function buildKing(colour = "white") {
   const head = new THREE.Group();
   head.name = "head";
   head.position.y = HEAD_Y;
-  const crown = shadowed(new THREE.Mesh(new THREE.LatheGeometry(turned(HEAD_PROFILE), 96), mats.wood));
+  const crown = shadowed(new THREE.Mesh(new THREE.LatheGeometry(turned(HEAD_PROFILE), LATHE), mats.wood));
   crown.rotation.y = Math.PI;
   head.add(crown);
   /* A ring of pearls just under the rim. */

@@ -496,7 +496,7 @@ export default function Film3D({ onDone, skippable = false }) {
       {/* Letterbox: a film, not the game. */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[9%]" style={{ background: "#000" }} aria-hidden="true" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[9%]" style={{ background: "#000" }} aria-hidden="true" />
-      {flash && <div className="pointer-events-none absolute inset-0" style={{ background: flash === "white" ? "#fff" : "#000" }} aria-hidden="true" />}
+      {flash && <div className="pointer-events-none absolute inset-0" style={{ background: flash === "white" ? "#fff" : "#000", opacity: 0.9 }} aria-hidden="true" />}
       {say && (
         <p className="pointer-events-none absolute inset-x-6 bottom-[calc(10%+1.2rem)] m-0 text-center text-base italic text-[var(--tc-cream)]" style={{ textShadow: "0 2px 6px #000, 0 0 12px #000" }}>{say}</p>
       )}

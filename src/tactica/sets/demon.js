@@ -11,7 +11,7 @@
    the realm, so his lightning and the sky's share one look. */
 import * as THREE from "three";
 import { play as playSound } from "../sound.js";
-import { dress } from "./art.js";
+import { dress, track } from "./art.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 /* The demon lord himself: a photographed armoured figure ("Demon Lord –
@@ -151,7 +151,7 @@ export function buildDemon(ts, zap) {
 
   /* The real demon, laid in when he loads. */
   let real = null;
-  new GLTFLoader().loadAsync(REAL_DEMON).then((gltf) => {
+  track(new GLTFLoader().loadAsync(REAL_DEMON)).then((gltf) => {
     const model = gltf.scene;
     const box = new THREE.Box3().setFromObject(model);
     const k = REAL_HEIGHT / (box.max.y - box.min.y);

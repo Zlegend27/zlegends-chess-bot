@@ -12,6 +12,11 @@ import { WORLD_FILMS, FILM_MOOD } from "./film3d/worldFilms";
    It waits for the world's scenery to finish loading (`ready`), then takes
    the scene over; when it ends, or is tapped away, everything the film
    touched is put back and onDone is called. */
+/* Never quite opaque: a layer that hides the 3D canvas completely makes the
+   browser stop drawing it, and showing it again cost a frame of 150 ms or
+   more (a visible hitch at every flash and fade-in). */
+const COVER = 0.97, FLASH = 0.9;
+
 export default function EntryFilm({ world, sceneRef, setRef, ready, onDone }) {
   const [say, setSay] = useState(null);
   const [flash, setFlash] = useState(null);
@@ -54,11 +59,18 @@ export default function EntryFilm({ world, sceneRef, setRef, ready, onDone }) {
         setFlash(null);
       },
       fade: async (to, s) => { if (!alive) return; setFade({ to, s }); await wait(s); },
+      /** The cast is on stage: build every shader while the screen is still
+       *  black, draw two frames, then fade in. */
+      ready: async () => {
+        if (!alive) return;
+        scene.warmAll();
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        if (alive) setFade({ to: 0, s: 0.8 });
+      },
     };
     (async () => {
       await wait(0.1);
       if (!alive) return;
-      setFade({ to: 0, s: 0.9 });
       try { await script(f); } catch (e) { console.error("world film", e); }
       if (alive) doneRef.current();
     })();
@@ -97,11 +109,11 @@ export default function EntryFilm({ world, sceneRef, setRef, ready, onDone }) {
   return (
     <button type="button" className="absolute inset-0 z-30 block cursor-default appearance-none overflow-hidden border-0 bg-transparent p-0" onClick={skip} aria-label="Skip the film">
       <canvas ref={linesRef} className="pointer-events-none absolute inset-0 block size-full" aria-hidden="true" />
-      <div className="pointer-events-none absolute inset-0" style={{ background: "#000", opacity: fade.to, transition: `opacity ${fade.s}s ease` }} aria-hidden="true" />
+      <div className="pointer-events-none absolute inset-0" style={{ background: "#000", opacity: fade.to * COVER, transition: `opacity ${fade.s}s ease` }} aria-hidden="true" />
       {/* Letterbox: a film, not the game. */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[9%]" style={{ background: "#000" }} aria-hidden="true" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[9%]" style={{ background: "#000" }} aria-hidden="true" />
-      {flash && <div className="pointer-events-none absolute inset-0" style={{ background: flash === "white" ? "#fff" : "#000" }} aria-hidden="true" />}
+      {flash && <div className="pointer-events-none absolute inset-0" style={{ background: flash === "white" ? "#fff" : "#000", opacity: FLASH }} aria-hidden="true" />}
       {say && (
         <span className="pointer-events-none absolute inset-x-6 bottom-[calc(10%+1.2rem)] text-center text-base italic text-[var(--tc-cream)]" style={{ textShadow: "0 2px 6px #000, 0 0 12px #000" }}>{say}</span>
       )}

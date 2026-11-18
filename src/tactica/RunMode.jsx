@@ -6,6 +6,7 @@ import { PUZZLES } from "../utils/puzzles";
 import { judgePuzzleMove } from "../utils/puzzleSession";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin, placeEscapeProps } from "./sets/trashBin";
+import { artSettled } from "./sets/art";
 import { BrassButton, MapButton, MenuButton, useViewSource, LearnHints, useLostRebuild } from "./ui";
 import { play as playSound, buzz, setScore as setMusicMood } from "./sound";
 import { track } from "../utils/track";
@@ -278,10 +279,17 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
       if (gone) return;
       bin = make(scene);
       binRef.current = bin;
-      builtKindRef.current = setKind;
-      setBuiltKind(setKind);
       scene.everyFrame.push((dt) => bin.update(dt));
       setSetReady((n) => n + 1);
+      /* Shown only once its art has arrived and every shader is built, under
+         the "Entering..." veil: art landing mid-floor made the first floors
+         of each world stutter. */
+      artSettled(5000).then(() => new Promise((r) => requestAnimationFrame(() => r()))).then(() => {
+        if (gone) return;
+        scene.warmAll();
+        builtKindRef.current = setKind;
+        setBuiltKind(setKind);
+      });
     };
     if (setKind === "bin") dress(dressTrashBin);
     else {

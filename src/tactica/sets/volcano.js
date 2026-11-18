@@ -245,7 +245,7 @@ export function dressVolcano(ts) {
   const castAll = () => {
     for (const e of ts.pieces.values()) {
       if (e.casts) continue;
-      e.model.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+      e.model.traverse((o) => { if (o.isMesh && !o.userData.tiny) o.castShadow = true; });
       e.casts = true;
     }
   };

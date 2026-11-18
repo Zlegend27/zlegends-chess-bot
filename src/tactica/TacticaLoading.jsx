@@ -22,7 +22,9 @@ export default function TacticaLoading({ visible = true, label = "Chess Tactica"
       style={{
         position: "absolute", inset: 0, zIndex: 60, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 18,
         background: "radial-gradient(circle at 50% 42%, #2a1a10 0%, #120b07 62%, #080504 100%)",
-        opacity: visible ? 1 : 0, transition: visible ? "none" : "opacity 320ms ease", pointerEvents: visible ? "auto" : "none",
+        /* Not quite opaque, so the scene behind is never hidden outright (see
+           EntryFilm: uncovering a hidden 3D canvas costs a long frame). */
+        opacity: visible ? 0.985 : 0, transition: visible ? "none" : "opacity 320ms ease", pointerEvents: visible ? "auto" : "none",
       }}
     >
       <style>{STYLE}</style>

@@ -3,7 +3,7 @@
    steel gauntlets on both fists. Same axes as the pawn: front +Z, up +Y. */
 import * as THREE from "three";
 import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import { PAWN_PROFILE, buildArm, chaikin, makeEye, makeMats, shadowed } from "./pawn.js";
+import { LATHE, PAWN_PROFILE, buildArm, chaikin, makeEye, makeMats, shadowed } from "./pawn.js";
 
 export const KNIGHT_SCALE = 1.08;
 export const COLLAR_Y = 0.92;
@@ -198,7 +198,7 @@ export function buildKnight(colour = "white") {
   knight.add(body);
 
   const profile = chaikin(PAWN_PROFILE, 2).map(([r, y]) => new THREE.Vector2(Math.max(r, 0), y));
-  body.add(shadowed(new THREE.Mesh(new THREE.LatheGeometry(profile, 96), mats.wood)));
+  body.add(shadowed(new THREE.Mesh(new THREE.LatheGeometry(profile, LATHE), mats.wood)));
   const felt = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.475, 0.475, 0.03, 64), mats.felt));
   felt.position.y = 0.015;
   body.add(felt);

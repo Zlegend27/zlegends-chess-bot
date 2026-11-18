@@ -13,6 +13,7 @@ import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { woodTexture, makeMats } from "./pieces/pawn.js";
 import { KINDS, BUILD, clipsFor, reactionFor, attackEffects, PAWN_ATTACK_END } from "./pieces/attacks.js";
 import { play as playSound, ATTACK_CUES, buzz } from "./sound.js";
+import { artSettled } from "./sets/art.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 /* Pieces are modelled about one square wide; this leaves a gap around them. */
@@ -143,14 +144,34 @@ function dampVector(cur, goal, vel, smooth, dt) {
 
 const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 const reducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+/** A mesh's see-through copies of its materials (for a boss over a piece),
+ *  made once and kept: never disposed, see setMarks. */
+function seeMats(o) {
+  o.userData.seeMat ??= [o.userData.seeOrig ?? o.material].flat().map((m) => { const c = m.clone(); c.transparent = true; c.depthWrite = false; c.userData.baseOpacity = m.opacity ?? 1; return c; });
+  return o.userData.seeMat;
+}
 
 /* One model per kind and colour, built once and cloned for every piece
    (clones share geometry and materials). */
 const templates = new Map();
 function modelFor(kind, colour) {
   const key = kind + colour;
-  if (!templates.has(key)) templates.set(key, bakeStill(BUILD[kind](colour)));
+  if (!templates.has(key)) templates.set(key, noTinyShadows(bakeStill(BUILD[kind](colour))));
   return templates.get(key).clone(true);
+}
+
+/* The small parts of a character (eyes, studs, rivets, a sword's tip) cast
+   no shadow: too small to see in the shadow map, and drawn into it every
+   frame they cost a phone more than the rest of the character. */
+function noTinyShadows(root) {
+  root.updateMatrixWorld(true);
+  const scale = new THREE.Vector3();
+  root.traverse((o) => {
+    if (!o.isMesh || !o.geometry) return;
+    if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
+    if (o.geometry.boundingSphere.radius * o.getWorldScale(scale).x < 0.06 / PIECE_SCALE) { o.castShadow = false; o.userData.tiny = true; }
+  });
+  return root;
 }
 
 /* Each character is built from dozens of small meshes; drawn one by one, a
@@ -234,6 +255,8 @@ export class TacticaScene {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 0.85;
+    /* Shadows are redrawn every other frame (see loop), not every frame. */
+    this.renderer.shadowMap.autoUpdate = false;
     this.renderer.localClippingEnabled = true;
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(colors.background);
@@ -564,6 +587,16 @@ export class TacticaScene {
   prewarm() {
     if (this.warmed || !this.running || !this.renderer.compileAsync) return;
     this.warmed = true;
+    this.compileFor(this.warmupGroup(), this.scene);
+    this.prewarmLive();
+    /* And once the scenery's art has all arrived, everything else. */
+    artSettled(8000).then(() => requestAnimationFrame(() => this.warmAll()));
+  }
+
+  /** The warm-up materials (made once, kept: disposing them would also
+   *  throw away the compiled shaders). */
+  warmupGroup() {
+    if (this.warmup) return this.warmup;
     const group = new THREE.Group();
     const geometry = new THREE.PlaneGeometry(0.01, 0.01);
     const add = (material) => group.add(new THREE.Mesh(geometry, material));
@@ -595,11 +628,8 @@ export class TacticaScene {
     const kit = this.bondAssets();
     [...kit.glow.slice(2), kit.aura, kit.silver, kit.gold].forEach(add);
     group.position.copy(this.camLook);
-    /* The warm-up materials are kept, not disposed: disposing them would
-       also throw away the compiled shaders. */
     this.warmup = group;
-    this.compileFor(group, this.scene);
-    this.prewarmLive();
+    return group;
   }
 
   /** The warm-up above can't match every shader the real scene asks for
@@ -612,17 +642,72 @@ export class TacticaScene {
   /** Compiles shaders for `objects` as the frame will really draw them: with
    *  post-processing on, the scene is drawn into the composer's buffer, and
    *  three.js makes different shaders for a buffer than for the screen. */
-  compileFor(objects, scene = undefined) {
+  compileFor(objects, scene = undefined, now = false) {
     const target = this.renderer.getRenderTarget();
     if (this.post && this.composer) this.renderer.setRenderTarget(this.composer.readBuffer);
     try {
-      this.renderer.compileAsync(objects, this.camera, scene).catch(() => {});
+      if (now || !this.renderer.compileAsync) this.renderer.compile(objects, this.camera, scene);
+      else this.renderer.compileAsync(objects, this.camera, scene).catch(() => {});
     } finally {
       this.renderer.setRenderTarget(target);
     }
   }
 
-  prewarmLive() {
+  /** Everything ready to draw, all at once, while something covers the
+   *  screen (a loading veil, a card, a film's black): every texture sent to
+   *  the graphics card, every shader in the scene built (scenery off to the
+   *  side and a boss far away included, which three.js would otherwise
+   *  build the first time each comes into view), and the bosses'
+   *  see-through copies built too, so a boss covering a piece mid-fight
+   *  doesn't freeze the game. One pause here instead of many during play. */
+  warmAll() {
+    if (!this.running) return;
+    const sent = new Set();
+    const send = (t) => { if (t?.isTexture && !sent.has(t) && t.image) { sent.add(t); try { this.renderer.initTexture(t); } catch { /* not ready */ } } };
+    send(this.scene.background); send(this.scene.environment);
+    this.scene.traverse((o) => {
+      for (const m of [o.material].flat()) {
+        if (!m) continue;
+        for (const key of ["map", "normalMap", "roughnessMap", "metalnessMap", "aoMap", "emissiveMap", "alphaMap", "bumpMap", "clearcoatNormalMap", "gradientMap"]) send(m[key]);
+      }
+    });
+    const target = this.renderer.getRenderTarget();
+    const compile = () => { try { this.renderer.compile(this.scene, this.camera); } catch { /* lost */ } };
+    try {
+      if (this.post && this.composer) this.renderer.setRenderTarget(this.composer.readBuffer);
+      compile();
+      /* The bosses as they look while faded. */
+      const swapped = [];
+      for (const root of this.seeThrough ?? []) {
+        root.traverse((o) => {
+          if (!o.isMesh || !o.geometry || o.userData.seeOrig) return;
+          seeMats(o);
+          swapped.push([o, o.material]);
+          o.material = Array.isArray(o.material) ? o.userData.seeMat : o.userData.seeMat[0];
+        });
+      }
+      if (swapped.length) { compile(); for (const [o, m] of swapped) o.material = m; }
+    } finally {
+      this.renderer.setRenderTarget(target);
+    }
+    /* The attack and bond materials, now rather than in the background. */
+    this.warmed = true;
+    this.compileFor(this.warmupGroup(), this.scene, true);
+    /* Highlights and faded characters need characters to build on: with an
+       empty board (a world just built), a stand-in of each kind and colour
+       is put down for the moment and taken away again. */
+    const empty = !this.pieces.size;
+    if (empty) {
+      const cast = [];
+      for (let type = 1; type <= 6; type++) cast.push({ sq: type - 1, type, white: true }, { sq: 56 + type - 1, type, white: false });
+      this.setPieces(cast);
+    }
+    this.prewarmLive(true);
+    if (empty) this.setPieces([]);
+    this.wake();
+  }
+
+  prewarmLive(now = false) {
     /* Textures go to the graphics card the first time something using them
        is drawn: scenery off to the side would make the first turn of the
        view hitch. Send them all now. */
@@ -639,7 +724,7 @@ export class TacticaScene {
       });
     }
     const entries = [...this.pieces.entries()];
-    if (!entries.length || !this.renderer.compileAsync) return;
+    if (!entries.length) return;
     const [sq] = entries[0];
     const others = entries.slice(1, 4).map(([s]) => s);
     const empty = [];
@@ -658,7 +743,7 @@ export class TacticaScene {
     try {
       this.setMarks({ selected: sq, held: true, targets: [...empty, ...others], chosen: empty[0] ?? null, captures: others, confirm: true });
       this.setHints(empty.length > 1 ? [{ from: empty[0], to: empty[1], color: "#3FE07A" }] : []);
-      this.compileFor(this.scene);
+      this.compileFor(this.scene, undefined, now);
     } finally {
       /* Back to exactly what was showing (still silent: no tap sound). */
       this.setMarks(this.lastMarks ?? {});
@@ -796,8 +881,7 @@ export class TacticaScene {
         }
         if (!o.userData.seeOrig) {
           o.userData.seeOrig = o.material;
-          /* A see-through copy kept for next time (never disposed, see setMarks). */
-          o.userData.seeMat ??= [o.material].flat().map((m) => { const c = m.clone(); c.transparent = true; c.depthWrite = false; c.userData.baseOpacity = m.opacity ?? 1; return c; });
+          seeMats(o);
           o.material = Array.isArray(o.material) ? o.userData.seeMat : o.userData.seeMat[0];
         }
         for (const m of o.userData.seeMat) m.opacity = (m.userData.baseOpacity ?? 1) * next;
@@ -2178,25 +2262,26 @@ export class TacticaScene {
    *  screen's own. Checked every ~1.5 seconds of motion, never more than
    *  once every 3 seconds. */
   adaptResolution(dt, now) {
-    const a = (this.adapt ??= { sum: 0, n: 0, changedAt: 0, max: Math.min(window.devicePixelRatio || 1, 2) });
+    /* Only ever down, and only after two slow stretches in a row: every
+       change resizes every buffer (a frame of 80 ms or more), and the old
+       way, up when fast and down when slow, kept changing back and forth
+       every few seconds on a 120 Hz phone. */
+    const a = (this.adapt ??= { sum: 0, n: 0, changedAt: 0, slow: 0 });
     a.sum += dt;
     a.n++;
     if (a.n < 90) return;
     const avg = a.sum / a.n;
     a.sum = 0;
     a.n = 0;
-    if (now - a.changedAt < 3000) return;
-    const ratio = this.renderer.getPixelRatio();
-    let next = ratio;
-    if (avg > 25 && ratio > 1) next = Math.max(1, ratio - 0.25);
-    else if (avg < 15 && ratio < a.max) next = Math.min(a.max, ratio + 0.25);
-    if (next === ratio) {
-      if (avg > 25 && ratio <= 1 && this.post) { this.post = false; a.changedAt = now; }
-      return;
-    }
+    a.slow = avg > 28 ? a.slow + 1 : 0;
+    if (a.slow < 2 || now - a.changedAt < 4000) return;
+    a.slow = 0;
     a.changedAt = now;
-    this.renderer.setPixelRatio(next);
-    this.resize();
+    const ratio = this.renderer.getPixelRatio();
+    if (ratio > 1) {
+      this.renderer.setPixelRatio(Math.max(1, ratio - 0.25));
+      this.resize();
+    } else if (this.post) this.post = false;
   }
 
   /** Average frame time while something is moving, for the test readout. */
@@ -2278,6 +2363,11 @@ export class TacticaScene {
       this.updateFades(since);
       this.updateSeeThrough(since);
       this.reportView();
+      /* The shadow map costs as much as the scene itself (every character's
+         every part drawn again): redrawn every other frame, a lag no one can
+         see, it nearly halves the work per frame. */
+      this.shadowFrame = !this.shadowFrame;
+      if (this.shadowFrame) this.renderer.shadowMap.needsUpdate = true;
       if (this.post) this.composer.render();
       else this.renderer.render(this.scene, this.camera);
       /* The loading screen waits for a mode's first picture. */

@@ -6,7 +6,7 @@
    with a polished edge line, a red silk grip and a gold guard, so it reads
    from across the board. Same axes as the pawn: front +Z, up +Y. */
 import * as THREE from "three";
-import { buildArm, chaikin, holdAt, makeEye, makeMats, shadowed } from "./pawn.js";
+import { LATHE, buildArm, chaikin, holdAt, makeEye, makeMats, shadowed } from "./pawn.js";
 
 const BODY_PROFILE = [
   [0.0, 0.03], [0.47, 0.03], [0.5, 0.05], [0.505, 0.09], [0.49, 0.115],
@@ -184,7 +184,7 @@ export function buildBishop(colour = "white") {
   bishop.add(body);
 
   const turned = (pts) => chaikin(pts, 2).map(([r, y]) => new THREE.Vector2(Math.max(r, 0), y));
-  body.add(shadowed(new THREE.Mesh(new THREE.LatheGeometry(turned(BODY_PROFILE), 96), mats.wood)));
+  body.add(shadowed(new THREE.Mesh(new THREE.LatheGeometry(turned(BODY_PROFILE), LATHE), mats.wood)));
   const felt = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.475, 0.475, 0.03, 64), mats.felt));
   felt.position.y = 0.015;
   body.add(felt);
@@ -192,7 +192,7 @@ export function buildBishop(colour = "white") {
   const head = new THREE.Group();
   head.name = "head";
   head.position.y = HEAD_Y;
-  const cap = shadowed(new THREE.Mesh(new THREE.LatheGeometry(turned(HEAD_PROFILE), 96), mats.wood));
+  const cap = shadowed(new THREE.Mesh(new THREE.LatheGeometry(turned(HEAD_PROFILE), LATHE), mats.wood));
   cap.rotation.y = Math.PI;
   head.add(cap);
   head.add(slitStrip(chaikin(HEAD_PROFILE, 2), colour));

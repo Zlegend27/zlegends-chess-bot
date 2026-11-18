@@ -100,6 +100,9 @@ export const REST = {
   elbowL: [-1.9, 0, 0],
 };
 
+/* Segments round the turned bodies: plenty for a phone screen, even close
+   up (96 was twice the triangles of the whole scenery, per piece). */
+export const LATHE = 56;
 export const shadowed = (m) => { m.castShadow = true; m.receiveShadow = true; return m; };
 
 /* A cartoon eye looking down its own +Z, sitting on a surface at z = 0. */
@@ -309,7 +312,7 @@ export function buildPawn(colour = "white") {
   pawn.add(body);
 
   const profile = chaikin(PAWN_PROFILE, 2).map(([r, y]) => new THREE.Vector2(Math.max(r, 0), y));
-  const turned = shadowed(new THREE.Mesh(new THREE.LatheGeometry(profile, 96), mats.wood));
+  const turned = shadowed(new THREE.Mesh(new THREE.LatheGeometry(profile, LATHE), mats.wood));
   turned.name = "turnedBody";
   body.add(turned);
   const felt = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.475, 0.475, 0.03, 64), mats.felt));
@@ -319,7 +322,7 @@ export function buildPawn(colour = "white") {
   const head = new THREE.Group();
   head.name = "head";
   head.position.y = HEAD.y;
-  const ball = shadowed(new THREE.Mesh(new THREE.SphereGeometry(HEAD.r, 64, 48), mats.wood));
+  const ball = shadowed(new THREE.Mesh(new THREE.SphereGeometry(HEAD.r, 40, 28), mats.wood));
   ball.rotation.y = Math.PI;
   head.add(ball);
   body.add(head);

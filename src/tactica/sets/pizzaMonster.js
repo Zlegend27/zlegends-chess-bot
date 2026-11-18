@@ -14,6 +14,7 @@
      roar()                mouth wide, the bin shakes (Promise)
      melt()                beaten: he sags and sinks (Promise) */
 import * as THREE from "three";
+import { track } from "./art.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { play as playSound } from "../sound.js";
 
@@ -144,7 +145,7 @@ export function buildPizzaMonster(ts) {
   /* The real slice: stood point-down, cheese toward the board, sized to the
      drawn one (point at y -1.75, crust top near 5.9), sitting just behind
      the eyes and mouth. */
-  new GLTFLoader().loadAsync(REAL_PIZZA).then((gltf) => {
+  track(new GLTFLoader().loadAsync(REAL_PIZZA)).then((gltf) => {
     const slice = gltf.scene;
     slice.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(slice);

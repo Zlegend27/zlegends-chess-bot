@@ -42,6 +42,8 @@ async function ice(f) {
   const heroes = castHeroes(scene);
   const [pawn] = heroes;
   stand(heroes, abreast(V(0, 0, 2.6), NORTH, 6, 0.9), Math.PI);
+  await f.ready();
+  if (!f.alive()) return;
   set.setBoss?.(0);
   f.score("wonder");
 
@@ -119,6 +121,8 @@ async function volcano(f) {
   const heroes = castHeroes(scene);
   const knight = heroes[1];
   stand(heroes, abreast(V(0, 0, 2.8), NORTH, 6, 0.9), Math.PI);
+  await f.ready();
+  if (!f.alive()) return;
   set.setBoss?.(0);
   f.score("sorrow");
 
@@ -141,6 +145,7 @@ async function volcano(f) {
   /* 3. Wide, over their heads: the mountain goes up, and out of the smoke
      the dragon turns and comes for them. */
   const dragon = set.monster;
+  dragon?.setRise?.(2);
   f.lend.zoom(0.6);
   f.cut(V(-1.5, 2.2, 7), V(16, 12, -60));
   await f.wait(0.6);
@@ -150,7 +155,6 @@ async function volcano(f) {
   playSound("whoom", { volume: 0.9, delay: 0.1 });
   await f.impact(true);
   scene.shake = 0.18;
-  dragon?.setRise?.(2);
   f.glide(V(-1, 1.7, 6.2), V(2, 4.5, -14), 2.6);
   await f.tween(1400, (k) => { scene.shake = 0.18 * (1 - k); });
   scene.shake = 0;
@@ -200,6 +204,8 @@ async function demon(f) {
   const { scene, set } = f;
   const heroes = castHeroes(scene);
   stand(heroes, abreast(V(0, 0, 2.8), NORTH, 6, 0.9), Math.PI);
+  await f.ready();
+  if (!f.alive()) return;
   set.setBoss?.(0);
   const lord = set.monster;
   f.score("dread");
@@ -330,14 +336,16 @@ async function ending(f) {
   set.monster?.hide?.();
   const heroes = castHeroes(scene);
   stand(heroes, abreast(V(0, 0, 2.2), NORTH, 6, 0.9), Math.PI);
-  f.score("wonder");
-
-  f.shot("dawn");
   /* 1. The storm goes, the sky turns blue and gold, and the sun comes up
-     over the edge of the world. */
+     over the edge of the world. (Made before the fade-in, so their
+     shaders are built with the rest.) */
   const sky = f.lend.add(dawnSky());
   const sun = f.lend.add(glowSprite("#ffd49a", 34, 0));
   sun.position.set(0, -8, -66);
+  await f.ready();
+  if (!f.alive()) return;
+  f.score("wonder");
+  f.shot("dawn");
   const warm = new THREE.Color("#ffd7a6"), lights = [];
   scene.scene.traverse((o) => { if (o.isLight) lights.push([o, o.color.clone(), o.intensity]); });
   const tint0 = scene.grade?.uniforms.tint.value.clone(), tint1 = new THREE.Color("#fff0dc");
@@ -387,6 +395,7 @@ async function ending(f) {
   }
   scene.setLook({ glow: 0.18, glowFrom: 1.05, vignette: 0.62, tint: "#fff1dc", contrast: 1.06, saturation: 1.08 });
   scene.renderer.toneMappingExposure = 0.78;
+  scene.warmAll();
   f.cut(V(2.2, 1.6, 7.6), V(0, 0.5, 0.2));
   f.glide(V(1.6, 1.3, 6.4), V(0.2, 0.5, 0.6), 4);
   await f.wait(0.15);

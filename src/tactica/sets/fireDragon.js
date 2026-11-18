@@ -10,6 +10,7 @@
    carry, rest, slam, roar, melt (beaten: it falls into the lava) and
    finish(points) (you lost: fire over your pieces). */
 import * as THREE from "three";
+import { track } from "./art.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { play as playSound } from "../sound.js";
 
@@ -75,7 +76,7 @@ export function buildFireDragon(ts) {
 
   /* The model, laid in when it loads. */
   let real = null;
-  new GLTFLoader().loadAsync(MODEL).then((gltf) => {
+  track(new GLTFLoader().loadAsync(MODEL)).then((gltf) => {
     const model = gltf.scene;
     const box = new THREE.Box3().setFromObject(model);
     const size = box.getSize(new THREE.Vector3());
@@ -164,7 +165,7 @@ export function buildFireDragon(ts) {
     return name === "Death" ? 1.2 : 0.8;
   }
 
-  let t = 0, stage = 0, move = null, hover = null, falling = 0;
+  let t = 0, stage = 0, move = null, hover = null, falling = 0, nextSnort = 7, snorting = 0;
   /** Flies to a spot (world position and scale) over `ms`. */
   const flyTo = (pos, scale = root.scale.x, ms = 900) => {
     move = { from: root.position.clone(), fromScale: root.scale.x, to: pos.clone(), toScale: scale, k: 0, ms };
@@ -201,6 +202,19 @@ export function buildFireDragon(ts) {
         falling += dt * 9;
         root.rotation.x = Math.min(1.2, root.rotation.x + dt * 0.8);
       }
+      /* Hovering over the board, now and then a short burst of fire over
+         the pieces' heads (never at them). */
+      if (stage === 2 && !move && !hover && !falling && root.visible) {
+        nextSnort -= dt;
+        if (nextSnort < 0 && !breathing) {
+          nextSnort = 9 + Math.random() * 6;
+          snorting = 0.55;
+          breathing = { at: new THREE.Vector3((Math.random() - 0.5) * 4, 3.4, 3.5) };
+          play("Yes");
+          playSound("whoom", { volume: 0.45 });
+        }
+      }
+      if (snorting > 0) { snorting -= dt; if (snorting <= 0) { breathing = null; play("Flying_Idle"); } }
       /* Fire breath. */
       if (real?.head) {
         real.head.getWorldPosition(mouth);
@@ -264,26 +278,35 @@ export function buildFireDragon(ts) {
       const spot = SPOTS[stage];
       flyTo(spot.pos, spot.scale, 700);
     },
-    /** A dive and a headbutt into the board at `point`. Resolves at the blow. */
+    /** A wrong move: it swoops over `point`, breathes fire on it, dives
+     *  into it, and flies back to where it hovers. Resolves just after the
+     *  blow. */
     async slam(point) {
+      snorting = 0;
       hover = point.clone();
       root.userData.seeAll = true;
       faceToward(point);
       play("Fast_Flying", { speed: 1.6 });
-      await flyTo(point.clone().add(new THREE.Vector3(0, 4.5, -3)), SPOTS[2].scale, 380);
-      play("Headbutt", { once: true, speed: 1.3 });
-      await flyTo(point.clone().add(new THREE.Vector3(0, 1.6, -1.2)), SPOTS[2].scale, 220);
+      await flyTo(point.clone().add(new THREE.Vector3(0, 4.4, -3.4)), SPOTS[2].scale, 380);
+      play("Yes");
+      playSound("whoom", { volume: 1 });
+      playSound("crunch", { volume: 0.5, rate: 0.7, delay: 0.25 });
+      breathing = { at: point.clone() };
+      ts.shake = 0.06;
+      await wait(700);
+      breathing = null;
+      ts.shake = 0;
+      play("Headbutt");
+      await flyTo(point.clone().add(new THREE.Vector3(0, 1.6, -1.2)), SPOTS[2].scale, 200);
       playSound("punchHeavy", { volume: 1 });
-      playSound("crunch", { volume: 0.8 });
       ts.shake = 0.24;
       ts.tween(520, (k) => { ts.shake = 0.24 * (1 - k); }, () => { ts.shake = 0; });
-      await wait(240);
-      hover = null;
-      root.userData.seeAll = false;
-      play("Flying_Idle");
+      await wait(200);
+      this.rest();
     },
     /** It rears back and breathes a long blast of fire over the board. */
     async roar() {
+      snorting = 0;
       play("Yes", { once: true });
       playSound("rumble", { volume: 1 });
       playSound("whoom", { volume: 1 });
