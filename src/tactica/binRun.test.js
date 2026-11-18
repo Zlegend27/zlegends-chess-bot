@@ -25,7 +25,7 @@ describe("the worlds", () => {
 
   test("every world ends on a boss floor", () => {
     expect([10, 20, 30, 40].map(isBossFloor)).toEqual([true, true, true, true]);
-    expect(WORLDS.map((w) => w.boss)).toEqual(["The pizza monster", "The polar bear", "The fire giant", "The demon"]);
+    expect(WORLDS.map((w) => w.boss)).toEqual(["The pizza monster", "The polar bear", "The fire dragon", "The demon"]);
     expect([19, 21, 35].some(isBossFloor)).toBe(false);
   });
 

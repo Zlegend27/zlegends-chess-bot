@@ -775,7 +775,7 @@ export class TacticaScene {
         if (!o.geometry.boundingSphere || (pos && o.userData.seeVersion !== pos.version)) { o.geometry.computeBoundingSphere(); o.userData.seeVersion = pos?.version; }
         sphere.copy(o.geometry.boundingSphere).applyMatrix4(o.matrixWorld);
         /* Hands and arms only: a whole body is too big to test this way. */
-        if (sphere.radius > SEE_THROUGH_MAX_RADIUS && !o.userData.seeOrig) return;
+        if (sphere.radius > SEE_THROUGH_MAX_RADIUS && !o.userData.seeOrig && !root.userData.seeAll) return;
         let covers = false;
         for (const t of targets) {
           ray.origin.copy(eye);

@@ -750,7 +750,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
     const mine = [];
     for (let sq = 0; sq < 64; sq++) if (Math.sign(eng.pieceAt(sq)) === side) mine.push(sq);
     if (boss.finish && scene) {
-      /* The fire giant destroys your pieces himself, fist by fist. */
+      /* The fire dragon burns your pieces itself, one after another. */
       (async () => {
         for (const sq of mine) setTimeout(() => scene.sink(sq), 300 + Math.random() * 1400);
         await boss.finish(mine.map((sq) => scene.worldOf(sq)));

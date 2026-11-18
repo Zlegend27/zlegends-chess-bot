@@ -27,9 +27,9 @@ export const BOSS_STORY = {
   },
   volcano: {
     omen: "The volcano is erupting",
-    peek: "The fire giant is wading toward you.",
-    intro: ["The giant was here before the volcano was. He has never been beaten.", "He reaches down for the board, and the lava rises with him."],
-    won: ["The fire goes out of him, and the giant crumbles into the lava.", "Beyond the smoke, something in the dark is watching."],
+    peek: "The fire dragon is circling closer.",
+    intro: ["The dragon was here before the volcano was. Nothing that came this far has left.", "It drops out of the smoke over the board, and the air turns to fire."],
+    won: ["The fire goes out of it, and the dragon falls into the lava.", "Beyond the smoke, something in the dark is watching."],
   },
   demon: {
     omen: "The storm breaks, and the red moon rises",
@@ -50,7 +50,7 @@ export const WORLD_STORY = {
 export const WORLDS = [
   { id: "bin", name: "The Bin", boss: "The pizza monster", rating: [550, 900], phases: [2, 3], baseSeconds: 30, secondsPerMove: 10, wrongMoveDamage: 25 },
   { id: "ice", name: "The Icy Lake", boss: "The polar bear", rating: [950, 1350], phases: [3, 4], baseSeconds: 30, secondsPerMove: 10, wrongMoveDamage: 25 },
-  { id: "volcano", name: "The Volcano", boss: "The fire giant", rating: [1500, 1900], phases: [4, 4], baseSeconds: 25, secondsPerMove: 8, wrongMoveDamage: 34 },
+  { id: "volcano", name: "The Volcano", boss: "The fire dragon", rating: [1500, 1900], phases: [4, 4], baseSeconds: 25, secondsPerMove: 8, wrongMoveDamage: 34 },
   { id: "demon", name: "The Demon's Realm", boss: "The demon", rating: [1950, 2300], phases: [4, 5], baseSeconds: 25, secondsPerMove: 8, wrongMoveDamage: 34 },
 ];
 

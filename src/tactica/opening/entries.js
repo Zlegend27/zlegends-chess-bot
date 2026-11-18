@@ -3,7 +3,7 @@
    since they began, with sound cues and a line of story under them.
 
      ice      out of the bin into the snow; the long walk; a pawn sees the sky
-     volcano  the snow turns to ash; the volcano wakes and the giant rises;
+     volcano  the snow turns to ash; the volcano wakes and the dragon rises;
               a knight steadies himself
      demon    lightning over a field of old swords; the red moon over the
               demon; the pieces draw close together
@@ -139,19 +139,35 @@ const VOLCANO = {
   eruption: {
     dur: 5.0, next: "knight",
     cues: [[0.3, "rumble", 1], [0.5, "whoom", 0.9], [1.0, "crunch", 0.6], [2.6, "rumble", 0.8], [3.0, "heartbeat", 0.7]],
-    line: () => ({ text: "Then the mountain woke, and something older than it stood up in the fire." }),
+    line: () => ({ text: "Then the mountain woke, and something older than it climbed out of the fire." }),
     draw(ctx, t) {
       gradient(ctx, [[0, "#140606"], [0.55, "#4a1408"], [1, "#1a0905"]]);
       const shake = t < 1.4 ? Math.sin(t * 60) * 4 * (1.4 - t) : 0;
       ctx.save(); ctx.translate(shake, 0);
-      /* The giant rising behind the volcano, eyes like furnaces. */
+      /* The dragon climbing out of the crater: wings unfolding, a long neck,
+         eyes like furnaces. */
       const rise = span(t, 1.8, 4.2);
       const gy = lerp(H * 0.62, H * 0.3, rise);
+      const spread = span(t, 2.6, 4.4);
+      const beat = Math.sin(t * 5) * 18 * spread;
       ctx.fillStyle = "#0c0504";
-      ctx.beginPath(); ctx.ellipse(W * 0.5, gy + 140, 150, 170, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.ellipse(W * 0.5, gy, 62, 70, 0, 0, Math.PI * 2); ctx.fill();
-      for (const sx of [-1, 1]) { ctx.beginPath(); ctx.moveTo(W * 0.5 + sx * 40, gy - 40); ctx.lineTo(W * 0.5 + sx * 78, gy - 104); ctx.lineTo(W * 0.5 + sx * 58, gy - 34); ctx.fill(); }
-      if (rise > 0.2) for (const sx of [-1, 1]) { glow(ctx, W * 0.5 + sx * 22, gy - 6, 38, "rgba(255,190,80,0.95)", rise); ctx.fillStyle = "#ffe9b0"; ctx.save(); ctx.translate(W * 0.5 + sx * 22, gy - 6); ctx.rotate(sx * 0.35); ctx.fillRect(-11, -3, 22, 6); ctx.restore(); }
+      for (const sx of [-1, 1]) {
+        /* A bat wing: shoulder, the long finger tips, scalloped back in. */
+        const wx = W * 0.5 + sx * 40, wy = gy + 60;
+        const tipX = wx + sx * lerp(60, 230, spread), tipY = wy - lerp(20, 150, spread) - beat;
+        ctx.beginPath();
+        ctx.moveTo(wx, wy);
+        ctx.lineTo(tipX, tipY);
+        ctx.quadraticCurveTo(wx + sx * lerp(50, 170, spread), wy - 10, wx + sx * lerp(40, 150, spread), wy + 50 - beat * 0.3);
+        ctx.quadraticCurveTo(wx + sx * lerp(30, 100, spread), wy + 30, wx + sx * lerp(20, 70, spread), wy + 80);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.beginPath(); ctx.ellipse(W * 0.5, gy + 120, 70, 110, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(W * 0.5 - 22, gy + 40); ctx.quadraticCurveTo(W * 0.5 - 30, gy - 10, W * 0.5 - 8, gy - 30); ctx.lineTo(W * 0.5 + 12, gy - 28); ctx.quadraticCurveTo(W * 0.5 + 30, gy, W * 0.5 + 22, gy + 40); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(W * 0.5, gy - 36, 34, 26, 0, 0, Math.PI * 2); ctx.fill();
+      for (const sx of [-1, 1]) { ctx.beginPath(); ctx.moveTo(W * 0.5 + sx * 16, gy - 54); ctx.lineTo(W * 0.5 + sx * 40, gy - 100); ctx.lineTo(W * 0.5 + sx * 28, gy - 50); ctx.fill(); }
+      if (rise > 0.2) for (const sx of [-1, 1]) { glow(ctx, W * 0.5 + sx * 13, gy - 38, 30, "rgba(255,190,80,0.95)", rise); ctx.fillStyle = "#ffe9b0"; ctx.save(); ctx.translate(W * 0.5 + sx * 13, gy - 38); ctx.rotate(sx * 0.35); ctx.fillRect(-8, -2.5, 16, 5); ctx.restore(); }
       /* The volcano, its crater glowing, lava running down. */
       ctx.fillStyle = "#1d0c08";
       ctx.beginPath(); ctx.moveTo(-30, H * 0.78); ctx.lineTo(W * 0.38, H * 0.46); ctx.lineTo(W * 0.62, H * 0.46); ctx.lineTo(W + 30, H * 0.78); ctx.closePath(); ctx.fill();

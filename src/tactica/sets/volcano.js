@@ -2,14 +2,14 @@
    of lava. The lava moves, its light comes up from below, embers rise past
    the board, ash drifts down, and the volcano itself smokes and glows on
    the horizon. In the second half it erupts: the lava runs brighter, ash
-   thickens, the rock shakes now and then, and the fire giant wades closer.
+   thickens, the rock shakes now and then, and the fire dragon flies closer.
 
    dressVolcano(tacticaScene) returns the same controls as the other worlds:
      update(dt), setSnow(), setIntense(on), setBoss(level), monster, omen(),
      omenView, bossView, dispose(). */
 import * as THREE from "three";
 import { setFlies, setWind, play as playSound } from "../sound.js";
-import { buildFireGiant } from "./fireGiant.js";
+import { buildFireDragon } from "./fireDragon.js";
 import { dress, sky, skyMood, art, prop } from "./art.js";
 import { buildLandform } from "./landform.js";
 
@@ -254,7 +254,7 @@ export function dressVolcano(ts) {
   setWind(true, 0.35);
 
   let t = 0, heat = 1, heatGoal = 1, intense = false, quake = 0, giant = null;
-  const ensureGiant = () => (giant ??= buildFireGiant(ts));
+  const ensureGiant = () => (giant ??= buildFireDragon(ts));
   ensureGiant();
   return {
     update(dt) {
@@ -300,7 +300,7 @@ export function dressVolcano(ts) {
     setBoss(level) { ensureGiant().setRise(level); },
     omenView: [[2, 3.2, 9.5], [6, 6, -40]],
     bossView: [[0, 3.2, 10.5], [0, 4.4, -8]],
-    /** The volcano's sixth floor: it erupts, the giant turns and roars, and
+    /** The volcano's sixth floor: it erupts, the dragon turns and roars, and
      *  starts wading toward the board. */
     async omen() {
       playSound("rumble", { volume: 1 });

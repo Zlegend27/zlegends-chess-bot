@@ -11,7 +11,7 @@ const SECTIONS = [
   { title: "Your team", lines: ["The pawns", "The knights", "The bishops", "The rooks", "The queen", "The king", "and you"] },
   { title: "The bosses", lines: WORLDS.map((w) => w.boss).filter(Boolean) },
   { title: "The games they remembered", lines: ["Paul Morphy", "Adolf Anderssen", "Richard Réti", "Bobby Fischer", "Edward Lasker", "Fernando Saavedra", "François-André Philidor", "Luis Ramírez de Lucena"] },
-  { title: "Models", lines: ["Polar bear by kenchoo", "Pizza by gatoperdido", "Demon lord by Pigcraft", "(Sketchfab, CC BY 4.0)"] },
+  { title: "Models", lines: ["Polar bear by kenchoo", "Pizza by gatoperdido", "Demon lord by Pigcraft", "(Sketchfab, CC BY 4.0)", "Fire dragon by Quaternius (CC0)"] },
   { title: "Textures, skies and props", lines: ["Poly Haven", "ambientCG"] },
   { title: "Puzzles", lines: ["The Lichess puzzle database"] },
   { title: "Bots", lines: ["Stockfish"] },

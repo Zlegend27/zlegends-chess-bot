@@ -34,3 +34,8 @@ demon_lord/demon.glb
   (meshoptimizer), textures turned into 1024 px JPEGs; in the game it
   breathes and sways, glows when angry, and fades away when beaten.
   Credited in the game under Chess Tactica > Settings > Credits.
+
+fire_dragon/dragon.glb
+  "Dragon Evolved" by Quaternius (quaternius.com, from the Ultimate Monsters
+  pack; downloaded from poly.pizza), public domain (CC0 1.0). Recoloured in
+  code (deep red, molten wings, burning eyes); its own animations are used.
