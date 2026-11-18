@@ -8,9 +8,11 @@ import BlitzMode from "./BlitzMode";
 import RunMode from "./RunMode";
 import BotMode from "./BotMode";
 import VersusMode from "./VersusMode";
-import OpeningScene from "./OpeningScene";
 import MemoryMode from "./MemoryMode";
 import TacticaLoading, { useVeil } from "./TacticaLoading";
+import { lazy, Suspense } from "react";
+/* The opening: a 3D anime film (film3d/Film3D.jsx), loaded when needed. */
+const Film3D = lazy(() => import("./film3d/Film3D"));
 import { loadStory, saveStory, afterOpening } from "./story";
 import { unlock, play, setFlies } from "./sound";
 import "./tactica.css";
@@ -91,7 +93,7 @@ function TacticaPageInner({ pieceImgSrc, sweetheart, player, start = null, onExi
   };
 
   let page;
-  if (screen === "opening") page = <OpeningScene sweetheart={sweetheart} skippable={(rewatch || seenNow) && loadStory().seen} onDone={openingDone} />;
+  if (screen === "opening") page = <Suspense fallback={null}><Film3D skippable={(rewatch || seenNow) && loadStory().seen} onDone={openingDone} /></Suspense>;
   else if (screen === "tutorial") page = <TutorialMode pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={toMenu} />;
   else if (screen === "run") page = <RunMode creator={player?.session?.user?.app_metadata?.role === "creator"} pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} best={runBest} onBest={recordRunBest} displayName={player?.displayName} onLeaderboard={onLeaderboard ? () => onLeaderboard("run") : null} onExit={toMenu} />;
   else if (screen === "memories") page = <MemoryMode onExit={toMenu} />;

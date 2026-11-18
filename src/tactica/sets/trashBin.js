@@ -830,6 +830,14 @@ export function dressTrashBin(ts) {
       else flies(t, dt);
       castAll();
     },
+    /** The light through the broken corner of the lid, 0 (shut) to 1 (as
+     *  in play), for the films: the crack of light opening. */
+    setHoleLight(k) {
+      hole.light.intensity = HOLE_LIGHT * Math.max(0, k);
+      ts.wake?.();
+    },
+    /** Where the light comes in, for the films' camera. */
+    holeAt: HOLE.clone(),
     /** The harder second half of the bin (floors 6 to 10). */
     setIntense(on) {
       if (on === intense) return;

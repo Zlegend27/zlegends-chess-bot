@@ -32,14 +32,16 @@ export const SET_BOARD = { light: "#EED6B0", dark: "#8A5229", frame: "#5C3317" }
    corners so the eye stays on the board, and takes a slight colour cast
    from the world it's in (warm in the bin, cold in the snow). */
 const GRADE_SHADER = {
-  uniforms: { tDiffuse: { value: null }, vignette: { value: 0.45 }, tint: { value: new THREE.Color("#ffffff") }, contrast: { value: 1.06 } },
+  uniforms: { tDiffuse: { value: null }, vignette: { value: 0.45 }, tint: { value: new THREE.Color("#ffffff") }, contrast: { value: 1.06 }, saturation: { value: 1 } },
   vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-  fragmentShader: `uniform sampler2D tDiffuse; uniform float vignette; uniform vec3 tint; uniform float contrast; varying vec2 vUv;
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float vignette; uniform vec3 tint; uniform float contrast; uniform float saturation; varying vec2 vUv;
     void main() {
       vec4 c = texture2D(tDiffuse, vUv);
       float edge = smoothstep(0.35, 0.95, length((vUv - 0.5) * vec2(1.0, 1.15)) * 1.25);
       c.rgb *= tint * (1.0 - vignette * edge);
       c.rgb = max(vec3(0.0), (c.rgb - 0.18) * contrast + 0.18);
+      float grey = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+      c.rgb = max(vec3(0.0), mix(vec3(grey), c.rgb, saturation));
       gl_FragColor = c;
     }`,
 };
@@ -312,12 +314,14 @@ export class TacticaScene {
 
   /** A world's look: how much bright things glow, how dark the corners go,
    *  and the colour cast. Anything left out keeps its value. */
-  setLook({ glow, glowFrom, vignette, tint } = {}) {
+  setLook({ glow, glowFrom, vignette, tint, contrast, saturation } = {}) {
     if (!this.composer) return;
     if (glow != null) this.bloom.strength = glow;
     if (glowFrom != null) this.bloom.threshold = glowFrom;
     if (vignette != null) this.grade.uniforms.vignette.value = vignette;
     if (tint != null) this.grade.uniforms.tint.value.set(tint);
+    if (contrast != null) this.grade.uniforms.contrast.value = contrast;
+    if (saturation != null) this.grade.uniforms.saturation.value = saturation;
     this.wake();
   }
 
