@@ -7,7 +7,7 @@ import { loadSetting, saveSetting } from "../utils/storage";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
 import { BrassButton, MapButton, MenuButton, PromotionPicker, useViewSource, LearnHints } from "./ui";
-import { play as playSound } from "./sound";
+import { play as playSound, sting } from "./sound";
 import { applyStory } from "./bonds";
 import { useBestMove, scoreLabel } from "../utils/useBestMove";
 import GameReview, { BEST_COLOR } from "./GameReview";
@@ -245,7 +245,9 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit, self = false 
       if (eng.inCheckNow()) playSound("metal", { volume: 0.7, delay: 0.1 });
       return false;
     }
-    playSound(res.winner === side ? "confirm" : res.winner ? "error" : "chime", { volume: 0.8 });
+    /* A short phrase for the end: a win (either side's, playing yourself), a
+       loss or a draw. */
+    sting(res.winner && (self || res.winner === side) ? "win" : res.winner ? "lose" : "draw");
     forget();
     setResult(res);
     setStage("over");
@@ -455,7 +457,7 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit, self = false 
     setMenuOpen(false);
     setThinking(false);
     setResult({ text: side === 1 ? "0–1" : "1–0", reason: "Resigned", winner: -side, resigned: true });
-    playSound("error", { volume: 0.5 });
+    sting("lose");
     setStage("over");
     sceneRef.current?.setMarks({});
   };

@@ -12,7 +12,7 @@ import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { woodTexture, makeMats } from "./pieces/pawn.js";
 import { KINDS, BUILD, clipsFor, reactionFor, attackEffects, PAWN_ATTACK_END } from "./pieces/attacks.js";
-import { play as playSound, ATTACK_CUES } from "./sound.js";
+import { play as playSound, ATTACK_CUES, buzz } from "./sound.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 /* Pieces are modelled about one square wide; this leaves a gap around them. */
@@ -1740,6 +1740,8 @@ export class TacticaScene {
 
   /** A swipe across the board: tells the game, and the swipe hint (ui.jsx). */
   swiped(dir) {
+    /* A tiny tick under the finger as the character changes. */
+    buzz(12);
     this.onSwipe?.(dir);
     try { window.dispatchEvent(new CustomEvent("tactica-swipe")); } catch { /* no window */ }
   }

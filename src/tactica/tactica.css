@@ -183,3 +183,8 @@
 @media (prefers-reduced-motion: reduce) {
   .tactica .tc-swipe-hand, .tactica .tc-tap-hand, .tactica .tc-swipe-hint { animation: none; }
 }
+
+/* The credits after the ending: they rise from below the screen and off the top. */
+.tactica .tc-credits-roll { position: absolute; inset-inline: 0; top: 100%; padding: 0 24px; animation-name: tc-credits; animation-timing-function: linear; animation-fill-mode: forwards; }
+@keyframes tc-credits { from { transform: translateY(0); } to { transform: translateY(calc(-100% - 100dvh)); } }
+.tactica .tc-credits-still { position: absolute; inset: 0; overflow-y: auto; padding: 32px 24px; }

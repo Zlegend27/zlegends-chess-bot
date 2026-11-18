@@ -11,6 +11,11 @@
                a tritone apart, a heartbeat on the drums, a cold high bell.
      "triumph" a boss beaten: a bright D major fanfare on the brass stabs
                over kick and toms.
+     "menu"    the front screen: slow, quiet G major bells over long pads.
+     "ghost"   a memory: an airy E minor pad, far-off high bells.
+
+   playSting(ctx, out, kind) plays a short one-off phrase for a game's end:
+   "win", "lose" or "draw".
 
    startScore(ctx, out, mood) returns a stop function. Notes are scheduled
    a little ahead on the audio clock, so timing stays steady even when the
@@ -180,7 +185,52 @@ const TRIUMPH = {
   },
 };
 
-const MOODS = { action: ACTION, wonder: WONDER, sorrow: SORROW, dread: DREAD, triumph: TRIUMPH };
+const MENU = {
+  bpm: 58,
+  steps: 64,
+  play(I, ac, out, at, step, dur) {
+    /* G, E minor, C, D: four calm bars, a bell every other beat. */
+    const chords = [[43, 55, 59, 62], [40, 52, 55, 59], [36, 52, 55, 60], [38, 50, 54, 57]];
+    const bar = Math.floor(step / 16), s = step % 16;
+    if (s === 0) I.pad(ac, out, at, 1, chords[bar], dur * 16);
+    const line = [[71, 74], [71, 67], [72, 67], [69, 66]];
+    if (s === 0 || s === 8) I.bell(ac, out, at, 0.45, line[bar][s / 8]);
+  },
+};
+
+const GHOST = {
+  bpm: 50,
+  steps: 32,
+  play(I, ac, out, at, step, dur) {
+    if (step === 0) I.pad(ac, out, at, 1.2, [40, 52, 55, 59, 66], dur * 32);
+    /* Far-off bells, an octave up, sparse. */
+    if (step === 6) I.bell(ac, out, at, 0.35, 83);
+    if (step === 14) I.bell(ac, out, at, 0.3, 79);
+    if (step === 22) I.bell(ac, out, at, 0.35, 86);
+  },
+};
+
+const MOODS = { action: ACTION, wonder: WONDER, sorrow: SORROW, dread: DREAD, triumph: TRIUMPH, menu: MENU, ghost: GHOST };
+
+/* Short phrases for the end of a game: a rising major arpeggio for a win,
+   a falling minor one for a loss, a suspended chord resolving for a draw. */
+const STINGS = {
+  win: { notes: [62, 66, 69, 74, 78], chord: [62, 66, 69, 74], step: 0.11 },
+  lose: { notes: [69, 65, 62, 57], chord: [50, 57, 62, 65], step: 0.16 },
+  draw: { notes: [62, 67, 69, 66], chord: [50, 57, 62, 66], step: 0.14 },
+};
+export function playSting(ac, out, kind, { volume = 0.6 } = {}) {
+  const sting = STINGS[kind];
+  if (!sting || !ac) return;
+  const bus = ac.createGain();
+  bus.gain.value = volume;
+  bus.connect(out);
+  const at = ac.currentTime + 0.05;
+  sting.notes.forEach((n, i) => { try { INSTRUMENTS.bell(ac, bus, at + i * sting.step, 1.1, n); } catch { /* skip */ } });
+  const end = at + sting.notes.length * sting.step;
+  try { INSTRUMENTS.stab(ac, bus, end, kind === "lose" ? 0.6 : 0.9, sting.chord, 1.1); } catch { /* skip */ }
+  setTimeout(() => bus.disconnect(), (end - ac.currentTime + 2.5) * 1000);
+}
 
 /** Starts a mood; returns a function that fades it out and stops it. */
 export function startScore(ac, out, mood, { volume = 0.5 } = {}) {

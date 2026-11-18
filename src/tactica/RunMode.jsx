@@ -15,6 +15,7 @@ import { noteTacticaChange } from "./accountSync.js";
 import { submitRunScore } from "../utils/leaderboard";
 import { wakeMemory, openMemories, lessonBefore } from "./memories";
 import EntryFilm from "./EntryFilm";
+import CreditsRoll from "./CreditsRoll";
 import {
   START_HEALTH, wrongMoveDamage, phasesForFloor, isStoryFloor, timerSeconds, ratingFor,
   rushDamage, pickPuzzle, effectFloors, offer, choose, floorScore, maxPliesFor, minPliesFor, rememberSeen, isBonusAfter, HARD_MODE_RATING,
@@ -313,6 +314,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
     const mood = stage === "omen" || stage === "cursed" ? "dread"
       : stage === "bossCard" ? bossCard?.mood ?? null
       : stage === "defeat" ? "sorrow"
+      : stage === "credits" ? "triumph"
       : stage === "over" ? (ending === "won" ? "triumph" : "sorrow")
       : null;
     setMusicMood(mood);
@@ -1207,7 +1209,8 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
       )}
 
       {stage === "arrive" && <EntryFilm world={worldOf(floor).id} onDone={() => setStage("story")} />}
-      {stage === "ending" && <EntryFilm world="ending" onDone={() => endRun("won")} />}
+      {stage === "ending" && <EntryFilm world="ending" onDone={() => setStage("credits")} />}
+      {stage === "credits" && <CreditsRoll onDone={() => endRun("won")} />}
       {stage === "story" && (
         <div className="tc-scrim absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
           {/* Where each world's entry cutscene and its halfway animation will play. */}

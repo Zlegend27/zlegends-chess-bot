@@ -4,7 +4,7 @@ import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
 import { BOND_KINDS, KIND_NAMES, LOOKS, MAX_LEVEL, loadBonds, levelsOf, progress } from "./bonds";
 import { Medal } from "./ui";
-import { soundOn, setSoundOn, onSoundChange, soundLevel, setSoundLevel, canVibrate, vibrateOn, setVibrateOn, buzz, play } from "./sound";
+import { setScore, soundOn, setSoundOn, onSoundChange, soundLevel, setSoundLevel, canVibrate, vibrateOn, setVibrateOn, buzz, play } from "./sound";
 import { loadSetting } from "../utils/storage";
 import { loadStory, saveStory, bondsOpen, redEyes, isHard, hardLocked, canSwitchHard, setHardSwitch, resetBond } from "./story";
 
@@ -68,6 +68,9 @@ export default function MenuScreen({ onPick, onExit, onOpening, blitzBest, sweet
   const [volume, setVolume] = useState(() => Math.round(soundLevel() * 100));
   const [vibes, setVibes] = useState(vibrateOn);
   useEffect(() => onSoundChange(setSound), []);
+  /* A quiet theme on the front screen (score.js "menu"; a real track in
+     public/tactica/music/ replaces it). Never during play. */
+  useEffect(() => { setScore("menu"); return () => setScore(null); }, []);
 
   useEffect(() => {
     const scene = new TacticaScene(canvasRef.current, {
@@ -190,7 +193,7 @@ export default function MenuScreen({ onPick, onExit, onOpening, blitzBest, sweet
             </label>
             {canVibrate() && (
               <div className="flex items-center justify-between gap-3">
-                <span className="tc-display text-sm">Vibration on hits</span>
+                <span className="tc-display text-sm">Vibration</span>
                 <button type="button" className="tc-plank tc-center tc-small" style={{ width: 96 }} aria-pressed={vibes}
                   onClick={() => { const on = !vibes; setVibes(on); setVibrateOn(on); if (on) buzz(60); }}>{vibes ? "On" : "Off"}</button>
               </div>

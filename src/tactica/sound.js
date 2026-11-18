@@ -7,7 +7,7 @@
    vibration switch for hits, remembered on this device. */
 import { loadSetting, saveSetting } from "../utils/storage";
 import { SYNTHS } from "./synth.js";
-import { startScore } from "./score.js";
+import { startScore, playSting } from "./score.js";
 
 const NAMES = [
   "tap", "land", "landHeavy", "step", "plank", "brass", "ghost", "swish", "slice", "draw", "chop",
@@ -58,14 +58,39 @@ export function setSoundLevel(v) {
   if (master) master.gain.value = gainNow();
 }
 
-/** Vibration on hits, where the phone can (Android; iPhones can't). */
-export const canVibrate = () => typeof navigator !== "undefined" && typeof navigator.vibrate === "function";
+/* Vibration. Android has the real thing (navigator.vibrate). iPhones don't,
+   but since iOS 18 Safari gives a light system tick when a switch-style
+   checkbox is toggled, so a hidden one is toggled instead: one light tick,
+   no strength or pattern, and only during a touch (a hit landing later may
+   not tick). */
+const hasVibrate = () => typeof navigator !== "undefined" && typeof navigator.vibrate === "function";
+const isIos = () => typeof navigator !== "undefined" && (/iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
+let tickSwitch = null;
+function iosTick() {
+  try {
+    if (!tickSwitch) {
+      const label = document.createElement("label");
+      label.setAttribute("aria-hidden", "true");
+      label.style.cssText = "position:fixed;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none";
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.setAttribute("switch", "");
+      input.tabIndex = -1;
+      label.appendChild(input);
+      document.body.appendChild(label);
+      tickSwitch = label;
+    }
+    tickSwitch.click();
+  } catch { /* no tick here */ }
+}
+export const canVibrate = () => hasVibrate() || isIos();
 export const vibrateOn = () => vibrate;
 export function setVibrateOn(on) { vibrate = !!on; saveSetting("tacticaVibrate", vibrate); }
-/** A short buzz (ms, or a pattern) if vibration is on. */
+/** A short buzz (ms, or a pattern) if vibration is on; a light tick on iPhone. */
 export function buzz(pattern = 60) {
-  if (!vibrate || !canVibrate()) return;
-  try { navigator.vibrate(pattern); } catch { /* not allowed right now */ }
+  if (!vibrate) return;
+  if (hasVibrate()) { try { navigator.vibrate(pattern); } catch { /* not allowed right now */ } return; }
+  if (isIos()) iosTick();
 }
 
 /** Starts audio from inside a touch or click (phones require it) and loads
@@ -87,6 +112,8 @@ export function unlock() {
           .catch(() => { /* this one sound stays silent */ });
       }
       if (fliesWanted) scheduleFly();
+      /* Music asked for before the first touch (the menu's) starts now. */
+      if (scoreMoodNow && !stopScore && enabled && !music?.src) stopScore = startScore(ctx, master, scoreMoodNow, { volume: 0.5 });
     }
     if (ctx.state === "suspended") ctx.resume();
   } catch { /* no audio on this device */ }
@@ -198,8 +225,8 @@ export function playMusic(name, { volume = 0.55, loop = false, fade = 1.2 } = {}
 }
 /* The music made in code (score.js), for when there's no real track. */
 let stopScore = null, scoreMoodNow = null;
-/** Plays the code-made music in `mood` ("wonder", "action"), or stops it
- *  with null. Never plays over a real track. */
+/** Plays the code-made music in `mood` (see score.js), or stops it with
+ *  null. Never plays over a real track. */
 export function setScore(mood) {
   if (mood === scoreMoodNow) return;
   scoreMoodNow = mood;
@@ -207,6 +234,12 @@ export function setScore(mood) {
   stopScore = null;
   if (!mood || !ctx || !enabled || music?.src) return;
   stopScore = startScore(ctx, master, mood, { volume: 0.5 });
+}
+
+/** A short phrase for the end of a game: "win", "lose" or "draw". */
+export function sting(kind) {
+  if (!ctx || !enabled || ctx.state !== "running") return;
+  playSting(ctx, master, kind);
 }
 
 /** Fades the music out over `fade` seconds. */

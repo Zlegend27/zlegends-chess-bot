@@ -10,7 +10,7 @@ import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
 import { BrassButton, MapButton, MenuButton, PromotionPicker, useViewSource, LearnHints } from "./ui";
 import { track } from "../utils/track";
-import { play as playSound } from "./sound";
+import { play as playSound, sting } from "./sound";
 import { applyStory } from "./bonds";
 import { friendlySquares } from "./BotMode";
 import GameReview from "./GameReview";
@@ -309,7 +309,7 @@ function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, on
     if (!over || overSound.current) return;
     overSound.current = true;
     sceneRef.current?.setMarks({});
-    playSound(result.winner === myColor ? "confirm" : result.winner ? "error" : "chime", { volume: 0.8 });
+    if (result.reason !== "Aborted") sting(result.winner === myColor ? "win" : result.winner ? "lose" : "draw");
   }, [over, result, myColor]);
 
   /* ---- Camera and highlights ---- */

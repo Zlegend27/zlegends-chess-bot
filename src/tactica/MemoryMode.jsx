@@ -5,7 +5,7 @@ import { judgePuzzleMove } from "../utils/puzzleSession";
 import { loadSetting } from "../utils/storage";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { BrassButton } from "./ui";
-import { play as playSound } from "./sound";
+import { play as playSound, setScore } from "./sound";
 import { track } from "../utils/track";
 import { WORLDS } from "./worlds";
 import { MEMORIES, openMemories } from "./memories";
@@ -21,6 +21,8 @@ const QUEEN = 5, KNIGHT = 2;
 const REPLY_MS = 650;
 
 export default function MemoryMode({ start = null, onExit }) {
+  /* Memories are story moments, so they get a soft, distant mood. */
+  useEffect(() => { setScore("ghost"); return () => setScore(null); }, []);
   const canvasRef = useRef(null);
   const sceneRef = useRef(null);
   const engRef = useRef(createEngine());
