@@ -6,6 +6,7 @@ import {
 import HomePage from "./components/HomePage";
 import { AppHeader, BottomBar } from "./components/AppNav";
 import PlayPage from "./components/PlayPage";
+import TacticaLoading from "./tactica/TacticaLoading";
 import { nextStreak, utcDay } from "./utils/dailyStreak";
 import { historyStep, pathForView, sectionForView, viewForPath, hiddenHeadingFor, titleFor } from "./utils/routes";
 import { pickPostGameLine } from "./utils/botLines";
@@ -2739,7 +2740,7 @@ export default function ZlegendsBot() {
 
   if (siteView === "tactica") {
     return (
-      <Suspense fallback={null}>
+      <Suspense fallback={<div style={{ position: "relative", height: "calc(100dvh - var(--headerH))" }}><TacticaLoading /></div>}>
         <TacticaPage
           pieceImgSrc={pieceImgSrc} sweetheart={sweetheart}
           start={tacticaStart} onExit={() => (tacticaStart === "self" ? setSiteView("practice") : onSection(tacticaStart ? "puzzles" : "play"))}

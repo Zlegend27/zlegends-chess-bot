@@ -210,6 +210,10 @@ export class TacticaScene {
     /* `onTurn(angle)`: the player turned the view with two fingers. */
     this.onTurn = onTurn;
     if (import.meta.env.DEV) window.__tcScene = this;
+    /* A scene that never gets characters (the Memories list) still tells
+       the loading screen it's ready. Timers wait for the build to finish, so
+       this can't fire in the middle of it. */
+    this.frameTimer = setTimeout(() => { if (!this.framed && this.running !== false) { this.framed = true; try { window.dispatchEvent(new CustomEvent("tactica-frame")); } catch { /* no window */ } } }, 300);
     /* How far the view is turned from the player's side, the point it turns
        around, and whether the player turned it with the map. */
     this.turn = 0;
@@ -2215,6 +2219,10 @@ export class TacticaScene {
       this.reportView();
       if (this.post) this.composer.render();
       else this.renderer.render(this.scene, this.camera);
+      /* The loading screen waits for a mode's first picture. */
+      /* The first picture with its characters (a scene with none, like the
+         Memories list, says so from a timer: see the constructor). */
+      if (!this.framed && this.pieces.size) { this.framed = true; try { window.dispatchEvent(new CustomEvent("tactica-frame")); } catch { /* no window */ } }
       if (busy && dt < 200) this.adaptResolution(dt, now);
     }
     this.lastFrame = now;
@@ -2224,6 +2232,7 @@ export class TacticaScene {
   dispose() {
     this.running = false;
     clearTimeout(this.warmTimer);
+    clearTimeout(this.frameTimer);
     this.resizeObserver.disconnect();
     this.canvas.removeEventListener("pointerdown", this.onDown);
     this.canvas.removeEventListener("pointerup", this.onUp);

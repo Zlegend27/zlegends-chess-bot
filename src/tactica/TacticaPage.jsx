@@ -10,6 +10,7 @@ import BotMode from "./BotMode";
 import VersusMode from "./VersusMode";
 import OpeningScene from "./OpeningScene";
 import MemoryMode from "./MemoryMode";
+import TacticaLoading, { useVeil } from "./TacticaLoading";
 import { loadStory, saveStory, afterOpening } from "./story";
 import { unlock, play, setFlies } from "./sound";
 import "./tactica.css";
@@ -59,9 +60,15 @@ function TacticaPageInner({ pieceImgSrc, sweetheart, player, start = null, onExi
   /* Whether the opening on screen is a rewatch (so it can be skipped). */
   const [rewatch] = useState(() => loadStory().seen);
   const [seenNow, setSeenNow] = useState(false);
-  const openingDone = (answer) => { saveStory(afterOpening(loadStory(), answer)); setSeenNow(true); setScreen("tutorial"); };
+  /* Every change of mode goes through the loading screen (TacticaLoading). */
+  const veil = useVeil();
+  const goTo = (next) => veil.go(() => setScreen(next), next === "opening");
+  /* First load: the screen is already up; it comes down with the first picture. */
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { veil.arm(screen === "opening"); }, []);
+  const openingDone = (answer) => { saveStory(afterOpening(loadStory(), answer)); setSeenNow(true); goTo("tutorial"); };
   const [blitzBest, setBlitzBest] = useState(() => loadSetting("tacticaBlitzBest", 0));
-  const toMenu = () => setScreen("menu");
+  const toMenu = () => goTo("menu");
   const leave = (mode) => (start === mode ? onExit : toMenu);
   const recordBest = (score) => { setBlitzBest(score); saveSetting("tacticaBlitzBest", score); noteTacticaChange(); };
   const [runBest, setRunBest] = useState(() => loadSetting("tacticaRunBest", 0));
@@ -92,6 +99,13 @@ function TacticaPageInner({ pieceImgSrc, sweetheart, player, start = null, onExi
   else if (screen === "self") page = <BotMode key="self" self pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={leave("self")} />;
   else if (screen === "versus") page = <VersusMode {...player} pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={toMenu} />;
   else if (screen === "blitz") page = <BlitzMode sweetheart={sweetheart} best={blitzBest} displayName={player?.displayName} onBest={recordBest} onExit={leave("blitz")} exitLabel={start === "blitz" ? "Back to Puzzles" : undefined} />;
-  else page = <MenuScreen onPick={(id) => setScreen(id === "tutorial" ? "opening" : id)} onOpening={() => setScreen("opening")} onExit={onExit} blitzBest={blitzBest} sweetheart={sweetheart} />;
-  return <div className="tactica" onPointerDownCapture={onPointerDown} onClickCapture={unlock} onTouchEndCapture={unlock}>{page}</div>;
+  else page = <MenuScreen onPick={(id) => goTo(id === "tutorial" ? "opening" : id)} onOpening={() => goTo("opening")} onExit={onExit} blitzBest={blitzBest} sweetheart={sweetheart} />;
+  /* The loading screen covers each mode while its 3D world builds (the
+     opening film is drawn flat, so it needs none). */
+  return (
+    <div className="tactica" style={{ position: "relative" }} onPointerDownCapture={onPointerDown} onClickCapture={unlock} onTouchEndCapture={unlock}>
+      {page}
+      <TacticaLoading visible={veil.visible} />
+    </div>
+  );
 }
