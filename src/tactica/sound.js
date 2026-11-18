@@ -136,7 +136,8 @@ export function play(name, { volume = 1, rate = 1, delay = 0, pan = 0, ...rest }
     src.buffer = buf;
     src.playbackRate.value = rate * (0.96 + Math.random() * 0.08);
     const gain = ctx.createGain();
-    gain.gain.value = volume;
+    /* A touch of variety, so a sound heard often never repeats exactly. */
+    gain.gain.value = volume * (0.92 + Math.random() * 0.08);
     let node = src.connect(gain);
     if (pan && ctx.createStereoPanner) {
       const p = ctx.createStereoPanner();

@@ -494,7 +494,7 @@ function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, on
       )}
 
       {reviewing && over && (
-        <GameReview sceneRef={sceneRef} moves={moves} ending={`${result.reason}. ${result.text}`} onDone={endReview} />
+        <GameReview sceneRef={sceneRef} moves={moves} ending={`${result.reason}. ${result.text}`} onDone={endReview} onQuit={leave} quitLabel="Back to the lobby" />
       )}
 
       {over && !reviewing && (

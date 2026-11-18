@@ -660,7 +660,7 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit, self = false 
         </div>
       )}
 
-      {reviewing && <GameReview sceneRef={sceneRef} moves={moveList} ending={result ? `${result.reason}. ${result.text}` : null} onDone={endReview} />}
+      {reviewing && <GameReview sceneRef={sceneRef} moves={moveList} ending={result ? `${result.reason}. ${result.text}` : null} onDone={endReview} onQuit={() => { gameIdRef.current++; onExit(); }} />}
     </div>
   );
 }

@@ -17,6 +17,12 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 
 /* Pieces are modelled about one square wide; this leaves a gap around them. */
 const PIECE_SCALE = 0.78;
+/* Hit-stop: when an attack connects, attacker and victim hold still for a
+   moment (heavier hitters longer) while the camera kicks, so the blow lands
+   instead of passing through. Times are when each attack's blow lands (see
+   ATTACK_CUES), and the hold in ms. */
+const IMPACT = { pawn: [0.6, 60], knight: [1.18, 110], bishop: [0.9, 80], rook: [1.7, 100], queen: [0.8, 70], king: [1.95, 120] };
+const IMPACT_KICK = { pawn: 0.05, knight: 0.11, bishop: 0.07, rook: 0.09, queen: 0.07, king: 0.12 };
 /* How tall each character's invisible tap area is, so a short pawn doesn't
    cover the squares behind it. Roughly the height of the model on the board. */
 const TAP_HEIGHT = { pawn: 1.1, knight: 1.4, bishop: 1.55, rook: 1.25, queen: 1.65, king: 1.75 };
@@ -866,7 +872,11 @@ export class TacticaScene {
     this.targets = held ? targets : [];
     this.captures = captures;
     /* A tap when a character is picked, a tick when a move is previewed. */
-    if (!this.silent && held && selected != null && selected !== this.soundSelected) playSound("tap", { volume: 0.55 });
+    if (!this.silent && held && selected != null && selected !== this.soundSelected) {
+      playSound("tap", { volume: 0.55 });
+      /* The picked character perks up: it heard you. */
+      this.squash(this.pieces.get(selected), -0.08, 220);
+    }
     if (!this.silent && held && chosen != null && chosen !== this.chosen) playSound("ghost", { volume: 0.7 });
     this.soundSelected = held ? selected : null;
     this.chosen = held ? chosen : null;
@@ -982,13 +992,44 @@ export class TacticaScene {
     this.hints.clear();
     /* Drawn over everything, like the x-ray square outlines: from a low
        camera the board surface and the characters would hide them. */
-    for (const a of arrows) this.addArrow(this.worldOf(a.from), this.worldOf(a.to), a.color, 0.85, this.hints, 0.05, true);
+    for (const a of arrows) {
+      /* A knight's move bends: an L, the long leg first, then the short one,
+         the way chess sites draw it (utils/arrowGeometry.js on the site). */
+      const df = (a.to % 8) - (a.from % 8), dr = ((a.to / 8) | 0) - ((a.from / 8) | 0);
+      const knight = (Math.abs(df) === 2 && Math.abs(dr) === 1) || (Math.abs(df) === 1 && Math.abs(dr) === 2);
+      if (!knight) { this.addArrow(this.worldOf(a.from), this.worldOf(a.to), a.color, 0.85, this.hints, 0.05, true); continue; }
+      const bendSq = Math.abs(df) === 2 ? a.from + df : a.from + dr * 8;
+      const from = this.worldOf(a.from), bend = this.worldOf(bendSq), to = this.worldOf(a.to);
+      this.addShaft(from, bend, a.color, 0.85, this.hints, 0.05, true);
+      this.addArrow(bend, to, a.color, 0.85, this.hints, 0.05, true, 0);
+    }
     this.wake();
   }
 
-  addArrow(from, to, color, opacity, into = this.marks, y = 0.025, onTop = false) {
+  /** The first leg of a bent arrow: a flat bar from just off `from` to
+   *  `to`, with a round end so the bend joins smoothly. */
+  addShaft(from, to, color, opacity, into = this.marks, y = 0.025, onTop = false) {
     const dir = new THREE.Vector3().subVectors(to, from);
-    const length = dir.length() - 0.35;
+    const w = 0.07, start = 0.25, length = dir.length() - start;
+    if (length <= 0) return;
+    const shape = new THREE.Shape();
+    shape.moveTo(-w, 0); shape.lineTo(w, 0); shape.lineTo(w, length);
+    shape.absarc(0, length, w, 0, Math.PI, false);
+    shape.lineTo(-w, 0);
+    const mesh = new THREE.Mesh(new THREE.ShapeGeometry(shape, 8), new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, depthTest: !onTop, side: THREE.DoubleSide }));
+    mesh.userData.ownGeometry = true;
+    if (onTop) mesh.renderOrder = 9;
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.rotation.z = Math.atan2(-dir.x, -dir.z);
+    mesh.position.copy(from).setY(y).add(dir.clone().normalize().multiplyScalar(start));
+    into.add(mesh);
+  }
+
+  /** A flat arrow from `from` to `to`; `startOff` leaves room round the
+   *  character it starts from (0 when it carries on from a bend). */
+  addArrow(from, to, color, opacity, into = this.marks, y = 0.025, onTop = false, startOff = 0.25) {
+    const dir = new THREE.Vector3().subVectors(to, from);
+    const length = dir.length() - 0.1 - startOff;
     if (length <= 0.2) return;
     const shape = new THREE.Shape();
     const w = 0.07, head = 0.24;
@@ -1002,7 +1043,7 @@ export class TacticaScene {
     mesh.rotation.x = -Math.PI / 2;
     mesh.rotation.z = Math.atan2(-dir.x, -dir.z);
     mesh.position.copy(from).setY(y);
-    const start = dir.clone().normalize().multiplyScalar(0.25);
+    const start = dir.clone().normalize().multiplyScalar(startOff);
     mesh.position.add(start);
     into.add(mesh);
   }
@@ -1656,7 +1697,13 @@ export class TacticaScene {
         if (leap) mover.group.position.y = Math.sin(Math.PI * k) * KNIGHT_HOP * (quick ? 0.5 : 1);
       }, () => {
         if (!current()) { resolve(); return; }
-        if (!victim) { playSound(leap ? "landHeavy" : "land", { volume: quick ? 0.6 : 0.8 }); resolve(); return; }
+        if (!victim) {
+          playSound(leap ? "landHeavy" : "land", { volume: quick ? 0.6 : 0.8 });
+          /* It lands with a little weight: a squash, more after a leap. */
+          if (!fast) this.squash(mover, leap ? 0.16 : 0.09, leap ? 260 : 200);
+          resolve();
+          return;
+        }
         playSound("poof", { volume: 0.7 });
         if (!fast) this.sparks(b);
         this.tween(fast ? 0 : quick ? QUICK_CAPTURE_MS : CAPTURE_MS, (t) => { if (current()) victim.group.scale.setScalar(Math.max(0.001, 1 - t)); }, resolve);
@@ -1801,6 +1848,19 @@ export class TacticaScene {
     buzz(12);
     this.onSwipe?.(dir);
     try { window.dispatchEvent(new CustomEvent("tactica-swipe")); } catch { /* no window */ }
+  }
+
+  /** A quick squash (`amount` > 0, flattening) or stretch (< 0) of a
+   *  character, back to its shape in `ms`. A newer one replaces an older. */
+  squash(entry, amount, ms = 200) {
+    if (!entry || reducedMotion()) return;
+    const token = (entry.squashToken = (entry.squashToken ?? 0) + 1);
+    const h = entry.holder;
+    this.tween(ms, (t) => {
+      if (entry.squashToken !== token) return;
+      const k = Math.sin(Math.PI * t) * (1 - t * 0.35);
+      h.scale.set(1 + amount * 0.5 * k, 1 - amount * k, 1 + amount * 0.5 * k);
+    }, () => { if (entry.squashToken === token) h.scale.set(1, 1, 1); });
   }
 
   tween(ms, step, done) {
@@ -2093,9 +2153,19 @@ export class TacticaScene {
       const dt = now - this.lastFrame;
       const since = Math.min(0.1, (now - (this.lastDraw ?? now)) / 1000);
       this.lastDraw = now;
-      for (const entry of this.pieces.values()) entry.mixer.update(since);
+      /* Characters in a hit-stop hold their pose. */
+      for (const entry of this.pieces.values()) if (!(entry.frozenUntil > now)) entry.mixer.update(since);
       for (const step of this.everyFrame) step(since);
       for (const run of this.active) {
+        const impact = IMPACT[run.mover.kind];
+        if (impact && !run.hit && run.act.time >= impact[0] && !reducedMotion()) {
+          run.hit = true;
+          const hold = impact[1] / Math.max(1, run.act.timeScale);
+          run.mover.frozenUntil = now + hold;
+          if (run.victim) run.victim.frozenUntil = now + hold;
+          this.kick = Math.max(this.kick ?? 0, (IMPACT_KICK[run.mover.kind] ?? 0.06) / Math.max(1, run.act.timeScale));
+          buzz(25);
+        }
         run.fx.update(run.act.time);
         while (run.cueAt < run.cues.length && run.act.time >= run.cues[run.cueAt][0]) {
           const [, name, volume] = run.cues[run.cueAt++];
@@ -2132,10 +2202,13 @@ export class TacticaScene {
         dampVector(this.camLook, this.goalLook, this.lookVel, this.smooth ?? CAMERA_SMOOTH, step);
       }
       this.camera.position.copy(this.camPos);
-      if (this.shake > 0) {
-        this.camera.position.x += (Math.random() - 0.5) * this.shake;
-        this.camera.position.y += (Math.random() - 0.5) * this.shake;
+      /* The rush's long shake, or an impact's short kick, fading fast. */
+      const shake = Math.max(this.shake, this.kick ?? 0);
+      if (shake > 0) {
+        this.camera.position.x += (Math.random() - 0.5) * shake;
+        this.camera.position.y += (Math.random() - 0.5) * shake;
       }
+      if (this.kick) { this.kick *= Math.exp(-since * 14); if (this.kick < 0.003) this.kick = 0; else this.wake(); }
       this.camera.lookAt(this.camLook);
       this.updateFades(since);
       this.updateSeeThrough(since);

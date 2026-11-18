@@ -179,10 +179,31 @@ export function MapButton({ fen, pieceImgSrc, size = 96, flipped, view, selected
      turn   "tactica-turn"   turning the view with a second finger
    Only one shows at a time: the game passes `show` for the one that fits
    the moment (see LearnHints). */
+/* Touch glyphs drawn in the game's cream, not emoji: a fingertip with a
+   two-way arrow (swipe), a fingertip with a ripple (tap), and two
+   fingertips with a turning arrow (turn). */
+const Glyph = ({ kind }) => (
+  <svg width="26" height="20" viewBox="0 0 26 20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    {kind === "swipe" && <>
+      <circle cx="13" cy="10" r="3.4" fill="currentColor" stroke="none" />
+      <path d="M2 10h5M2 10l2.4-2.4M2 10l2.4 2.4M24 10h-5M24 10l-2.4-2.4M24 10l-2.4 2.4" />
+    </>}
+    {kind === "map" && <>
+      <circle cx="13" cy="10" r="3.2" fill="currentColor" stroke="none" />
+      <circle cx="13" cy="10" r="6.6" opacity="0.6" />
+      <circle cx="13" cy="10" r="9.4" opacity="0.3" />
+    </>}
+    {kind === "turn" && <>
+      <circle cx="7" cy="13" r="2.8" fill="currentColor" stroke="none" />
+      <circle cx="19" cy="13" r="2.8" fill="currentColor" stroke="none" />
+      <path d="M6 5.5a9 6 0 0 1 14 0M20 5.5l-0.4-3M20 5.5l-3 0.6" />
+    </>}
+  </svg>
+);
 const HINTS = {
-  swipe: { key: "tacticaSwipesLearned", event: "tactica-swipe", needed: 3, icon: "👆", text: "Swipe left or right to switch characters", hand: "tc-swipe-hand" },
-  map: { key: "tacticaMapLearned", event: "tactica-map", needed: 2, icon: "👆", text: "Tap the map for the whole board", hand: "tc-tap-hand" },
-  turn: { key: "tacticaTurnLearned", event: "tactica-turn", needed: 1, icon: "✌️", text: "Hold one finger down, slide a 2nd to turn", hand: "tc-swipe-hand" },
+  swipe: { key: "tacticaSwipesLearned", event: "tactica-swipe", needed: 3, text: "Swipe left or right to switch characters", hand: "tc-swipe-hand" },
+  map: { key: "tacticaMapLearned", event: "tactica-map", needed: 2, text: "Tap the map for the whole board", hand: "tc-tap-hand" },
+  turn: { key: "tacticaTurnLearned", event: "tactica-turn", needed: 1, text: "Hold one finger down, slide a 2nd to turn", hand: "tc-swipe-hand" },
 };
 const isTouch = () => typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches;
 
@@ -211,7 +232,7 @@ export function LearnHints({ close }) {
   const where = id === "map" ? "top-[118px] right-3" : "inset-x-0 bottom-24 mx-auto";
   return (
     <div key={id} className={`tc-swipe-hint tc-panel pointer-events-none absolute ${where} flex w-max items-center gap-2 px-3 py-1.5 text-sm`} role="status">
-      <span className={h.hand} aria-hidden="true">{h.icon}</span>
+      <span className={`${h.hand} text-[var(--tc-gold-hi)]`} aria-hidden="true"><Glyph kind={id} /></span>
       {h.text}
     </div>
   );

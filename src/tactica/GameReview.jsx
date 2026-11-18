@@ -11,7 +11,8 @@ import { useBestMove, scoreLabel } from "../utils/useBestMove";
 export const BEST_COLOR = "#3FE07A", PLAYED_COLOR = "#5AA8FF";
 const sqOf = (sq120) => M120TO64[sq120];
 
-export default function GameReview({ sceneRef, moves, ending = null, onDone }) {
+/* `onQuit` (optional): leave the mode altogether, straight from the review. */
+export default function GameReview({ sceneRef, moves, ending = null, onDone, onQuit = null, quitLabel = "Back to the menu" }) {
   const engRef = useRef(null);
   if (!engRef.current) engRef.current = createEngine();
   const eng = engRef.current;
@@ -100,6 +101,7 @@ export default function GameReview({ sceneRef, moves, ending = null, onDone }) {
           <button type="button" className="tc-round" onClick={() => goTo(moves.length)} disabled={atEnd} aria-label="To the end">»</button>
         </div>
         <button type="button" className="tc-plank tc-center tc-small" style={{ width: 200 }} onClick={() => doneRef.current()}>Done</button>
+        {onQuit && <button type="button" className="tc-link" onClick={onQuit}>{quitLabel}</button>}
       </div>
     </>
   );
