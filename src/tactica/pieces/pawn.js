@@ -105,21 +105,82 @@ export const REST = {
 export const LATHE = 56;
 export const shadowed = (m) => { m.castShadow = true; m.receiveShadow = true; return m; };
 
+/* The eyeball's painting: iris, pupil and glint drawn onto the white, so an
+   eye is one mesh where it was four (on a full board that is about a hundred
+   fewer draw calls a frame). Painted by angle from the eye's front (+Z) on
+   the sphere's own UV layout, so each ring lands where the old separate
+   iris, pupil and glint sat. `red`: hard mode's glowing iris. */
+const eyeMats = new Map();
+const IRIS = Math.asin(0.027 / 0.047), PUPIL = Math.asin(0.0145 / 0.047), GLINT = 0.12;
+const GLINT_AT = new THREE.Vector3(0.17, 0.185, 1).normalize();
+export function eyeMaterial(iris, red = false) {
+  const key = `${iris}|${red}`;
+  if (eyeMats.has(key)) return eyeMats.get(key);
+  const W = 256, H = 128;
+  const paint = (glow) => {
+    const c = document.createElement("canvas");
+    c.width = W; c.height = H;
+    const g = c.getContext("2d"), img = g.createImageData(W, H);
+    const irisCol = new THREE.Color(red ? "#ff3a22" : `#${iris}`), white = new THREE.Color("#fbfbf8"), pupil = new THREE.Color("#0c0806");
+    const d = new THREE.Vector3();
+    for (let y = 0; y < H; y++) {
+      const th = ((y + 0.5) / H) * Math.PI;
+      for (let x = 0; x < W; x++) {
+        const ph = ((x + 0.5) / W) * Math.PI * 2;
+        d.set(-Math.cos(ph) * Math.sin(th), Math.cos(th), Math.sin(ph) * Math.sin(th));
+        const a = Math.acos(Math.min(1, d.z));
+        let col = null;
+        if (d.angleTo(GLINT_AT) < GLINT) col = new THREE.Color(1, 1, 1);
+        else if (a < PUPIL) col = glow ? null : pupil;
+        else if (a < IRIS) col = irisCol.clone().multiplyScalar(glow ? 1 : 0.75 + 0.25 * (1 - (a - PUPIL) / (IRIS - PUPIL)));
+        else col = glow ? null : white;
+        const i = (y * W + x) * 4;
+        const k = col ?? new THREE.Color(0, 0, 0);
+        img.data[i] = k.r * 255; img.data[i + 1] = k.g * 255; img.data[i + 2] = k.b * 255; img.data[i + 3] = 255;
+      }
+    }
+    g.putImageData(img, 0, 0);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  };
+  /* The glow map: the glint always (it was unlit), and the iris when red. */
+  const glowMap = (() => {
+    const c = document.createElement("canvas");
+    c.width = W; c.height = H;
+    const g = c.getContext("2d"), img = g.createImageData(W, H), d = new THREE.Vector3();
+    for (let y = 0; y < H; y++) {
+      const th = ((y + 0.5) / H) * Math.PI;
+      for (let x = 0; x < W; x++) {
+        const ph = ((x + 0.5) / W) * Math.PI * 2;
+        d.set(-Math.cos(ph) * Math.sin(th), Math.cos(th), Math.sin(ph) * Math.sin(th));
+        const a = Math.acos(Math.min(1, d.z)), i = (y * W + x) * 4;
+        const glint = d.angleTo(GLINT_AT) < GLINT, ring = red && a < IRIS && a >= PUPIL;
+        const v = glint ? (red ? 0.25 : 1) : 0;
+        img.data[i] = ring ? 255 : v * 255; img.data[i + 1] = ring ? 32 : v * 255; img.data[i + 2] = ring ? 16 : v * 255; img.data[i + 3] = 255;
+      }
+    }
+    g.putImageData(img, 0, 0);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  })();
+  const m = new THREE.MeshPhysicalMaterial({ map: paint(false), emissiveMap: glowMap, emissive: "#ffffff", emissiveIntensity: red ? 4 : 1, roughness: 0.25, clearcoat: 1 });
+  eyeMats.set(key, m);
+  return m;
+}
+
 /* A cartoon eye looking down its own +Z, sitting on a surface at z = 0. */
 export function makeEye(eye, mats) {
-    const white = new THREE.Mesh(new THREE.SphereGeometry(0.047, 32, 16), mats.eyeWhite);
+    const iris = mats.iris.color.getHexString();
+    const white = new THREE.Mesh(new THREE.SphereGeometry(0.047, 32, 16), eyeMaterial(iris));
     white.scale.set(1, 1.15, 0.45);
-    const iris = new THREE.Mesh(new THREE.SphereGeometry(0.027, 24, 12), mats.iris);
-    iris.scale.set(1, 1.08, 0.3); iris.position.z = 0.0145;
-    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.0145, 20, 10), mats.pupil);
-    pupil.scale.set(1, 1.05, 0.3); pupil.position.z = 0.0185;
-    const glint = new THREE.Mesh(new THREE.SphereGeometry(0.0055, 12, 6), mats.glint);
-    glint.position.set(0.008, 0.01, 0.0205);
+    white.userData.eyeball = iris;
     const brow = new THREE.Mesh(new THREE.TorusGeometry(0.042, 0.0055, 8, 20, Math.PI * 0.55), mats.brow);
     brow.rotation.z = Math.PI * 0.225;
     brow.position.set(0, 0.032, -0.004);
     brow.scale.set(1, 0.7, 1);
-    eye.add(white, iris, pupil, glint, brow);
+    eye.add(white, brow);
 }
 
 function buildEyes(head, mats) {

@@ -113,6 +113,18 @@ export function model(id) {
       holder.userData.size = box.getSize(new THREE.Vector3());
       root.traverse((o) => {
         if (!o.isMesh) return;
+        /* Real refracting glass (the wine bottles) makes three.js draw the
+           whole scene a second time, every frame it is on screen: twice
+           the work for a few small bottles. Plain see-through tinted glass
+           looks the same at this size. */
+        for (const m of [o.material].flat()) {
+          if (!(m?.transmission > 0)) continue;
+          m.transmission = 0;
+          m.transparent = true;
+          m.opacity = Math.min(m.opacity ?? 1, 0.6);
+          m.depthWrite = false;
+          m.needsUpdate = true;
+        }
         o.castShadow = o.receiveShadow = true;
         for (const k of ["map", "normalMap", "roughnessMap", "metalnessMap", "aoMap"]) if (o.material[k]) o.material[k].anisotropy = 4;
       });

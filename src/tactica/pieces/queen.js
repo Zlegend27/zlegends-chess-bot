@@ -73,7 +73,9 @@ function buildStaff() {
   s.add(tip);
   const orb = new THREE.Mesh(
     new THREE.SphereGeometry(0.055, 32, 20),
-    new THREE.MeshPhysicalMaterial({ color: "#bfefff", emissive: "#5fc8ff", emissiveIntensity: 0.6, roughness: 0.05, transmission: 0.3, thickness: 0.1, clearcoat: 1 }),
+    /* A glowing crystal: polished and lit from inside. (Not refracting glass:
+       that made every board with a queen draw the whole scene twice.) */
+    new THREE.MeshPhysicalMaterial({ color: "#bfefff", emissive: "#5fc8ff", emissiveIntensity: 0.75, roughness: 0.05, clearcoat: 1 }),
   );
   orb.name = "orb";
   orb.position.y = 0.72;

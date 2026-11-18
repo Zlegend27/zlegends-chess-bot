@@ -53,7 +53,7 @@ export default function TacticaLoading({ visible = true, label = "Chess Tactica"
  *  draws its first picture (the "tactica-frame" event, scene.js), after at
  *  least `minMs` and at most `maxMs`. A mode with no 3D world (the opening
  *  film) passes `flat` and gets no wait. Also up on first load. */
-export function useVeil({ minMs = 450, maxMs = 4000 } = {}) {
+export function useVeil({ minMs = 450, maxMs = 6000 } = {}) {
   const [visible, setVisible] = useState(true);
   const armRef = useRef(null);
   const arm = useCallback((flat = false) => {

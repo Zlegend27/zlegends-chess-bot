@@ -10,7 +10,8 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
-import { woodTexture, makeMats } from "./pieces/pawn.js";
+import { FXAAShader } from "three/examples/jsm/shaders/FXAAShader.js";
+import { woodTexture, eyeMaterial } from "./pieces/pawn.js";
 import { KINDS, BUILD, clipsFor, reactionFor, attackEffects, PAWN_ATTACK_END } from "./pieces/attacks.js";
 import { play as playSound, ATTACK_CUES, buzz } from "./sound.js";
 import { artSettled } from "./sets/art.js";
@@ -48,6 +49,9 @@ const GRADE_SHADER = {
 };
 /* Idle breathing only needs about 30 frames a second. */
 const IDLE_FRAME_MS = 33;
+/* The shortest gap between drawn frames (a little under 1/60 s, so a 60 Hz
+   screen still gets every frame). */
+const MIN_FRAME_MS = 15;
 const SWIPE_PX = 50;
 /* A quick sideways flick is a swipe to the next character even when it
    starts on one: the character isn't picked up while a sideways move is
@@ -236,7 +240,7 @@ export class TacticaScene {
     /* A scene that never gets characters (the Memories list) still tells
        the loading screen it's ready. Timers wait for the build to finish, so
        this can't fire in the middle of it. */
-    this.frameTimer = setTimeout(() => { if (!this.framed && this.running !== false) { this.framed = true; try { window.dispatchEvent(new CustomEvent("tactica-frame")); } catch { /* no window */ } } }, 300);
+    this.frameTimer = setTimeout(() => { if (!this.framed && this.running !== false) this.announceReady(); }, 300);
     /* How far the view is turned from the player's side, the point it turns
        around, and whether the player turned it with the map. */
     this.turn = 0;
@@ -251,7 +255,10 @@ export class TacticaScene {
     /* Bond levels by kind, shown on the player's characters. */
     this.bonds = {};
     this.dragging = false;
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "low-power" });
+    /* The screen itself is multisampled only where FXAA isn't used (see
+       setupPost): on a sharp phone screen it would cost every frame and
+       smooth nothing the FXAA pass doesn't already. */
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: (window.devicePixelRatio || 1) < 1.5, powerPreference: "low-power" });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 0.85;
@@ -321,7 +328,12 @@ export class TacticaScene {
   setupPost() {
     this.post = false;
     try {
-      const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 });
+      /* Edges: on a sharp phone screen (1.5x pixels and up), a cheap
+         smoothing pass at the end (FXAA) instead of 4x multisampling, which
+         was the costliest part of every frame: about 40% of the time on a
+         weak graphics chip, with no visible difference at that density. */
+      this.fxaa = (window.devicePixelRatio || 1) >= 1.5;
+      const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: this.fxaa ? 0 : 4 });
       this.composer = new EffectComposer(this.renderer, target);
       this.composer.addPass(new RenderPass(this.scene, this.camera));
       this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.45, 0.7, 0.9);
@@ -329,6 +341,7 @@ export class TacticaScene {
       this.grade = new ShaderPass(GRADE_SHADER);
       this.composer.addPass(this.grade);
       this.composer.addPass(new OutputPass());
+      if (this.fxaa) { this.fxaaPass = new ShaderPass(FXAAShader); this.composer.addPass(this.fxaaPass); }
       this.post = true;
     } catch {
       this.composer = null;
@@ -491,11 +504,10 @@ export class TacticaScene {
    *  otherwise. */
   paintEyes(entry, force = false) {
     const red = force || (this.redEyes && entry.colour === this.nearColour);
-    const own = makeMats(entry.colour).iris;
-    this.redIris ??= new THREE.MeshStandardMaterial({ color: "#ff3a22", emissive: "#ff2010", emissiveIntensity: 4, roughness: 0.4 });
+    /* The eyeballs carry their iris painted on (pieces/pawn.js): red eyes
+       are the same eyeball painted red and glowing. */
     entry.model.traverse((o) => {
-      if (!o.isMesh || (o.material !== own && o.material !== this.redIris)) return;
-      o.material = red ? this.redIris : own;
+      if (o.isMesh && o.userData.eyeball) o.material = eyeMaterial(o.userData.eyeball, red);
     });
   }
 
@@ -651,6 +663,19 @@ export class TacticaScene {
     } finally {
       this.renderer.setRenderTarget(target);
     }
+  }
+
+  /** The first picture is up: tells the loading screen it can come down,
+   *  but only once the scenery's art has arrived and every shader is built
+   *  (warmAll), so the first seconds on screen don't stutter. The loading
+   *  screen gives up waiting after a few seconds regardless. */
+  announceReady() {
+    this.framed = true;
+    artSettled(3500)
+      .then(() => new Promise((r) => requestAnimationFrame(r)))
+      .then(() => { if (this.running) this.warmAll(); })
+      .then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))))
+      .then(() => { try { window.dispatchEvent(new CustomEvent("tactica-frame")); } catch { /* no window */ } });
   }
 
   /** Everything ready to draw, all at once, while something covers the
@@ -2245,6 +2270,8 @@ export class TacticaScene {
     if (this.composer) {
       this.composer.setPixelRatio(this.renderer.getPixelRatio());
       this.composer.setSize(w, h);
+      const r = this.renderer.getPixelRatio();
+      this.fxaaPass?.material.uniforms.resolution.value.set(1 / (w * r), 1 / (h * r));
     }
     this.camera.aspect = w / h;
     this.camera.fov = w < h ? 62 : 45;
@@ -2298,9 +2325,18 @@ export class TacticaScene {
   loop(now) {
     if (!this.running) return;
     const busy = this.tweens.length > 0 || now < this.awakeUntil || this.dragging || this.pulse.length > 0 || this.active.length > 0 || this.continuous || this.cameraMoving();
-    const idleDue = this.pieces.size > 0 && now - (this.lastDraw ?? 0) >= IDLE_FRAME_MS;
-    if (busy || idleDue) {
-      const dt = now - this.lastFrame;
+    const sinceDraw = now - (this.lastDraw ?? 0);
+    /* The screen's own refresh, measured: the cap below is only for 120 Hz
+       and faster (a 90 Hz screen keeps every frame). */
+    const gap = now - this.lastFrame;
+    if (gap > 0 && gap < 50) this.refreshMs = this.refreshMs ? this.refreshMs * 0.95 + gap * 0.05 : gap;
+    const minGap = this.refreshMs && this.refreshMs < 9.5 ? MIN_FRAME_MS : 0;
+    const idleDue = this.pieces.size > 0 && sinceDraw >= IDLE_FRAME_MS;
+    /* At most about 60 drawn frames a second, even on a 120 Hz phone: twice
+       the drawing there looks no smoother, but heats the phone until it
+       slows itself down, which is what reads as stutter later on. */
+    if ((busy && sinceDraw >= minGap) || idleDue) {
+      const dt = Math.min(sinceDraw, 1000);
       const since = Math.min(0.1, (now - (this.lastDraw ?? now)) / 1000);
       this.lastDraw = now;
       /* Characters in a hit-stop hold their pose. */
@@ -2373,7 +2409,7 @@ export class TacticaScene {
       /* The loading screen waits for a mode's first picture. */
       /* The first picture with its characters (a scene with none, like the
          Memories list, says so from a timer: see the constructor). */
-      if (!this.framed && this.pieces.size) { this.framed = true; try { window.dispatchEvent(new CustomEvent("tactica-frame")); } catch { /* no window */ } }
+      if (!this.framed && this.pieces.size) this.announceReady();
       if (busy && dt < 200) this.adaptResolution(dt, now);
     }
     this.lastFrame = now;
