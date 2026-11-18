@@ -6,8 +6,8 @@ import { PUZZLES } from "../utils/puzzles";
 import { judgePuzzleMove } from "../utils/puzzleSession";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin, placeEscapeProps } from "./sets/trashBin";
-import { BrassButton, MapButton, MenuButton, useViewSource } from "./ui";
-import { play as playSound, buzz } from "./sound";
+import { BrassButton, MapButton, MenuButton, useViewSource, LearnHints } from "./ui";
+import { play as playSound, buzz, setScore as setMusicMood } from "./sound";
 import { track } from "../utils/track";
 import { makeEscape, movesOf, apply, escaped, strikerOf, piecesOf, fenOf, escapeClock, closeRing, outerRing, ringSquares, allStuck } from "./escape";
 import { loadSetting, saveSetting } from "../utils/storage";
@@ -302,7 +302,24 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
   /** The bin's boss, if this is his floor. */
   const bossOn = (f) => (isBossFloor(f) ? binRef.current?.monster ?? null : null);
   /** Shows a boss's card and waits for Continue. */
-  const showCard = (title, lines) => new Promise((resolve) => { setBossCard({ title, lines }); setStage("bossCard"); cardRef.current = resolve; });
+  const showCard = (title, lines, mood = null) => new Promise((resolve) => { setBossCard({ title, lines, mood }); setStage("bossCard"); cardRef.current = resolve; });
+
+  /* Music for the story moments between floors (made in code until real
+     tracks come): dread before a boss and at the omen, a fanfare when one
+     falls, sorrow when a run is lost. Never during play. The arrival and
+     ending films choose their own. */
+  useEffect(() => {
+    if (stage === "arrive" || stage === "ending") return;
+    const mood = stage === "omen" || stage === "cursed" ? "dread"
+      : stage === "bossCard" ? bossCard?.mood ?? null
+      : stage === "defeat" ? "sorrow"
+      : stage === "over" ? (ending === "won" ? "triumph" : "sorrow")
+      : null;
+    setMusicMood(mood);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage, bossCard]);
+  /* Leaving the run stops whatever was playing. */
+  useEffect(() => () => setMusicMood(null), []);
 
   /* Arriving in a new world: its short film (EntryFilm, opening/entries.js)
      plays while the world's scenery builds behind it, then the world's
@@ -518,7 +535,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
       const open = openMemories({ reached, beaten: loadStory().beaten, levels: levelsOf(loadBonds()) });
       const lesson = lessonBefore(worldIndex(f), open);
       const recall = lesson ? [`The pieces remember ${lesson.title}: ${lesson.motto}.`] : [];
-      if (lines) { await showCard(worldOf(f).boss, [...lines.intro, ...recall]); if (run !== runIdRef.current) return; }
+      if (lines) { await showCard(worldOf(f).boss, [...lines.intro, ...recall], "dread"); if (run !== runIdRef.current) return; }
       setStage("playing");
       busyRef.current = true;
       setBusy(true);
@@ -633,13 +650,13 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
       await bossOn(floor).melt();
       if (fell !== runIdRef.current) return;
       const lines = BOSS_STORY[worldOf(floor).id];
-      if (lines) { await showCard(`${worldOf(floor).boss} is beaten`, lines.won); if (fell !== runIdRef.current) return; }
+      if (lines) { await showCard(`${worldOf(floor).boss} is beaten`, lines.won, "triumph"); if (fell !== runIdRef.current) return; }
       /* Beating a boss wakes a memory (memories.js). */
       const memory = preview() ? null : wakeMemory(worldIndex(floor));
       if (memory) {
         noteTacticaChange();
         playSound("shimmer", { volume: 0.8 });
-        await showCard("A memory wakes", [`Your pieces remember ${memory.title}, ${memory.where}.`, "Play it from Memories, in the menu, when the run is done."]);
+        await showCard("A memory wakes", [`Your pieces remember ${memory.title}, ${memory.where}.`, "Play it from Memories, in the menu, when the run is done."], "wonder");
         if (fell !== runIdRef.current) return;
       }
     }
@@ -1070,6 +1087,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
   return (
     <div className="relative mx-auto w-full max-w-[480px] overflow-hidden" style={{ height: "calc(100dvh - var(--headerH))" }}>
       <canvas ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
+      <LearnHints close={stage === "playing" && view === "close" && !busy} />
       {hurt > 0 && <div key={hurt} className="tacticaNote fades pointer-events-none absolute inset-0 bg-[#b8322a]/30" />}
 
       {stage === "playing" && (
@@ -1128,12 +1146,12 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
           )}
 
           <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/80 to-transparent px-3 pt-10 pb-[calc(0.9rem+env(safe-area-inset-bottom))]">
-            <button type="button" className="tc-round" onClick={() => cycle(-1)} disabled={busy} aria-label="Previous character">‹</button>
+            <button type="button" className="tc-round tc-cycle" onClick={() => cycle(-1)} disabled={busy} aria-label="Previous character">‹</button>
             <div className="flex min-w-0 flex-1 flex-col items-center gap-0.5 text-center">
               <span className="tc-display truncate text-[15px]">{selected != null && view === "close" ? pieceName(selected) : `Score ${score}`}</span>
               <span className={"truncate text-sm " + (isAttack ? "font-bold text-[var(--tc-gold-hi)]" : "text-[var(--tc-cream-dim)]")} aria-live="polite">{hint}</span>
             </div>
-            <button type="button" className="tc-round" onClick={() => cycle(1)} disabled={busy} aria-label="Next character">›</button>
+            <button type="button" className="tc-round tc-cycle" onClick={() => cycle(1)} disabled={busy} aria-label="Next character">›</button>
           </div>
         </>
       )}

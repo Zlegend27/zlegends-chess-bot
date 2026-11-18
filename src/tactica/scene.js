@@ -62,7 +62,11 @@ const KNIGHT_HOP = 1.1;
    and the collar ring that sits in the base groove every piece shares
    (model units, before PIECE_SCALE). */
 const BOND_GLOW = "#ffc864";
-const BOND_GLOW_OPACITY = [0, 0, 0.32, 0.38, 0.55, 0.7];
+/* Turning the view with a second finger: radians per pixel slid. */
+const TURN_PER_PX = 0.012;
+/* Kept faint and inside the piece's own square: a bond is a keepsake, and a
+   strong gold glow read like a move highlight (the creator, 2026-11-17). */
+const BOND_GLOW_OPACITY = [0, 0, 0.13, 0.16, 0.22, 0.28];
 const BOND_TRIM = { r: 0.462, tube: 0.026, y: 0.128 };
 const DOUBLE_TAP_MS = 400;
 const DOUBLE_TAP_PX = 40;
@@ -187,13 +191,15 @@ export class TacticaScene {
   /** `onDragStart(sq)` returns whether that character may be dragged;
    *  `onDrop(sq)` gets the square it was let go over, or null, and returns
    *  whether it took the move; if not, the character slides home. */
-  constructor(canvas, { colors, flipped, onTap, onDoubleTap, onSwipe, onDragStart, onDrop, onLost, onView }) {
+  constructor(canvas, { colors, flipped, onTap, onDoubleTap, onSwipe, onDragStart, onDrop, onLost, onView, onTurn }) {
     this.canvas = canvas;
     this.flipped = flipped;
     this.onTap = onTap;
     this.onDoubleTap = onDoubleTap;
     this.onSwipe = onSwipe;
     this.onView = onView;
+    /* `onTurn(angle)`: the player turned the view with two fingers. */
+    this.onTurn = onTurn;
     if (import.meta.env.DEV) window.__tcScene = this;
     /* How far the view is turned from the player's side, the point it turns
        around, and whether the player turned it with the map. */
@@ -479,7 +485,7 @@ export class TacticaScene {
     glowMap.colorSpace = auraMap.colorSpace = THREE.SRGBColorSpace;
     const additive = { transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, color: BOND_GLOW };
     this.bondKit = {
-      glowGeometry: new THREE.PlaneGeometry(1.7, 1.7).rotateX(-Math.PI / 2),
+      glowGeometry: new THREE.PlaneGeometry(0.95, 0.95).rotateX(-Math.PI / 2),
       /* One glow material per strength, so a level-2 glow and a level-4 glow
          can sit on the board together. */
       glow: BOND_GLOW_OPACITY.map((opacity) => new THREE.MeshBasicMaterial({ ...additive, map: glowMap, opacity })),
@@ -487,7 +493,7 @@ export class TacticaScene {
       silver: new THREE.MeshStandardMaterial({ color: "#dfe3ea", metalness: 1, roughness: 0.22 }),
       gold: new THREE.MeshStandardMaterial({ color: "#f2c45a", metalness: 1, roughness: 0.25 }),
       auraGeometry: new THREE.CylinderGeometry(0.42, 0.5, 1.7, 32, 1, true).translate(0, 0.85, 0),
-      aura: new THREE.MeshBasicMaterial({ ...additive, map: auraMap, opacity: 0.32, side: THREE.DoubleSide }),
+      aura: new THREE.MeshBasicMaterial({ ...additive, map: auraMap, opacity: 0.1, side: THREE.DoubleSide }),
     };
     return this.bondKit;
   }
@@ -600,6 +606,21 @@ export class TacticaScene {
   }
 
   prewarmLive() {
+    /* Textures go to the graphics card the first time something using them
+       is drawn: scenery off to the side would make the first turn of the
+       view hitch. Send them all now. */
+    if (this.renderer.initTexture) {
+      const sent = new Set();
+      this.scene.traverse((o) => {
+        for (const m of [o.material].flat()) {
+          if (!m) continue;
+          for (const key of ["map", "normalMap", "roughnessMap", "metalnessMap", "aoMap", "emissiveMap", "alphaMap", "bumpMap"]) {
+            const t = m[key];
+            if (t?.isTexture && !sent.has(t) && t.image) { sent.add(t); try { this.renderer.initTexture(t); } catch { /* not ready */ } }
+          }
+        }
+      });
+    }
     const entries = [...this.pieces.entries()];
     if (!entries.length || !this.renderer.compileAsync) return;
     const [sq] = entries[0];
@@ -1717,6 +1738,12 @@ export class TacticaScene {
     });
   }
 
+  /** A swipe across the board: tells the game, and the swipe hint (ui.jsx). */
+  swiped(dir) {
+    this.onSwipe?.(dir);
+    try { window.dispatchEvent(new CustomEvent("tactica-swipe")); } catch { /* no window */ }
+  }
+
   tween(ms, step, done) {
     this.tweens.push({ start: performance.now(), ms, step, done });
     this.wake();
@@ -1741,6 +1768,11 @@ export class TacticaScene {
       return points;
     };
     let down = null, drag = null, lastTap = null;
+    /* Turning the view: one finger holds the selected character, a second
+       finger anywhere on the screen slides sideways to turn the camera round
+       it (the same sensitivity the map's drag had). Lifting either finger
+       ends it; nothing counts as a tap or a move. */
+    let turning = null;
     /* A dragged character stays under the point of it that was grabbed: the
        finger slides it across a level through that point, so picking a
        piece up by its head doesn't make it jump to the square behind (and a
@@ -1788,8 +1820,24 @@ export class TacticaScene {
       follow(drag.pointer);
     };
 
-    /* One finger at a time: a second finger can't hijack a drag. */
     this.onDown = (e) => {
+      /* A second finger while the first holds the selected character: turn. */
+      if (down && e.pointerId !== down.id) {
+        const holding = this.held != null && (down.sq === this.held || drag?.sq === this.held);
+        if (!holding || turning) return;
+        if (drag?.piece) {
+          /* The hold had started to lift it: put it back down first. */
+          drag.piece.group.position.copy(this.worldOf(drag.sq));
+          this.setHover(null);
+          drag = null;
+          this.dragging = false;
+          this.onDrop?.(null);
+        }
+        down.turning = true;
+        turning = { id: e.pointerId, x: e.clientX };
+        try { this.canvas.setPointerCapture?.(e.pointerId); } catch { /* the pointer is already gone */ }
+        return;
+      }
       if (down && drag) return;
       aim(e);
       /* What a tap means is fixed where the finger lands, not where it lifts:
@@ -1800,7 +1848,18 @@ export class TacticaScene {
       down = { id: e.pointerId, x: e.clientX, y: e.clientY, sq: hits[0] ?? null, hits, points, tile, at: performance.now() };
     };
     this.onMove = (e) => {
-      if (!down || e.pointerId !== down.id) return;
+      if (turning && e.pointerId === turning.id) {
+        const dx = e.clientX - turning.x;
+        turning.x = e.clientX;
+        if (dx) {
+          this.spinBy(dx * TURN_PER_PX);
+          this.onTurn?.(dx * TURN_PER_PX);
+          turning.total = (turning.total ?? 0) + Math.abs(dx);
+          if (turning.total > 40 && !turning.told) { turning.told = true; try { window.dispatchEvent(new CustomEvent("tactica-turn")); } catch { /* no window */ } }
+        }
+        return;
+      }
+      if (!down || e.pointerId !== down.id || down.turning) return;
       /* A mouse released outside the page never sends pointerup here. */
       if (e.pointerType === "mouse" && e.buttons === 0 && !drag) { down = null; return; }
       const mx = e.clientX - down.x, my = e.clientY - down.y;
@@ -1832,6 +1891,8 @@ export class TacticaScene {
       this.wake();
     };
     this.onUp = (e) => {
+      if (turning && e.pointerId === turning.id) { turning = null; return; }
+      if (down?.turning && e.pointerId === down.id) { down = null; turning = null; return; }
       if (!down || e.pointerId !== down.id) return;
       const dx = e.clientX - down.x, dy = e.clientY - down.y;
       const pressed = down;
@@ -1855,10 +1916,10 @@ export class TacticaScene {
           const from = piece.group.position.clone(), home = this.worldOf(sq);
           this.tween(reducedMotion() ? 0 : 160, (t) => piece.group.position.lerpVectors(from, home, ease(t)));
         }
-        if (flick) this.onSwipe?.(dx < 0 ? 1 : -1);
+        if (flick) this.swiped(dx < 0 ? 1 : -1);
         return;
       }
-      if (Math.abs(dx) > SWIPE_PX && Math.abs(dx) > Math.abs(dy)) { this.onSwipe?.(dx < 0 ? 1 : -1); return; }
+      if (Math.abs(dx) > SWIPE_PX && Math.abs(dx) > Math.abs(dy)) { this.swiped(dx < 0 ? 1 : -1); return; }
       const quick = performance.now() - pressed.at < QUICK_TAP_MS;
       if (Math.hypot(dx, dy) > (quick ? QUICK_TAP_SLOP_PX : TAP_SLOP_PX)) return;
       /* A tap on a character means that character (an enemy on a glowing
@@ -1882,6 +1943,8 @@ export class TacticaScene {
       this.onTap?.(sq);
     };
     this.onCancel = (e) => {
+      if (turning && e?.pointerId === turning.id) { turning = null; return; }
+      if (down?.turning) { down = null; turning = null; return; }
       if (down && e?.pointerId !== down.id) return;
       const wasDragging = !!drag;
       if (drag?.piece) {

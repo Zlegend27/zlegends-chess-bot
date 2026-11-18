@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { loadSetting, saveSetting } from "../utils/storage";
 import MiniBoard from "../components/MiniBoard";
 import { cburnettPieceSvgUrl } from "../utils/cburnettPieceSvg";
 import { SET_BOARD } from "./scene";
@@ -111,12 +112,15 @@ export function MapButton({ fen, pieceImgSrc, size = 96, flipped, view, selected
   }), [viewSource, size]);
 
   const down = (e) => {
-    dragRef.current = { id: e.pointerId, x: e.clientX, moved: false };
+    /* On a touch screen the view turns with two fingers on the board instead
+       (hold the character, slide a second finger), so the map only switches
+       views there; a mouse can still drag it to turn. */
+    dragRef.current = { id: e.pointerId, x: e.clientX, moved: false, touch: e.pointerType === "touch" };
     try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* the pointer is already gone */ }
   };
   const move = (e) => {
     const drag = dragRef.current;
-    if (!drag || drag.id !== e.pointerId || locked) return;
+    if (!drag || drag.id !== e.pointerId || locked || drag.touch) return;
     const dx = e.clientX - drag.x;
     if (!drag.moved && Math.abs(dx) < MAP_DRAG_PX) return;
     drag.moved = true;
@@ -124,7 +128,11 @@ export function MapButton({ fen, pieceImgSrc, size = 96, flipped, view, selected
     if (view === "close") onSpin?.(dx * MAP_TURN_PER_PX);
   };
   const up = () => { setTimeout(() => { dragRef.current = null; }, 0); };
-  const click = () => { if (!dragRef.current?.moved && !locked) onToggle?.(); };
+  const click = () => {
+    if (dragRef.current?.moved || locked) return;
+    onToggle?.();
+    try { window.dispatchEvent(new CustomEvent("tactica-map")); } catch { /* no window */ }
+  };
   /* The selected square on the diagram, the same way round as the board. */
   const ring = selected != null && view === "close" ? (() => {
     const file = selected % 8, rank = (selected / 8) | 0, cell = size / 8;
@@ -160,5 +168,51 @@ export function MapButton({ fen, pieceImgSrc, size = 96, flipped, view, selected
         </svg>
       </div>
     </button>
+  );
+}
+
+/* Small hints that teach a control until it has been used a few times
+   (counted on the device), shown only on phones. Each listens for its own
+   event from the scene or the map:
+     swipe  "tactica-swipe"  switching characters by swiping
+     map    "tactica-map"    tapping the map for the whole board
+     turn   "tactica-turn"   turning the view with a second finger
+   Only one shows at a time: the game passes `show` for the one that fits
+   the moment (see LearnHints). */
+const HINTS = {
+  swipe: { key: "tacticaSwipesLearned", event: "tactica-swipe", needed: 3, icon: "👆", text: "Swipe left or right to switch characters", hand: "tc-swipe-hand" },
+  map: { key: "tacticaMapLearned", event: "tactica-map", needed: 2, icon: "👆", text: "Tap the map for the whole board", hand: "tc-tap-hand" },
+  turn: { key: "tacticaTurnLearned", event: "tactica-turn", needed: 1, icon: "✌️", text: "Hold your character, slide a 2nd finger to turn", hand: "tc-swipe-hand" },
+};
+const isTouch = () => typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches;
+
+function useLearned(id) {
+  const h = HINTS[id];
+  const [count, setCount] = useState(() => Number(loadSetting(h.key, 0)) || 0);
+  useEffect(() => {
+    if (count >= h.needed) return undefined;
+    const on = () => setCount((n) => { const next = n + 1; saveSetting(h.key, next); return next; });
+    window.addEventListener(h.event, on);
+    return () => window.removeEventListener(h.event, on);
+  }, [count, h]);
+  return count >= h.needed;
+}
+
+/** The hints for a game screen, while up close on a character (`close`):
+ *  swiping first, then the map, then turning the view. Phones only. */
+export function LearnHints({ close }) {
+  const swipe = useLearned("swipe"), map = useLearned("map"), turn = useLearned("turn");
+  if (!close || !isTouch()) return null;
+  const id = !swipe ? "swipe" : !map ? "map" : !turn ? "turn" : null;
+  if (!id) return null;
+  const h = HINTS[id];
+  /* The map hint sits under the map in the top corner; the others over the
+     bottom bar. */
+  const where = id === "map" ? "top-[118px] right-3" : "inset-x-0 bottom-24 mx-auto";
+  return (
+    <div key={id} className={`tc-swipe-hint tc-panel pointer-events-none absolute ${where} flex w-max items-center gap-2 px-3 py-1.5 text-sm`} role="status">
+      <span className={h.hand} aria-hidden="true">{h.icon}</span>
+      {h.text}
+    </div>
   );
 }

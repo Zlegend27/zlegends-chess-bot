@@ -166,3 +166,20 @@
   100% { opacity: 0; transform: rotate(var(--a)) translateX(var(--d)) scale(0.4); }
 }
 @media (prefers-reduced-motion: reduce) { .tactica .tc-burst { display: none; } }
+
+/* On a phone you swipe across the board to change characters, so the ‹ ›
+   buttons only show where there's a mouse. */
+@media (pointer: coarse) {
+  .tactica .tc-cycle { display: none; }
+}
+
+/* The swipe hint: a finger sliding left and right, until it's been used. */
+.tactica .tc-swipe-hint { animation: tc-swipe-in 400ms ease-out both; }
+.tactica .tc-swipe-hand { display: inline-block; animation: tc-swipe 1.6s ease-in-out infinite; }
+@keyframes tc-swipe { 0%, 100% { transform: translateX(-14px); } 50% { transform: translateX(14px); } }
+@keyframes tc-swipe-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.tactica .tc-tap-hand { display: inline-block; animation: tc-tap 1.2s ease-in-out infinite; }
+@keyframes tc-tap { 0%, 100% { transform: translateY(0) scale(1); } 40% { transform: translateY(-4px) scale(1.05); } 55% { transform: translateY(2px) scale(0.92); } }
+@media (prefers-reduced-motion: reduce) {
+  .tactica .tc-swipe-hand, .tactica .tc-tap-hand, .tactica .tc-swipe-hint { animation: none; }
+}

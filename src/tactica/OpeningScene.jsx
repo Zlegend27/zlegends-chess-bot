@@ -4,7 +4,13 @@ import { play as playSound, playMusic, stopMusic, setFlies, setWind, setScore } 
 
 /* Which code-made music goes under each shot (until a real track is added):
    wonder while the pieces wake and ask, action from the bond to the end. */
-const scoreFor = (shot) => (/^duel|^bonded$|^arenaIn$|^finale$/.test(shot) ? "action" : /^awaken$|^ask1$|^huddle$|^beg$|^ask2$/.test(shot) ? "wonder" : null);
+/* Cutscene music by shot: the old owner's story is sad, the bin is dark
+   and quiet, the waking is wonder, a refusal is dread, the bond is action. */
+const scoreFor = (shot) => (/^duel|^bonded$|^arenaIn$|^finale$/.test(shot) ? "action"
+  : /^awaken$|^ask1$|^huddle$|^beg$|^ask2$/.test(shot) ? "wonder"
+  : /^refused$/.test(shot) ? "dread"
+  : /^attic$|^found$|^hands$|^carry$|^toss$/.test(shot) ? "sorrow"
+  : null);
 import { BrassButton } from "./ui";
 
 /* The opening, as a 2D film drawn on one canvas (opening/film.js holds the

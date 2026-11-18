@@ -6,7 +6,7 @@ import { gameResult, resultSentence } from "../utils/gameResult";
 import { loadSetting, saveSetting } from "../utils/storage";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
-import { BrassButton, MapButton, MenuButton, PromotionPicker, useViewSource } from "./ui";
+import { BrassButton, MapButton, MenuButton, PromotionPicker, useViewSource, LearnHints } from "./ui";
 import { play as playSound } from "./sound";
 import { applyStory } from "./bonds";
 import { useBestMove, scoreLabel } from "../utils/useBestMove";
@@ -518,6 +518,7 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit, self = false 
   return (
     <div className="relative mx-auto w-full max-w-[480px] overflow-hidden" style={{ height: "calc(100dvh - var(--headerH))" }}>
       <canvas ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
+      <LearnHints close={stage === "playing" && view === "close" && !busy && !thinking} />
 
       {stage === "playing" && (
         <>
@@ -592,12 +593,12 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit, self = false 
           )}
 
           <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/80 to-transparent px-3 pt-10 pb-[calc(0.9rem+env(safe-area-inset-bottom))]">
-            <button type="button" className="tc-round" onClick={() => cycle(-1)} disabled={busy} aria-label="Previous character">‹</button>
+            <button type="button" className="tc-round tc-cycle" onClick={() => cycle(-1)} disabled={busy} aria-label="Previous character">‹</button>
             <div className="flex min-w-0 flex-1 flex-col items-center gap-0.5 text-center">
               <span className="tc-display truncate text-[15px]">{selected != null && view === "close" ? pieceName(selected) : self ? `${mover === 1 ? "White" : "Black"}'s characters` : `You play ${side === 1 ? "White" : "Black"}`}</span>
               <span className={"truncate text-sm " + (isAttack ? "font-bold text-[var(--tc-gold-hi)]" : "text-[var(--tc-cream-dim)]")} aria-live="polite">{hint}</span>
             </div>
-            <button type="button" className="tc-round" onClick={() => cycle(1)} disabled={busy} aria-label="Next character">›</button>
+            <button type="button" className="tc-round tc-cycle" onClick={() => cycle(1)} disabled={busy} aria-label="Next character">›</button>
           </div>
         </>
       )}

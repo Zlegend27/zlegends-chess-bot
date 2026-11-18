@@ -8,7 +8,7 @@ import { useLobby, useLobbyMe } from "../pvp/useLobby";
 import { usePvpMatch } from "../pvp/usePvpMatch";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
-import { BrassButton, MapButton, MenuButton, PromotionPicker, useViewSource } from "./ui";
+import { BrassButton, MapButton, MenuButton, PromotionPicker, useViewSource, LearnHints } from "./ui";
 import { track } from "../utils/track";
 import { play as playSound } from "./sound";
 import { applyStory } from "./bonds";
@@ -417,6 +417,7 @@ function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, on
   return (
     <div className="relative mx-auto w-full max-w-[480px] overflow-hidden" style={{ height: "calc(100dvh - var(--headerH))" }}>
       <canvas ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
+      <LearnHints close={!over && myTurn && view === "close"} />
 
       {!reviewing && <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-black/80 to-transparent p-3 pb-10">
         <div className="flex min-w-0 items-center gap-2.5">
@@ -480,7 +481,7 @@ function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, on
 
       {!over && (
         <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/80 to-transparent px-3 pt-10 pb-[calc(0.9rem+env(safe-area-inset-bottom))]">
-          <button type="button" className="tc-round" onClick={() => cycle(-1)} disabled={busy} aria-label="Previous character">‹</button>
+          <button type="button" className="tc-round tc-cycle" onClick={() => cycle(-1)} disabled={busy} aria-label="Previous character">‹</button>
           <div className="flex min-w-0 flex-1 flex-col items-center gap-0.5 text-center">
             <span className="flex items-baseline gap-2">
               <span className="tc-display truncate text-[15px]">{selected != null && view === "close" && myTurn ? pieceName(selected) : `You play ${myColor === 1 ? "White" : "Black"}`}</span>
@@ -488,7 +489,7 @@ function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, on
             </span>
             <span className={"truncate text-sm " + (isAttack ? "font-bold text-[var(--tc-gold-hi)]" : "text-[var(--tc-cream-dim)]")} aria-live="polite">{hint}</span>
           </div>
-          <button type="button" className="tc-round" onClick={() => cycle(1)} disabled={busy} aria-label="Next character">›</button>
+          <button type="button" className="tc-round tc-cycle" onClick={() => cycle(1)} disabled={busy} aria-label="Next character">›</button>
         </div>
       )}
 

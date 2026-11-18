@@ -15,14 +15,18 @@ const START_FEN = "6k1/8/1p3n2/3p4/8/2N2p2/PP3PPP/R2QKB1R w KQ - 0 1";
 const KNIGHT = 2, QUEEN = 5, KING = 6;
 const OPENING_PAUSE_MS = 900;
 
+/* A phone: the character buttons are hidden there (you swipe), and the
+   view turns with two fingers rather than by dragging the map. */
+const TOUCH = typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches;
+
 const STEPS = [
   { id: "look", title: "The whole board", text: "This is the whole board from above. Your characters are the light ones nearest you. Tap one of them to go up close." },
   { id: "select", title: "Where it can go", text: "The glowing squares are where this character can move. Tap one to see a ghost of the move." },
   { id: "play", title: "Play the move", text: "The ghost shows where it would stand. Tap that same square again to play it." },
-  { id: "swipe", title: "Change character", text: "Swipe left or right on the board, or use the ‹ › buttons, to switch to another of your characters." },
+  { id: "swipe", title: "Change character", text: TOUCH ? "Swipe left or right anywhere on the board to switch to another of your characters." : "Swipe left or right on the board, or use the ‹ › buttons, to switch to another of your characters." },
   { id: "drag", title: "Drag to move", text: "You can also drag a character straight onto a glowing square. It plays at once. Try it." },
   { id: "capture", title: "Attack", text: "A red square holds an enemy you can attack. Take one and watch your character's attack." },
-  { id: "turn", title: "Turn the view", text: "Drag sideways across the map in the top corner to turn the view around your character." },
+  { id: "turn", title: "Turn the view", text: TOUCH ? "Hold your character with one finger, then slide a second finger sideways anywhere on the screen to turn the view around it." : "Drag sideways across the map in the top corner to turn the view around your character." },
   { id: "map", title: "Back to the map", text: "Tap the map to see the whole board again. Tap a character to go back in close." },
   { id: "done", title: "You're ready", text: "That's every control. Puzzles in Rogue Chess Run and Puzzle Rush Tactica are played exactly like this." },
 ];
@@ -101,6 +105,7 @@ export default function TutorialMode({ pieceImgSrc, sweetheart, onExit }) {
       onDrop: (sq) => dropRef.current(sq),
       onLost: () => setLost(true),
       onView: (v) => viewSource.set(v),
+      onTurn: (angle) => turnRef.current?.(angle),
     });
     sceneRef.current = scene;
     applyStory(scene);
@@ -240,13 +245,16 @@ export default function TutorialMode({ pieceImgSrc, sweetheart, onExit }) {
   /* Only a turn the player makes with the map counts for the step; the
      camera also turns itself. */
   const turnedRef = useRef(0);
-  const spin = (angle) => {
-    sceneRef.current?.spinBy(angle);
+  const turned = (angle) => {
     turnedRef.current += Math.abs(angle);
     if (turnedRef.current > 0.25) complete("turn");
   };
+  /* The map's drag (a mouse), or two fingers on the board (a phone). */
+  const spin = (angle) => { sceneRef.current?.spinBy(angle); turned(angle); };
+  const turnRef = useRef(null);
+  turnRef.current = turned;
   const finished = current.id === "done" && !practising;
-  const highlightMap = current.id === "turn" || current.id === "map";
+  const highlightMap = (current.id === "turn" && !TOUCH) || current.id === "map";
 
   return (
     <div className="relative mx-auto w-full max-w-[480px] overflow-hidden" style={{ height: "calc(100dvh - var(--headerH))" }}>
@@ -300,12 +308,12 @@ export default function TutorialMode({ pieceImgSrc, sweetheart, onExit }) {
 
       {!finished && (
         <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/80 to-transparent px-3 pt-10 pb-[calc(0.9rem+env(safe-area-inset-bottom))]">
-          <button type="button" className="tc-round" onClick={() => cycleCharacter(-1)} disabled={busy} aria-label="Previous character">‹</button>
+          <button type="button" className="tc-round tc-cycle" onClick={() => cycleCharacter(-1)} disabled={busy} aria-label="Previous character">‹</button>
           <div className="flex min-w-0 flex-1 flex-col items-center gap-0.5 text-center">
             <span className="tc-display truncate text-[15px]">{selected != null && view === "close" ? pieceName(selected) : ""}</span>
             <span className={"truncate text-sm " + (isAttack ? "font-bold text-[var(--tc-gold-hi)]" : "text-[var(--tc-cream-dim)]")}>{hint}</span>
           </div>
-          <button type="button" className="tc-round" onClick={() => cycleCharacter(1)} disabled={busy} aria-label="Next character">›</button>
+          <button type="button" className="tc-round tc-cycle" onClick={() => cycleCharacter(1)} disabled={busy} aria-label="Next character">›</button>
         </div>
       )}
 

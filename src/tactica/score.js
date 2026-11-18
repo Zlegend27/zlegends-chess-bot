@@ -1,9 +1,16 @@
 /* Music made in code for the opening film, until real tracks are added
-   (a file in public/tactica/music/ always wins over this). Two moods:
+   (a file in public/tactica/music/ always wins over this). Five moods, for
+   cutscenes and story cards only, never under play:
 
      "wonder"  the pieces waking: a slow music-box arpeggio over a soft pad.
      "action"  the bond and the arena: drums, a driving bass and brass-like
                stabs in D minor, 124 beats a minute, two-bar loop.
+     "sorrow"  the old owner, the attic, a lost run: A minor (Am F C G),
+               a sparse falling bell line over slow pads.
+     "dread"   an omen, a boss stepping out, refusing the bond: a low drone
+               a tritone apart, a heartbeat on the drums, a cold high bell.
+     "triumph" a boss beaten: a bright D major fanfare on the brass stabs
+               over kick and toms.
 
    startScore(ctx, out, mood) returns a stop function. Notes are scheduled
    a little ahead on the audio clock, so timing stays steady even when the
@@ -128,7 +135,52 @@ const WONDER = {
   },
 };
 
-const MOODS = { action: ACTION, wonder: WONDER };
+const SORROW = {
+  bpm: 64,
+  steps: 64,
+  play(I, ac, out, at, step, dur) {
+    /* Four bars, a chord each: A minor, F, C, G. */
+    const chords = [[45, 57, 60, 64], [41, 53, 57, 60], [48, 55, 60, 64], [43, 55, 59, 62]];
+    const bar = Math.floor(step / 16), s = step % 16;
+    if (s === 0) I.pad(ac, out, at, 1.3, chords[bar], dur * 16);
+    /* A falling line, one note on each beat but the last. */
+    const tops = [[76, 72, 69], [77, 72, 69], [76, 72, 67], [74, 71, 67]];
+    if (s % 4 === 0 && s < 12) I.bell(ac, out, at, 0.7, tops[bar][s / 4]);
+  },
+};
+
+const DREAD = {
+  bpm: 56,
+  steps: 32,
+  play(I, ac, out, at, step, dur) {
+    /* D against A flat: the tritone, low and held. */
+    if (step === 0) I.pad(ac, out, at, 1.6, [38, 44, 50], dur * 32);
+    /* A heartbeat: lub-dub, then rest. */
+    if (step % 8 === 0) I.tom(ac, out, at, 0.8, 70);
+    if (step % 8 === 2) I.tom(ac, out, at, 0.55, 62);
+    /* Now and then a cold, high bell. */
+    if (step === 12) I.bell(ac, out, at, 0.5, 80);
+    if (step === 28) I.bell(ac, out, at, 0.45, 86);
+  },
+};
+
+const TRIUMPH = {
+  bpm: 104,
+  steps: 32,
+  play(I, ac, out, at, step, dur) {
+    const s = step % 16, bar = step < 16 ? 0 : 1;
+    if (s % 4 === 0) I.kick(ac, out, at, 0.8);
+    if (s === 8) I.snare(ac, out, at, 0.7);
+    if (bar === 1 && s >= 12) I.tom(ac, out, at, 0.7, [150, 130, 115, 100][s - 12]);
+    /* D, G, A, D: the fanfare. */
+    if (s === 0) I.stab(ac, out, at, 1, bar ? [57, 61, 64] : [62, 66, 69], dur * 7);
+    if (s === 8) I.stab(ac, out, at, 0.9, bar ? [62, 66, 69, 74] : [55, 59, 62], dur * 7);
+    if (s % 2 === 0) I.bell(ac, out, at, 0.5, [74, 78, 81, 86, 81, 78, 76, 74][(s / 2) % 8] + (bar ? 2 : 0));
+    I.bass(ac, out, at, 0.6, [38, 38, 38, 38, 43, 43, 45, 45][Math.floor(s / 2)] + (bar ? 0 : 0), dur * 0.8);
+  },
+};
+
+const MOODS = { action: ACTION, wonder: WONDER, sorrow: SORROW, dread: DREAD, triumph: TRIUMPH };
 
 /** Starts a mood; returns a function that fades it out and stops it. */
 export function startScore(ac, out, mood, { volume = 0.5 } = {}) {
