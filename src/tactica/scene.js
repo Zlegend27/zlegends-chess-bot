@@ -194,6 +194,7 @@ export class TacticaScene {
     this.onDoubleTap = onDoubleTap;
     this.onSwipe = onSwipe;
     this.onView = onView;
+    if (import.meta.env.DEV) window.__tcScene = this;
     /* How far the view is turned from the player's side, the point it turns
        around, and whether the player turned it with the map. */
     this.turn = 0;
@@ -565,6 +566,8 @@ export class TacticaScene {
     add(new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
     add(new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
     add(new THREE.MeshStandardMaterial({ roughness: 1, transparent: true, depthWrite: false }));
+    /* The walls of light around glowing squares (faded by a texture). */
+    add(new THREE.MeshBasicMaterial({ alphaMap: this.beamFade(), transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
     /* The bond looks: glows, the aura and the metal collars. */
     const kit = this.bondAssets();
     [...kit.glow.slice(2), kit.aura, kit.silver, kit.gold].forEach(add);
@@ -572,7 +575,60 @@ export class TacticaScene {
     /* The warm-up materials are kept, not disposed: disposing them would
        also throw away the compiled shaders. */
     this.warmup = group;
-    this.renderer.compileAsync(group, this.camera, this.scene).catch(() => {});
+    this.compileFor(group, this.scene);
+    this.prewarmLive();
+  }
+
+  /** The warm-up above can't match every shader the real scene asks for
+   *  (lights, shadows and flags on the real objects differ), so the real
+   *  thing is compiled too: for one moment, between two frames, the scene
+   *  gets a full set of highlights and one faded copy of each kind of
+   *  character, the shaders are made, and it is all put back before
+   *  anything is drawn. Without this the first few character picks each
+   *  froze for 60-100 ms. */
+  /** Compiles shaders for `objects` as the frame will really draw them: with
+   *  post-processing on, the scene is drawn into the composer's buffer, and
+   *  three.js makes different shaders for a buffer than for the screen. */
+  compileFor(objects, scene = undefined) {
+    const target = this.renderer.getRenderTarget();
+    if (this.post && this.composer) this.renderer.setRenderTarget(this.composer.readBuffer);
+    try {
+      this.renderer.compileAsync(objects, this.camera, scene).catch(() => {});
+    } finally {
+      this.renderer.setRenderTarget(target);
+    }
+  }
+
+  prewarmLive() {
+    const entries = [...this.pieces.entries()];
+    if (!entries.length || !this.renderer.compileAsync) return;
+    const [sq] = entries[0];
+    const others = entries.slice(1, 4).map(([s]) => s);
+    const empty = [];
+    for (let t = 0; t < 64 && empty.length < 3; t++) if (!this.pieces.has(t)) empty.push(t);
+    const faded = [];
+    const kinds = new Set();
+    for (const [, entry] of entries) {
+      const key = entry.kind + entry.colour;
+      if (kinds.has(key) || entry.fadeMats || entry.ghost) continue;
+      kinds.add(key);
+      this.fadeMaterials(entry);
+      faded.push(entry);
+    }
+    this.silent = true;
+    const before = { soundSelected: this.soundSelected, chosen: this.chosen };
+    try {
+      this.setMarks({ selected: sq, held: true, targets: [...empty, ...others], chosen: empty[0] ?? null, captures: others, confirm: true });
+      this.setHints(empty.length > 1 ? [{ from: empty[0], to: empty[1], color: "#3FE07A" }] : []);
+      this.compileFor(this.scene);
+    } finally {
+      /* Back to exactly what was showing (still silent: no tap sound). */
+      this.setMarks(this.lastMarks ?? {});
+      this.setHints(this.lastHints ?? []);
+      for (const entry of faded) this.unfade(entry);
+      Object.assign(this, before);
+      this.silent = false;
+    }
   }
 
   /** A still, see-through copy of a character, for the move preview. */
@@ -611,7 +667,8 @@ export class TacticaScene {
         o.material.opacity = HELD_OPACITY;
       });
     } else {
-      for (const [o, m] of entry.ghost) { o.material.dispose(); o.material = m; }
+      /* The see-through copies aren't disposed (see setMarks). */
+      for (const [o, m] of entry.ghost) o.material = m;
       entry.ghost = null;
     }
   }
@@ -649,26 +706,30 @@ export class TacticaScene {
       if (now === goal && (goal < 1 || !entry.fadeMats)) continue;
       const next = Math.abs(goal - now) < 0.02 ? goal : now + (goal - now) * k;
       if (next >= 1) { this.unfade(entry); continue; }
-      if (!entry.fadeMats) {
-        entry.fadeMats = new Map();
-        entry.model.traverse((o) => {
-          if (!o.isMesh) return;
-          entry.fadeMats.set(o, o.material);
-          o.material = o.material.clone();
-          o.material.transparent = true;
-          o.material.depthWrite = false;
-        });
-      }
+      this.fadeMaterials(entry);
       entry.fade = next;
       for (const o of entry.fadeMats.keys()) o.material.opacity = next;
       this.wake();
     }
   }
 
+  /** Gives a character see-through copies of its materials, to fade. */
+  fadeMaterials(entry) {
+    if (entry.fadeMats) return;
+    entry.fadeMats = new Map();
+    entry.model.traverse((o) => {
+      if (!o.isMesh) return;
+      entry.fadeMats.set(o, o.material);
+      o.material = o.material.clone();
+      o.material.transparent = true;
+      o.material.depthWrite = false;
+    });
+  }
+
   /** Puts a faded character back to solid at once. */
   unfade(entry) {
     if (entry.fadeMats) {
-      for (const [o, m] of entry.fadeMats) { o.material.dispose(); o.material = m; }
+      for (const [o, m] of entry.fadeMats) o.material = m;
       entry.fadeMats = null;
     }
     entry.fade = 1;
@@ -710,10 +771,16 @@ export class TacticaScene {
    *  character itself turns see-through so the squares under it show.
    *  `confirm` tells the tap logic that a first tap only previews a move
    *  (see throughTo). */
-  setMarks({ selected = null, held = false, targets = [], chosen = null, captures = [], ghost = false, confirm = false } = {}) {
-    /* Free the old highlights' materials (the geometry is shared), or every
-       tap would leave a few more behind on the graphics card. */
-    for (const m of this.marks.children) { m.material?.dispose(); if (m.userData.ownGeometry) m.geometry.dispose(); }
+  setMarks(marks = {}) {
+    if (!this.silent) this.lastMarks = marks;
+    const { selected = null, held = false, targets = [], chosen = null, captures = [], ghost = false, confirm = false } = marks;
+    /* The old highlights' own geometry (arrows) is freed. Their materials are
+       left to the garbage collector, never disposed: disposing the last
+       material using a shader makes three.js delete that shader, and the
+       next highlight then recompiles it, a 60-90 ms freeze on every
+       character switch. Materials hold nothing on the graphics card
+       themselves, so this costs nothing. */
+    for (const m of this.marks.children) { if (m.userData.ownGeometry) m.geometry.dispose(); }
     this.marks.clear();
     this.pulse = [];
     this.held = held ? selected : null;
@@ -721,8 +788,8 @@ export class TacticaScene {
     this.targets = held ? targets : [];
     this.captures = captures;
     /* A tap when a character is picked, a tick when a move is previewed. */
-    if (held && selected != null && selected !== this.soundSelected) playSound("tap", { volume: 0.55 });
-    if (held && chosen != null && chosen !== this.chosen) playSound("ghost", { volume: 0.7 });
+    if (!this.silent && held && selected != null && selected !== this.soundSelected) playSound("tap", { volume: 0.55 });
+    if (!this.silent && held && chosen != null && chosen !== this.chosen) playSound("ghost", { volume: 0.7 });
     this.soundSelected = held ? selected : null;
     this.chosen = held ? chosen : null;
     this.confirm = confirm;
@@ -832,7 +899,8 @@ export class TacticaScene {
 
   /** Analysis arrows: [{ from, to, color }] as 0-63 squares; [] clears. */
   setHints(arrows = []) {
-    for (const m of this.hints.children) { m.material?.dispose(); m.geometry?.dispose(); }
+    if (!this.silent) this.lastHints = arrows;
+    for (const m of this.hints.children) m.geometry?.dispose();
     this.hints.clear();
     /* Drawn over everything, like the x-ray square outlines: from a low
        camera the board surface and the characters would hide them. */
@@ -1118,7 +1186,7 @@ export class TacticaScene {
   setHover(sq) {
     if (sq === this.hoverSq) return;
     this.hoverSq = sq;
-    for (const m of this.hoverMark.children) m.material?.dispose();
+    /* Materials not disposed, for the reason in setMarks. */
     this.hoverMark.clear();
     if (sq != null && this.outlineGeometry) {
       const legal = this.targets.includes(sq);

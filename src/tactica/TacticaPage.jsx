@@ -86,7 +86,7 @@ function TacticaPageInner({ pieceImgSrc, sweetheart, player, start = null, onExi
   let page;
   if (screen === "opening") page = <OpeningScene sweetheart={sweetheart} skippable={(rewatch || seenNow) && loadStory().seen} onDone={openingDone} />;
   else if (screen === "tutorial") page = <TutorialMode pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={toMenu} />;
-  else if (screen === "run") page = <RunMode pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} best={runBest} onBest={recordRunBest} displayName={player?.displayName} onLeaderboard={onLeaderboard ? () => onLeaderboard("run") : null} onExit={toMenu} />;
+  else if (screen === "run") page = <RunMode creator={player?.session?.user?.app_metadata?.role === "creator"} pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} best={runBest} onBest={recordRunBest} displayName={player?.displayName} onLeaderboard={onLeaderboard ? () => onLeaderboard("run") : null} onExit={toMenu} />;
   else if (screen === "memories") page = <MemoryMode onExit={toMenu} />;
   else if (screen === "bot") page = <BotMode pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={toMenu} />;
   else if (screen === "self") page = <BotMode key="self" self pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={leave("self")} />;

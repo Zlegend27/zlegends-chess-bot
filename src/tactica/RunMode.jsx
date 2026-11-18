@@ -20,7 +20,7 @@ import {
   rushDamage, pickPuzzle, effectFloors, offer, choose, floorScore, maxPliesFor, minPliesFor, rememberSeen, isBonusAfter, HARD_MODE_RATING,
 } from "./binRun";
 import { loadStory, saveStory, isHard, beatStory } from "./story";
-import { WORLDS, BOSS_STORY, WORLD_STORY, LAST_FLOOR, worldIndex, worldOf, floorInWorld, firstFloorOf, isWorldStart, isBossFloor, isSnowFloor, isIntense, isIntensify } from "./worlds";
+import { WORLDS, FLOORS_PER_WORLD, BOSS_STORY, WORLD_STORY, LAST_FLOOR, worldIndex, worldOf, floorInWorld, firstFloorOf, isWorldStart, isBossFloor, isSnowFloor, isIntense, isIntensify } from "./worlds";
 import { levelsOf, loadBonds, recordMove, levelUpText, applyStory } from "./bonds";
 import { poolNear, expandPuzzle, warmPool } from "./puzzlePool";
 
@@ -109,7 +109,11 @@ function RunSummary({ run, hard }) {
   );
 }
 
-export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, displayName, onLeaderboard, onExit }) {
+/* `creator`: the game's creator is signed in (account app_metadata role
+   "creator"). The intro then offers the boss viewer: a jump straight to any
+   world's boss floor that saves nothing (no worlds reached, bonds,
+   memories, story, bests or leaderboard). */
+export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, displayName, onLeaderboard, onExit, creator = false }) {
   const canvasRef = useRef(null);
   const sceneRef = useRef(null);
   /* The current world's scenery (the bin, the lake...), so the run can
@@ -294,7 +298,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
     sceneRef.current?.setBossRoom(live && isBossFloor(floor) && w > 0 ? 1 : 0);
   }, [floor, stage, setKind, setReady]);
   /* For checking a floor while building: jump straight to it. */
-  if (import.meta.env.DEV) window.__run = { floor: (f) => { runIdRef.current++; usedRef.current = new Set(); runRef.current = { from: f, wrong: 0, rushes: 0, cleared: 0, bosses: 0, startedAt: Date.now() }; setHealth(START_HEALTH); beginFloor(f, null); }, bin: () => binRef.current, scene: () => sceneRef.current, lose: () => endRunRef.current?.("lost"), clear: () => nextRef.current?.() };
+  if (import.meta.env.DEV) window.__run = { floor: (f) => { runIdRef.current++; usedRef.current = new Set(); runRef.current = { from: f, wrong: 0, rushes: 0, cleared: 0, bosses: 0, startedAt: Date.now() }; setHealth(START_HEALTH); beginFloor(f, null); }, bin: () => binRef.current, scene: () => sceneRef.current, eng, state: { stage, busy: busyRef.current }, tap: (sq) => tapRef.current?.(sq), lose: () => endRunRef.current?.("lost"), clear: () => nextRef.current?.() };
   /** The bin's boss, if this is his floor. */
   const bossOn = (f) => (isBossFloor(f) ? binRef.current?.monster ?? null : null);
   /** Shows a boss's card and waits for Continue. */
@@ -404,21 +408,24 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
   /* ---- Run flow ---- */
   /** Starts a run at the first floor of world `from` (0 is the bin, a full
    *  run from floor 1). */
-  const startRun = (from = 0) => {
+  const startRun = (from = 0, { at = null } = {}) => {
     runIdRef.current++;
     usedRef.current = new Set();
-    runRef.current = { from: firstFloorOf(from), wrong: 0, rushes: 0, cleared: 0, bosses: 0, startedAt: Date.now() };
+    /* A boss preview (`at`, the creator's boss viewer) starts on that floor
+       and keeps nothing. */
+    runRef.current = { from: at ?? firstFloorOf(from), preview: at != null, wrong: 0, rushes: 0, cleared: 0, bosses: 0, startedAt: Date.now() };
     setEnding(null);
     setHealth(START_HEALTH);
     setEffect(null);
     setScore(0);
-    beginFloor(firstFloorOf(from), null);
+    beginFloor(at ?? firstFloorOf(from), null);
   };
+  const preview = () => !!runRef.current.preview;
 
   const beginFloor = (f, eff) => {
     setFloor(f);
     /* Reaching a new world unlocks starting there. */
-    if (worldIndex(f) > reached) { setReached(worldIndex(f)); saveSetting("tacticaRunReached", worldIndex(f)); noteTacticaChange(); }
+    if (!preview() && worldIndex(f) > reached) { setReached(worldIndex(f)); saveSetting("tacticaRunReached", worldIndex(f)); noteTacticaChange(); }
     if (isStoryFloor(f)) {
       /* A story floor ends any reward or challenge. */
       setEffect(null);
@@ -624,7 +631,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
       const lines = BOSS_STORY[worldOf(floor).id];
       if (lines) { await showCard(`${worldOf(floor).boss} is beaten`, lines.won); if (fell !== runIdRef.current) return; }
       /* Beating a boss wakes a memory (memories.js). */
-      const memory = wakeMemory(worldIndex(floor));
+      const memory = preview() ? null : wakeMemory(worldIndex(floor));
       if (memory) {
         noteTacticaChange();
         playSound("shimmer", { volume: 0.8 });
@@ -642,7 +649,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
     await wait(900);
     if (run !== runIdRef.current) return;
     /* The last floor: the run is won. */
-    if (floor >= LAST_FLOOR) { saveStory(beatStory(loadStory())); setStage("ending"); return; }
+    if (floor >= LAST_FLOOR) { if (!preview()) saveStory(beatStory(loadStory())); setStage("ending"); return; }
     const proceed = () => {
       if (!eff && effectFloors(floor) > 0) {
         setChoices(offer(Math.random, hard));
@@ -930,7 +937,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
         return;
       }
       /* The piece that played it grows closer to you. */
-      const bond = recordMove(eng.pieceAt(sqOf(mFrom(move))), { capture: eng.pieceAt(target) !== EMPTY, final: verdict.solved });
+      const bond = preview() ? {} : recordMove(eng.pieceAt(sqOf(mFrom(move))), { capture: eng.pieceAt(target) !== EMPTY, final: verdict.solved });
       if (bond.levelUp) { sceneRef.current?.setBonds(levelsOf(bond.bonds)); playSound("shimmer", { volume: 0.8 }); say(levelUpText(bond.kind, bond.levelUp), "good"); }
       await animate(move);
       if (gone()) return;
@@ -1133,6 +1140,17 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
                 <button key={w.id} type="button" className="tc-plank tc-center tc-small" onClick={() => startRun(i + 1)}>{w.name} · floor {firstFloorOf(i + 1)}</button>
               ))}
               <p className="m-0 text-xs text-[var(--tc-cream-dim)]">Only a run from floor 1 counts for your best.</p>
+            </div>
+          )}
+          {creator && (
+            <div className="tc-panel flex w-full max-w-[34ch] flex-col gap-2 p-3">
+              <p className="tc-label m-0">Boss viewer · creator only</p>
+              <div className="grid grid-cols-2 gap-2">
+                {WORLDS.map((w, i) => w.boss && (
+                  <button key={w.id} type="button" className="tc-plank tc-center tc-small" onClick={() => startRun(i, { at: firstFloorOf(i) + FLOORS_PER_WORLD - 1 })}>{w.boss}</button>
+                ))}
+              </div>
+              <p className="m-0 text-xs text-[var(--tc-cream-dim)]">Starts on that boss&apos;s floor. Nothing is saved: no progress, bonds, memories or scores.</p>
             </div>
           )}
           <button type="button" className="tc-link" onClick={onExit}>Back to the menu</button>

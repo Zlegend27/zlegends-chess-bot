@@ -5,7 +5,10 @@
    The two browsers talk directly over a Supabase Realtime channel for
    the match: each move goes out as { ply, san, clocks } and the other
    side replays it on its own engine, so an illegal or out-of-order move
-   is simply ignored (and a resync asked for). Each side runs the clocks
+   is simply ignored (and a resync asked for). Nothing the other side sends
+   is taken on trust: a move must be theirs to play, a resync may only add
+   their moves, and a result that says I lost must be one my own board and
+   clock agree with (see `believable`). Each side runs the clocks
    from the times sent with every move. A refresh rejoins: the game is
    kept on this device (under `storeKey`), and the opponent sends the
    moves to catch up.
@@ -29,6 +32,19 @@ const TICK_MS = 200;
    the win, to allow for the delay in their moves reaching you. */
 const FLAG_GRACE_MS = 2000;
 const LEFT_CLAIM_MS = 60_000;
+
+/** Whether a result sent by the other player can be true (see the top). */
+export function believableResult(res, { moves, myColor, offer = null, myTimeLeft = null }) {
+  if (!res || typeof res !== "object" || ![1, -1, 0, undefined, null].includes(res.winner)) return false;
+  if (res.winner === myColor) return true;
+  if (res.reason === "Aborted") return !res.winner && moves.length < 2;
+  if (res.reason === "Agreement") return !res.winner && offer === "sent";
+  if (res.reason === "Timeout") return res.winner === -myColor && myTimeLeft != null && myTimeLeft <= 1500;
+  const probe = createEngine();
+  replayIntoEngine(probe, moves);
+  const real = gameResult(probe);
+  return !!real && real.reason === res.reason && (real.winner ?? 0) === (res.winner ?? 0);
+}
 
 export const resultFor = (winner, reason) => ({ text: winner === 1 ? "1–0" : winner === -1 ? "0–1" : "½–½", reason, winner });
 
@@ -137,7 +153,9 @@ export function usePvpMatch({ supabase, me, match, signedIn, storeKey = "pvpMatc
     channel
       .on("broadcast", { event: "move" }, ({ payload }) => {
         const { moves: list } = live.current;
-        if (payload.ply === list.length) apply(payload.san, payload.clocks);
+        /* Only a move for their own side: never one of mine. */
+        const theirTurn = (list.length % 2 === 0 ? 1 : -1) !== myColor;
+        if (payload.ply === list.length && theirTurn && typeof payload.san === "string") apply(payload.san, payload.clocks);
         else if (payload.ply > list.length) send("sync-request");
       })
       .on("broadcast", { event: "sync-request" }, () => {
@@ -147,14 +165,18 @@ export function usePvpMatch({ supabase, me, match, signedIn, storeKey = "pvpMatc
       .on("broadcast", { event: "sync" }, ({ payload }) => {
         const mine = live.current.moves;
         const theirs = payload.moves ?? [];
-        const extends_ = theirs.length > mine.length && mine.every((m, i) => theirs[i] === m);
-        if (extends_) adopt(theirs, payload.clocks, payload.result);
-        else if (payload.result) finish(payload.result, { announce: false });
+        /* A resync may only add their moves: my own are kept on this device,
+           so a list with a new move of mine in it was made up. */
+        const extends_ = Array.isArray(theirs) && theirs.length > mine.length && mine.every((m, i) => theirs[i] === m)
+          && theirs.slice(mine.length).every((_, k) => ((mine.length + k) % 2 === 0 ? 1 : -1) !== myColor);
+        if (extends_) adopt(theirs, payload.clocks, believableRef.current(payload.result, theirs) ? payload.result : null);
+        else if (payload.result && believableRef.current(payload.result)) finish(payload.result, { announce: false });
       })
-      .on("broadcast", { event: "result" }, ({ payload }) => finish(payload, { announce: false }))
+      .on("broadcast", { event: "result" }, ({ payload }) => { if (believableRef.current(payload)) finish(payload, { announce: false }); })
       .on("broadcast", { event: "draw-offer" }, () => setDrawOffer("received"))
       .on("broadcast", { event: "draw-decline" }, () => setDrawOffer("declined"))
-      .on("broadcast", { event: "draw-accept" }, () => finish(resultFor(0, "Agreement"), { announce: false }))
+      /* A draw they accept only counts if I offered one. */
+      .on("broadcast", { event: "draw-accept" }, () => { if (offerRef.current === "sent") finish(resultFor(0, "Agreement"), { announce: false }); })
       .on("broadcast", { event: "rematch" }, () => setRematch((r) => ({ ...r, theirs: true })))
       .on("presence", { event: "sync" }, () => {
         const here = Object.keys(channel.presenceState()).includes(opponent.id);
@@ -164,7 +186,7 @@ export function usePvpMatch({ supabase, me, match, signedIn, storeKey = "pvpMatc
       },
     });
     return () => { table.close(); channelRef.current = null; };
-  }, [supabase, match.id, me.id, opponent.id, apply, adopt, finish, send, signedIn]);
+  }, [supabase, match.id, me.id, opponent.id, apply, adopt, finish, send, signedIn, myColor]);
 
   /* The clocks run from the first move, like any chess clock: White's
      starts once both players are at the board (so nobody loses time waiting
@@ -201,6 +223,16 @@ export function usePvpMatch({ supabase, me, match, signedIn, storeKey = "pvpMatc
   }, [rematch, result, match]);
 
   const myTurn = sideToMove === myColor && !result;
+
+  /* Whether a result the other side sent can be true. One that's good for
+     me (they resigned, flagged, or left) is always fine; a draw or a loss
+     for me must match my own board (checkmate, stalemate and the draw
+     rules), my own clock (a timeout), or the game's start (an abort). */
+  const offerRef = useRef(drawOffer);
+  offerRef.current = drawOffer;
+  const believableRef = useRef(null);
+  believableRef.current = (res, list = live.current.moves) =>
+    believableResult(res, { moves: list, myColor, offer: offerRef.current, myTimeLeft: timeLeft(myColor) });
 
   /** Plays my move (in SAN) and sends it. False if it isn't legal now. */
   const submit = (san) => {

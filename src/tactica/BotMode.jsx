@@ -230,8 +230,9 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit, self = false 
     const san = eng.sanOf(move);
     const game = gameIdRef.current;
     await scene?.animateMove(from, to, { knight, captured, follow, pace });
-    /* A new game started while it played: this move isn't part of it. */
-    if (game !== gameIdRef.current) return null;
+    /* A new game started (or the game ended) while it played: this move
+       isn't part of it, so the board goes back to what the game says. */
+    if (game !== gameIdRef.current) { if (sceneRef.current === scene) scene?.setPieces(piecesNow()); return null; }
     eng.make(move);
     scene?.syncPieces(piecesNow());
     return san;
@@ -398,6 +399,7 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit, self = false 
 
   /** Analyse the game: the review steps through its own copy of it. */
   const startReview = () => {
+    if (busyRef.current) return;
     gameIdRef.current++;
     setMenuOpen(false);
     setStage("review");
@@ -446,6 +448,8 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit, self = false 
   };
 
   const resign = () => {
+    /* Not in the middle of a move playing out: wait for it to land. */
+    if (busyRef.current) return;
     gameIdRef.current++;
     forget();
     setMenuOpen(false);
@@ -509,6 +513,7 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit, self = false 
     : chosen != null ? (isAttack ? `Tap ${squareName(chosen)} again to strike` : `Tap ${squareName(chosen)} again to move`)
     : "Tap a glowing square, or drag there";
   const lastMove = moveList.length ? `${Math.ceil(moveList.length / 2)}${moveList.length % 2 ? "." : "…"} ${moveList[moveList.length - 1]}` : null;
+  if (import.meta.env.DEV) window.__bot = { eng, stage, moveList, busy, thinking, view, selected, targets, side, mover, tap: (sq) => tapRef.current(sq), cycle: (d) => cycleRef.current(d), takeBack, start, startSelf, resign };
 
   return (
     <div className="relative mx-auto w-full max-w-[480px] overflow-hidden" style={{ height: "calc(100dvh - var(--headerH))" }}>
@@ -561,11 +566,11 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit, self = false 
                       sceneRef.current?.setFlipped(on && eng.getSide() === -1);
                       sceneRef.current?.showBoard();
                     }}>Turn the board: {turnBoard ? "On" : "Off"}</button>
-                    <button type="button" className="tc-plank tc-center tc-small" onClick={startReview} disabled={!moveList.length}>Step through the moves</button>
+                    <button type="button" className="tc-plank tc-center tc-small" onClick={startReview} disabled={!moveList.length || busy}>Step through the moves</button>
                     <button type="button" className="tc-plank tc-center tc-small" onClick={() => { setMenuOpen(false); forget(); startSelf([]); }}>Start over</button>
                   </>
                 ) : (
-                  <button type="button" className="tc-plank tc-center tc-small" onClick={resign}>Resign</button>
+                  <button type="button" className="tc-plank tc-center tc-small" onClick={resign} disabled={busy}>Resign</button>
                 )}
                 {moveList.length > 0 && (
                   <div>

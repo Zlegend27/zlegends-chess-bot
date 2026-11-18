@@ -215,7 +215,9 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
     const knight = Math.abs(eng.pieceAt(from)) === KNIGHT;
     const game = gameIdRef.current;
     await scene?.animateMove(from, to, { knight, captured, pace, camera: false });
-    if (game !== gameIdRef.current) return false;
+    /* The run ended (or restarted) while it played: the board goes back to
+       what the game says rather than keep a move that never counted. */
+    if (game !== gameIdRef.current) { if (sceneRef.current === scene) scene?.syncPieces(piecesNow()); return false; }
     eng.make(move);
     scene?.syncPieces(piecesNow());
     return true;
@@ -297,6 +299,7 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
     return false;
   };
 
+  if (import.meta.env.DEV) window.__blitz = { eng, phase, busy: busyRef.current, tap: (sq) => tapRef.current(sq), start, scene: () => sceneRef.current };
   const low = timeLeft < 30000;
   const toMove = side === 1 ? "White" : "Black";
   return (
