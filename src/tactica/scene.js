@@ -64,8 +64,9 @@ const KNIGHT_HOP = 1.1;
 const BOND_GLOW = "#ffc864";
 /* How see-through a boss's hand gets where it covers a character. */
 const SEE_THROUGH = 0.35, SEE_THROUGH_MAX_RADIUS = 2.6;
-/* Turning the view with a second finger: radians per pixel slid. */
-const TURN_PER_PX = 0.012;
+/* Turning the view with a second finger: radians per pixel slid (slowed
+   from 0.012, the creator found it too fast). */
+const TURN_PER_PX = 0.0075;
 /* Kept faint and inside the piece's own square: a bond is a keepsake, and a
    strong gold glow read like a move highlight (the creator, 2026-11-17). */
 const BOND_GLOW_OPACITY = [0, 0, 0.13, 0.16, 0.22, 0.28];
