@@ -72,10 +72,13 @@ export function outline(root, { color = "#140a06", width = 0.02, minSize = 0.06 
     parts.push(o);
   });
   for (const o of parts) {
-    const ink = new THREE.Mesh(o.geometry, inkMaterial(color, width));
+    /* A skinned part (the game's characters) gets a skinned outline on the
+       same bones, so the ink moves with it. */
+    const ink = o.isSkinnedMesh ? new THREE.SkinnedMesh(o.geometry, inkMaterial(color, width)) : new THREE.Mesh(o.geometry, inkMaterial(color, width));
     ink.userData.ink = true;
     ink.renderOrder = -1;
     o.add(ink);
+    if (o.isSkinnedMesh) ink.bind(o.skeleton, o.bindMatrix);
     o.userData.inked = true;
   }
 }

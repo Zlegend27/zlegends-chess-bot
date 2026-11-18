@@ -43,6 +43,17 @@ const ANIME_LOOK = { glow: 0.5, glowFrom: 0.9, vignette: 0.78, contrast: 1.08, s
 /* The attic is a memory: faded, warm, heavy at the edges. */
 const FLASHBACK = { glow: 0.28, glowFrom: 0.97, vignette: 0.95, contrast: 1.04, saturation: 0.5, tint: "#efdcc0" };
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
+/* Hides parts of a character until shown: scaled to nothing after each
+   frame's animation (the characters are skinned, so .visible on a part
+   doesn't hide it, and the idle animation would undo a one-off scale). */
+function hider(scene) {
+  const hidden = new Set();
+  scene.everyFrame.push(() => { for (const p of hidden) p.scale.setScalar(1e-4); });
+  return {
+    hide(parts) { for (const p of parts) { p.userData.restScale ??= p.scale.clone(); hidden.add(p); } },
+    show(p) { hidden.delete(p); if (p.userData.restScale) p.scale.copy(p.userData.restScale); },
+  };
+}
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 const easeOut = (t) => 1 - (1 - t) ** 3;
 
@@ -94,9 +105,10 @@ export default function Film3D({ onDone, skippable = false }) {
       scene.setPieces(START);
       /* Still just carved pieces here: no eyes, no arms. They only wake in
          the bin. */
+      const carved = hider(scene);
       for (const e of scene.pieces.values()) {
         toonify(e.model); outline(e.model, { width: 0.012 });
-        for (const part of partsNamed(e.model, (n) => /^(eye[RL]|shoulder[RL])$/.test(n))) part.visible = false;
+        carved.hide(partsNamed(e.model, (n) => /^(eye[RL]|shoulder[RL])$/.test(n)));
       }
       const attic = buildAttic(scene);
       scene.everyFrame.push((dt) => attic.update(dt));
@@ -265,7 +277,8 @@ export default function Film3D({ onDone, skippable = false }) {
         eyes: partsNamed(e.model, (n) => n === "eyeR" || n === "eyeL"),
         arms: partsNamed(e.model, (n) => n === "shoulderR" || n === "shoulderL"),
       }));
-      for (const s of sprouts) for (const p of [...s.eyes, ...s.arms]) p.visible = false;
+      const asleep = hider(scene);
+      for (const s of sprouts) asleep.hide([...s.eyes, ...s.arms]);
       heroes.forEach((e, i) => { e.group.rotation.z = (i % 2 ? 1 : -1) * (1.25 + (i % 3) * 0.12); e.group.position.y = 0.32; e.holder.rotation.y = Math.PI + (i - 2.5) * 0.5; });
       bin.setHoleLight(0);
       const { cut, glide, tween } = camFor(scene);
@@ -332,12 +345,12 @@ export default function Film3D({ onDone, skippable = false }) {
       await wait(0.3);
       await impact();
       playSound("chime", { volume: 0.7 });
-      for (const s of sprouts) for (const p of s.eyes) p.visible = true;
+      for (const s of sprouts) for (const p of s.eyes) asleep.show(p);
       await wait(0.8);
       for (const [i, s] of sprouts.entries()) {
         playSound(i % 2 ? "cloth1" : "cloth2", { volume: 0.6 });
         for (const p of s.arms) {
-          p.visible = true;
+          asleep.show(p);
           const s0 = p.scale.clone();
           p.scale.setScalar(0.01);
           scene.tween(260, (k) => p.scale.copy(s0).multiplyScalar(Math.max(0.01, ease(k) * (1 + 0.25 * Math.sin(k * Math.PI)))));

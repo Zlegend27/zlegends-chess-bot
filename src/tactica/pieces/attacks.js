@@ -5,6 +5,7 @@
    lab uses the same pieces. Everything here is driven by the attack clip's
    own time, so it stays in step however the frames fall. */
 import * as THREE from "three";
+import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { buildPawn, pawnClips } from "./pawn.js";
 import { buildKnight, knightClips, crushedClip } from "./knight.js";
 import { buildBishop, bishopClips, SPLIT_T } from "./bishop.js";
@@ -82,7 +83,8 @@ function bishopCut({ scene, victim, from, to, scale, victimColour }) {
     victim.visible = false;
     const cutColour = victimColour === "white" ? "#efe2c8" : "#7a5236";
     const halves = [1, -1].map((sign) => {
-      const obj = victim.clone(true);
+      /* Skinned characters (scene.js skinParts) need their bones copied too. */
+      const obj = cloneSkinned(victim);
       obj.visible = true;
       victim.parent.add(obj);
       obj.position.copy(victim.position);
@@ -98,7 +100,8 @@ function bishopCut({ scene, victim, from, to, scale, victimColour }) {
         o.material.side = THREE.FrontSide;
         o.material.transparent = true;
         mats.push(o.material);
-        o.add(new THREE.Mesh(o.geometry, cutWood));
+        if (o.isSkinnedMesh) { const inside = new THREE.SkinnedMesh(o.geometry, cutWood); o.add(inside); inside.bind(o.skeleton, o.bindMatrix); }
+        else o.add(new THREE.Mesh(o.geometry, cutWood));
       }
       return { obj, plane, sign, base: plane.constant, start: obj.position.clone(), mats };
     });

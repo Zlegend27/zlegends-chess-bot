@@ -16,6 +16,7 @@ import { KINDS, BUILD, clipsFor, reactionFor, attackEffects, PAWN_ATTACK_END } f
 import { play as playSound, ATTACK_CUES, buzz } from "./sound.js";
 import { artSettled } from "./sets/art.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 
 /* Pieces are modelled about one square wide; this leaves a gap around them. */
 const PIECE_SCALE = 0.78;
@@ -158,10 +159,89 @@ function seeMats(o) {
 /* One model per kind and colour, built once and cloned for every piece
    (clones share geometry and materials). */
 const templates = new Map();
+/* Switch: one skinned mesh per material for each character (see skinParts). */
+const SKIN_PIECES = true;
+/* Named meshes no code looks up, so free to merge. */
+const MERGEABLE_NAMES = new Set(["turnedBody"]);
 function modelFor(kind, colour) {
   const key = kind + colour;
-  if (!templates.has(key)) templates.set(key, noTinyShadows(bakeStill(BUILD[kind](colour))));
-  return templates.get(key).clone(true);
+  if (!templates.has(key)) {
+    const baked = noTinyShadows(bakeStill(BUILD[kind](colour)));
+    templates.set(key, SKIN_PIECES ? skinParts(baked) : baked);
+  }
+  return SKIN_PIECES ? cloneSkinned(templates.get(key)) : templates.get(key).clone(true);
+}
+
+/* A character is a dozen parts that move on their own (body, head, eyes,
+   shoulders, elbows, hands, weapon, shield), each made of a few meshes, so
+   it was drawn in about 25 pieces. Here every plain part that shares a
+   material becomes one skinned mesh, each vertex tied to the part it came
+   from: the parts are the skeleton's bones, so the animations still move
+   them exactly as before, and the character draws in about 10. Named meshes
+   (glows, the orb), see-through and glowing-additive ones stay as they
+   were; so do the parts' own groups, so code that finds a part by name
+   (getObjectByName("head")) and moves or scales it still works. Hiding a
+   part with .visible no longer hides its meshes: scale it to nothing
+   instead (the opening film does). */
+function skinParts(root) {
+  root.updateMatrixWorld(true);
+  const bones = [], index = new Map();
+  root.traverse((o) => { if (!o.isMesh) { index.set(o, bones.length); bones.push(o); } });
+  const buckets = new Map();
+  root.traverse((o) => {
+    if (!o.isMesh || o.isSkinnedMesh || (o.name && !MERGEABLE_NAMES.has(o.name)) || o.children.length || Array.isArray(o.material) || !o.visible) return;
+    const m = o.material;
+    if (m.transparent || m.blending !== THREE.NormalBlending || !index.has(o.parent) || !o.geometry.attributes.position) return;
+    /* Shadow casting doesn't split a group: small parts merged into one
+       that casts add a few triangles to the shadow, not another draw. */
+    const key = [m.uuid, o.receiveShadow, o.renderOrder, o.userData.eyeball ?? ""].join("|");
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(o);
+  });
+  const toRoot = root.matrixWorld.clone().invert();
+  const made = [];
+  for (const list of buckets.values()) {
+    if (list.length < 2) continue;
+    const geos = list.map((o) => {
+      /* The same attributes for all (position, normal, uv) and an index,
+         so parts built different ways can merge. */
+      const src = o.geometry, g = new THREE.BufferGeometry();
+      g.setAttribute("position", src.attributes.position.clone());
+      if (src.attributes.normal) g.setAttribute("normal", src.attributes.normal.clone());
+      else g.computeVertexNormals();
+      g.setAttribute("uv", src.attributes.uv ? src.attributes.uv.clone() : new THREE.Float32BufferAttribute(new Float32Array(src.attributes.position.count * 2), 2));
+      if (src.index) g.setIndex(src.index.clone());
+      else g.setIndex([...Array(src.attributes.position.count).keys()]);
+      g.applyMatrix4(toRoot.clone().multiply(o.matrixWorld));
+      const n = g.attributes.position.count, bone = index.get(o.parent);
+      const si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
+      for (let i = 0; i < n; i++) { si[i * 4] = bone; sw[i * 4] = 1; }
+      g.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(si, 4));
+      g.setAttribute("skinWeight", new THREE.Float32BufferAttribute(sw, 4));
+      return g;
+    });
+    const merged = mergeGeometries(geos, false);
+    if (!merged) continue;
+    const first = list[0];
+    const sm = new THREE.SkinnedMesh(merged, first.material);
+    sm.castShadow = list.some((o) => o.castShadow);
+    sm.receiveShadow = first.receiveShadow;
+    sm.renderOrder = first.renderOrder;
+    sm.userData = { ...first.userData, tiny: list.every((o) => o.userData.tiny) };
+    for (const o of list) o.removeFromParent();
+    root.add(sm);
+    made.push(sm);
+  }
+  root.updateMatrixWorld(true);
+  const skeleton = new THREE.Skeleton(bones);
+  for (const sm of made) {
+    sm.bind(skeleton);
+    /* Parts swing out in attacks (a lunge, a raised sword): a roomier bound
+       so the character isn't culled while a part is out at the side. */
+    sm.computeBoundingSphere();
+    sm.boundingSphere.radius *= 1.6;
+  }
+  return root;
 }
 
 /* The small parts of a character (eyes, studs, rivets, a sword's tip) cast
@@ -626,7 +706,18 @@ export class TacticaScene {
     if (this.warmup) return this.warmup;
     const group = new THREE.Group();
     const geometry = new THREE.PlaneGeometry(0.01, 0.01);
-    const add = (material) => group.add(new THREE.Mesh(geometry, material));
+    /* Each material twice: on a plain mesh, and on a skinned one, since the
+       characters are skinned (skinParts) and that is a different shader. */
+    const skinGeo = geometry.clone();
+    skinGeo.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(new Uint16Array(skinGeo.attributes.position.count * 4), 4));
+    skinGeo.setAttribute("skinWeight", new THREE.Float32BufferAttribute(new Float32Array(skinGeo.attributes.position.count * 4).map((_, i) => (i % 4 ? 0 : 1)), 4));
+    const add = (material) => {
+      group.add(new THREE.Mesh(geometry, material));
+      const sm = new THREE.SkinnedMesh(skinGeo, material), bone = new THREE.Bone();
+      sm.add(bone);
+      sm.bind(new THREE.Skeleton([bone]));
+      group.add(sm);
+    };
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     const seen = new Set();
     for (const kind of KINDS.slice(1)) {
@@ -2354,6 +2445,17 @@ export class TacticaScene {
       const dt = Math.min(sinceDraw, 1000);
       const since = Math.min(0.1, (now - (this.lastDraw ?? now)) / 1000);
       this.lastDraw = now;
+      /* A skinned character is culled by a bound round its own square; when
+         its body is carried off across the board (a bishop's dash, a
+         knight's leap) that bound would hide it, so while the body is away
+         from home it is always drawn. */
+      if (SKIN_PIECES) {
+        for (const e of this.pieces.values()) {
+          const body = e.bodyBone === undefined ? (e.bodyBone = e.model.getObjectByName("body") ?? null) : e.bodyBone;
+          const away = !!body && body.position.lengthSq() > 0.25;
+          if (away !== !!e.unculled) { e.unculled = away; e.model.traverse((o) => { if (o.isSkinnedMesh) o.frustumCulled = !away; }); }
+        }
+      }
       /* Characters in a hit-stop hold their pose. */
       for (const entry of this.pieces.values()) if (!(entry.frozenUntil > now)) entry.mixer.update(since);
       for (const step of this.everyFrame) step(since);
