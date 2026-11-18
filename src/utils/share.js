@@ -3,14 +3,18 @@
    replays moves by matching each target SAN string against the legal moves
    generated at that ply (sanOf is a pure function of position + move). */
 
+/* The code is URL-safe base64 (no "+", "/" or "="), so it can sit in a
+   path: /g/<code>. Old links used plain base64 after #g=; both decode. */
 export function encodeGame(playerColor, moveList) {
   const payload = JSON.stringify({ c: playerColor, m: moveList });
-  return btoa(payload);
+  return btoa(payload).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
 export function decodeGame(hash) {
   try {
-    const payload = JSON.parse(atob(hash));
+    let b64 = decodeURIComponent(hash).replace(/-/g, "+").replace(/_/g, "/");
+    while (b64.length % 4) b64 += "=";
+    const payload = JSON.parse(atob(b64));
     if (!payload || !Array.isArray(payload.m)) return null;
     return { playerColor: payload.c === -1 ? -1 : 1, moveList: payload.m };
   } catch {
@@ -18,9 +22,13 @@ export function decodeGame(hash) {
   }
 }
 
+/** The shared game's code in this page's address: /g/<code> (shared links
+ *  since 2026-11-17, which get a picture in link previews), or the older
+ *  #g=<code>. */
 export function getSharedHash() {
-  const raw = window.location.hash || "";
-  const match = raw.match(/^#g=(.+)$/);
+  const path = window.location.pathname.match(/^\/g\/([A-Za-z0-9_\-+=%]+)\/?$/);
+  if (path) return path[1];
+  const match = (window.location.hash || "").match(/^#g=(.+)$/);
   return match ? match[1] : null;
 }
 

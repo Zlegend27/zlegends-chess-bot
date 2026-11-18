@@ -175,7 +175,7 @@ export default function ZlegendsBot() {
      one also requires musicSource === "chiptune"). */
   const isFirstVisitRef = useRef(!loadSetting("visitedBefore", false));
   /* A brand-new visitor arriving on Home gets a one-screen welcome, once. */
-  const [welcomeOpen, setWelcomeOpen] = useState(() => isFirstVisitRef.current && !loadSetting("welcomeSeen", false) && viewForPath(window.location.pathname) === "home" && !window.location.hash);
+  const [welcomeOpen, setWelcomeOpen] = useState(() => isFirstVisitRef.current && !loadSetting("welcomeSeen", false) && viewForPath(window.location.pathname) === "home" && !window.location.hash && !initialShared);
   const closeWelcome = () => { setWelcomeOpen(false); saveSetting("welcomeSeen", true); };
   /* Flips for every first-time visitor once this render has read it. It also
      arms the first-visit theme music (see hooks/useMusic.js), which reads
@@ -2333,7 +2333,8 @@ export default function ZlegendsBot() {
         and the player would think Share was just broken. */
   const onShare = async () => {
     const hash = encodeGame(playerColor, moveList);
-    const url = `${window.location.origin}${window.location.pathname}#g=${hash}`;
+    /* /g/<code>: the server gives link previews a picture of the game. */
+    const url = `${window.location.origin}/g/${hash}`;
     if (navigator.share) {
       try {
         await navigator.share({ title: "Zlegend's Chess Bot", text: "Check out this game!", url });

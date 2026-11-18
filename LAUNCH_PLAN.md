@@ -382,3 +382,39 @@ Not covered: real phones, two-player 1v1, playing Tactica's modes through
 
 Chess Tactica: a plan for the next version is in tactica-design/game-plan.md
 (private). Nothing built; waiting on the creator's decisions.
+
+## 2026-11-17 (night): major update
+
+Owner's answers: uptime monitor yes; share cards yes; supporters: Ko-fi for
+now, but BOTH of these are wanted later (to do):
+- [ ] YouTube channel members get cosmetic perks (they link Google; check
+      membership with the YouTube API). Needs the owner's channel set up
+      for memberships.
+- [ ] A paid supporter tier with Stripe (cosmetics only, a few dollars a
+      month). Needs a Stripe account and Vercel Pro (Vercel's free plan
+      doesn't allow commercial use).
+
+Built:
+- Uptime (item 12): .github/workflows/uptime.yml checks the site and the
+  database every 30 minutes; a failed check fails the run and GitHub emails
+  the repo owner (keep "failed workflows" notifications on in GitHub).
+- Share cards (item 16): shared game links are now /g/<code>. Link previews
+  (Discord, iMessage, WhatsApp) get the result as the title and a picture of
+  the final position (api/g.js, api/card.js with @vercel/og). Old #g= links
+  still open. Not checked on the live site yet: paste a shared link into
+  Discord after the deploy.
+- 1v1: the other player's messages are checked (moves for their own side
+  only, resyncs can only add their moves, results that say you lost must
+  match your own board or clock). Unit-tested in src/pvp/believableResult.test.js.
+- Light theme: every main page re-checked for text contrast; the one
+  failure (the Watch Bots line) fixed.
+- Chess Tactica: per-floor numbers for tuning (event tactica_floor; query 9
+  in supabase/stats.sql), a floor-clear celebration, the creator's boss
+  viewer (supabase/011_creator_role.sql, run by the owner).
+
+Measured: first script 207 KB (77 KB compressed), up from 186 KB after
+Preact; fine for now.
+
+Still open: Rank Bot v3 vs v2 (5 v3 games so far, needs 30+); server-checked
+ranked results (ratings can still be faked by a determined cheat); real-phone
+and two-player tests; Supabase/Vercel usage checks (item 9).

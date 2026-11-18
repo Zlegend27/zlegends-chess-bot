@@ -548,6 +548,8 @@
 .boardGrade.blunder{ color:#F05348; box-shadow:0 0 8px #F0534899; }
 .empty{ padding:10px 2px; color:var(--dim); font-size:12px; font-style:italic; }
 .pv{ margin-top:8px; font-family:var(--font-mono); font-size:12px; color:#B9AEE0; line-height:1.5; word-break:break-word; }
+/* The pale lavender is for the dark theme; on the light theme it was 1.9:1. */
+:root[data-theme="sweetheart"] .pv{ color:var(--sh-linkDim); }
 .promoBox .modalCloseX{ position:absolute; top:6px; right:6px; width:36px; height:36px; padding:0;
   border:1px solid #8B2FC966; border-radius:50%; background:#1D1038; color:var(--liliac);
   font-size:14px; line-height:1; display:flex; align-items:center; justify-content:center;

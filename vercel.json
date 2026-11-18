@@ -1,7 +1,11 @@
 {
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/g/:code",
+      "destination": "/api/g?c=:code"
+    },
+    {
+      "source": "/((?!api/).*)",
       "destination": "/"
     }
   ]

@@ -1,0 +1,37 @@
+# Checks the live site every 30 minutes. When a check fails, the run fails
+# and GitHub emails the repository owner (Settings > Notifications >
+# Actions: "Send notifications for failed workflows only").
+name: Uptime
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Home page answers
+        run: |
+          for attempt in 1 2 3; do
+            code=$(curl -s -o page.html -w "%{http_code}" --max-time 20 https://www.zlegend2700.com/) || code=000
+            if [ "$code" = "200" ] && grep -q '<div id="root"' page.html; then
+              echo "Site is up ($code)"; exit 0
+            fi
+            echo "Attempt $attempt: HTTP $code"; sleep 30
+          done
+          echo "::error::www.zlegend2700.com is down or not serving the app"
+          exit 1
+      - name: Database answers
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 https://oqhioznopfdgiksuwahj.supabase.co/auth/v1/health) || code=000
+          # 401 means it's up but wants a key; anything 5xx or no answer is down.
+          if [ "$code" = "000" ] || [ "${code:0:1}" = "5" ]; then
+            echo "::error::Supabase did not answer (HTTP $code)"; exit 1
+          fi
+          echo "Supabase answered ($code)"

@@ -424,6 +424,8 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
 
   const beginFloor = (f, eff) => {
     setFloor(f);
+    /* Where this floor started, for the per-floor tuning numbers. */
+    runRef.current.floorStart = { at: Date.now(), wrong: runRef.current.wrong, rushes: runRef.current.rushes, health: healthRef.current };
     /* Reaching a new world unlocks starting there. */
     if (!preview() && worldIndex(f) > reached) { setReached(worldIndex(f)); saveSetting("tacticaRunReached", worldIndex(f)); noteTacticaChange(); }
     if (isStoryFloor(f)) {
@@ -615,7 +617,9 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
     }
     /* Floor cleared. */
     runRef.current.cleared++;
+    trackFloor("cleared");
     setBurst((n) => n + 1);
+    sceneRef.current?.celebrate(friendlySquares(eng, side));
     if (bossOn(floor)) runRef.current.bosses++;
     const gained = floorScore(effect);
     const newScore = score + gained;
@@ -722,11 +726,25 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
      recorded (where it started and ended, and how health was lost), so the
      difficulty can be tuned from real runs. */
   const fullRun = runRef.current.from === 1;
+  /* One line per floor played (cleared, or where the run ended), so the
+     difficulty of each floor can be tuned from real runs: how long it took,
+     wrong moves and timer rushes on it, health before and after. Boss
+     previews (the creator's viewer) aren't counted. */
+  const trackFloor = (how) => {
+    if (runRef.current.preview) return;
+    const start = runRef.current.floorStart ?? { at: Date.now(), wrong: 0, rushes: 0, health: healthRef.current };
+    track("tactica_floor", {
+      floor, world: worldOf(floor).id, how, hard, seconds: Math.round((Date.now() - start.at) / 1000),
+      wrong: runRef.current.wrong - start.wrong, rushes: runRef.current.rushes - start.rushes,
+      healthBefore: start.health, healthAfter: healthRef.current, challenge: effect?.kind === "challenge" ? effect.id : null,
+    });
+  };
   useEffect(() => {
     if (stage !== "over") return;
     const beat = fullRun && score > (best || 0);
     setNewBest(beat);
-    track("tactica_run_end", {
+    if (ending !== "won") trackFloor(ending ?? "ended");
+    if (!runRef.current.preview) track("tactica_run_end", {
       score, floor, world: worldOf(floor).id, from: runRef.current.from, how: ending, health: healthRef.current, hard,
       wrong: runRef.current.wrong, rushes: runRef.current.rushes, challenge: effect?.kind === "challenge" ? effect.id : null,
     });

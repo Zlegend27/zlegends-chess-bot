@@ -1317,6 +1317,19 @@ export class TacticaScene {
 
   /** A burst of sparks where a piece is taken: thrown up and out, falling
    *  back and fading in about two thirds of a second. */
+  /** A floor won: each character on `squares` hops in turn and throws
+   *  sparks, gold and cyan. */
+  celebrate(squares) {
+    squares.slice(0, 8).forEach((sq, i) => setTimeout(() => {
+      const entry = this.running ? this.pieces.get(sq) : null;
+      if (!entry) return;
+      this.sparks(this.worldOf(sq), i % 2 ? "#3EE7F5" : "#ffcf6a");
+      const g = entry.group, base = g.position.y;
+      this.tweens.push({ start: performance.now(), ms: 460, step: (t) => { g.position.y = base + Math.sin(t * Math.PI) * 0.4; }, done: () => { g.position.y = base; } });
+      this.wake();
+    }, i * 80));
+  }
+
   sparks(at, color = "#ffcf6a") {
     if (!this.sparkMap) {
       const c = document.createElement("canvas");
@@ -1351,7 +1364,9 @@ export class TacticaScene {
       if (life >= 0.7) {
         this.everyFrame = this.everyFrame.filter((x) => x !== step);
         this.scene.remove(points);
-        geo.dispose(); mat.dispose();
+        /* The material isn't disposed: that would delete its shader and
+           make the next burst recompile it (see setMarks). */
+        geo.dispose();
       }
     };
     this.everyFrame.push(step);

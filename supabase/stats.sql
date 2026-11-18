@@ -63,3 +63,18 @@ select date_trunc('week', f.first_day)::date as week, count(*) as new_people,
     select 1 from public.events e where e.client_id = f.client_id and e.name = 'app_open' and e.created_at::date > f.first_day
   )) as came_back
 from firsts f group by 1 order by 1 desc;
+
+-- 9. Chess Tactica: how hard each Rogue Run floor is (last 30 days). For each
+-- floor: how often it was cleared or ended the run, time taken, wrong moves
+-- and timer rushes. A floor where many runs end, or that eats a lot of
+-- health, is too hard for where it sits.
+select (detail->>'floor')::int as floor, detail->>'world' as world,
+  count(*) filter (where detail->>'how' = 'cleared') as cleared,
+  count(*) filter (where detail->>'how' <> 'cleared') as runs_ended_here,
+  round(avg((detail->>'seconds')::numeric)) as avg_seconds,
+  round(avg((detail->>'wrong')::numeric), 2) as avg_wrong,
+  round(avg((detail->>'rushes')::numeric), 2) as avg_rushes,
+  round(avg((detail->>'healthBefore')::numeric - (detail->>'healthAfter')::numeric), 1) as avg_health_lost
+from public.events
+where name = 'tactica_floor' and created_at > now() - interval '30 days'
+group by 1, 2 order by 1;
