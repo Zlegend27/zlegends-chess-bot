@@ -4,7 +4,7 @@ import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
 import { BOND_KINDS, KIND_NAMES, LOOKS, MAX_LEVEL, loadBonds, levelsOf, progress } from "./bonds";
 import { Medal } from "./ui";
-import { setScore, soundOn, setSoundOn, onSoundChange, soundLevel, setSoundLevel, canVibrate, vibrateOn, setVibrateOn, buzz, play } from "./sound";
+import { playMusic, stopMusic, soundOn, setSoundOn, onSoundChange, soundLevel, setSoundLevel, canVibrate, vibrateOn, setVibrateOn, buzz, play } from "./sound";
 import { loadSetting } from "../utils/storage";
 import { loadStory, saveStory, bondsOpen, redEyes, isHard, hardLocked, canSwitchHard, setHardSwitch, resetBond } from "./story";
 
@@ -68,9 +68,9 @@ export default function MenuScreen({ onPick, onExit, onOpening, blitzBest, sweet
   const [volume, setVolume] = useState(() => Math.round(soundLevel() * 100));
   const [vibes, setVibes] = useState(vibrateOn);
   useEffect(() => onSoundChange(setSound), []);
-  /* A quiet theme on the front screen (score.js "menu"; a real track in
-     public/tactica/music/ replaces it). Never during play. */
-  useEffect(() => { setScore("menu"); return () => setScore(null); }, []);
+  /* The front screen's theme: "The Old Tower Inn" by RandomMind (CC0,
+     public/tactica/music/menu.mp3), looping. Never during play. */
+  useEffect(() => { playMusic("menu", { loop: true, volume: 0.4, fade: 1.5 }); return () => stopMusic(1); }, []);
 
   useEffect(() => {
     const scene = new TacticaScene(canvasRef.current, {

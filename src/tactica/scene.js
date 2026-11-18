@@ -62,6 +62,8 @@ const KNIGHT_HOP = 1.1;
    and the collar ring that sits in the base groove every piece shares
    (model units, before PIECE_SCALE). */
 const BOND_GLOW = "#ffc864";
+/* How see-through a boss's hand gets where it covers a character. */
+const SEE_THROUGH = 0.35, SEE_THROUGH_MAX_RADIUS = 2.6;
 /* Turning the view with a second finger: radians per pixel slid. */
 const TURN_PER_PX = 0.012;
 /* Kept faint and inside the piece's own square: a bond is a keepsake, and a
@@ -731,6 +733,60 @@ export class TacticaScene {
       entry.fade = next;
       for (const o of entry.fadeMats.keys()) o.material.opacity = next;
       this.wake();
+    }
+  }
+
+  /** Boss parts that go see-through where they cover a character: a boss's
+   *  hand reaching over the board shouldn't hide the pieces under it. */
+  addSeeThrough(root) { (this.seeThrough ??= new Set()).add(root); this.wake(); }
+  removeSeeThrough(root) { this.seeThrough?.delete(root); }
+
+  /** Each frame: any boss part between the camera and a character fades to
+   *  SEE_THROUGH, and comes back when it has moved off. Bounding spheres
+   *  only (no triangles), so it costs next to nothing. */
+  updateSeeThrough(dt) {
+    if (!this.seeThrough?.size) return;
+    const eye = this.camera.position;
+    const targets = [];
+    for (const e of this.pieces.values()) targets.push(e.group.position.clone().setY((TAP_HEIGHT[e.kind] ?? 1.4) * 0.55));
+    const sphere = this._seeSphere ??= new THREE.Sphere(), ray = this._seeRay ??= new THREE.Ray(), hitAt = this._seeHit ??= new THREE.Vector3();
+    const k = 1 - Math.exp(-10 * dt);
+    for (const root of this.seeThrough) {
+      root.traverse((o) => {
+        if (!o.isMesh || !o.visible || !o.geometry) return;
+        /* Shapes redrawn every frame (the pizza monster's rope arms) are
+           measured again when they change. */
+        const pos = o.geometry.attributes.position;
+        if (!o.geometry.boundingSphere || (pos && o.userData.seeVersion !== pos.version)) { o.geometry.computeBoundingSphere(); o.userData.seeVersion = pos?.version; }
+        sphere.copy(o.geometry.boundingSphere).applyMatrix4(o.matrixWorld);
+        /* Hands and arms only: a whole body is too big to test this way. */
+        if (sphere.radius > SEE_THROUGH_MAX_RADIUS && !o.userData.seeOrig) return;
+        let covers = false;
+        for (const t of targets) {
+          ray.origin.copy(eye);
+          ray.direction.subVectors(t, eye);
+          const far = ray.direction.length();
+          ray.direction.divideScalar(far);
+          if (ray.intersectSphere(sphere, hitAt) && hitAt.distanceTo(eye) < far - 0.3) { covers = true; break; }
+        }
+        const goal = covers ? SEE_THROUGH : 1;
+        const now = o.userData.seeOpacity ?? 1;
+        if (now === goal && (goal < 1 || !o.userData.seeOrig)) return;
+        const next = Math.abs(goal - now) < 0.02 ? goal : now + (goal - now) * k;
+        o.userData.seeOpacity = next;
+        if (next >= 1) {
+          if (o.userData.seeOrig) { o.material = o.userData.seeOrig; o.userData.seeOrig = null; }
+          return;
+        }
+        if (!o.userData.seeOrig) {
+          o.userData.seeOrig = o.material;
+          /* A see-through copy kept for next time (never disposed, see setMarks). */
+          o.userData.seeMat ??= [o.material].flat().map((m) => { const c = m.clone(); c.transparent = true; c.depthWrite = false; c.userData.baseOpacity = m.opacity ?? 1; return c; });
+          o.material = Array.isArray(o.material) ? o.userData.seeMat : o.userData.seeMat[0];
+        }
+        for (const m of o.userData.seeMat) m.opacity = (m.userData.baseOpacity ?? 1) * next;
+        this.wake();
+      });
     }
   }
 
@@ -1770,10 +1826,11 @@ export class TacticaScene {
       return points;
     };
     let down = null, drag = null, lastTap = null;
-    /* Turning the view: one finger holds the selected character, a second
-       finger anywhere on the screen slides sideways to turn the camera round
-       it (the same sensitivity the map's drag had). Lifting either finger
-       ends it; nothing counts as a tap or a move. */
+    /* Turning the view: with a character selected, one finger held down
+       anywhere and a second finger sliding sideways turns the camera round
+       it (the same sensitivity the map's drag had). The first finger can be
+       anywhere, since after a turn the character is no longer under it.
+       Lifting either finger ends it; nothing counts as a tap or a move. */
     let turning = null;
     /* A dragged character stays under the point of it that was grabbed: the
        finger slides it across a level through that point, so picking a
@@ -1825,7 +1882,7 @@ export class TacticaScene {
     this.onDown = (e) => {
       /* A second finger while the first holds the selected character: turn. */
       if (down && e.pointerId !== down.id) {
-        const holding = this.held != null && (down.sq === this.held || drag?.sq === this.held);
+        const holding = this.held != null;
         if (!holding || turning) return;
         if (drag?.piece) {
           /* The hold had started to lift it: put it back down first. */
@@ -2080,6 +2137,7 @@ export class TacticaScene {
       }
       this.camera.lookAt(this.camLook);
       this.updateFades(since);
+      this.updateSeeThrough(since);
       this.reportView();
       if (this.post) this.composer.render();
       else this.renderer.render(this.scene, this.camera);

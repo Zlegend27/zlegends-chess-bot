@@ -161,6 +161,43 @@ export function buildFireGiant(ts) {
     parent.add(f);
     flames.push({ f, base: sz, ph: Math.random() * 6 });
   }
+  /* His sword, as in the old Norse tales of the fire giant whose blade
+     shines brighter than the sun: a long molten blade driven point-down
+     into the lava at his side, wreathed in flame. Ours alone (not any
+     film or comic design). It flares when he roars. */
+  const sword = new THREE.Group();
+  const bladeShape = new THREE.Shape();
+  bladeShape.moveTo(-0.32, 0); bladeShape.lineTo(0.32, 0); bladeShape.lineTo(0.26, 6.2); bladeShape.lineTo(0, 7.1); bladeShape.lineTo(-0.26, 6.2); bladeShape.closePath();
+  const bladeGeo = new THREE.ExtrudeGeometry(bladeShape, { depth: 0.12, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.06, bevelSegments: 1 });
+  bladeGeo.translate(0, 0, -0.06);
+  /* White-hot along the middle, cooling to orange at the edges: the whole
+     blade glows, not just its cracks. */
+  const molten = new THREE.MeshStandardMaterial({ color: "#7a3010", roughness: 0.4, metalness: 0.3, emissive: "#ff8c2a", emissiveIntensity: 1.3 });
+  const blade = piece(bladeGeo, molten, 0, 0, 0);
+  blade.rotation.z = Math.PI; // point down
+  blade.position.y = 7.1;
+  sword.add(blade);
+  const edgeGlow = glow("#ff8a2a", 2.4, 0.55);
+  edgeGlow.scale.set(1.6, 7.5, 1);
+  edgeGlow.position.y = 3.6;
+  sword.add(edgeGlow);
+  const guard = piece(new THREE.BoxGeometry(2.2, 0.32, 0.4), darkRock, 0, 7.25, 0);
+  const grip = piece(new THREE.CylinderGeometry(0.16, 0.16, 1.5, 8), darkRock, 0, 8.15, 0);
+  const pommel = piece(lump, rock, 0, 9.05, 0, 0.32, 0.32, 0.32);
+  sword.add(guard, grip, pommel);
+  /* Planted at his right side, leaning a little, half sunk. */
+  sword.position.set(1.9, -2.6, 2.9);
+  sword.rotation.set(0.1, 0.2, -0.16);
+  root.add(sword);
+  for (let i = 0; i < 6; i++) {
+    const f = new THREE.Sprite(flameMat);
+    const y = 2.2 + i * 0.9, sz = 1.25 - i * 0.08;
+    f.position.set((i % 2 ? 0.25 : -0.25), y, 0.1);
+    f.scale.set(sz * 0.6, sz, 1);
+    sword.add(f);
+    flames.push({ f, base: sz, ph: Math.random() * 6 });
+  }
+
   /* His arms: rock drawn from the shoulder to wherever the hand is. */
   const armGeo = new THREE.CylinderGeometry(0.55, 0.42, 1, 7);
   const arms = [-1, 1].map((side) => {
@@ -187,6 +224,7 @@ export function buildFireGiant(ts) {
   root.scale.setScalar(SPOTS[0].scale);
   root.rotation.y = -0.25;
   ts.scene.add(root);
+  ts.addSeeThrough?.(root);
 
   let t = 0, stage = 0, open = 0, openGoal = 0, crumble = 0, heat = 1;
   let move = null;
@@ -228,6 +266,8 @@ export function buildFireGiant(ts) {
       emberPoints.visible = heat > 0.3;
       const flicker = 0.85 + 0.15 * Math.sin(t * 17) * Math.sin(t * 7.3);
       rock.emissiveIntensity = (0.65 + 0.3 * Math.sin(t * 1.6)) * heat;
+      molten.emissiveIntensity = (1.0 + 0.25 * Math.sin(t * 2.1)) * heat;
+      edgeGlow.material.opacity = Math.min(0.9, 0.45 * heat);
       core.scale.setScalar(1 + 0.08 * Math.sin(t * 3));
       for (const { e, g } of eyes) { e.scale.y = (t % 4.6 > 4.45 ? 0.08 : 0.55) * flicker; g.material.opacity = 0.85 * heat * flicker; }
       for (const fl of flames) { const k = 1 + 0.18 * Math.sin(t * 11 + fl.ph) + open * 0.6; fl.f.scale.set(fl.base * 0.6 * (1 + open * 0.3), fl.base * k, 1); }
@@ -318,6 +358,6 @@ export function buildFireGiant(ts) {
       for (const p of points.slice(0, 4)) await this.slam(p);
       await this.roar();
     },
-    dispose() { ts.scene.remove(root); },
+    dispose() { ts.scene.remove(root); ts.removeSeeThrough?.(root); },
   };
 }

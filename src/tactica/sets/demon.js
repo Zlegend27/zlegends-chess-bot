@@ -181,6 +181,7 @@ export function buildDemon(ts, zap) {
   root.position.copy(SPOTS[0].pos);
   root.scale.setScalar(SPOTS[0].scale);
   ts.scene.add(root);
+  ts.addSeeThrough?.(root);
 
   let t = 0, stage = 0, move = null, rage = 0, rageGoal = 0, breaking = 0;
   const shards = [];
@@ -251,7 +252,6 @@ export function buildDemon(ts, zap) {
       const a = armBy("hand");
       a.speed = 7;
       a.goal = point.clone().setY(point.y + 1.0);
-      playSound("zap", { volume: 0.25 });
       await wait(380);
       return a;
     },
@@ -335,6 +335,6 @@ export function buildDemon(ts, zap) {
       for (const p of points.slice(0, 5)) await this.slam(p);
       await this.roar();
     },
-    dispose() { for (const s of shards) ts.scene.remove(s.mesh); ts.scene.remove(root); },
+    dispose() { for (const s of shards) ts.scene.remove(s.mesh); ts.scene.remove(root); ts.removeSeeThrough?.(root); },
   };
 }

@@ -346,6 +346,26 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
   }, [stage]);
 
   /* ---- The timer: runs only while playing and nothing is animating ---- */
+  /* The menu is a pause: the clock stops and the board is covered, so a
+     pause can't be used to study the puzzle. One pause per run is free; a
+     run paused twice or more doesn't go on the leaderboard. */
+  const pausedWasRunning = useRef(false);
+  const pausedRef = useRef(false);
+  const openPause = () => {
+    pausedRef.current = true;
+    pausedWasRunning.current = timerRef.current.running;
+    pauseTimer();
+    runRef.current.pauses = (runRef.current.pauses ?? 0) + 1;
+    setMenuOpen(true);
+  };
+  const closePause = () => {
+    pausedRef.current = false;
+    setMenuOpen(false);
+    if (pausedWasRunning.current) resumeTimer();
+    pausedWasRunning.current = false;
+  };
+  const closePauseRef = useRef(null);
+  closePauseRef.current = closePause;
   const pauseTimer = () => {
     const t = timerRef.current;
     if (!t.running) return;
@@ -355,6 +375,9 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
   const resumeTimer = () => {
     const t = timerRef.current;
     if (t.running) return;
+    /* Paused: an animation finishing behind the pause screen doesn't start
+       the clock; Resume does. */
+    if (pausedRef.current) { pausedWasRunning.current = true; return; }
     /* Hidden (another app is in front): start again when the game is back. */
     if (document.hidden) { t.waitVisible = true; return; }
     t.deadline = performance.now() + t.left;
@@ -410,7 +433,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
         if (t.running) { t.left = Math.max(0, t.deadline - performance.now()); t.running = false; t.waitVisible = true; }
       } else if (t.waitVisible) {
         t.waitVisible = false;
-        if (!busyRef.current) { t.deadline = performance.now() + t.left; t.running = true; }
+        if (!busyRef.current && !pausedRef.current) { t.deadline = performance.now() + t.left; t.running = true; }
       }
     };
     document.addEventListener("visibilitychange", onVisibility);
@@ -419,7 +442,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
 
   useEffect(() => {
     if (!menuOpen) return;
-    const onKey = (e) => { if (e.key === "Escape") setMenuOpen(false); };
+    const onKey = (e) => { if (e.key === "Escape") closePauseRef.current(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [menuOpen]);
@@ -769,7 +792,8 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
     });
     if (beat) onBest(score);
     /* Full runs go on the Rogue Chess Run leaderboard. */
-    if (fullRun && score > 0) submitRunScore({ score, floor, won: ending === "won", hard, displayName });
+    /* A run paused more than once doesn't go on the leaderboard. */
+    if (fullRun && score > 0 && (runRef.current.pauses ?? 0) <= 1) submitRunScore({ score, floor, won: ending === "won", hard, displayName });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage]);
 
@@ -1097,7 +1121,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
           <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col gap-2.5 bg-gradient-to-b from-black/80 to-transparent p-3 pb-10">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5">
-                <MenuButton open={menuOpen} onClick={() => setMenuOpen((o) => !o)} />
+                <MenuButton open={menuOpen} onClick={() => (menuOpen ? closePause() : openPause())} />
                 <div>
                   <div className="tc-label">{escape ? "Bonus" : `${worldOf(floor).name} · Floor ${floor}`}</div>
                   <div className="tc-display text-[15px]">{escape ? "Escape to the light" : isBossFloor(floor) ? worldOf(floor).boss : `Phase ${phase + 1} of ${phases}`}</div>
@@ -1134,13 +1158,19 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
           </div>
 
           {menuOpen && (
-            <>
-              <button type="button" aria-label="Close the menu" className="absolute inset-0 cursor-default border-0 bg-transparent" onClick={() => setMenuOpen(false)} />
-              <div className="tc-panel absolute top-16 left-3 flex w-56 flex-col gap-3 p-3">
-                <button type="button" className="tc-plank tc-center tc-small" onClick={() => setMenuOpen(false)}>Resume</button>
-                <button type="button" className="tc-plank tc-center tc-small" onClick={() => { setMenuOpen(false); endRun("quit"); }}>Quit run</button>
+            <div className="tc-scrim absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 p-6 text-center" style={{ background: "radial-gradient(circle at 50% 40%, #2a1a10, #0c0806)" }} role="dialog" aria-label="Paused">
+              <h2 className="tc-title m-0 text-[30px]">Paused</h2>
+              <p className="m-0 text-sm text-[var(--tc-cream-dim)]">The clock is stopped. Floor {floor}, {worldOf(floor).name}.</p>
+              <div className="flex w-56 flex-col gap-3">
+                <button type="button" className="tc-plank tc-center tc-small" onClick={closePause}>Resume</button>
+                <button type="button" className="tc-plank tc-center tc-small" onClick={() => { pausedRef.current = false; setMenuOpen(false); endRun("quit"); }}>Quit run</button>
               </div>
-            </>
+              {fullRun && (
+                <p className="m-0 max-w-[30ch] text-xs text-[var(--tc-cream-dim)]">
+                  {(runRef.current.pauses ?? 0) > 1 ? "This run has been paused more than once, so it won't go on the leaderboard." : "One pause per run is free. Pause again and this run won't go on the leaderboard."}
+                </p>
+              )}
+            </div>
           )}
 
           {banner && (

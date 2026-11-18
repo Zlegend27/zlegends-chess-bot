@@ -113,6 +113,7 @@ export function unlock() {
       }
       if (fliesWanted) scheduleFly();
       /* Music asked for before the first touch (the menu's) starts now. */
+      if (pendingMusic) { const p = pendingMusic; pendingMusic = null; playMusic(p.name, p); }
       if (scoreMoodNow && !stopScore && enabled && !music?.src) stopScore = startScore(ctx, master, scoreMoodNow, { volume: 0.5 });
     }
     if (ctx.state === "suspended") ctx.resume();
@@ -193,7 +194,8 @@ function flyBuzz() {
 function scheduleFly() {
   clearTimeout(flyTimer);
   if (!fliesWanted) return;
-  flyTimer = setTimeout(() => { flyBuzz(); scheduleFly(); }, 8000 + Math.random() * 14000);
+  /* A fly now and then: 12-30 s apart (it was 8-22, which got old). */
+  flyTimer = setTimeout(() => { flyBuzz(); scheduleFly(); }, 12000 + Math.random() * 18000);
 }
 
 /* Music. A track is a file in public/tactica/music/ (see the README
@@ -201,9 +203,12 @@ function scheduleFly() {
    at a time; starting another fades the last one out. */
 let music = null;
 /** Plays `name` (for example "opening"), looping if `loop`. */
+/* A track asked for before the first touch (phones keep audio locked until
+   then), started by unlock(). */
+let pendingMusic = null;
 export function playMusic(name, { volume = 0.55, loop = false, fade = 1.2 } = {}) {
   stopMusic(fade);
-  if (!ctx) return;
+  if (!ctx) { pendingMusic = { name, volume, loop, fade }; return; }
   const mine = (music = { name, gain: null, src: null });
   fetch(`/tactica/music/${name}.mp3`)
     .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error("none"))))
@@ -244,6 +249,7 @@ export function sting(kind) {
 
 /** Fades the music out over `fade` seconds. */
 export function stopMusic(fade = 1.2) {
+  pendingMusic = null;
   const old = music;
   music = null;
   if (!old?.src || !ctx) return;

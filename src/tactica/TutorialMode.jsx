@@ -26,7 +26,7 @@ const STEPS = [
   { id: "swipe", title: "Change character", text: TOUCH ? "Swipe left or right anywhere on the board to switch to another of your characters." : "Swipe left or right on the board, or use the ‹ › buttons, to switch to another of your characters." },
   { id: "drag", title: "Drag to move", text: "You can also drag a character straight onto a glowing square. It plays at once. Try it." },
   { id: "capture", title: "Attack", text: "A red square holds an enemy you can attack. Take one and watch your character's attack." },
-  { id: "turn", title: "Turn the view", text: TOUCH ? "Hold your character with one finger, then slide a second finger sideways anywhere on the screen to turn the view around it." : "Drag sideways across the map in the top corner to turn the view around your character." },
+  { id: "turn", title: "Turn the view", text: TOUCH ? "Hold one finger down anywhere, then slide a second finger sideways to turn the view around your character." : "Drag sideways across the map in the top corner to turn the view around your character." },
   { id: "map", title: "Back to the map", text: "Tap the map to see the whole board again. Tap a character to go back in close." },
   { id: "done", title: "You're ready", text: "That's every control. Puzzles in Rogue Chess Run and Puzzle Rush Tactica are played exactly like this." },
 ];

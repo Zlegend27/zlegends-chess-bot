@@ -92,6 +92,8 @@ const LAVA_SHADER = {
     }`,
 };
 
+const USE_LAVA_SCAN = false;
+
 export function dressVolcano(ts) {
   const scene = ts.scene;
   const SKY = "#2a0e08", SKY_ERUPT = "#3c1006";
@@ -123,6 +125,16 @@ export function dressVolcano(ts) {
   key.shadow.bias = -0.0006;
   key.shadow.normalBias = 0.02;
   scene.add(key, key.target);
+  /* The dark pieces were hard to make out against the black rock (the
+     creator, 2026-11-17): a soft fill from the camera's side lights their
+     faces, and a rim from beyond the board traces their outline. No
+     shadows, so they cost little. */
+  const fill = new THREE.DirectionalLight("#ffe2cc", 0.7);
+  fill.position.set(0, 6, 11);
+  const rim = new THREE.DirectionalLight("#ffc9a0", 1.1);
+  rim.position.set(-2, 5, -11);
+  scene.add(fill, fill.target, rim, rim.target);
+  scene.environmentIntensity = 0.45;
   const LOOK = { glow: 0.32, glowFrom: 1.05, vignette: 0.62, tint: "#ffe6d6" };
   const ERUPT_LOOK = { glow: 0.42, glowFrom: 1.0, vignette: 0.74, tint: "#ffd9c6" };
   ts.setLook?.(LOOK);
@@ -152,6 +164,14 @@ export function dressVolcano(ts) {
   for (let i = 0; i < 12; i++) {
     const a = (i / 12) * Math.PI * 2 + r() * 0.3, d = 6.5 + r() * 0.9;
     prop(ts, set, i % 3 ? "moon_rock_02" : "moon_rock_03", { size: 1.1 + r() * 0.9, at: [Math.cos(a) * d, -0.45, Math.sin(a) * d], rot: [0, r() * 6, 0], tint: "#6a5650", sink: 0.2 });
+  }
+  /* Cooled pahoehoe flows (a scan of real Hawaiian lava): ropy black crust
+     spilling off the rock into the lava sea, between the boulders. */
+  /* Off until its credit is settled (CC BY-NC: it must be credited); the
+     model file is kept out of the repo until then. */
+  if (USE_LAVA_SCAN) for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2 + 0.4 + r() * 0.3, d = 8.6 + r() * 1.4;
+    prop(ts, set, "lava_flow/lava_flow.glb", { size: 3.4 + r() * 1.6, at: [Math.cos(a) * d, -2.75, Math.sin(a) * d], rot: [0, a + Math.PI / 2 + (r() - 0.5) * 0.6, 0], tint: "#9a8580", sink: 0.35 });
   }
   /* Boulders sticking out of the lava, near enough to see their surface. */
   for (const [x, z, sz] of [[-11, -9, 4.5], [12, -12, 5.5], [-15, 3, 3.6], [15, 2, 4], [3, -17, 6]]) {

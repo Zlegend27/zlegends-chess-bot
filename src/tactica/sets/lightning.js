@@ -15,6 +15,23 @@ function jagged(from, to, jitter, steps) {
   return pts;
 }
 
+/* The flash lights are made once per scene and reused. A light added or
+   removed changes how many lights every material's shader is built for, so
+   a fresh light per bolt made the whole world recompile on each strike: the
+   demon's realm stuttered at every flash. Call prepareLightning when the
+   world is built. */
+const POOL = 2;
+export function prepareLightning(scene) {
+  if (scene.userData.boltLights) return scene.userData.boltLights;
+  const lights = Array.from({ length: POOL }, () => {
+    const l = new THREE.PointLight("#9fd6ff", 0, 40, 1.4);
+    scene.add(l);
+    return l;
+  });
+  scene.userData.boltLights = { lights, next: 0 };
+  return scene.userData.boltLights;
+}
+
 /** Makes a bolt in `scene` from `from` to `to`. Call the returned
  *  update(dt) every frame; it returns false once the bolt has faded and
  *  removed itself. `color` tints the flash. */
@@ -22,6 +39,8 @@ export function strike(scene, from, to, { width = 0.06, life = 0.32, flash = 60,
   const group = new THREE.Group();
   const main = jagged(from, to, from.distanceTo(to) * 0.12, 14);
   const curve = new THREE.CatmullRomCurve3(main, false, "catmullrom", 0.1);
+  /* Copies of shared materials, never disposed: disposing the last one
+     would throw its shader away and the next bolt would rebuild it. */
   const mat = boltMat.clone(), halo = glowMat.clone();
   group.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 48, width, 5, false), mat));
   group.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 48, width * 4, 5, false), halo));
@@ -32,22 +51,26 @@ export function strike(scene, from, to, { width = 0.06, life = 0.32, flash = 60,
     const c = new THREE.CatmullRomCurve3(jagged(at, end, 1.2, 6));
     group.add(new THREE.Mesh(new THREE.TubeGeometry(c, 16, width * 0.6, 4, false), mat));
   }
-  const light = new THREE.PointLight(color, flash, 40, 1.4);
+  const pool = prepareLightning(scene);
+  const light = pool.lights[pool.next++ % pool.lights.length];
+  light.color.set(color);
   light.position.copy(to).add(new THREE.Vector3(0, 1.5, 0));
-  group.add(light);
+  light.intensity = flash;
   scene.add(group);
   let t = 0;
   return (dt) => {
     t += dt;
-    const k = 1 - t / life, flick = Math.random() < 0.3 ? 0.4 : 1;
+    /* A smooth fade, no strobing: the old random flicker read as flashing. */
+    const k = Math.max(0, 1 - t / life);
     if (k <= 0) {
       scene.remove(group);
-      group.traverse((o) => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } });
+      light.intensity = 0;
+      group.traverse((o) => { if (o.isMesh) o.geometry.dispose(); });
       return false;
     }
-    mat.opacity = k * flick;
-    halo.opacity = 0.35 * k * flick;
-    light.intensity = flash * k * flick;
+    mat.opacity = k;
+    halo.opacity = 0.35 * k;
+    light.intensity = flash * k * k;
     return true;
   };
 }

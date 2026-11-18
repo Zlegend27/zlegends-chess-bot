@@ -6,7 +6,8 @@ A track that isn't here simply doesn't play.
                 takes their time over the question)
 
 Planned, not yet used by the game:
-  menu.mp3      the Tactica menu
+  menu.mp3      the Tactica menu (in use: "The Old Tower Inn" by RandomMind,
+                OpenGameArt, CC0)
   bin.mp3       world 1, the bin
   ice.mp3       world 2, the icy lake
   volcano.mp3   world 3, the volcano

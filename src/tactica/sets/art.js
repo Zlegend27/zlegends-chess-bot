@@ -74,7 +74,9 @@ const models = new Map();
  *  (userData.size, in metres), or null if it could not load. */
 export function model(id) {
   if (!models.has(id)) {
-    models.set(id, gltfLoader.loadAsync(`/tactica/models/${id}/${id}.gltf`).then((gltf) => {
+    /* Poly Haven props are folder/folder.gltf; others are named in full. */
+    const url = id.includes(".") ? `/tactica/models/${id}` : `/tactica/models/${id}/${id}.gltf`;
+    models.set(id, gltfLoader.loadAsync(url).then((gltf) => {
       const root = gltf.scene;
       /* Some models carry several levels of detail (name_LOD0, _LOD1...),
          all visible at once. Keep one: LOD1, half the detail, is plenty

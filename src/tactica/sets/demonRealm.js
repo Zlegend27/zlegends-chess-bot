@@ -11,7 +11,7 @@
 import * as THREE from "three";
 import { setFlies, setWind, play as playSound } from "../sound.js";
 import { buildDemon } from "./demon.js";
-import { strike } from "./lightning.js";
+import { strike, prepareLightning } from "./lightning.js";
 import { dress, sky, skyMood, prop } from "./art.js";
 
 function rng(seed) {
@@ -256,8 +256,12 @@ export function dressDemonRealm(ts) {
 
   /* Lightning: bolts live a moment each. */
   const bolts = [];
-  const zap = (from, to, opts) => { bolts.push(strike(scene, from, to, opts)); playSound("zap", { volume: 0.7 }); playSound("crack", { volume: 0.5, delay: 0.05 }); };
-  let nextBolt = 2;
+  /* Close strikes (the demon's) zap; far ones are a quieter crack of
+     thunder, a moment after the flash, as thunder is. */
+  prepareLightning(scene);
+  const zap = (from, to, opts) => { bolts.push(strike(scene, from, to, opts)); playSound("zap", { volume: 0.55 }); playSound("crack", { volume: 0.45, delay: 0.05 }); };
+  const farBolt = (from, to, opts) => { bolts.push(strike(scene, from, to, opts)); playSound("crack", { volume: 0.3, delay: 0.5 + Math.random() * 0.6 }); };
+  let nextBolt = 3;
 
   const castAll = () => {
     for (const e of ts.pieces.values()) {
@@ -271,7 +275,7 @@ export function dressDemonRealm(ts) {
   setWind(true, 0.45);
 
   let t = 0, intense = false, moonUp = 0, demon = null;
-  const ensureDemon = () => (demon ??= buildDemon(ts, (from, to) => zap(from, to, { width: 0.08, flash: 80 })));
+  const ensureDemon = () => (demon ??= buildDemon(ts, (from, to) => zap(from, to, { width: 0.08, flash: 50 })));
   ensureDemon();
   return {
     update(dt) {
@@ -297,10 +301,10 @@ export function dressDemonRealm(ts) {
       /* Lightning in the distance, more often in the storm. */
       nextBolt -= dt;
       if (nextBolt < 0) {
-        nextBolt = intense ? 1.5 + Math.random() * 3 : 4 + Math.random() * 6;
+        nextBolt = intense ? 4 + Math.random() * 4 : 8 + Math.random() * 8;
         const a = Math.random() * Math.PI * 2, d = 18 + Math.random() * 30;
         const to = new THREE.Vector3(Math.cos(a) * d, -3, Math.sin(a) * d - 12);
-        zap(to.clone().add(new THREE.Vector3((Math.random() - 0.5) * 8, 34, 0)), to, { width: 0.12, flash: 120, life: 0.4 });
+        farBolt(to.clone().add(new THREE.Vector3((Math.random() - 0.5) * 8, 34, 0)), to, { width: 0.12, flash: 45, life: 0.45 });
       }
       for (let i = bolts.length - 1; i >= 0; i--) if (!bolts[i](dt)) bolts.splice(i, 1);
       demon?.update(dt);

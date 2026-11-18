@@ -205,6 +205,7 @@ export function buildPizzaMonster(ts) {
   });
 
   ts.scene.add(group);
+  ts.addSeeThrough?.(group);
 
   /* Lays an arm's rope along the curve from shoulder to hand. */
   const bez = (p, q, r, u, out) => out.set(
@@ -353,6 +354,6 @@ export function buildPizzaMonster(ts) {
       riseGoal = 0;
       await wait(500);
     },
-    dispose() { ts.scene.remove(group); },
+    dispose() { ts.scene.remove(group); ts.removeSeeThrough?.(group); },
   };
 }

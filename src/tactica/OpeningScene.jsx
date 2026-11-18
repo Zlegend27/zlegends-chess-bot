@@ -6,7 +6,12 @@ import { play as playSound, playMusic, stopMusic, setFlies, setWind, setScore } 
    wonder while the pieces wake and ask, action from the bond to the end. */
 /* Cutscene music by shot: the old owner's story is sad, the bin is dark
    and quiet, the waking is wonder, a refusal is dread, the bond is action. */
+/* The whole film runs this much faster than it was drawn: at its first
+   pace it dragged (the creator, 2026-11-17). Sounds, lines and moves all
+   follow the same clock, so they stay in step. */
+const FILM_SPEED = 1.5;
 const scoreFor = (shot) => (/^duel|^bonded$|^arenaIn$|^finale$/.test(shot) ? "action"
+  : /^inside$/.test(shot) ? "ghost"
   : /^awaken$|^ask1$|^huddle$|^beg$|^ask2$/.test(shot) ? "wonder"
   : /^refused$/.test(shot) ? "dread"
   : /^attic$|^found$|^hands$|^carry$|^toss$/.test(shot) ? "sorrow"
@@ -43,9 +48,9 @@ export default function OpeningScene({ skippable = false, onDone }) {
     const end = (answer) => { if (over) return; over = true; doneRef.current(answer); };
     /* A tap jumps to the shot's next beat (the next narrator line). */
     hurryRef.current = () => {
-      const shot = SHOTS[id], lt = (performance.now() - began) / 1000;
+      const shot = SHOTS[id], lt = ((performance.now() - began) / 1000) * FILM_SPEED;
       const beat = shot.beats?.find((at) => at > lt + 0.4);
-      if (beat != null && lt > (shot.beats[0] ?? 0)) began -= (beat - lt) * 1000;
+      if (beat != null && lt > (shot.beats[0] ?? 0)) began -= ((beat - lt) * 1000) / FILM_SPEED;
     };
     /* For checking a shot while building: jump to it, or hold it at a time. */
     if (import.meta.env.DEV) window.__opening = { go, hold: (shot, at) => { go(shot); began = performance.now() - at * 1000; window.__openingHold = at; }, free: () => { window.__openingHold = null; } };
@@ -53,8 +58,8 @@ export default function OpeningScene({ skippable = false, onDone }) {
     const draw = (now) => {
       if (over) return;
       frame = requestAnimationFrame(draw);
-      if (import.meta.env.DEV && window.__openingHold != null) began = now - window.__openingHold * 1000;
-      const shot = SHOTS[id], lt = (now - began) / 1000;
+      if (import.meta.env.DEV && window.__openingHold != null) began = now - (window.__openingHold * 1000) / FILM_SPEED;
+      const shot = SHOTS[id], lt = ((now - began) / 1000) * FILM_SPEED;
       /* The picture fills the screen, keeping its shape (the sides are cut
          on a wide screen, never stretched). */
       const dpr = Math.min(window.devicePixelRatio || 1, 2);

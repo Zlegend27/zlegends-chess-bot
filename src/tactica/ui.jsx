@@ -182,7 +182,7 @@ export function MapButton({ fen, pieceImgSrc, size = 96, flipped, view, selected
 const HINTS = {
   swipe: { key: "tacticaSwipesLearned", event: "tactica-swipe", needed: 3, icon: "👆", text: "Swipe left or right to switch characters", hand: "tc-swipe-hand" },
   map: { key: "tacticaMapLearned", event: "tactica-map", needed: 2, icon: "👆", text: "Tap the map for the whole board", hand: "tc-tap-hand" },
-  turn: { key: "tacticaTurnLearned", event: "tactica-turn", needed: 1, icon: "✌️", text: "Hold your character, slide a 2nd finger to turn", hand: "tc-swipe-hand" },
+  turn: { key: "tacticaTurnLearned", event: "tactica-turn", needed: 1, icon: "✌️", text: "Hold one finger down, slide a 2nd to turn", hand: "tc-swipe-hand" },
 };
 const isTouch = () => typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches;
 

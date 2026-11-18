@@ -278,6 +278,7 @@ export function buildPolarBear(ts) {
 
   root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   ts.scene.add(root);
+  ts.addSeeThrough?.(root);
 
   /* The real bear, laid in when (and if) he loads. */
   let real = null;
@@ -527,6 +528,6 @@ export function buildPolarBear(ts) {
       root.visible = false;
       await wait(400);
     },
-    dispose() { ts.scene.remove(root); for (const b of breaths) ts.scene.remove(b.sp); },
+    dispose() { ts.scene.remove(root); for (const b of breaths) ts.scene.remove(b.sp); ts.removeSeeThrough?.(root); },
   };
 }
