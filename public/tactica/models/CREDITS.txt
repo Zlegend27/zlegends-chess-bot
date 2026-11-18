@@ -36,6 +36,9 @@ demon_lord/demon.glb
   Credited in the game under Chess Tactica > Settings > Credits.
 
 fire_dragon/dragon.glb
-  "Dragon Evolved" by Quaternius (quaternius.com, from the Ultimate Monsters
-  pack; downloaded from poly.pizza), public domain (CC0 1.0). Recoloured in
-  code (deep red, molten wings, burning eyes); its own animations are used.
+  "Dragon Rigged" by na3ee1 on Poly Pizza, licensed CC BY 4.0
+  (https://creativecommons.org/licenses/by/4.0/)
+  https://poly.pizza/m/WIOTISRjeX
+  Changes: recoloured in code (charcoal scales, ember wings, burning eyes);
+  it came with a skeleton but no animations, so it is animated in code.
+  Credited in the game under Chess Tactica > Settings > Credits.

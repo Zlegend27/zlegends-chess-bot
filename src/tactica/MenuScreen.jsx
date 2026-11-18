@@ -237,7 +237,7 @@ export default function MenuScreen({ onPick, onExit, onOpening, blitzBest, sweet
                 Polar bear model: &ldquo;Polar Bear&rdquo; by kenchoo (Sketchfab), CC BY 4.0, mouth added.
                 Pizza monster&apos;s slice: &ldquo;Pizza&rdquo; by gatoperdido (Sketchfab), CC BY 4.0, face added.
                 Demon lord: &ldquo;Demon Lord &ndash; Ember-Cracked Corrupted Armor&rdquo; by Pigcraft (Sketchfab), CC BY 4.0, simplified.
-                Fire dragon: &ldquo;Dragon Evolved&rdquo; by Quaternius, public domain (CC0), recoloured.
+                Fire dragon: &ldquo;Dragon Rigged&rdquo; by na3ee1 (Poly Pizza), CC BY 4.0, recoloured and animated.
                 Textures, skies and props: Poly Haven and ambientCG, public domain.
               </p>
             </div>

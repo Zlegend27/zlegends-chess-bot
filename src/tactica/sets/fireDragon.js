@@ -1,7 +1,8 @@
-/* The volcano's boss: the fire dragon. "Dragon Evolved" by Quaternius
-   (public domain, CC0), recoloured deep red with molten wings, flown with
-   its own animations (hovering, fast flight, headbutt, claw swipe, flinch,
-   death) and given fire breath. Far off over the volcano for the world's
+/* The volcano's boss: the fire dragon. "Dragon Rigged" by na3ee1 (Poly
+   Pizza, CC BY 4.0), recoloured charcoal and ember with burning eyes. The
+   model has a skeleton but no animations, so it is flown here in code:
+   wingbeats (the forearms lagging the arms), a snapping jaw, a swaying
+   tail, a head that follows you, a roar, and fire breath. Far off over the volcano for the world's
    first half, closer in the second, and on the last floor hovering over the
    board, moving the enemy's pieces itself. If you lose, it burns yours.
 
@@ -17,19 +18,26 @@ const ease = (t) => t * t * (3 - 2 * t);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 /* Where it flies: far over the volcano, closer, then over the board. */
 const SPOTS = [
-  { pos: new THREE.Vector3(18, 16, -62), scale: 3.2 },
-  { pos: new THREE.Vector3(-7, 9, -30), scale: 2.0 },
-  { pos: new THREE.Vector3(0, 6.2, -10.5), scale: 1.25 },
+  { pos: new THREE.Vector3(18, 14, -62), scale: 3.0 },
+  { pos: new THREE.Vector3(-7, 6, -30), scale: 1.9 },
+  /* Hanging in the open space above the board's far edge in the
+     whole-board view (worked out from the camera: centred about 45% up
+     the screen, clear of the pieces). */
+  { pos: new THREE.Vector3(0, 3.9, -12), scale: 1.6 },
 ];
 /* Its wingspan at scale 1, in board squares. */
-const SPAN = 7.5;
+const SPAN = 8.5;
+/* Charcoal scales, ember-red wings and belly, a fiery mouth, burning eyes. */
 const COLOURS = {
-  Dragon_Main: { color: "#7a140c", emissive: "#ff2a08", emissiveIntensity: 0.12 },
-  Dragon_Secondary: { color: "#e8761e", emissive: "#ff5a10", emissiveIntensity: 0.35 },
-  Dragon_Horn: { color: "#241612", emissive: "#000000", emissiveIntensity: 0 },
-  Eye_White: { color: "#ffd24a", emissive: "#ffb020", emissiveIntensity: 2.2 },
-  Eye_Black: { color: "#1a0400", emissive: "#000000", emissiveIntensity: 0 },
+  DarkGreen: { color: "#2a1d19", emissive: "#5a1004", emissiveIntensity: 0.45 },
+  Green: { color: "#8c1e0e", emissive: "#ff3a0c", emissiveIntensity: 0.3 },
+  Red: { color: "#ff4a14", emissive: "#ff3a0c", emissiveIntensity: 1.4 },
+  Yellow: { color: "#ffd24a", emissive: "#ffb020", emissiveIntensity: 3 },
+  Teeth: { color: "#ece0c4", emissive: "#000000", emissiveIntensity: 0 },
+  Black: { color: "#0b0707", emissive: "#000000", emissiveIntensity: 0 },
 };
+/* Model axes: it faces +z, its left wing is on +x. */
+const FWD = new THREE.Vector3(0, 0, 1), SIDE = new THREE.Vector3(1, 0, 0), UP = new THREE.Vector3(0, 1, 0);
 
 /* A soft round glow, for the fire. */
 function glowTexture() {
@@ -47,9 +55,9 @@ export function buildFireDragon(ts) {
   root.position.copy(SPOTS[0].pos);
   root.scale.setScalar(SPOTS[0].scale);
   ts.scene.add(root);
-  /* The whole dragon is one mesh, so the whole of it fades when it hangs
-     over a piece (other bosses fade just their hands). */
-  root.userData.seeAll = true;
+  /* The whole dragon is one mesh: while it swoops over the board (only
+     then) the whole of it may fade where it covers a piece. */
+  root.userData.seeAll = false;
   ts.addSeeThrough?.(root);
 
   /* Fire breath: sparks streaming from its mouth toward a point. */
@@ -75,47 +83,85 @@ export function buildFireDragon(ts) {
     model.updateMatrixWorld(true);
     box.setFromObject(model);
     model.position.set(-(box.min.x + box.max.x) / 2, -(box.min.y + box.max.y) / 2, -(box.min.z + box.max.z) / 2);
-    let head = null;
+    const bones = {};
     model.traverse((o) => {
+      if (o.isBone) bones[o.name] = o;
       if (o.isMesh) {
         o.castShadow = true;
         o.frustumCulled = false;
         const mats = [o.material].flat().map((m) => {
           const look = COLOURS[m.name];
           if (!look) return m;
-          const n = new THREE.MeshStandardMaterial({ color: look.color, emissive: look.emissive, emissiveIntensity: look.emissiveIntensity, roughness: 0.55, metalness: 0.1 });
+          const n = new THREE.MeshStandardMaterial({ color: look.color, emissive: look.emissive, emissiveIntensity: look.emissiveIntensity, roughness: 0.6, metalness: 0.15, flatShading: true });
           n.name = m.name;
           return n;
         });
         o.material = Array.isArray(o.material) ? mats : mats[0];
       }
-      if (o.isBone && o.name === "Head") head = o;
     });
     root.add(model);
-    const mixer = new THREE.AnimationMixer(model);
-    const clips = {};
-    for (const c of gltf.animations) clips[c.name.split("|").pop()] = c;
-    const actions = {};
-    const action = (name) => (actions[name] ??= clips[name] ? mixer.clipAction(clips[name]) : null);
-    real = { model, mixer, head, action, current: null };
-    play("Flying_Idle");
+    model.updateMatrixWorld(true);
+    /* Each animated bone with its rest turn and its parent's turn in model
+       space, so a turn can be given round the model's own axes. */
+    const modelInv = model.getWorldQuaternion(new THREE.Quaternion()).invert();
+    const rig = (name) => {
+      const b = bones[name];
+      if (!b) return null;
+      const parent = b.parent.getWorldQuaternion(new THREE.Quaternion()).premultiply(modelInv);
+      return { b, rest: b.quaternion.clone(), parent, parentInv: parent.clone().invert() };
+    };
+    const R = {
+      armL: rig("ArmL"), armR: rig("ArmR"), foreL: rig("ForearmL"), foreR: rig("ForearmR"),
+      jaw: rig("Jaw001"), skull: rig("SkullControl"), neck: rig("Spine008"),
+      tail: ["Tail002", "Tail004", "Tail006"].map(rig).filter(Boolean),
+    };
+    real = { model, head: bones.Head001 ?? bones.SkullControl, R };
     ts.wake?.();
   }).catch(() => {});
 
-  /** Crossfades to an animation; `once` plays it through and holds. */
-  function play(name, { once = false, fade = 0.25, speed = 1 } = {}) {
-    if (!real) return 0;
-    const next = real.action(name);
-    if (!next) return 0;
-    next.reset();
-    next.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
-    next.clampWhenFinished = once;
-    next.timeScale = speed;
-    next.enabled = true;
-    if (real.current && real.current !== next) real.current.crossFadeTo(next, fade, false);
-    next.play();
-    real.current = next;
-    return next.getClip().duration / speed;
+  /* Motion state, eased toward each frame. */
+  const pose = { flap: 1, flapGoal: 1, jaw: 0, jawGoal: 0, rear: 0, rearGoal: 0, lunge: 0, lungeGoal: 0, droop: 0, droopGoal: 0, look: 0 };
+  let phase = 0;
+  const qa = new THREE.Quaternion(), qb = new THREE.Quaternion();
+  /** Turns a rigged bone by `angle` round a model-space `axis`, on top of rest. */
+  const turn = (r, axis, angle, extra = null) => {
+    if (!r) return;
+    qa.setFromAxisAngle(axis, angle);
+    qb.copy(r.parentInv).multiply(qa).multiply(r.parent);
+    r.b.quaternion.copy(qb).multiply(r.rest);
+    if (extra) { qa.setFromAxisAngle(extra[0], extra[1]); qb.copy(r.parentInv).multiply(qa).multiply(r.parent); r.b.quaternion.premultiply(qb); }
+  };
+  const animate = (dt) => {
+    if (!real) return;
+    const k = Math.min(1, dt * 6);
+    for (const key of ["flap", "jaw", "rear", "lunge", "droop"]) pose[key] += (pose[key + "Goal"] - pose[key]) * k;
+    phase += dt * (2.6 + pose.flap * 3.2);
+    const { R } = real;
+    /* Wingbeats: up on +z for the left wing, mirrored on the right; the
+       forearms follow a beat behind. Folded when it droops (dying). */
+    const beat = Math.sin(phase) * (0.35 + 0.25 * pose.flap) * (1 - pose.droop);
+    const lag = Math.sin(phase - 0.9) * (0.3 + 0.2 * pose.flap) * (1 - pose.droop);
+    turn(R.armL, FWD, beat - pose.droop * 0.9);
+    turn(R.armR, FWD, -beat + pose.droop * 0.9);
+    turn(R.foreL, FWD, lag * 0.8);
+    turn(R.foreR, FWD, -lag * 0.8);
+    /* The jaw drops; the head rears back for a roar or thrusts in a lunge. */
+    turn(R.jaw, SIDE, pose.jaw * 0.75);
+    turn(R.skull, SIDE, -pose.rear * 0.5 + pose.lunge * 0.35 + Math.sin(phase * 0.5) * 0.04, [UP, pose.look]);
+    turn(R.neck, SIDE, -pose.rear * 0.25 + pose.lunge * 0.2);
+    R.tail.forEach((r, i) => turn(r, UP, Math.sin(phase * 0.45 - i * 0.7) * 0.18));
+  };
+
+  /** Animation states, for the same calls the other bosses use. */
+  function play(name, { speed = 1 } = {}) {
+    pose.flapGoal = name === "Fast_Flying" ? 2 * speed : 1;
+    pose.jawGoal = name === "Yes" || name === "Punch" ? 1 : name === "Headbutt" ? 0.6 : 0;
+    pose.rearGoal = name === "Yes" ? 1 : 0;
+    pose.lungeGoal = name === "Headbutt" || name === "Punch" ? 1 : 0;
+    pose.droopGoal = name === "Death" ? 1 : 0;
+    if (name === "HitReact") { pose.rear = 0.8; pose.jaw = 0.5; }
+    ts.wake?.();
+    return name === "Death" ? 1.2 : 0.8;
   }
 
   let t = 0, stage = 0, move = null, hover = null, falling = 0;
@@ -132,7 +178,7 @@ export function buildFireDragon(ts) {
   return {
     update(dt) {
       t += dt;
-      real?.mixer.update(dt);
+      animate(dt);
       if (move) {
         move.k = Math.min(1, move.k + (dt * 1000) / move.ms);
         const k = ease(move.k);
@@ -199,6 +245,7 @@ export function buildFireDragon(ts) {
     /** It swoops in over the piece it is about to move. */
     async reach(point) {
       hover = point.clone();
+      root.userData.seeAll = true;
       faceToward(point);
       play("Fast_Flying", { speed: 1.4 });
       playSound("whoom", { volume: 0.6 });
@@ -212,6 +259,7 @@ export function buildFireDragon(ts) {
     },
     rest() {
       hover = null;
+      root.userData.seeAll = false;
       play("Flying_Idle");
       const spot = SPOTS[stage];
       flyTo(spot.pos, spot.scale, 700);
@@ -219,6 +267,7 @@ export function buildFireDragon(ts) {
     /** A dive and a headbutt into the board at `point`. Resolves at the blow. */
     async slam(point) {
       hover = point.clone();
+      root.userData.seeAll = true;
       faceToward(point);
       play("Fast_Flying", { speed: 1.6 });
       await flyTo(point.clone().add(new THREE.Vector3(0, 4.5, -3)), SPOTS[2].scale, 380);
@@ -230,6 +279,7 @@ export function buildFireDragon(ts) {
       ts.tween(520, (k) => { ts.shake = 0.24 * (1 - k); }, () => { ts.shake = 0; });
       await wait(240);
       hover = null;
+      root.userData.seeAll = false;
       play("Flying_Idle");
     },
     /** It rears back and breathes a long blast of fire over the board. */
