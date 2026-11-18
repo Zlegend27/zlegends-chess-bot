@@ -67,6 +67,8 @@ export default function Film3D({ onDone, skippable = false }) {
     setFlies(false);
     playMusic("opening", { loop: true });
     const wait = (s) => new Promise((r) => setTimeout(r, s * 1000));
+    /* Which shot is playing, for checking shots on the dev server. */
+    const shot = (name) => { if (import.meta.env.DEV) window.__filmShot = name; };
     const line = async (text, secs) => { if (!alive) return; setSay(text); await wait(secs); if (alive) setSay(null); };
     const impact = async (heavy = false) => {
       setFlash("white"); await wait(heavy ? 0.07 : 0.05);
@@ -90,7 +92,12 @@ export default function Film3D({ onDone, skippable = false }) {
       scenes.push(scene);
       scene.continuous = true;
       scene.setPieces(START);
-      for (const e of scene.pieces.values()) { toonify(e.model); outline(e.model, { width: 0.012 }); }
+      /* Still just carved pieces here: no eyes, no arms. They only wake in
+         the bin. */
+      for (const e of scene.pieces.values()) {
+        toonify(e.model); outline(e.model, { width: 0.012 });
+        for (const part of partsNamed(e.model, (n) => /^(eye[RL]|shoulder[RL])$/.test(n))) part.visible = false;
+      }
       const attic = buildAttic(scene);
       scene.everyFrame.push((dt) => attic.update(dt));
       scene.setLook(FLASHBACK);
@@ -110,6 +117,7 @@ export default function Film3D({ onDone, skippable = false }) {
       await wait(0.4);
       if (!alive) return;
 
+      shot("attic");
       /* 1. Forgotten: a slow drift over the set under its dust and webs. */
       setScore("sorrow");
       cut(V(-8, 4.2, 10), V(0, -0.2, 0));
@@ -124,6 +132,7 @@ export default function Film3D({ onDone, skippable = false }) {
       await wait(2.4);
       if (!alive) return;
 
+      shot("door");
       /* 2. Found: the door opens, light floods in, and for a moment the
          colour comes back. */
       /* Low behind the pieces: they stand dark against the door's light. */
@@ -143,6 +152,7 @@ export default function Film3D({ onDone, skippable = false }) {
       await wait(0.4);
       if (!alive) return;
 
+      shot("hands");
       /* 3. Hands: they come in from both sides, grip the board's edges, and
          tear it out of its webs. */
       const [L, Rh] = attic.hands;
@@ -172,6 +182,7 @@ export default function Film3D({ onDone, skippable = false }) {
       await wait(0.4);
       if (!alive) return;
 
+      shot("carry");
       /* 4. Carried out: the yard, grey and cold. */
       attic.setYardLight(1);
       scene.setLook({ ...FLASHBACK, glow: 0.12, glowFrom: 1.1, saturation: 0.6, tint: "#cfd5de" });
@@ -195,6 +206,7 @@ export default function Film3D({ onDone, skippable = false }) {
       });
       if (!alive) return;
 
+      shot("throw");
       /* 5. Thrown: up and over, in slow motion, into the bin. */
       /* Close as it leaves the hands, the camera turning to follow it up. */
       cut(YARD.clone().add(V(-6.5, 1.2, 8)), YARD.clone().add(V(0, 3.4, 2)));
@@ -213,6 +225,7 @@ export default function Film3D({ onDone, skippable = false }) {
       await wait(1.4);
       speedRef.current = 0;
       slow = 1;
+      shot("binview");
       /* Looking down into the bin as they rain in. */
       cut(YARD.clone().add(V(0.5, 16, -6)), YARD.clone().add(V(0, -4, -14)));
       await wait(0.7);
@@ -222,6 +235,7 @@ export default function Film3D({ onDone, skippable = false }) {
       await impact(true);
       await wait(0.4);
       /* The lid slams. */
+      shot("lid");
       /* From inside the bin, looking up: the lid swings down over the sky. */
       cut(YARD.clone().add(V(0.6, -4.5, -13)), YARD.clone().add(V(0, 6, -17)));
       await wait(0.25);
@@ -283,6 +297,7 @@ export default function Film3D({ onDone, skippable = false }) {
       await line(NARRATOR[3], 3);
       if (!alive) return;
 
+      shot("waking");
       /* 2. The waking. */
       setScore("wonder");
       playSound("rumble", { volume: 0.8 });
@@ -392,6 +407,7 @@ export default function Film3D({ onDone, skippable = false }) {
         return;
       }
 
+      shot("bonded");
       /* Bonded: a flare of gold, weapons up, and a taste of the fight. */
       setScore("action");
       await impact(true);
@@ -402,6 +418,7 @@ export default function Film3D({ onDone, skippable = false }) {
       glide(V(0, 0.5, 3.6), V(0, 1.2, 0.8), 1.5);
       await wait(1.4);
       if (!alive) return;
+      shot("arena");
       /* The arena: six shadows step up to face them. */
       /* Each foe stands where its hero can really reach: the knight's L
          (c4 to d6), the bishop's diagonal (e4 to g6), the queen's file (f5
@@ -485,7 +502,7 @@ export default function Film3D({ onDone, skippable = false }) {
       )}
       {!begun && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 p-6 text-center" style={{ background: "radial-gradient(circle at 50% 40%, #2a1a10, #0c0806)" }}>
-          <h1 className="tc-title m-0 text-[34px]">Chess Tactica</h1>
+          <h1 className="tc-title m-0 leading-tight" style={{ fontSize: "clamp(24px, 8.5vw, 34px)" }}>Chess Tactica</h1>
           <BrassButton onClick={() => setBegun(true)}>Begin</BrassButton>
           {skippable && <button type="button" className="tc-link" onClick={() => finish(null)}>Skip the opening</button>}
         </div>
@@ -495,7 +512,7 @@ export default function Film3D({ onDone, skippable = false }) {
       )}
       {title && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <h1 className="tc-title m-0 text-[40px]" style={{ textShadow: "0 3px 12px #000" }}>Chess Tactica</h1>
+          <h1 className="tc-title m-0 px-4 text-center leading-tight" style={{ fontSize: "clamp(26px, 9.5vw, 40px)", textShadow: "0 3px 12px #000" }}>Chess Tactica</h1>
         </div>
       )}
       {asking && (
