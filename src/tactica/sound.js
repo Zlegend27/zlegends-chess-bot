@@ -206,13 +206,30 @@ let music = null;
 /* A track asked for before the first touch (phones keep audio locked until
    then), started by unlock(). */
 let pendingMusic = null;
+/* Tracks are a few MB: each is downloaded once (starting as soon as it's
+   asked for, even before the first touch) and decoded once, then kept, so
+   it starts at once on the first tap and on every return to its screen. */
+const trackFiles = new Map(), trackBuffers = new Map();
+const trackFile = (name) => {
+  if (!trackFiles.has(name)) {
+    trackFiles.set(name, fetch(`/tactica/music/${name}.mp3`).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error("none")))));
+    trackFiles.get(name).catch(() => trackFiles.delete(name));
+  }
+  return trackFiles.get(name);
+};
+const trackBuffer = (name) => {
+  if (!trackBuffers.has(name)) {
+    /* decodeAudioData takes the bytes over, so it gets its own copy. */
+    trackBuffers.set(name, trackFile(name).then((data) => ctx.decodeAudioData(data.slice(0))));
+    trackBuffers.get(name).catch(() => trackBuffers.delete(name));
+  }
+  return trackBuffers.get(name);
+};
 export function playMusic(name, { volume = 0.55, loop = false, fade = 1.2 } = {}) {
   stopMusic(fade);
-  if (!ctx) { pendingMusic = { name, volume, loop, fade }; return; }
+  if (!ctx) { pendingMusic = { name, volume, loop, fade }; trackFile(name).catch(() => {}); return; }
   const mine = (music = { name, gain: null, src: null });
-  fetch(`/tactica/music/${name}.mp3`)
-    .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error("none"))))
-    .then((data) => ctx.decodeAudioData(data))
+  trackBuffer(name)
     .then((buf) => {
       if (music !== mine) return;
       mine.src = ctx.createBufferSource();
