@@ -1619,6 +1619,62 @@ export class TacticaScene {
     });
   }
 
+  /** Check! The camera cuts close on the king's face: he glances about,
+   *  eyes wide, then scurries a few nervous hops away from `threatSq`,
+   *  trembles, and shuffles back to his square as the camera returns.
+   *  About a second and a half; modes wait for it before carrying on. */
+  async kingScare(kingSq, threatSq) {
+    const king = this.pieces.get(kingSq);
+    if (!king || reducedMotion() || this.kingScaring) return;
+    this.kingScaring = true;
+    this.moving++;
+    const at = this.worldOf(kingSq);
+    const threat = threatSq != null ? this.worldOf(threatSq) : at.clone().add(new THREE.Vector3(0, 0, -1));
+    const away = at.clone().sub(threat).setY(0);
+    if (away.lengthSq() < 1e-4) away.set(0, 0, 1);
+    away.normalize();
+    const h = king.holder, g = king.group, baseTurn = h.rotation.y;
+    const face = new THREE.Vector3(Math.sin(baseTurn), 0, Math.cos(baseTurn));
+    const prev = { pos: this.goalPos.clone(), look: this.goalLook.clone(), smooth: this.smooth };
+    const eyes = [];
+    king.model.traverse((o) => { if (o.name === "eyeR" || o.name === "eyeL") eyes.push([o, o.scale.clone()]); });
+    const tween = (ms, step) => new Promise((r) => this.tween(ms, step, r));
+    /* Close on his face, a little to the side. */
+    this.moveCamera(at.clone().addScaledVector(face, 2.4).add(new THREE.Vector3(0.6, 1.35, 0)), at.clone().setY(0.95), 0.16);
+    playSound("heartbeat", { volume: 0.8 });
+    await tween(260, () => {});
+    /* The glance: left, right, left, eyes wide. */
+    playSound("squeak", { volume: 0.6 });
+    await tween(720, (k) => {
+      h.rotation.y = baseTurn + Math.sin(k * Math.PI * 3) * 0.55;
+      const wide = 1 + 0.45 * Math.sin(Math.min(1, k * 3) * Math.PI / 2);
+      for (const [o, s] of eyes) o.scale.copy(s).multiplyScalar(wide);
+    });
+    /* Skedaddle: quick hops away from the threat. */
+    for (let i = 0; i < 3; i++) playSound("step", { volume: 0.55, delay: i * 0.13 });
+    await tween(420, (k) => {
+      g.position.copy(at).addScaledVector(away, 0.42 * Math.min(1, k * 1.2));
+      g.position.y = Math.abs(Math.sin(k * Math.PI * 3)) * 0.14;
+      h.rotation.y = baseTurn + Math.sin(k * Math.PI * 6) * 0.15;
+    });
+    await tween(300, (k) => { h.rotation.z = Math.sin(k * 70) * 0.05 * (1 - k); });
+    h.rotation.z = 0;
+    /* Back to his square, eyes back, camera back. */
+    this.moveCamera(prev.pos, prev.look, prev.smooth ?? CAMERA_SMOOTH);
+    const from = g.position.clone();
+    await tween(320, (k) => {
+      g.position.lerpVectors(from, at, ease(k));
+      h.rotation.y = baseTurn;
+      for (const [o, s] of eyes) o.scale.copy(s).multiplyScalar(1 + 0.45 * (1 - k));
+    });
+    g.position.copy(at);
+    for (const [o, s] of eyes) o.scale.copy(s);
+    h.rotation.y = baseTurn;
+    this.moving--;
+    this.kingScaring = false;
+    if (!this.moving && !this.active.length) { const view = this.pendingView; this.pendingView = null; view?.(); }
+  }
+
   /** After a quiet punishing reply: the camera shows the threat, then closes
    *  in on the threatened character, which trembles, scared stiff. */
   scare(threatSq, victimSq) {

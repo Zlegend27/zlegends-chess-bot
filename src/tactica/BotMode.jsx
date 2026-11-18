@@ -6,7 +6,7 @@ import { gameResult, resultSentence } from "../utils/gameResult";
 import { loadSetting, saveSetting } from "../utils/storage";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
-import { BrassButton, MapButton, MenuButton, PromotionPicker, useViewSource, LearnHints } from "./ui";
+import { BrassButton, MapButton, MenuButton, PromotionPicker, useViewSource, LearnHints, useLostRebuild } from "./ui";
 import { play as playSound, sting } from "./sound";
 import { applyStory } from "./bonds";
 import { useBestMove, scoreLabel } from "../utils/useBestMove";
@@ -28,6 +28,9 @@ import GameReview, { BEST_COLOR } from "./GameReview";
 const BOTS = DIFFICULTIES.filter((d) => d.id !== "rank");
 const KNIGHT = 2, QUEEN = 5;
 const sqOf = (sq120) => M120TO64[sq120];
+/** The square of the king of the side to move (0-63), or null. */
+const kingSquare = (e) => { const k = 6 * e.getSide(); for (let sq = 0; sq < 64; sq++) if (e.pieceAt(sq) === k) return sq; return null; };
+
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 /* A bot never answers faster than this, so its move doesn't land before
    yours has finished. */
@@ -170,8 +173,11 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit, self = false 
   }, [hintKey, reviewing]);
 
   /* ---- The scene ---- */
+  /* If the phone drops the 3D, rebuild on a fresh canvas (useLostRebuild). */
+  const { epoch, onLost } = useLostRebuild(sceneRef);
   useEffect(() => {
     const scene = new TacticaScene(canvasRef.current, {
+      onLost,
       flipped: false,
       colors: {
         light: SET_BOARD.light, dark: SET_BOARD.dark, background: sweetheart ? "#FFF2F6" : "#060507",
@@ -188,15 +194,21 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit, self = false 
     applyStory(scene);
     const bin = dressTrashBin(scene);
     scene.everyFrame.push((dt) => bin.update(dt));
-    eng.reset();
+    /* A rebuild keeps the game; only the first build starts a fresh board. */
+    if (epoch === 0) eng.reset();
+    else scene.setFlipped(self ? turnBoard && eng.getSide() === -1 : side === -1);
     scene.setPieces(piecesNow());
     scene.showBoard();
     /* Leaving bumps the game id on purpose, so a bot reply still on its way
        is dropped instead of landing on a scene that is gone. */
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    return () => { gameIdRef.current++; scene.dispose(); sceneRef.current = null; };
+    return () => { if (!epochChanging.current) gameIdRef.current++; epochChanging.current = false; scene.dispose(); sceneRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sweetheart]);
+  }, [sweetheart, epoch]);
+  /* A rebuild mustn't cancel a bot reply on its way, as leaving does. */
+  const epochChanging = useRef(false);
+  const lastEpoch = useRef(epoch);
+  if (lastEpoch.current !== epoch) { lastEpoch.current = epoch; epochChanging.current = true; }
 
   useEffect(() => { warmUpStockfish(); }, []);
 
@@ -235,6 +247,8 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit, self = false 
     if (game !== gameIdRef.current) { if (sceneRef.current === scene) scene?.setPieces(piecesNow()); return null; }
     eng.make(move);
     scene?.syncPieces(piecesNow());
+    /* Check: the king's moment of fear, before anyone moves on. */
+    if (eng.inCheckNow() && !gameResult(eng)) await scene?.kingScare(kingSquare(eng), to);
     return san;
   };
 
@@ -519,7 +533,7 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit, self = false 
 
   return (
     <div className="relative mx-auto w-full max-w-[480px] overflow-hidden" style={{ height: "calc(100dvh - var(--headerH))" }}>
-      <canvas ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
+      <canvas key={epoch} ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
       <LearnHints close={stage === "playing" && view === "close" && !busy && !thinking} />
 
       {stage === "playing" && (

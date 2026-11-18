@@ -6,7 +6,7 @@ import { PUZZLES } from "../utils/puzzles";
 import { judgePuzzleMove } from "../utils/puzzleSession";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
-import { BrassButton } from "./ui";
+import { BrassButton, useLostRebuild } from "./ui";
 import { play as playSound } from "./sound";
 import { track } from "../utils/track";
 import { submitRushScore, TACTICA_RUSH_SECONDS } from "../utils/leaderboard";
@@ -102,8 +102,11 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
   useEffect(() => { warmPool(START_RATING); }, []);
 
   /* The scene, in the bin, seen whole. */
+  /* If the phone drops the 3D, rebuild on a fresh canvas (useLostRebuild). */
+  const { epoch, onLost } = useLostRebuild(sceneRef);
   useEffect(() => {
     const scene = new TacticaScene(canvasRef.current, {
+      onLost,
       flipped: false,
       colors: {
         light: SET_BOARD.light, dark: SET_BOARD.dark, background: sweetheart ? "#FFF2F6" : "#060507",
@@ -118,10 +121,13 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
     applyStory(scene);
     const bin = dressTrashBin(scene);
     scene.everyFrame.push((dt) => bin.update(dt));
-    scene.setPieces([]);
+    /* A rebuild mid-run puts the puzzle back as it was. */
+    if (epoch > 0 && puzzle) { scene.setFlipped(puzzle.fen.split(" ")[1] === "b"); scene.setPieces(piecesNow()); }
+    else scene.setPieces([]);
     scene.showBoard();
     return () => { scene.dispose(); sceneRef.current = null; };
-  }, [sweetheart]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sweetheart, epoch]);
 
   /** Sets up the next puzzle, about RATING_STEP harder than the last. The
    *  enemy's opening move isn't shown here: this mode is against the clock. */
@@ -304,7 +310,7 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
   const toMove = side === 1 ? "White" : "Black";
   return (
     <div className="relative mx-auto w-full max-w-[480px] overflow-hidden" style={{ height: "calc(100dvh - var(--headerH))" }}>
-      <canvas ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
+      <canvas key={epoch} ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
 
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-black/75 to-transparent p-3 pb-10">
         <div>

@@ -8,7 +8,7 @@ import { useLobby, useLobbyMe } from "../pvp/useLobby";
 import { usePvpMatch } from "../pvp/usePvpMatch";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
-import { BrassButton, MapButton, MenuButton, PromotionPicker, useViewSource, LearnHints } from "./ui";
+import { BrassButton, MapButton, MenuButton, PromotionPicker, useViewSource, LearnHints, useLostRebuild } from "./ui";
 import { track } from "../utils/track";
 import { play as playSound, sting } from "./sound";
 import { applyStory } from "./bonds";
@@ -28,6 +28,9 @@ import GameReview from "./GameReview";
    move has played out on your board. */
 const KNIGHT = 2, QUEEN = 5;
 const sqOf = (sq120) => M120TO64[sq120];
+/** The square of the king of the side to move (0-63), or null. */
+const kingSquare = (e) => { const k = 6 * e.getSide(); for (let sq = 0; sq < 64; sq++) if (e.pieceAt(sq) === k) return sq; return null; };
+
 /* Your clock starts once their move has played out on your board, so the
    other side waits this long past zero before it can claim a win on time. */
 const FLAG_GRACE_MS = 10_000;
@@ -182,6 +185,8 @@ function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, on
 
   const canvasRef = useRef(null);
   const sceneRef = useRef(null);
+  /* If the phone drops the 3D, rebuild on a fresh canvas (useLostRebuild). */
+  const { epoch, onLost } = useLostRebuild(sceneRef);
   /* The board as shown: it plays the game's moves out one at a time, so it
      can be a move or two behind the game while a scene finishes. */
   const shownRef = useRef(null);
@@ -224,6 +229,7 @@ function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, on
   useEffect(() => {
     aliveRef.current = true;
     const scene = new TacticaScene(canvasRef.current, {
+      onLost,
       flipped: myColor === -1,
       colors: {
         light: SET_BOARD.light, dark: SET_BOARD.dark, background: sweetheart ? "#FFF2F6" : "#060507",
@@ -245,7 +251,7 @@ function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, on
     scene.showBoard();
     return () => { aliveRef.current = false; scene.dispose(); sceneRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sweetheart]);
+  }, [sweetheart, epoch]);
 
   /* ---- Playing the game's moves out on the board ---- */
   useEffect(() => {
@@ -284,7 +290,13 @@ function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, on
       if (!aliveRef.current) return;
       shown.make(move);
       sceneRef.current?.syncPieces(piecesNow());
-      if (shown.inCheckNow()) playSound("metal", { volume: 0.7, delay: 0.1 });
+      if (shown.inCheckNow()) {
+        playSound("metal", { volume: 0.7, delay: 0.1 });
+        /* The checked king's moment of fear (the board is still catching up). */
+        animatingRef.current = true;
+        try { await sceneRef.current?.kingScare(kingSquare(shown), to); } finally { animatingRef.current = false; }
+        if (!aliveRef.current) return;
+      }
       const stillHere = friendlySquares(shown, myColor).indexOf(to);
       if (!theirs) setSelectedIdx((i) => (stillHere >= 0 ? stillHere : Math.min(i, friendlySquares(shown, myColor).length - 1)));
       setShownPly((n) => n + 1);
@@ -416,7 +428,7 @@ function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, on
 
   return (
     <div className="relative mx-auto w-full max-w-[480px] overflow-hidden" style={{ height: "calc(100dvh - var(--headerH))" }}>
-      <canvas ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
+      <canvas key={epoch} ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
       <LearnHints close={!over && myTurn && view === "close"} />
 
       {!reviewing && <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-black/80 to-transparent p-3 pb-10">

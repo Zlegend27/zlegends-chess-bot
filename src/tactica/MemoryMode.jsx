@@ -4,7 +4,7 @@ import { createEngine, mFrom, mPromo, mTo, M120TO64, EMPTY } from "../engine/che
 import { judgePuzzleMove } from "../utils/puzzleSession";
 import { loadSetting } from "../utils/storage";
 import { TacticaScene, SET_BOARD } from "./scene";
-import { BrassButton } from "./ui";
+import { BrassButton, useLostRebuild } from "./ui";
 import { play as playSound, setScore } from "./sound";
 import { track } from "../utils/track";
 import { WORLDS } from "./worlds";
@@ -59,8 +59,11 @@ export default function MemoryMode({ start = null, onExit }) {
 
   /* The scene: the board in a dark blue mist, motes drifting, every piece a
      ghost. */
+  /* If the phone drops the 3D, rebuild on a fresh canvas (useLostRebuild). */
+  const { epoch, onLost } = useLostRebuild(sceneRef);
   useEffect(() => {
     const scene = new TacticaScene(canvasRef.current, {
+      onLost,
       flipped: false,
       colors: { light: SET_BOARD.light, dark: SET_BOARD.dark, background: "#070b14", highlight: "#9fd4ff", target: "#cfe6ff", attack: "#ff9a8a", select: "#9fd4ff" },
       onTap: (sq) => tapRef.current(sq),
@@ -84,12 +87,18 @@ export default function MemoryMode({ start = null, onExit }) {
       for (let i = 0; i < N; i++) { const m = motes[i]; m.y += dt * m.s; if (m.y > 8) m.y = -2; pos[i * 3] = m.x; pos[i * 3 + 1] = m.y; pos[i * 3 + 2] = m.z; }
       geo.attributes.position.needsUpdate = true;
     });
-    scene.setPieces([]);
+    /* A rebuild mid-memory puts the position back. */
+    if (epoch > 0 && stage === "playing") scene.setPieces(piecesNow());
+    else scene.setPieces([]);
     scene.showBoard();
     /* Leaving bumps the run on purpose, so a ghost reply still on its way is dropped. */
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    return () => { runRef.current++; scene.dispose(); sceneRef.current = null; };
-  }, []);
+    return () => { if (!epochChanging.current) runRef.current++; epochChanging.current = false; scene.dispose(); sceneRef.current = null; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [epoch]);
+  const epochChanging = useRef(false);
+  const lastEpoch = useRef(epoch);
+  if (lastEpoch.current !== epoch) { lastEpoch.current = epoch; epochChanging.current = true; }
 
   const begin = (m) => {
     runRef.current++;
@@ -205,7 +214,7 @@ export default function MemoryMode({ start = null, onExit }) {
   const doneMoves = Math.ceil(played.length / 2);
   return (
     <div className="relative mx-auto w-full max-w-[480px] overflow-hidden" style={{ height: "calc(100dvh - var(--headerH))" }}>
-      <canvas ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
+      <canvas key={epoch} ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
 
       {stage === "playing" && memory && (
         <>

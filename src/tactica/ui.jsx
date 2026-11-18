@@ -237,3 +237,23 @@ export function LearnHints({ close }) {
     </div>
   );
 }
+
+/** Recovery from a lost 3D context. Phones (iPhones especially) can drop a
+ *  page's WebGL context under memory pressure, leaving the board black while
+ *  the buttons still work. `onLost` (pass it to TacticaScene) waits a moment
+ *  for the browser to give the context back; if it doesn't, `epoch` goes up.
+ *  A mode keys its canvas on `epoch` (a lost canvas can't make a new
+ *  context) and rebuilds its scene from its own game state, which is never
+ *  touched. */
+export function useLostRebuild(sceneRef) {
+  const [epoch, setEpoch] = useState(0);
+  const onLost = () => {
+    setTimeout(() => {
+      const scene = sceneRef.current;
+      let lost = true;
+      try { lost = !scene || scene.renderer.getContext().isContextLost(); } catch { lost = true; }
+      if (lost) setEpoch((n) => n + 1);
+    }, 1200);
+  };
+  return { epoch, onLost };
+}

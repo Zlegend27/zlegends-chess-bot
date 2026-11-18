@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
 import { BOND_KINDS, KIND_NAMES, LOOKS, MAX_LEVEL, loadBonds, levelsOf, progress } from "./bonds";
-import { Medal } from "./ui";
+import { Medal, useLostRebuild } from "./ui";
 import { playMusic, stopMusic, soundOn, setSoundOn, onSoundChange, soundLevel, setSoundLevel, canVibrate, vibrateOn, setVibrateOn, buzz, play } from "./sound";
 import { loadSetting } from "../utils/storage";
 import { loadStory, saveStory, bondsOpen, redEyes, isHard, hardLocked, canSwitchHard, setHardSwitch, resetBond } from "./story";
@@ -72,8 +72,12 @@ export default function MenuScreen({ onPick, onExit, onOpening, blitzBest, sweet
      public/tactica/music/menu.mp3), looping. Never during play. */
   useEffect(() => { playMusic("menu", { loop: true, volume: 0.4, fade: 1.5 }); return () => stopMusic(1); }, []);
 
+  /* If the phone drops the 3D, rebuild on a fresh canvas (useLostRebuild). */
+  const sceneRef = useRef(null);
+  const { epoch, onLost } = useLostRebuild(sceneRef);
   useEffect(() => {
     const scene = new TacticaScene(canvasRef.current, {
+      onLost,
       flipped: false,
       colors: {
         light: SET_BOARD.light, dark: SET_BOARD.dark, background: sweetheart ? "#FFF2F6" : "#060507",
@@ -101,12 +105,14 @@ export default function MenuScreen({ onPick, onExit, onOpening, blitzBest, sweet
     if (!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
       scene.everyFrame.push((dt) => scene.spinBy(dt * CIRCLE_SPEED));
     }
-    return () => { stop(); scene.dispose(); };
-  }, [sweetheart, bonds, story]);
+    sceneRef.current = scene;
+    return () => { stop(); scene.dispose(); sceneRef.current = null; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sweetheart, bonds, story, epoch]);
 
   return (
     <div className="relative mx-auto w-full max-w-[480px] overflow-hidden" style={{ height: "calc(100dvh - var(--headerH))" }}>
-      <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 block size-full" aria-hidden="true" />
+      <canvas key={epoch} ref={canvasRef} className="pointer-events-none absolute inset-0 block size-full" aria-hidden="true" />
       {/* The title keeps clear of the Bonds button in the corner, shrinking a little on narrow phones. */}
       <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/70 to-transparent px-16 pt-7 pb-14 text-center">
         <h1 className="tc-title m-0 leading-tight whitespace-nowrap" style={{ fontSize: "clamp(22px, calc((100vw - 136px) / 10), 32px)" }}>Chess Tactica</h1>

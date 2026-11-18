@@ -6,7 +6,7 @@ import { PUZZLES } from "../utils/puzzles";
 import { judgePuzzleMove } from "../utils/puzzleSession";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin, placeEscapeProps } from "./sets/trashBin";
-import { BrassButton, MapButton, MenuButton, useViewSource, LearnHints } from "./ui";
+import { BrassButton, MapButton, MenuButton, useViewSource, LearnHints, useLostRebuild } from "./ui";
 import { play as playSound, buzz, setScore as setMusicMood } from "./sound";
 import { track } from "../utils/track";
 import { makeEscape, movesOf, apply, escaped, strikerOf, piecesOf, fenOf, escapeClock, closeRing, outerRing, ringSquares, allStuck } from "./escape";
@@ -49,6 +49,9 @@ const BONUS_HEAL = 25;
 const VALUE = [0, 1, 3, 3, 5, 9, 100];
 const sqOf = (sq120) => M120TO64[sq120];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** The square of the king of the side to move (0-63), or null. */
+const kingSquare = (e) => { const k = 6 * e.getSide(); for (let sq = 0; sq < 64; sq++) if (e.pieceAt(sq) === k) return sq; return null; };
 
 function friendlySquares(eng, side) {
   const squares = [];
@@ -240,8 +243,12 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
   }, [banner]);
 
   /* ---- The scene ---- */
+  /* If the phone drops the 3D (memory), the scene is rebuilt on a fresh
+     canvas from the run's own state (see useLostRebuild). */
+  const { epoch, onLost } = useLostRebuild(sceneRef);
   useEffect(() => {
     const scene = new TacticaScene(canvasRef.current, {
+      onLost,
       flipped: false,
       colors: {
         light: SET_BOARD.light, dark: SET_BOARD.dark, background: sweetheart ? "#FFF2F6" : "#060507",
@@ -259,7 +266,10 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
     /* The light on an Escape floor pulses. */
     let clockT = 0;
     scene.everyFrame.push((dt) => { clockT += dt; propsRef.current?.update(clockT); });
-    scene.setPieces([]);
+    /* A rebuild mid-floor puts the board back as it was. */
+    const rebuilding = epoch > 0 && stage === "playing";
+    if (rebuilding) { scene.setFlipped(side === -1); scene.setPieces(piecesNow()); }
+    else scene.setPieces([]);
     scene.showBoard();
     /* The bin is part of every mode; the other worlds' scenery loads only
        when the run reaches them, so opening Tactica stays quick. */
@@ -280,7 +290,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
     }
     return () => { gone = true; builtKindRef.current = null; propsRef.current = null; bin?.dispose?.(); binRef.current = null; scene.dispose(); sceneRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sweetheart, setKind]);
+  }, [sweetheart, setKind, epoch]);
 
   /* The world's scenery follows the floor: the bin's last two floors are
      under snow, every world gets worse in its second half, and its boss
@@ -814,6 +824,9 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
     if (run !== runIdRef.current) return null;
     eng.make(move);
     scene?.syncPieces(piecesNow());
+    /* Check: the king's moment of fear. */
+    if (eng.inCheckNow() && eng.legalMoves().length) await scene?.kingScare(kingSquare(eng), to);
+    if (run !== runIdRef.current) return null;
     return { from, to, captured };
   };
 
@@ -1112,7 +1125,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
 
   return (
     <div className="relative mx-auto w-full max-w-[480px] overflow-hidden" style={{ height: "calc(100dvh - var(--headerH))" }}>
-      <canvas ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
+      <canvas key={epoch} ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
       <LearnHints close={stage === "playing" && view === "close" && !busy} />
       {hurt > 0 && <div key={hurt} className="tacticaNote fades pointer-events-none absolute inset-0 bg-[#b8322a]/30" />}
 
