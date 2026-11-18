@@ -227,6 +227,7 @@ export function buildAttic(ts) {
   const rig = new THREE.Group();
   scene.add(rig);
   for (const tile of ts.tiles) rig.attach(tile);
+  for (const m of ts.boardMeshes ?? []) rig.attach(m);
   /* (Found first, moved after: moving things while walking the scene's
      list of children would skip or break the walk.) */
   const frame = scene.children.filter((o) => o.isMesh && o.geometry?.parameters?.width === 8.7);

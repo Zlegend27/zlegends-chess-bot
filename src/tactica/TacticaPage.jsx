@@ -36,7 +36,10 @@ import "./tactica.css";
 class TacticaGuard extends Component {
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
-  componentDidCatch(error) { track("tactica_error", { message: String(error?.message ?? error).slice(0, 200) }); }
+  componentDidCatch(error) {
+    track("tactica_error", { message: String(error?.message ?? error).slice(0, 200) });
+    if (import.meta.env.DEV) console.error("Tactica crashed:", error);
+  }
   render() {
     if (!this.state.failed) return this.props.children;
     return (

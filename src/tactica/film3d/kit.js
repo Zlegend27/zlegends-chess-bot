@@ -53,7 +53,7 @@ export function borrow(scene) {
     /** Hides the world (not the board, its characters or the lights), for a
      *  film's shot somewhere else. */
     hideWorld() {
-      const keep = new Set([...scene.tiles, scene.marks, scene.hoverMark, scene.hints, ...saved.added]);
+      const keep = new Set([...scene.tiles, ...(scene.boardMeshes ?? []), scene.marks, scene.hoverMark, scene.hints, ...saved.added]);
       for (const e of scene.pieces.values()) keep.add(e.group);
       for (const o of scene.scene.children) {
         if (keep.has(o) || o.isLight || !o.visible) continue;

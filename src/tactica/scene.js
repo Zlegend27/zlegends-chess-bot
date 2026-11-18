@@ -393,17 +393,32 @@ export class TacticaScene {
       light: new THREE.MeshStandardMaterial({ map: grain(this.colors.light, 5), roughness: 0.6 }),
       dark: new THREE.MeshStandardMaterial({ map: grain(this.colors.dark, 9), roughness: 0.6 }),
     };
+    /* The squares are drawn as two meshes, all the light ones and all the
+       dark ones (2 draw calls a frame instead of 64). A board turned round
+       looks the same, so these never move. The 64 tiles stay, unseen, to
+       tell which square was tapped and where each square is. */
     this.tiles = [];
     const tileGeometry = new THREE.PlaneGeometry(1, 1);
+    const parts = { light: [], dark: [] };
+    const place = new THREE.Matrix4(), turn = new THREE.Matrix4().makeRotationX(-Math.PI / 2);
     for (let sq = 0; sq < 64; sq++) {
       const light = ((sq % 8) + ((sq / 8) | 0)) % 2 === 1;
       const tile = new THREE.Mesh(tileGeometry, light ? squareMat.light : squareMat.dark);
       tile.rotation.x = -Math.PI / 2;
       tile.position.copy(this.worldOf(sq));
       tile.userData.sq = sq;
+      tile.visible = false;
       this.scene.add(tile);
       this.tiles.push(tile);
+      const at = this.worldOf(sq);
+      parts[light ? "light" : "dark"].push(tileGeometry.clone().applyMatrix4(place.makeTranslation(at.x, at.y, at.z).multiply(turn)));
     }
+    this.boardMeshes = ["light", "dark"].map((k) => {
+      const m = new THREE.Mesh(mergeGeometries(parts[k], false), squareMat[k]);
+      m.receiveShadow = true;
+      this.scene.add(m);
+      return m;
+    });
     this.shadowGeometry = new THREE.CircleGeometry(0.32, 24);
     this.shadowMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false });
   }
