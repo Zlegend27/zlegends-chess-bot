@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { TacticaScene, SET_BOARD } from "../scene";
 import { dressTrashBin } from "../sets/trashBin";
 import { play as playSound, setScore, playMusic, stopMusic, setFlies } from "../sound";
-import { NARRATOR } from "../opening/film";
+import { NARRATOR } from "./lines";
 import { toonify, outline, partsNamed } from "./anime";
 import { buildAttic, YARD } from "./attic";
 import { BrassButton } from "../ui";
