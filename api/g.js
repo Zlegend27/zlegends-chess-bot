@@ -14,8 +14,8 @@ export default async function handler(req) {
   const page = await fetch(`${origin}/index.html`).then((r) => r.text());
   const game = readGame(code);
   if (!game) return new Response(page, { headers: { "Content-Type": "text/html; charset=utf-8" } });
-  const title = escapeHtml(`${game.title} · Zlegend's Chess Bot`);
-  const description = escapeHtml(`${game.title === "A game on Zlegend's Chess Bot" ? "" : game.title + ", "}${game.summary}. Replay every move.`);
+  const title = escapeHtml(`${game.title} · Zlegend2700`);
+  const description = escapeHtml(`${game.title === "A game on Zlegend2700" ? "" : game.title + ", "}${game.summary}. Replay every move.`);
   const image = `${origin}/api/card?c=${encodeURIComponent(code)}`;
   const link = `${origin}/g/${encodeURIComponent(code)}`;
   const swap = (html, attr, name, value) => html.replace(new RegExp(`(<meta ${attr}="${name}" content=")[^"]*(")`), `$1${value}$2`);

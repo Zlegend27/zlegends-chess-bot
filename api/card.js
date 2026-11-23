@@ -35,7 +35,7 @@ export default function handler(req) {
   const tree = h("div", { style: { width: 1200, height: 630, display: "flex", alignItems: "center", background: BG, padding: 35, gap: 50, fontFamily: "sans-serif" } },
     h("div", { style: { display: "flex", flexDirection: "column", border: "6px solid #3a2560", borderRadius: 10 } }, rows),
     h("div", { style: { display: "flex", flexDirection: "column", gap: 24, flex: 1, color: "#F2E9FF" } },
-      h("div", { style: { fontSize: 34, color: "#3EE7F5", fontWeight: 700 } }, "Zlegend's Chess Bot"),
+      h("div", { style: { fontSize: 34, color: "#3EE7F5", fontWeight: 700 } }, "Zlegend2700"),
       h("div", { style: { fontSize: 54, fontWeight: 800, lineHeight: 1.1 } }, game ? game.title : "A shared game"),
       h("div", { style: { fontSize: 32, color: "#BFAFDA" } }, game ? game.summary : "Open the link to replay it"),
       h("div", { style: { fontSize: 28, color: "#F5D93E", marginTop: 20 } }, "Tap to replay every move")));

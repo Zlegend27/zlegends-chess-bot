@@ -18,7 +18,7 @@ export function readGame(code) {
   const res = gameResult(eng);
   const result = res ? (res.winner ? `${res.winner === 1 ? "White" : "Black"} wins by ${res.reason.toLowerCase()}` : `Draw by ${res.reason.toLowerCase()}`) : null;
   const summary = result ? `${moves} ${moves === 1 ? "move" : "moves"}` : plies ? `${moves} ${moves === 1 ? "move" : "moves"} played · ${eng.getSide() === 1 ? "White" : "Black"} to move` : "The starting position";
-  return { board, side: game.playerColor, plies, title: result ? `${result}` : "A game on Zlegend's Chess Bot", summary };
+  return { board, side: game.playerColor, plies, title: result ? `${result}` : "A game on Zlegend2700", summary };
 }
 
 export const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
