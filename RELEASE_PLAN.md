@@ -327,8 +327,25 @@ Checked: lint, 968 tests, build; Play, Puzzles, Learn, Home and a game at
 phone size; the skip link with a real Tab press. Noted for D2: the game
 screen is 897px tall on an 812px phone (it was before too).
 
-Next: A1 (a real page for every address), then the Home newcomer message,
-the Dumb Bot, invite links, How to play.
+Pushed 2026-11-23 (cd751ac, 89626a2, 3cbcfc5) and checked live: real 404,
+security headers, year-long caching, new titles and Play cards. The first
+deploy failed (Vercel rejects "/?" in a route pattern); fixed in 3cbcfc5.
+Analytics (owner chose "drop the ID"): events carry a per-visit number
+and no account id; Privacy Policy and stats.sql updated.
+
+Built, committed, NOT pushed yet (waiting for the owner's OK):
+- A1/A3/A4: scripts/prerender.mjs (postbuild) writes dist/<page>.html for
+  14 pages from src/data/seoPages.js: own title, description, canonical,
+  og:url, structured data (WebSite, Organization, WebApplication on Home;
+  breadcrumbs elsewhere) and visible text; the sitemap is generated with
+  lastmod. vercel.json cleanUrls serves /puzzles from puzzles.html. Checked
+  in the production preview: each page's HTML, and the app replacing the
+  text with no leftovers. To check after deploy: curl /review shows its own
+  title (not Home's).
+- D1: Home "New here?" card under the buttons (Hide remembers).
+- F2: Dumb Bot (below 1000), offered first after Rank Bot in every list.
+
+Next: invite links (F1), How to play (F3), then the desktop layout (D2).
 
 Sources for the search notes:
 - Chess.com, Game Review for members: https://www.chess.com/news/view/chesscom-releases-new-game-review
