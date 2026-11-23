@@ -31,16 +31,38 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: false,
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'og.jpg'],
+      includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png'],
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,webp}'],
-        // Chess Tactica loads only for players who open it, so it stays out of
-        // the cache every visitor downloads.
-        globIgnores: ['**/TacticaPage-*.js'],
+        // Only what every visit needs is downloaded up front: the page, the
+        // app's code and styles, and the icons. What loads on demand (the
+        // engine, the opening book, puzzles, Chess Tactica, pictures) is
+        // cached the first time it's used instead (below). Precaching all of
+        // it cost every first visit about 3.3 MB.
+        globPatterns: ['index.html', 'assets/*.{js,css}', '*.{svg,png}'],
+        globIgnores: ['**/TacticaPage-*.js', '**/engineWorker-*.js', '**/maiaWorker-*.js', '**/ecoOpenings-*.js', '**/puzzles-*.js', 'sweetheart-*.png'],
         // Stockfish's ~7MB wasm/js never changes without a version bump in
         // the file name here, so cache it long-term instead of re-fetching
         // every time a below-2000 difficulty tier is picked.
         runtimeCaching: [
+          {
+            /* Code loaded on demand: named by its content, so a cached copy
+               is always right. */
+            urlPattern: ({ url, sameOrigin }) => sameOrigin && url.pathname.startsWith('/assets/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'app-chunks',
+              expiration: { maxEntries: 80, maxAgeSeconds: 60 * 60 * 24 * 60 },
+            },
+          },
+          {
+            /* Pictures: shown straight from the cache, refreshed behind. */
+            urlPattern: ({ url, sameOrigin }) => sameOrigin && /\.(png|webp|jpg|svg|gif)$/.test(url.pathname) && !url.pathname.startsWith('/tactica/'),
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'site-images',
+              expiration: { maxEntries: 120, maxAgeSeconds: 60 * 60 * 24 * 30 },
+            },
+          },
           {
             /* Maia's ~11MB model: same deal as Stockfish, so it isn't
                re-checked against the server on every visit. */

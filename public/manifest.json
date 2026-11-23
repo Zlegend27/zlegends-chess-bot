@@ -1,7 +1,7 @@
 {
-  "name": "Zlegend's Chess Bot",
+  "name": "Zlegend2700",
   "short_name": "Zlegend2700",
-  "description": "Challenge Zlegend2700, a neon chiptune chess engine, right in your browser.",
+  "description": "Free chess in your browser: bots that play like people, game review, puzzles, openings and Chess Tactica.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0E0620",

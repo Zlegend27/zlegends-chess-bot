@@ -2890,6 +2890,14 @@ export default function ZlegendsBot() {
 
   return (
     <div className={"appShell" + (barHidden ? "" : " hasBottomBar") + (immersive ? " noHeader" : "")}>
+      {/* For keyboard users: the first Tab stop, shown only when focused,
+          jumps past the header to the page. (A click handler, not a #hash,
+          so it never touches the address.) */}
+      <a
+        href="#content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[200] focus:rounded-lg focus:bg-[var(--yellow)] focus:px-4 focus:py-3 focus:font-bold focus:text-[var(--void)] focus:no-underline"
+        onClick={(e) => { e.preventDefault(); document.getElementById("content")?.focus(); }}
+      >Skip to content</a>
       {!immersive && <AppHeader
         section={section}
         onSection={onSection}
@@ -2906,15 +2914,16 @@ export default function ZlegendsBot() {
         onSettings={openSettings}
         onMusic={() => setMusicOpen(true)}
       />}
-      {hiddenHeadingFor(siteView) && <h1 className="sr-only">{hiddenHeadingFor(siteView)}</h1>}
       {welcomeOpen && siteView === "home" && (
         <Suspense fallback={null}>
           <WelcomeSheet open onClose={closeWelcome} onPlay={() => { closeWelcome(); onSection("play"); }} />
         </Suspense>
       )}
-      <div key={siteView} className="pageIn">
+      {/* The page itself: the "main" landmark screen readers jump to. */}
+      <main id="content" key={siteView} className="pageIn" tabIndex={-1} style={{ outline: "none" }}>
+        {hiddenHeadingFor(siteView) && <h1 className="sr-only">{hiddenHeadingFor(siteView)}</h1>}
         <Suspense fallback={null}>{renderPage()}</Suspense>
-      </div>
+      </main>
       {!barHidden && <BottomBar section={section} onSection={onSection} sweetheart={sweetheart} />}
       {appOverlays}
     </div>

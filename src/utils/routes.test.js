@@ -46,3 +46,19 @@ describe("back swipes", () => {
     expect(historyStep("home", true)).toBe("back");
   });
 });
+
+/* vercel.json lists the app's addresses (anything else gets the real
+   404 page), so a page added to routes.js must be added there too. */
+import { readFileSync } from "node:fs";
+import { ALL_PATHS } from "./routes";
+describe("the host serves every page", () => {
+  const config = JSON.parse(readFileSync(new URL("../../vercel.json", import.meta.url), "utf8"));
+  const served = (path) => path === "/" || config.rewrites.some((r) => r.destination === "/" && new RegExp(`^${r.source.replace(/:\w+/g, "[^/]+")}$`).test(path));
+  test.each(ALL_PATHS)("%s", (path) => {
+    expect(served(path)).toBe(true);
+    if (path !== "/") expect(served(path + "/")).toBe(true);
+  });
+  test("an unknown address is not sent to the app", () => {
+    expect(served("/nope")).toBe(false);
+  });
+});

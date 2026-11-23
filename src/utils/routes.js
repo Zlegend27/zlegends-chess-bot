@@ -24,12 +24,14 @@ const VIEW_PATHS = {
 };
 
 export const pathForView = (view) => VIEW_PATHS[view] ?? "/";
+/** Every page address, for the checks that the host serves them all. */
+export const ALL_PATHS = Object.values(VIEW_PATHS);
 
 /* A heading for the pages that don't show one of their own, read out by
    screen readers (the others carry a visible h1: Puzzles, Leaderboard,
    Game Review, Lessons, Privacy, Terms). */
 const HIDDEN_HEADINGS = {
-  home: "Zlegend's Chess Bot",
+  home: "Zlegend2700",
   playHub: "Play",
   play: "Chess board",
   openings: "Openings",
@@ -37,19 +39,20 @@ const HIDDEN_HEADINGS = {
   ranked: "Ranked puzzles",
   rush: "Puzzle Rush",
   profile: "Your profile",
+  lobby: "1v1 lobby",
 };
 export const hiddenHeadingFor = (view) => HIDDEN_HEADINGS[view] ?? null;
 
 /* The browser tab's title per page, so tabs, history and search results
    say where they lead. */
-const SITE = "Zlegend's Chess Bot";
+const SITE = "Zlegend2700";
 const TITLES = {
   playHub: "Play", play: "Game", puzzlesHome: "Puzzles", leaderboard: "Leaderboards", review: "Game Review",
   lessons: "Learn", openings: "Openings", watch: "Watch bots play", ranked: "Ranked puzzles", rush: "Puzzle Rush",
   profile: "Profile", avatar: "Your avatar", history: "Game History", lobby: "1v1 lobby", practice: "Play with yourself", tactica: "Chess Tactica",
   privacy: "Privacy Policy", terms: "Terms of Service",
 };
-export const titleFor = (view) => (TITLES[view] ? `${TITLES[view]} · ${SITE}` : `${SITE} — can you beat it?`);
+export const titleFor = (view) => (TITLES[view] ? `${TITLES[view]} · ${SITE}` : `${SITE} · Free chess: bots, puzzles and game review`);
 
 export function viewForPath(path) {
   const clean = path.length > 1 ? path.replace(/\/+$/, "") : path;

@@ -17,6 +17,11 @@ import "./index.css";
    mid-session. */
 registerSW({ immediate: true });
 
+/* A page whose code loads on demand failed to load: almost always a tab left
+   open across a deploy (the old files are gone). Reload once for the new
+   build (staleBuild.js keeps it from looping). */
+window.addEventListener("vite:preloadError", (event) => { if (reloadIfStaleBuild(event.payload)) event.preventDefault(); });
+
 class ErrorBoundary extends React.Component {
   state = { error: null };
   static getDerivedStateFromError(error) {

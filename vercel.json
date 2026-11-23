@@ -5,8 +5,26 @@
       "destination": "/api/g?c=:code"
     },
     {
-      "source": "/((?!api/).*)",
+      "source": "/(play|game|puzzles|leaderboard|review|lessons|profile|openings|watch|ranked|rush|tactica|lobby|practice|history|avatar|privacy|terms)/?",
       "destination": "/"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Content-Security-Policy", "value": "frame-ancestors 'self'" },
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+        { "key": "Permissions-Policy", "value": "camera=(), geolocation=(), microphone=(self), payment=(), usb=()" }
+      ]
     }
   ]
 }

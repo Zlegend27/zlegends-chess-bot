@@ -111,8 +111,7 @@ export default function LessonsPage({ onOpenings, sweetheart }) {
             onClick={() => setTrainerOpen(true)}
             className={`rounded-2xl border ${featureBorder} bg-gradient-to-br ${featureGradientFrom} ${featureGradientTo} px-4 py-3 text-left backdrop-blur-sm transition hover:-translate-y-0.5 ${featureBorderHover} focus-visible:outline-none focus-visible:ring-2 ${T.ring}`}
           >
-            <div className={"text-[11px] font-bold uppercase tracking-[0.14em] " + T.accentText}>New</div>
-            <div className={"mt-1 font-bold " + T.ink}>Opening Trainer</div>
+            <div className={"font-bold " + T.ink}>Opening Trainer</div>
             <div className={"mt-1 text-xs " + T.dimText}>Learn 12 openings the right way: the ideas, the replies players at your level make, and how to punish their mistakes. The openings library is in here too.</div>
           </button>
         )}
@@ -132,7 +131,7 @@ export default function LessonsPage({ onOpenings, sweetheart }) {
                   <div className={"font-bold " + T.ink}>{l.title}</div>
                   <div className={"mt-1 text-xs " + T.dimText}>{l.desc}</div>
                   <div className={"mt-2 text-[11px] font-bold uppercase tracking-[0.14em] " + T.interactiveText}>
-                    {ready} of {l.chapters.length} chapters ready
+                    {ready < l.chapters.length ? `Coming soon · ${ready === 1 ? "chapter 1" : `${ready} chapters`} open now` : `${ready} chapters`}
                   </div>
                 </div>
               </button>

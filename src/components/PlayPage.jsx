@@ -5,9 +5,21 @@ import { getUiTheme } from "../utils/uiTheme";
 import ConfirmModal from "./ConfirmModal";
 import { cburnettPieceSvgUrl } from "../utils/cburnettPieceSvg";
 
+/* Small line icons for the modes without a character of their own. */
+const MicIcon = () => (
+  <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11z" />
+  </svg>
+);
+const TvIcon = () => (
+  <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M21 6h-7.59l3.29-3.29L16 2l-4 4-4-4-.71.71L10.59 6H3a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2zm0 13H3V8h18zM9 10v7l6-3.5z" />
+  </svg>
+);
+
 const OTHER_MODES = [
-  { id: "blind", label: "Blind Chess", desc: "Play a full game by voice, with no board." },
-  { id: "spectate", label: "Watch Bots", desc: "Sit back and watch two bots battle." },
+  { id: "blind", label: "Blind Chess", desc: "A full game by voice, with no board.", Icon: MicIcon },
+  { id: "spectate", label: "Watch Bots", desc: "Sit back and watch two bots battle.", Icon: TvIcon },
 ];
 
 /** Where a new game starts. `levels` are the bots in the order to offer them,
@@ -18,6 +30,13 @@ export default function PlayPage({ levels, hasLiveGame, onPick, onResume, onQuit
   const [quitting, setQuitting] = useState(false);
   const card = `rounded-2xl border ${T.cardBorder} ${T.panelBg} backdrop-blur-sm`;
   const focus = `focus-visible:outline-none focus-visible:ring-2 ${T.ring}`;
+  /* Every mode reads the same way: an icon, its name, one line. */
+  const label = (name, desc) => (
+    <span className="flex flex-1 flex-col">
+      <span className={"text-base font-bold " + T.ink}>{name}</span>
+      <span className={"mt-0.5 text-xs leading-relaxed " + T.dimText}>{desc}</span>
+    </span>
+  );
 
   return (
     <div className="root">
@@ -46,7 +65,7 @@ export default function PlayPage({ levels, hasLiveGame, onPick, onResume, onQuit
             className={`flex w-full items-center gap-3 rounded-2xl bg-transparent p-4 text-left ${focus}`}
           >
             <PixelAvatar rows={ZPIX} pal={ZPAL} size={40} />
-            <span className={"flex-1 text-base font-bold " + T.ink}>Play vs Bot</span>
+            {label("Play vs Bot", "From a bot that plays like you to full engine strength.")}
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"
               className={`${T.dimText} transition-transform ${open ? "rotate-180" : ""}`}>
               <path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z" />
@@ -81,7 +100,7 @@ export default function PlayPage({ levels, hasLiveGame, onPick, onResume, onQuit
           className={`${card} flex w-full cursor-pointer items-center gap-3 p-4 text-left transition hover:-translate-y-0.5 ${focus}`}
         >
           <PixelAvatar rows={TPIX} pal={TPAL} size={40} />
-          <span className={"flex-1 text-base font-bold " + T.ink}>Chess Tactica</span>
+          {label("Chess Tactica", "A 3D story adventure with living chess pieces.")}
         </button>
 
         {/* 1v1: Zlegend squaring up to a pawn. Opens the lobby. */}
@@ -93,7 +112,7 @@ export default function PlayPage({ levels, hasLiveGame, onPick, onResume, onQuit
             </svg>
             <img src={cburnettPieceSvgUrl(1, false)} alt="" width="36" height="36" style={{ transform: "scaleX(-1)" }} />
           </span>
-          <span className={"flex-1 text-base font-bold " + T.ink}>1v1</span>
+          {label("1v1", "Play a real person online.")}
         </button>
 
         {/* Play with yourself: move both sides to try out ideas. */}
@@ -102,7 +121,7 @@ export default function PlayPage({ levels, hasLiveGame, onPick, onResume, onQuit
             <img src={cburnettPieceSvgUrl(6, true)} alt="" width="30" height="30" className="absolute top-0 left-0" />
             <img src={cburnettPieceSvgUrl(6, false)} alt="" width="30" height="30" className="absolute right-0 bottom-0" />
           </span>
-          <span className={"flex-1 text-base font-bold " + T.ink}>Play with yourself</span>
+          {label("Play with yourself", "Move both sides to try out ideas.")}
         </button>
 
         {OTHER_MODES.map((m) => (
@@ -110,10 +129,10 @@ export default function PlayPage({ levels, hasLiveGame, onPick, onResume, onQuit
             key={m.id}
             type="button"
             onClick={() => onMode(m.id)}
-            className={`${card} block w-full p-4 text-left transition hover:-translate-y-0.5 ${focus}`}
+            className={`${card} flex w-full cursor-pointer items-center gap-3 p-4 text-left transition hover:-translate-y-0.5 ${focus}`}
           >
-            <span className={"block text-sm font-bold " + T.ink}>{m.label}</span>
-            <span className={"mt-1 block text-xs leading-relaxed " + T.dimText}>{m.desc}</span>
+            <span className={"flex size-10 shrink-0 items-center justify-center " + T.accentText}><m.Icon /></span>
+            {label(m.label, m.desc)}
           </button>
         ))}
       </div>

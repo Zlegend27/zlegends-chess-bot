@@ -24,10 +24,10 @@ export default function PuzzlesHomePage({ onBack, onDaily, onRanked, onRush, onT
 
   const T = getUiTheme(sweetheart);
   const modes = [
-    { id: "daily", name: "Daily puzzle", desc: dailySolved ? "Solved today ✓" : null, onClick: onDaily, needsPuzzles: true },
-    { id: "ranked", name: "Ranked puzzles", desc: null, onClick: onRanked, needsPuzzles: true },
+    { id: "daily", name: "Daily puzzle", desc: dailySolved ? "Solved today ✓" : "One new puzzle every day", onClick: onDaily, needsPuzzles: true },
+    { id: "ranked", name: "Ranked puzzles", desc: "Pick your level, from beginner up", onClick: onRanked, needsPuzzles: true },
     { id: "rush", name: "Puzzle Rush", desc: "Solve as many as you can on the clock", onClick: onRush, needsPuzzles: true },
-    { id: "tactica", name: "Chess Tactica", desc: "Puzzle Rush Tactica", onClick: onTactica },
+    { id: "tactica", name: "Chess Tactica", desc: "A puzzle rush in the 3D bin", onClick: onTactica },
   ];
 
   return (
