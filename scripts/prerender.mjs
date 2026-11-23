@@ -59,6 +59,13 @@ function render(page) {
   swap(/<meta property="og:description" content="[^"]*" \/>/, `<meta property="og:description" content="${esc(page.description)}" />`);
   swap(/<meta name="twitter:title" content="[^"]*" \/>/, `<meta name="twitter:title" content="${esc(title)}" />`);
   swap(/<meta name="twitter:description" content="[^"]*" \/>/, `<meta name="twitter:description" content="${esc(page.description)}" />`);
+  /* Each page's own preview picture (api/page-card.js); Home keeps og.jpg. */
+  if (page.path !== "/") {
+    const card = `${SITE.url}/api/page-card?p=${encodeURIComponent(page.path)}`;
+    swap(/<meta property="og:image" content="[^"]*" \/>/, `<meta property="og:image" content="${card}" />`);
+    swap(/<meta name="twitter:image" content="[^"]*" \/>/, `<meta name="twitter:image" content="${card}" />`);
+    swap(/<meta property="og:image:alt" content="[^"]*" \/>/, `<meta property="og:image:alt" content="${esc(page.heading)} on ${esc(SITE.name)}" />`);
+  }
   const head = [
     `<link rel="canonical" href="${urlOf(page.path)}" />`,
     `<meta property="og:url" content="${urlOf(page.path)}" />`,

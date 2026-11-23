@@ -484,6 +484,13 @@ the fix that matters is never leaving two people waiting apart. Now:
   unit-tested; restore and Cancel checked in dev; NOT tested on real
   phones yet.
 
+
+Then, A5 per-page share pictures: every public page except Home (which
+keeps og.jpg) now has its own preview picture, api/page-card.js: the
+page's heading and description beside a board; an opening's page shows
+that opening's position from its side. The board drawing is shared with
+the game card (api/_board.js).
+
 Owner: A6 Search Console, L4 device
 test day (two signed-in phones for invite links; a real Feedback send),
 L5 link previews.
