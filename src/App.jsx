@@ -9,6 +9,7 @@ import PlayPage from "./components/PlayPage";
 import TacticaLoading from "./tactica/TacticaLoading";
 import { nextStreak, utcDay } from "./utils/dailyStreak";
 import { historyStep, pathForView, sectionForView, viewForPath, hiddenHeadingFor, titleFor } from "./utils/routes";
+import { courseForPath } from "./data/openingPages";
 import { pickPostGameLine } from "./utils/botLines";
 import { signOut, watchAuthState, accountProfile, accountInfo, saveAccountName, accountRating, saveAccountRating } from "./utils/auth";
 import { syncTacticaAccount } from "./tactica/accountSync";
@@ -330,7 +331,10 @@ export default function ZlegendsBot() {
      exists from the start. */
   const firstRouteRef = useRef(true);
   useEffect(() => {
-    const url = pathForView(siteView) + window.location.search + window.location.hash;
+    /* An opening's own address (/openings/vienna-game) is Learn too, and
+       stays as it is: LessonsPage keeps it in step with the open course. */
+    const onCoursePage = siteView === "lessons" && !!courseForPath(window.location.pathname);
+    const url = (onCoursePage ? window.location.pathname : pathForView(siteView)) + window.location.search + window.location.hash;
     const onSubPage = !!history.state?.subPage;
     if (firstRouteRef.current) {
       firstRouteRef.current = false;
@@ -339,14 +343,18 @@ export default function ZlegendsBot() {
       history.pushState({ subPage: true }, "", url);
       return;
     }
-    if (window.location.pathname === pathForView(siteView)) return;
+    if (onCoursePage || window.location.pathname === pathForView(siteView)) return;
     const step = historyStep(siteView, onSubPage);
     if (step === "back") history.back();
     else if (step === "push") history.pushState({ subPage: true }, "", url);
     else history.replaceState(siteView === "home" ? null : { subPage: true }, "", url);
   }, [siteView]);
   /* What gets used: one event per page opened, and per sign-in. */
-  useEffect(() => { track("page", { view: siteView }); document.title = titleFor(siteView); }, [siteView]);
+  useEffect(() => {
+    track("page", { view: siteView });
+    /* A course page's title is the opening's (set by LessonsPage). */
+    if (!(siteView === "lessons" && courseForPath(window.location.pathname))) document.title = titleFor(siteView);
+  }, [siteView]);
   const signedInId = session?.user?.id;
   useEffect(() => {
     if (signedInId) track("sign_in", { providers: session.user.app_metadata?.providers ?? [] });

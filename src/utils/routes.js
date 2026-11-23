@@ -1,6 +1,8 @@
 /* Every screen gets a real address, so the phone's back gesture, a refresh
    and a pasted link all land where they should. siteView stays the source
    of truth in App.jsx; this just translates it to and from the URL. */
+import { courseForPath } from "../data/openingPages";
+
 const VIEW_PATHS = {
   home: "/",
   playHub: "/play",
@@ -57,6 +59,8 @@ export const titleFor = (view) => (TITLES[view] ? `${TITLES[view]} · ${SITE}` :
 
 export function viewForPath(path) {
   const clean = path.length > 1 ? path.replace(/\/+$/, "") : path;
+  /* An opening's own page (/openings/vienna-game) is the trainer, in Learn. */
+  if (courseForPath(clean)) return "lessons";
   return Object.keys(VIEW_PATHS).find((view) => VIEW_PATHS[view] === clean) ?? "home";
 }
 

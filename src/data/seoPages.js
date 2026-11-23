@@ -5,6 +5,9 @@
    build time, plus the sitemap. Keep it true to what the page really does.
 
    Brand: Zlegend2700 in every title (owner's decision, 2026-11-23). */
+import { COURSES } from "./openingCourses.js";
+import { NOTES } from "./openingNotes.js";
+import { coursePath, OPENING_PATHS } from "./openingPages.js";
 
 export const SITE = {
   name: "Zlegend2700",
@@ -161,8 +164,38 @@ export const SEO_PAGES = [
   },
 ];
 
+/* ---------------- One page per Opening Trainer course ----------------
+   Built from the same hand-written notes the trainer's coach uses
+   (openingNotes.js), so the page says what the course really teaches:
+   the opening's point, its idea step by step, and the plan after it. */
+const movesText = (moves) => moves.split(" ").map((m, i) => (i % 2 === 0 ? `${i / 2 + 1}.${m}` : m)).join(" ");
+
+const OPENING_SEO = COURSES.map((c) => {
+  const notes = NOTES[c.id] ?? {};
+  const Side = c.side === "white" ? "White" : "Black";
+  const sameSide = COURSES.filter((o) => o.side === c.side && o.id !== c.id).map((o) => coursePath(o.id));
+  return {
+    path: coursePath(c.id),
+    parent: "/lessons",
+    title: `${c.name}: ideas, plans and a free trainer`,
+    description: `How to play the ${c.name} (${movesText(c.root)}) as ${Side}: the ideas behind the moves, the plan after the opening, and a free trainer.`,
+    heading: `How to play the ${c.name}`,
+    intro: [
+      `The ${c.name} starts ${movesText(c.root)} and is played by ${Side}. ${notes.summary ?? ""}`.trim(),
+      ...(notes.idea ?? []).map((step) => step.text),
+      ...(notes.plan ? [`After the opening: ${notes.plan}`] : []),
+      `Learn it on the board with the free Opening Trainer: the idea move by move, a quiz on the main line, and the replies players at your level really make, with how to answer each${c.lines.length > 1 ? ` (it covers ${c.lines.map((l) => `the ${l.name}`).join(" and ")})` : ""}. Then practise it against a bot at three levels. No account needed.`,
+    ],
+    links: ["/lessons", ...sameSide],
+  };
+});
+SEO_PAGES.push(...OPENING_SEO);
+/* Learn and the openings library point to every opening page. */
+for (const p of SEO_PAGES) if (p.path === "/lessons" || p.path === "/openings") p.links.push(...OPENING_PATHS);
+
 /** Link text for each page, for the "more on the site" links. */
 export const LINK_TEXT = {
+  ...Object.fromEntries(COURSES.map((c) => [coursePath(c.id), c.name])),
   "/": "Home",
   "/play": "Play chess",
   "/review": "Free game review",

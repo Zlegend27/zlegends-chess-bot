@@ -24,14 +24,17 @@ const STEPS = [
 
 /* `back` is the link to Learn; it shows on the library only, since courses
    and sessions have their own way back. */
-export default function OpeningTrainer({ sweetheart, pieceSetId, back = null, onLibrary = null }) {
+/* `initialCourseId` opens straight on a course (its own address,
+   /openings/<slug>); `onCourseChange` hears which course is open (or null),
+   so the address can follow. */
+export default function OpeningTrainer({ sweetheart, pieceSetId, back = null, onLibrary = null, initialCourseId = null, onCourseChange = null }) {
   const T = getUiTheme(sweetheart);
   const pieceImgSrc = (type, isWhite) => getPieceSet(pieceSetId).svgUrl(type, isWhite);
   const colors = getBoardColor(loadSetting("boardColor", "default"));
   const focus = `focus-visible:outline-none focus-visible:ring-2 ${T.ring}`;
 
   const [side, setSide] = useState(() => loadSetting("openingSide", "white"));
-  const [courseId, setCourseId] = useState(null);
+  const [courseId, setCourseId] = useState(() => (courseById(initialCourseId) ? initialCourseId : null));
   const [lineId, setLineId] = useState(null);
   const [level, setLevel] = useState(() => loadSetting("openingLevel", "medium"));
   const [session, setSession] = useState(null); // { mode }
@@ -42,6 +45,8 @@ export default function OpeningTrainer({ sweetheart, pieceSetId, back = null, on
   const course = courseById(courseId);
   const line = course?.lines.find((l) => l.id === lineId) ?? course?.lines[0] ?? null;
   const due = dueReviews(reviews);
+
+  useEffect(() => { onCourseChange?.(courseId); }, [courseId, onCourseChange]);
 
   useEffect(() => {
     if (!courseId) return;

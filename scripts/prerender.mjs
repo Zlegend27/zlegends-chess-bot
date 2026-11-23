@@ -37,12 +37,12 @@ function structuredData(page) {
       },
     ];
   }
+  /* Home > (parent, e.g. Learn chess) > this page. */
+  const parent = page.parent && SEO_PAGES.find((p) => p.path === page.parent);
+  const trail = [{ name: SITE.name, path: "/" }, ...(parent ? [{ name: parent.heading, path: parent.path }] : []), { name: page.heading, path: page.path }];
   return [{
     "@context": "https://schema.org", "@type": "BreadcrumbList",
-    itemListElement: [
-      { "@type": "ListItem", position: 1, name: SITE.name, item: SITE.url + "/" },
-      { "@type": "ListItem", position: 2, name: page.heading, item: urlOf(page.path) },
-    ],
+    itemListElement: trail.map((t, i) => ({ "@type": "ListItem", position: i + 1, name: t.name, item: urlOf(t.path) })),
   }];
 }
 

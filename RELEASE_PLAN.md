@@ -397,8 +397,21 @@ Pushed 2026-11-23 (this batch):
 - Leftover "Zlegend's Chess Bot" names (Privacy, Terms, crash screen,
   share title) changed to Zlegend2700.
 
-Next: opening pages (A8), empty and error states (D8), feedback link (F8),
-Game Review share link (F4), /daily (F5).
+Pushed 2026-11-23 (17c3818): P3, P5 and the greeting-bubble shift above.
+
+Then, A8 opening pages: each of the 12 trainer courses has its own
+address, /openings/<name> (vienna-game, sicilian-defence, ...; slugs in
+src/data/openingPages.js, never rename one once live). The prerendered page
+is the course's own notes (what the opening is after, the idea step by
+step, the plan), a Home > Learn chess > opening breadcrumb, and links to
+the other openings for that side; Learn and the Openings library link to
+all 12; all are in the sitemap (27 pages now). In the app the address
+opens the trainer on that course, and the address follows whichever
+course is open, so it can be shared or refreshed. Back still goes to Home.
+Unknown names (/openings/bongcloud) get the real 404.
+
+Next: empty and error states (D8), feedback link (F8), Game Review share
+link (F4), /daily (F5).
 
 Sources for the search notes:
 - Chess.com, Game Review for members: https://www.chess.com/news/view/chesscom-releases-new-game-review

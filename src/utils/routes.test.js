@@ -62,3 +62,34 @@ describe("the host serves every page", () => {
     expect(served("/nope")).toBe(false);
   });
 });
+
+describe("opening pages", () => {
+  test("every trainer course has its own address, which opens Learn", async () => {
+    const { COURSES } = await import("../data/openingCourses");
+    const { coursePath, courseForPath } = await import("../data/openingPages");
+    const paths = COURSES.map((c) => coursePath(c.id));
+    expect(paths.every(Boolean)).toBe(true);
+    expect(new Set(paths).size).toBe(COURSES.length);
+    for (const c of COURSES) {
+      expect(courseForPath(coursePath(c.id))?.id).toBe(c.id);
+      expect(viewForPath(coursePath(c.id))).toBe("lessons");
+    }
+    expect(viewForPath("/openings/vienna-game/")).toBe("lessons");
+  });
+  test("an unknown opening is not a course", async () => {
+    const { courseForPath } = await import("../data/openingPages");
+    expect(courseForPath("/openings/bongcloud")).toBe(null);
+    expect(viewForPath("/openings/bongcloud")).toBe("home");
+  });
+  test("each opening gets a prerendered page with real text", async () => {
+    const { SEO_PAGES, LINK_TEXT } = await import("../data/seoPages");
+    const { OPENING_PATHS } = await import("../data/openingPages");
+    for (const path of OPENING_PATHS) {
+      const page = SEO_PAGES.find((p) => p.path === path);
+      expect(page).toBeTruthy();
+      expect(page.intro.join(" ").length).toBeGreaterThan(400);
+      expect(page.description.length).toBeLessThanOrEqual(170);
+      expect(LINK_TEXT[path]).toBeTruthy();
+    }
+  });
+});

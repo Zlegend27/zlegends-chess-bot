@@ -1,4 +1,7 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { courseForPath, coursePath } from "../data/openingPages";
+import { courseById } from "../data/openingCourses";
+import { titleFor } from "../utils/routes";
 import StarField from "./StarField";
 import LessonPlayer from "./LessonPlayer";
 /* Lazy: the Opening Trainer and its move trees load only when opened. */
@@ -16,7 +19,20 @@ import { track } from "../utils/track";
 export default function LessonsPage({ onOpenings, sweetheart }) {
   const [lessonId, setLessonId] = useState(null);
   const [chapterNumber, setChapterNumber] = useState(null);
-  const [trainerOpen, setTrainerOpen] = useState(false);
+  /* Arriving at an opening's own address (/openings/vienna-game) opens the
+     trainer on that course. Read once, as the page opens. */
+  const [startCourse] = useState(() => courseForPath(window.location.pathname)?.id ?? null);
+  const [trainerOpen, setTrainerOpen] = useState(!!startCourse);
+  /* The address follows the open course, so it can be shared or refreshed;
+     the library and the rest of Learn are /lessons. Replaced, not pushed:
+     back still goes straight to Home (see historyStep in routes.js). */
+  const onCourseChange = useCallback((id) => {
+    const course = courseById(id);
+    const path = course ? coursePath(id) : "/lessons";
+    if (window.location.pathname !== path) history.replaceState(history.state, "", path + window.location.search);
+    document.title = course ? `${course.name} · Zlegend2700` : titleFor("lessons");
+  }, []);
+  const closeTrainer = () => { setTrainerOpen(false); onCourseChange(null); };
   const pieceSetId = loadSetting("pieceSet", "classic");
   const T = getUiTheme(sweetheart);
   const cardHoverBorder = sweetheart ? "hover:border-sh-lteal/50" : "hover:border-cyan/40";
@@ -52,7 +68,7 @@ export default function LessonsPage({ onOpenings, sweetheart }) {
       <div className="root">
         <StarField sweetheart={sweetheart} />
         <Suspense fallback={null}>
-          <OpeningTrainer sweetheart={sweetheart} pieceSetId={pieceSetId} back={backLink("Learn", () => setTrainerOpen(false))} onLibrary={onOpenings} />
+          <OpeningTrainer sweetheart={sweetheart} pieceSetId={pieceSetId} back={backLink("Learn", closeTrainer)} onLibrary={onOpenings} initialCourseId={startCourse} onCourseChange={onCourseChange} />
         </Suspense>
       </div>
     );
