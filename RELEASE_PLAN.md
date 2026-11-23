@@ -360,7 +360,21 @@ Also built and pushed:
   can accept any checkmate, acceptMate). lessons.test.js replays every
   lesson. Played chapter 2 through in the browser.
 
-Next: the desktop layout (D2), then accessibility checks (C1, axe).
+Pushed 2026-11-23 (9c15e4b):
+- D2 Home on desktop: two columns from 1024px, fits one screen. The game
+  screen was measured at a real 1366x800: the board is already 512px and
+  fills the height; growing it more means moving the player cards beside
+  it (bigger change, not done).
+- C1 axe-core (dev) + our own contrast check: __a11y() in the dev console.
+  12 pages, both themes: no rule failures. Found and fixed: the Opening
+  Trainer card showed the browser's grey through its gradient.
+- C4 NOT changed: pinch zoom is blocked on the game screen because the
+  owner asked for it (2026-11-16). Asked the owner whether to allow pinch
+  but keep blocking double-tap.
+
+Next: C5 (focus returns after popups), C6 (colour-only cues), C7 an
+accessibility page, P3 images, P5 real-visitor speed numbers, opening
+pages (A8).
 
 Sources for the search notes:
 - Chess.com, Game Review for members: https://www.chess.com/news/view/chesscom-releases-new-game-review
