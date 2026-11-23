@@ -67,7 +67,15 @@ export const SEO_PAGES = [
     intro: [
       "Solve a new puzzle every day, train at your level with ranked puzzles from beginner up, race the clock in Puzzle Rush and climb the leaderboard, or take on the puzzle rush inside Chess Tactica's 3D bin.",
     ],
-    links: ["/rush", "/ranked", "/leaderboard", "/tactica"],
+    links: ["/daily", "/rush", "/ranked", "/leaderboard", "/tactica"],
+  },
+  {
+    path: "/daily",
+    title: "Daily chess puzzle",
+    description: "A new chess puzzle every day, free. Find the best move, keep your streak going, and send a friend the link.",
+    heading: "Daily chess puzzle",
+    intro: ["A new puzzle every day, the same one for everyone. Find the winning move, keep your daily streak going, then try ranked puzzles or Puzzle Rush."],
+    links: ["/puzzles", "/rush", "/ranked"],
   },
   {
     path: "/rush",
@@ -200,6 +208,7 @@ export const LINK_TEXT = {
   "/play": "Play chess",
   "/review": "Free game review",
   "/puzzles": "Chess puzzles",
+  "/daily": "Daily puzzle",
   "/rush": "Puzzle Rush",
   "/ranked": "Ranked puzzles",
   "/leaderboard": "Leaderboards",

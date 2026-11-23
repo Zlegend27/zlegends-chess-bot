@@ -8,6 +8,7 @@ const VIEW_PATHS = {
   playHub: "/play",
   play: "/game",
   puzzlesHome: "/puzzles",
+  daily: "/daily",
   leaderboard: "/leaderboard",
   review: "/review",
   lessons: "/lessons",
@@ -38,6 +39,7 @@ const HIDDEN_HEADINGS = {
   playHub: "Play",
   play: "Chess board",
   openings: "Openings",
+  daily: "Daily puzzle",
   watch: "Watch bots play",
   ranked: "Ranked puzzles",
   rush: "Puzzle Rush",
@@ -50,7 +52,7 @@ export const hiddenHeadingFor = (view) => HIDDEN_HEADINGS[view] ?? null;
    say where they lead. */
 const SITE = "Zlegend2700";
 const TITLES = {
-  playHub: "Play", play: "Game", puzzlesHome: "Puzzles", leaderboard: "Leaderboards", review: "Game Review",
+  playHub: "Play", play: "Game", puzzlesHome: "Puzzles", leaderboard: "Leaderboards", daily: "Daily chess puzzle", review: "Game Review",
   lessons: "Learn", openings: "Openings", watch: "Watch bots play", ranked: "Ranked puzzles", rush: "Puzzle Rush",
   profile: "Profile", avatar: "Your avatar", history: "Game History", lobby: "1v1 lobby", practice: "Play with yourself", tactica: "Chess Tactica",
   privacy: "Privacy Policy", terms: "Terms of Service", accessibility: "Accessibility",
@@ -67,7 +69,7 @@ export function viewForPath(path) {
 /** Which menu item to light up. A puzzle or a reviewed game runs on the Play
  *  screen, but as far as the player knows they're still in that section. */
 export function sectionForView({ siteView, rushMode, activePuzzle, pastedGame }) {
-  if (["puzzlesHome", "leaderboard", "ranked", "rush"].includes(siteView)) return "puzzles";
+  if (["puzzlesHome", "daily", "leaderboard", "ranked", "rush"].includes(siteView)) return "puzzles";
   if (siteView === "lessons" || siteView === "openings") return "learn";
   if (siteView === "review") return "review";
   if (siteView === "home") return "home";

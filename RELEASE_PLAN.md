@@ -437,7 +437,18 @@ player's own words. Text is trimmed to fit the table's 2 KB limit (tested
 with emoji and non-Latin text). Checked in dev, both themes, contrast
 clean; a real send from the live site is NOT tested yet (dev only logs).
 
-Next: Game Review share link (F4), /daily (F5).
+Pushed 2026-11-23 (e881d64).
+
+Then, F5 /daily: today's puzzle at its own address. Opening /daily puts
+it straight on the board (Puzzles lit in the nav), and the address then
+reads /game like any puzzle (keeping /daily during the puzzle would leave
+it wrong after "Next puzzle"). Prerendered page and sitemap entry; Puzzles
+links to it. vercel.json lists it (routes.test caught the trailing-slash
+rule missing it).
+
+Next: Game Review share link (F4). Owner: A6 Search Console, L4 device
+test day (two signed-in phones for invite links; a real Feedback send),
+L5 link previews.
 
 Sources for the search notes:
 - Chess.com, Game Review for members: https://www.chess.com/news/view/chesscom-releases-new-game-review

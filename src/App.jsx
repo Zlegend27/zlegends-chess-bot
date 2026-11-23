@@ -2652,6 +2652,22 @@ export default function ZlegendsBot() {
     startPuzzle(daily);
     setSiteView("play");
   };
+  /* /daily is today's puzzle at its own address (shareable, and a page
+     search can find): arriving there opens it on the board at once. */
+  useEffect(() => {
+    if (siteView !== "daily") return;
+    let live = true;
+    loadDailyPuzzle().then((p) => {
+      if (!live) return;
+      if (!p) { setSiteView("puzzlesHome"); return; }
+      leaveActivity();
+      ensurePuzzlesLoaded();
+      startPuzzle(p);
+      setSiteView("play");
+    }, () => { if (live) setSiteView("puzzlesHome"); });
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [siteView]);
   /* A finished game may still be on the board, so Play starts a fresh one
      instead of reopening it. */
   const startFromHub = (idx) => {
@@ -2820,6 +2836,14 @@ export default function ZlegendsBot() {
           sweetheart={sweetheart}
         />
       </Suspense>
+    );
+  }
+
+  if (siteView === "daily") {
+    return (
+      <div className="root">
+        <p role="status" className="m-0 mt-10 text-sm" style={{ color: "var(--liliac)" }}>Loading today&apos;s puzzle…</p>
+      </div>
     );
   }
 
