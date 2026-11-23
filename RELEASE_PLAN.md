@@ -474,6 +474,15 @@ the fix that matters is never leaving two people waiting apart. Now:
 - Seen in dev with a temporary fake room (removed): both themes,
   contrast clean. The live two-player flow is NOT tested yet (owner
   will test).
+- Leaving the app to send an invite (owner flagged it as tricky): you
+  only count as seated while the lobby is on screen, so a game can't
+  start (and your clock can't run) while you're still in Messages; your
+  friend waits and it starts when you're back. Your invite is saved on
+  the device for 30 minutes, so the link still works if the phone
+  reloaded the page; an installed app reopening on Home goes back to the
+  lobby. After more than 5 s away the lobby reconnects. Rules
+  unit-tested; restore and Cancel checked in dev; NOT tested on real
+  phones yet.
 
 Owner: A6 Search Console, L4 device
 test day (two signed-in phones for invite links; a real Feedback send),

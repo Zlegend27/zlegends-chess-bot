@@ -116,7 +116,7 @@ export default function LobbyPage({ session, profile, displayName, avatar, piece
           <div className={label}>{seat.side === 0 ? "Invite a friend" : "Your friend's game"} · {kindText(inviteTable.tc ?? tcId, inviteTable.ranked)}</div>
           {seat.side === 0 ? (
             <>
-              <p className={"m-0 text-sm " + T.ink}>Send this link to a friend. The game starts as soon as they open it. Keep this page open until then.</p>
+              <p className={"m-0 text-sm " + T.ink}>Send this link to a friend, then come back here. The game starts when you&apos;re both on this page.</p>
               <input readOnly value={link ?? ""} aria-label="Invite link" onFocus={(e) => e.target.select()}
                 className={`min-h-11 w-full rounded-lg border ${T.cardBorder} bg-transparent px-3 font-mono text-xs ${T.ink}`} />
               <div className="flex flex-wrap gap-2">
@@ -127,7 +127,7 @@ export default function LobbyPage({ session, profile, displayName, avatar, piece
               </div>
             </>
           ) : (
-            <p className={"m-0 text-sm " + T.ink} role="status">You&apos;re in. The game starts when your friend is here.</p>
+            <p className={"m-0 text-sm " + T.ink} role="status">You&apos;re in. The game starts as soon as your friend is back on this page.</p>
           )}
           <button type="button" className={textLink} onClick={standUp}>{seat.side === 0 ? "Cancel the invite" : "Leave"}</button>
         </div>

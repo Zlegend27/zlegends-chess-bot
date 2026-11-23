@@ -32,6 +32,7 @@ import { judgePuzzleMove } from "./utils/puzzleSession";
 import { clearLiveGame, isResumable, loadLiveGame, saveLiveGame } from "./utils/liveGame";
 import { reloadIfStaleBuild } from "./utils/staleBuild";
 import { pendingInvite } from "./utils/invite";
+import { restoredSeat } from "./utils/lobby";
 import { gradeGame } from "./utils/gradeGame";
 import { buildPgn, parsePgnMoves, replayForeignPgn, parsePgnHeaders, countPgnGames, describePasteProblem, reviewInfoFromHeaders, exporterSide } from "./utils/pgn";
 import { encodeGame, decodeGame, getSharedHash, replayIntoEngine } from "./utils/share";
@@ -319,9 +320,11 @@ export default function ZlegendsBot() {
   }, [session?.user?.id]);
   /* Someone opened a friend's 1v1 invite link, then signed in (which brings
      them back to Home): take them on to the lobby, where they're seated at
-     their friend's table (utils/invite.js). */
+     their friend's table (utils/invite.js). The same for someone with an
+     invite still open who left to send it and whose phone closed the app
+     meanwhile (an installed app reopens on Home): back to their table. */
   useEffect(() => {
-    if (session?.user?.id && pendingInvite()) setSiteView((v) => (v === "home" ? "lobby" : v));
+    if (session?.user?.id && (pendingInvite() || restoredSeat(loadSetting("pvpActiveSeat", null)))) setSiteView((v) => (v === "home" ? "lobby" : v));
   }, [session?.user?.id]);
   /* Which Tactica mode to open directly (the Puzzles tab opens "blitz"). */
   const [tacticaStart, setTacticaStart] = useState(null);

@@ -12,7 +12,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getSupabase } from "../utils/supabase";
 import { loadSetting, saveSetting } from "../utils/storage";
-import { playersFrom, tablesFrom, holdsSeat, matchAt, tableOfSeat, inviteTableId, newInviteCode, isInviteTable, isSeekTable, seekTableId, openSeeks, matchingSeek, olderTwin } from "../utils/lobby";
+import { playersFrom, tablesFrom, holdsSeat, matchAt, tableOfSeat, inviteTableId, newInviteCode, isInviteTable, isSeekTable, seekTableId, openSeeks, matchingSeek, olderTwin, presenceSeat, seatToSave, restoredSeat } from "../utils/lobby";
 import { DEFAULT_AVATAR } from "../utils/avatar";
 import { cleanName } from "../utils/cleanName";
 import { openChannel } from "./channel";
@@ -54,7 +54,12 @@ export function useLobby({ me, rating = null, room = "lobby-v1", activeKey = "pv
     return () => clearTimeout(t);
   }, [connected, attempt]);
   const [players, setPlayers] = useState([]);
-  const [seat, setSeat] = useState(null); // { table, side, at }
+  /* { table, side, at }. An invite seat survives the page being reloaded
+     while I was off sending the link (restoredSeat in utils/lobby.js). */
+  const [seat, setSeat] = useState(() => restoredSeat(loadSetting(activeKey + "Seat", null)));
+  /* Whether the lobby is on screen: I'm only seated while it is
+     (presenceSeat), and coming back after a while reconnects. */
+  const [visible, setVisible] = useState(() => typeof document === "undefined" || !document.hidden);
   const [tcId, setTcId] = useState(() => loadSetting(tcKey, "10+0"));
   const [match, setMatch] = useState(() => loadSetting(activeKey, null));
   const [note, setNote] = useState(null);
@@ -95,9 +100,26 @@ export function useLobby({ me, rating = null, room = "lobby-v1", activeKey = "pv
     if (!connected || !me) return;
     channelRef.current?.track({
       id: me.id, name: me.name, avatar: me.avatar, discordUrl: me.discordUrl,
-      seat: match ? match.seat ?? seat : seat, tc: tcId, ranked, elo: rating, playing: match?.id ?? null, joinedAt: joinedAt.current,
+      seat: presenceSeat({ seat, match, visible }), tc: tcId, ranked, elo: rating, playing: match?.id ?? null, joinedAt: joinedAt.current,
     });
-  }, [connected, me, seat, tcId, ranked, rating, match]);
+  }, [connected, me, seat, tcId, ranked, rating, match, visible]);
+
+  useEffect(() => { saveSetting(activeKey + "Seat", seatToSave(seat, match)); }, [activeKey, seat, match]);
+
+  /* Back from another app (sending an invite, say): a phone may have
+     dropped the connection while the page was in the background without
+     it showing yet, so after more than a few seconds away, reconnect. */
+  useEffect(() => {
+    let hiddenAt = null;
+    const onVisibility = () => {
+      if (document.hidden) { hiddenAt = Date.now(); setVisible(false); return; }
+      setVisible(true);
+      if (hiddenAt && Date.now() - hiddenAt > 5000) { setStuck(false); setAttempt((n) => n + 1); }
+      hiddenAt = null;
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
 
   const tables = useMemo(() => tablesFrom(players), [players]);
   const mePresent = players.find((p) => p.id === me?.id);

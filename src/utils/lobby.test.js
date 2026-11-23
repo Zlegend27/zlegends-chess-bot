@@ -156,3 +156,31 @@ describe("seeks (Play in the lobby)", () => {
     expect(holdsSeat(guest, tablesFrom([host, guest]), [host, guest])).toBe(true);
   });
 });
+
+import { presenceSeat, seatToSave, restoredSeat, INVITE_SEAT_FRESH_MS } from "./lobby";
+describe("leaving the app to send an invite, and coming back", () => {
+  const inv = { table: inviteTableId("k3x9mnp2qr"), side: 0, at: 1000 };
+  test("not seated while the page is hidden, seated again (same claim) when back", () => {
+    expect(presenceSeat({ seat: inv, match: null, visible: false })).toBe(null);
+    expect(presenceSeat({ seat: inv, match: null, visible: true })).toBe(inv);
+  });
+  test("a game in progress keeps its seat even when hidden", () => {
+    expect(presenceSeat({ seat: null, match: { seat: inv }, visible: false })).toBe(inv);
+  });
+  test("so a friend arriving while I'm away doesn't start the game", () => {
+    const host = player("hosthost-1", presenceSeat({ seat: inv, match: null, visible: false }));
+    const friend = player("friendxx-2", { table: inv.table, side: 1, at: 5000 });
+    expect(tableById([host, friend], inv.table).full).toBe(false);
+    const back = player("hosthost-1", presenceSeat({ seat: inv, match: null, visible: true }));
+    expect(tableById([back, friend], inv.table).full).toBe(true);
+  });
+  test("only invite seats are saved, and they go stale", () => {
+    expect(seatToSave(inv, null)).toBe(inv);
+    expect(seatToSave({ table: "seek-abc", side: 0, at: 1 }, null)).toBe(null);
+    expect(seatToSave(inv, { id: "m" })).toBe(null);
+    expect(restoredSeat(inv, 2000)).toBe(inv);
+    expect(restoredSeat(inv, 1000 + INVITE_SEAT_FRESH_MS + 1)).toBe(null);
+    expect(restoredSeat({ table: 2, side: 0, at: 1 }, 2)).toBe(null);
+    expect(restoredSeat(null)).toBe(null);
+  });
+});

@@ -156,3 +156,25 @@ export function clockText(ms) {
   if (left < 10_000) return `0:0${s}.${Math.floor((left % 1000) / 100)}`;
   return `${m}:${String(s).padStart(2, "0")}`;
 }
+
+/* ---- Leaving the app and coming back (e.g. to send an invite link) ----
+   Phones pause or close a page that's in the background. So:
+   - I only count as seated while the lobby is on screen: a game can start
+     only when both players are looking, never while one is still in their
+     messages app (their clock would be running). Back on screen, I'm
+     seated again with my original claim time, so I keep my place.
+   - My invite table is saved on the device, so if the phone reloaded the
+     page while I was away, the link I sent still works. */
+export const INVITE_SEAT_FRESH_MS = 30 * 60 * 1000;
+
+/** The seat to tell the room about. */
+export const presenceSeat = ({ seat, match, visible }) => (match ? match.seat ?? seat : visible ? seat : null);
+
+/** The invite seat worth saving (none for other seats or during a match). */
+export const seatToSave = (seat, match) => (seat && !match && isInviteTable(seat.table) ? seat : null);
+
+/** A saved invite seat, if it's still fresh. */
+export function restoredSeat(saved, now = Date.now()) {
+  if (!saved || !isInviteTable(saved.table) || ![0, 1].includes(saved.side)) return null;
+  return typeof saved.at === "number" && now - saved.at < INVITE_SEAT_FRESH_MS ? saved : null;
+}
