@@ -2689,6 +2689,10 @@ export default function ZlegendsBot() {
   }, [siteView]);
   /* A finished game may still be on the board, so Play starts a fresh one
      instead of reopening it. */
+  /* A newcomer's one tap to a game (Home's "New here?" card, the welcome
+     sheet): straight onto the board against Rank Bot, the bot that finds
+     their level, instead of the Play menu. A game already going resumes. */
+  const quickPlay = () => (hasLiveGame ? setSiteView("play") : startFromHub(DIFFICULTIES.findIndex((d) => d.id === "rank")));
   const startFromHub = (idx) => {
     leaveActivity();
     if (moveList.length > 0) newGame(playerColor);
@@ -2732,6 +2736,7 @@ export default function ZlegendsBot() {
       <HomePage
         onEnter={enterMode}
         onPlay={() => onSection("play")}
+        onQuickPlay={quickPlay}
         onTactica={() => { leaveActivity(); setTacticaStart(null); setSiteView("tactica"); }}
         hasLiveGame={hasLiveGame}
         firstVisit={isFirstVisitRef.current}
@@ -2990,7 +2995,7 @@ export default function ZlegendsBot() {
       )}
       {welcomeOpen && siteView === "home" && (
         <Suspense fallback={null}>
-          <WelcomeSheet open onClose={closeWelcome} onPlay={() => { closeWelcome(); onSection("play"); }} />
+          <WelcomeSheet open onClose={closeWelcome} onPlay={() => { closeWelcome(); quickPlay(); }} />
         </Suspense>
       )}
       {/* The page itself: the "main" landmark screen readers jump to. */}

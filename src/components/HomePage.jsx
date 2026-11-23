@@ -23,7 +23,7 @@ const REVIEW_ICON = "M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0
  *  TV. Nothing else: the menu (AppNav.jsx) covers the full tour, and the
  *  daily puzzle and suggestions that used to sit here made it cluttered.
  *  Everything above the socials should fit on a phone screen. */
-export default function HomePage({ onEnter, onPlay, onTactica, hasLiveGame, firstVisit, rankElo, rankGames, sweetheart }) {
+export default function HomePage({ onEnter, onPlay, onQuickPlay, onTactica, hasLiveGame, firstVisit, rankElo, rankGames, sweetheart }) {
   /* Picked once per mount so it doesn't reroll mid-typewriter. */
   const [dismissed, setDismissed] = useState(false);
   /* "New here?": what the site is, for anyone arriving for the first time
@@ -78,7 +78,7 @@ export default function HomePage({ onEnter, onPlay, onTactica, hasLiveGame, firs
             </p>
             <div className="mt-3 grid grid-cols-2 gap-2">
               {[
-                { label: "Play a bot", icon: iconOf("play"), go: onPlay },
+                { label: "Play a bot", icon: iconOf("play"), go: onQuickPlay ?? onPlay },
                 { label: "Puzzles", icon: iconOf("puzzles"), go: () => onEnter("puzzles") },
                 { label: "Learn", icon: iconOf("learn"), go: () => onEnter("lessons") },
                 { label: "Chess Tactica", icon: CUBE_ICON, go: onTactica },

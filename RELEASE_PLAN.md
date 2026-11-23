@@ -491,6 +491,12 @@ page's heading and description beside a board; an opening's page shows
 that opening's position from its side. The board drawing is shared with
 the game card (api/_board.js).
 
+
+Then, D3 one-tap play: "Play a bot" on Home's "New here?" card and Play
+on the first-visit welcome sheet start a game against Rank Bot at once
+(a game already going resumes instead). Home's own Play still opens the
+Play menu.
+
 Owner: A6 Search Console, L4 device
 test day (two signed-in phones for invite links; a real Feedback send),
 L5 link previews.
