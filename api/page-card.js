@@ -13,6 +13,13 @@ import { BG, h, boardRows } from "./_board.js";
 
 export const config = { runtime: "edge" };
 
+export function shorten(text, max) {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const end = cut.lastIndexOf(". ");
+  return end > 40 ? cut.slice(0, end + 1) : cut.replace(/\s+\S*$/, "") + "…";
+}
+
 function boardFor(path) {
   const course = courseForPath(path);
   const eng = createEngine();
@@ -25,7 +32,8 @@ export default function handler(req) {
   const path = new URL(req.url).searchParams.get("p") || "/";
   const page = SEO_PAGES.find((p) => p.path === path) ?? SEO_PAGES[0];
   const { board, flipped } = boardFor(page.path);
-  const description = page.description.length > 150 ? page.description.slice(0, 147).replace(/\s+\S*$/, "") + "…" : page.description;
+  /* Long descriptions stop at the end of a sentence that fits, not mid-phrase. */
+  const description = shorten(page.description, 150);
   const tree = h("div", { style: { width: 1200, height: 630, display: "flex", alignItems: "center", background: BG, padding: 35, gap: 50, fontFamily: "sans-serif" } },
     boardRows(board, { flipped }),
     h("div", { style: { display: "flex", flexDirection: "column", gap: 22, flex: 1, color: "#F2E9FF" } },
