@@ -4,18 +4,21 @@
    third-party tracker. It never throws and never blocks anything: events are
    queued and sent a few at a time, and once more as the page is left.
 
-   What's sent with each: its name, a small detail object, this browser's
-   random id, the signed-in player's id if there is one, and the build. No
-   names, emails or free text typed by the player. The Privacy Policy
+   What's sent with each: its name, a small detail object, a random number
+   made for this visit only (never stored), whether the player is signed
+   in, and the build. No account id, no stored browser id, no names, emails
+   or free text typed by the player. The Privacy Policy
    describes this; change both together. */
 /* global __APP_VERSION__ */
-import { getClientId } from "./clientId";
 import { isConfigured, restPost, storedSession } from "./restApi";
 
 const FLUSH_MS = 4000;
 /* A visit that somehow loops can't flood the table. */
 const MAX_PER_VISIT = 300;
 const MAX_ERRORS_PER_VISIT = 5;
+
+/* This visit only: never stored, so visits can't be linked (see track). */
+const VISIT_ID = "v-" + Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
 
 const VERSION = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "dev";
 
@@ -41,11 +44,13 @@ export function track(name, detail = null) {
     /* Not from tests or local development: only real visits count. */
     if (off || !isConfigured() || import.meta.env?.MODE === "test" || import.meta.env?.DEV || sent >= MAX_PER_VISIT) return;
     sent++;
+    /* Not tied to the person (owner's decision, 2026-11-23): no account id
+       and no stored browser id, only a number made up for this visit and
+       kept in memory, so one visit's events can be grouped but two visits
+       can't be linked. Whether they're signed in is all we keep. */
     const session = storedSession();
-    /* The user id only counts with a token that's still good (the database
-       checks it against the token). */
-    const fresh = session && session.expires_at * 1000 > Date.now();
-    queue.push({ name, detail, client_id: getClientId(), user_id: fresh ? session.user?.id ?? null : null, app_version: VERSION });
+    const signedIn = !!(session && session.expires_at * 1000 > Date.now());
+    queue.push({ name, detail: { ...(detail ?? {}), signedIn }, client_id: VISIT_ID, user_id: null, app_version: VERSION });
     if (!timer) timer = setTimeout(flush, FLUSH_MS);
   } catch { /* never in the way */ }
 }
