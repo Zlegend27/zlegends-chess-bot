@@ -40,6 +40,15 @@
       #shell header { box-sizing: border-box; height: calc(57px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) 12px 0; display: flex; align-items: center; border-bottom: 1px solid #8B2FC955; background: #1D1038; }
       html.shellLight #shell { color: #4A1030; }
       html.shellLight #shell header { background: #FFF6E9; border-color: #F0A8C4; }
+      /* Each page's own heading and lines (scripts/prerender.mjs), for
+         search engines and the moment before the app loads. */
+      #shell .seoText { max-width: 32rem; margin: 0 auto; padding: 28px 16px; text-align: center; font-weight: 400; line-height: 1.55; }
+      #shell .seoText h1 { margin: 0 0 12px; font: 900 24px/1.2 'Arial Black', Impact, sans-serif; }
+      #shell .seoText p { margin: 0 0 12px; color: #C9C2E8; }
+      #shell .seoText nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 16px; margin-top: 8px; }
+      #shell .seoText a { color: #3EE7F5; display: inline-block; padding: 8px 0; }
+      html.shellLight #shell .seoText p { color: #6B3A55; }
+      html.shellLight #shell .seoText a { color: #0E7C86; }
     </style>
     <script>
       try { if (localStorage.getItem("zlegendsBot.lightTheme") === "true") document.documentElement.classList.add("shellLight"); } catch (e) {}
