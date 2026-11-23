@@ -5,7 +5,7 @@ import { getUiTheme } from "../utils/uiTheme";
    sign-in setup links to both). Written in plain words, and it has to match
    what the site really does: if the site starts collecting or sending
    anything new, update the policy and its date. */
-const UPDATED = "November 15, 2026";
+const UPDATED = "November 23, 2026";
 const CONTACT = "support@zlegend2700.com";
 
 function Section({ title, children, T }) {
@@ -95,13 +95,48 @@ function Terms({ T }) {
   );
 }
 
+/* What works for people using a keyboard, a screen reader or other help,
+   what doesn't yet, and how to tell us. Keep it true: check it against
+   the site (await __a11y() on the dev server) when things change. */
+function Accessibility({ T }) {
+  return (
+    <>
+      <Section title="Our aim" T={T}>
+        <p className="m-0">We want everyone to be able to play here. We aim for the WCAG 2.1 AA guidelines and check the site with automated tools and by hand, on phones and computers, in both the dark and light themes.</p>
+      </Section>
+      <Section title="What works" T={T}>
+        <ul className="m-0 pl-5">
+          <li>The whole site works with a keyboard. On the board, Tab reaches every square and Enter or Space picks up and puts down a piece.</li>
+          <li>Screen readers hear every square by name, the moves as they&apos;re played, and the result.</li>
+          <li>Blind Chess is a full game played by voice, with no board at all: moves are spoken and heard.</li>
+          <li>A &quot;Skip to content&quot; link is the first thing Tab reaches on every page.</li>
+          <li>If your device asks for less motion, animations are cut down.</li>
+          <li>You can pinch to zoom the page, except on the board itself.</li>
+          <li>Chess Tactica&apos;s films have captions.</li>
+        </ul>
+      </Section>
+      <Section title="What doesn't work yet" T={T}>
+        <ul className="m-0 pl-5">
+          <li>Chess Tactica is a 3D game built to be seen and touched: its world and bosses aren&apos;t described to screen readers, and its board needs a mouse or a touch screen (its menus work with a keyboard). Everything else on the site, including puzzles and games against the bots, works without it.</li>
+          <li>Text over the moving starry background is checked for contrast against the card behind it, not every star.</li>
+        </ul>
+      </Section>
+      <Section title="Tell us" T={T}>
+        <p className="m-0">If something gets in your way, email <a href={`mailto:${CONTACT}`}>{CONTACT}</a> with the page and what happened, or tell us on the <a href="https://discord.gg/TQtfCVkYqa" target="_blank" rel="noopener noreferrer">Discord</a>. We read everything and fix what we can.</p>
+      </Section>
+    </>
+  );
+}
+
+const DOC_TITLES = { terms: "Terms of Service", privacy: "Privacy Policy", accessibility: "Accessibility" };
+
 export default function LegalPage({ doc, onBack, sweetheart }) {
   const T = getUiTheme(sweetheart);
   return (
     <SubPage onBack={onBack} sweetheart={sweetheart}>
-      <h1 className="boxHead m-0">{doc === "terms" ? "Terms of Service" : "Privacy Policy"}</h1>
+      <h1 className="boxHead m-0">{DOC_TITLES[doc] ?? DOC_TITLES.privacy}</h1>
       <p className={"m-0 text-xs " + T.dimText}>Last updated {UPDATED}</p>
-      {doc === "terms" ? <Terms T={T} /> : <Privacy T={T} />}
+      {doc === "terms" ? <Terms T={T} /> : doc === "accessibility" ? <Accessibility T={T} /> : <Privacy T={T} />}
     </SubPage>
   );
 }

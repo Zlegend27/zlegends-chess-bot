@@ -38,12 +38,14 @@ function RankFeel({ outcome }) {
    for a live game, a puzzle, a review or a rush. Loaded when a game starts
    (see App.jsx). Everything it reads or does comes in as a prop. */
 export default function PlayView({ mateFxProps, rechecking, betterMoveLine, rankTestNote, RushThemeArt, Tray, activeOpening, activePuzzle, analysisBusy, analysisContent, analysisLabel, analysisMove, analyzing, arrowLine, beginRestartCountdown, bestArrow, boardColorId, boardRef, boardVars, botColor, botLine, botMood, botTaken, colorPick, curMoveIdx, difficultyIdx, difficultyRef, displayName, dragCellSize, dragFrom, dragPos, eng, evalLabel, evalPawns, exitMissedAttempt, exitPractice, exitPuzzle, exitReplay, exitRush, endRush, formatClock, gameStyle, gradeDetail, gradeProgress, grading, hideEvalBar, hideRushSummary, hinting, inChk, liveOpening, missedAttempt, missedStepIdx, mode, moveGrades, moveList, nameDraft, nameEditOpen, newGame, newGameConfirm, nextPuzzle, onCopyPgn, onDifficultyChange, onHint, onMissedSwipeEnd, onMissedSwipeStart, openLeaderboard, openReviewPage, pairs, pastedGame, pauseSpectate, pgnToast, pieceImgSrc, pieceSetId, playMove, playerAdvantageCp, playerColor, playerShare, practice, practiceMove, practiceNext, practiceReveal, promo, puzzleBand, puzzleFeedback, puzzleMove, puzzleSolved, pz, quizDoneToast, quizMove, quizOpening, rankBotAssessedElo, rankBotGames, playerRating, replayFull, replayIndex, replayPlaying, replayStep, restartCountdown, result, resumeSpectate, reviewIndex, reviewInfo, reviewMissedPuzzle, reviewing, rows, rushBandIdx, rushBestMap, rushDuration, rushLifetime, rushMilestone, rushMissed, rushMistakes, rushMode, rushResult, rushSolved, rushSummaryOpen, rushTimeLeft, saveDisplayName, setBotLine, setColorPick, setMissedStepIdx, setNameDraft, setNameEditOpen, setNewGameConfirm, setPlayerColor, setPromo, setReplayIndex, setReviewIndex, setRushSummaryOpen, setShareLinkFallback, setShareToast, setSiteView, shareLinkFallback, shareToast, spectateBlackIdx, spectateMode, spectateOpeningId, spectatePaused, spectateWhiteIdx, startPuzzle, startQuiz, startSpectate, status, stopSpectate, sweetheart, thinking, toggleAnalyze, toggleReplayPlay, uiT, undo, youDiff, youTaken, onQuit, profile, accountAvatar }) {
-  /* No pinch or double-tap zoom on the game screen: a stray two-finger touch
-     beside the board used to zoom the whole page mid-game. Scrolling still
-     works. The gesture events are Safari's own, for iPhones that ignore the
-     style. */
+  /* Zoom on the game screen, the way Lichess and Chess.com do it (checked
+     2026-11-23): the board itself never zooms (it takes its own touches),
+     double-tap zoom is off everywhere (taps on buttons used to zoom the page
+     mid-game), but pinching anywhere else still zooms, for anyone who needs
+     a closer look. The gesture events are Safari's own, for iPhones, which
+     ignore the board's CSS touch rule for pinches. */
   useEffect(() => {
-    const stop = (e) => e.preventDefault();
+    const stop = (e) => { if (e.target?.closest?.(".boardWrap")) e.preventDefault(); };
     document.documentElement.classList.add("noPinch");
     document.addEventListener("gesturestart", stop);
     document.addEventListener("gesturechange", stop);

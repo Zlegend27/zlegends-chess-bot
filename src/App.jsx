@@ -2028,15 +2028,23 @@ export default function ZlegendsBot() {
       const heading = box.querySelector(".boxHead, h1, h2, h3");
       if (heading) box.setAttribute("aria-label", heading.textContent.trim());
     }
+    /* Where keyboard focus goes back to when a popup closes: what had it
+       when the popup opened. A popup opened from the header menu was opened
+       by a menu item that disappears with the menu, so the menu's own button
+       stands in for it. */
+    const menuButton = () => document.querySelector('[aria-haspopup="menu"]');
     if (box && !modalOpenRef.current) {
       modalOpenRef.current = true;
-      modalPrevFocusRef.current = document.activeElement;
+      const had = document.activeElement;
+      modalPrevFocusRef.current = !had || had === document.body || had.closest?.('[role="menu"]') ? menuButton() : had;
       document.body.style.overflow = "hidden";
-      box.querySelector(FOCUSABLE_SEL)?.focus();
+      /* A frame later, so a closing menu can't take focus back out. */
+      requestAnimationFrame(() => { if (!box.contains(document.activeElement)) box.querySelector(FOCUSABLE_SEL)?.focus(); });
     } else if (!box && modalOpenRef.current) {
       modalOpenRef.current = false;
       document.body.style.overflow = "";
-      modalPrevFocusRef.current?.focus?.();
+      const back = modalPrevFocusRef.current;
+      (back?.isConnected ? back : menuButton() ?? document.getElementById("content"))?.focus?.();
       modalPrevFocusRef.current = null;
     }
   });
@@ -2451,7 +2459,7 @@ export default function ZlegendsBot() {
               (kingInCheck ? " chk" : "") + (isHintFrom ? " hintFrom" : "") + (isHintTo ? " hintTo" : "") +
               (isDragOver ? " dragOver" : "")}>
             {p !== EMPTY && !isDragFrom && !(showMateFx && mateFx.sq === i64) && <img className={"pc " + (p > 0 ? "w" : "b") + (pieceSetId === "sweetheart" && Math.abs(p) === 6 ? " kingBoost" : "") + (pieceSetId === "sweetheart" && p === -2 ? " knightBoost" : "")} src={pieceImgSrc(Math.abs(p), p > 0)} alt="" draggable="false" />}
-            {gradeHere && lastMove && lastMove.to === sq120 && <span className={"boardGrade " + gradeHere}>{GRADE_TAG[gradeHere]}</span>}
+            {gradeHere && lastMove && lastMove.to === sq120 && <span className={"boardGrade " + gradeHere} role="img" aria-label={`Graded: ${gradeHere}`} title={gradeHere}>{GRADE_TAG[gradeHere]}</span>}
             {isTarget && <span className={"dot" + (p !== EMPTY ? " ring" : "")} />}
             {vf === 0 && <span className="coord rk">{r + 1}</span>}
             {vr === 7 && <span className="coord fl">{FILES[f]}</span>}
@@ -2759,7 +2767,7 @@ export default function ZlegendsBot() {
     );
   }
 
-  if (siteView === "privacy" || siteView === "terms") {
+  if (siteView === "privacy" || siteView === "terms" || siteView === "accessibility") {
     return (
       <Suspense fallback={null}>
         <LegalPage doc={siteView} onBack={() => setSiteView("home")} sweetheart={sweetheart} />

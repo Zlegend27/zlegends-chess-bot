@@ -144,6 +144,14 @@ export const SEO_PAGES = [
     links: ["/terms"],
   },
   {
+    path: "/accessibility",
+    title: "Accessibility",
+    description: "How Zlegend2700 works with a keyboard, screen readers and voice, what doesn't work yet, and how to tell us.",
+    heading: "Accessibility",
+    intro: ["The whole site works with a keyboard and screen readers, Blind Chess is a full game played by voice, and here is what doesn't work yet and how to tell us."],
+    links: ["/privacy", "/terms"],
+  },
+  {
     path: "/terms",
     title: "Terms of Service",
     description: "The terms for using Zlegend2700.",
@@ -169,4 +177,5 @@ export const LINK_TEXT = {
   "/lobby": "Play 1v1",
   "/privacy": "Privacy",
   "/terms": "Terms",
+  "/accessibility": "Accessibility",
 };

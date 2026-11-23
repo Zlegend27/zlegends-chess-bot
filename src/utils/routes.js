@@ -21,6 +21,7 @@ const VIEW_PATHS = {
   avatar: "/avatar",
   privacy: "/privacy",
   terms: "/terms",
+  accessibility: "/accessibility",
 };
 
 export const pathForView = (view) => VIEW_PATHS[view] ?? "/";
@@ -50,7 +51,7 @@ const TITLES = {
   playHub: "Play", play: "Game", puzzlesHome: "Puzzles", leaderboard: "Leaderboards", review: "Game Review",
   lessons: "Learn", openings: "Openings", watch: "Watch bots play", ranked: "Ranked puzzles", rush: "Puzzle Rush",
   profile: "Profile", avatar: "Your avatar", history: "Game History", lobby: "1v1 lobby", practice: "Play with yourself", tactica: "Chess Tactica",
-  privacy: "Privacy Policy", terms: "Terms of Service",
+  privacy: "Privacy Policy", terms: "Terms of Service", accessibility: "Accessibility",
 };
 export const titleFor = (view) => (TITLES[view] ? `${TITLES[view]} · ${SITE}` : `${SITE} · Free chess: bots, puzzles and game review`);
 
@@ -66,7 +67,7 @@ export function sectionForView({ siteView, rushMode, activePuzzle, pastedGame })
   if (siteView === "lessons" || siteView === "openings") return "learn";
   if (siteView === "review") return "review";
   if (siteView === "home") return "home";
-  if (["profile", "avatar", "history", "privacy", "terms"].includes(siteView)) return "";
+  if (["profile", "avatar", "history", "privacy", "terms", "accessibility"].includes(siteView)) return "";
   if (["playHub", "watch", "tactica", "lobby", "practice"].includes(siteView)) return "play";
   if (rushMode || activePuzzle) return "puzzles";
   return pastedGame ? "review" : "play";

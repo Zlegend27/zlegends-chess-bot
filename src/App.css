@@ -868,9 +868,10 @@ select:hover{ border-color:var(--cyan); }
 @media (max-width:700px) and (orientation:portrait) and (hover:none) and (pointer:coarse){
   .root.noEval .board{ width:100vw; height:100vw; aspect-ratio:auto; flex:none; }
 }
-/* The game screen (PlayView adds the class): scrolling only, no pinch or
-   double-tap zoom. */
-html.noPinch, html.noPinch body{ touch-action:pan-x pan-y; }
+/* The game screen (PlayView adds the class): scrolling and pinch zoom, but
+   no double-tap zoom (taps on the controls kept zooming the page). The
+   board itself never zooms: .board is touch-action:none. */
+html.noPinch, html.noPinch body{ touch-action:manipulation; }
 /* A small phone held sideways: keep the board within the screen's height. */
 @media (max-width:700px) and (orientation:landscape){
   .board, .root.noEval .board{ width:min(calc(100vw - 28px), 460px, calc(100dvh - 32px)); }
