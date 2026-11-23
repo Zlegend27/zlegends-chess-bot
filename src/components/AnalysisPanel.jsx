@@ -2,13 +2,13 @@
    opening quiz, opening replay, or a game with its post-game report and
    the bot's live search). Moved out of App.jsx; it only reads App's state,
    so everything arrives as a prop under the same name it had there. */
-import { sideAccuracy } from "../utils/reviewScoring";
+import { gameAccuracies } from "../utils/reviewScoring";
 import { fullMoves } from "../utils/moveNumber";
 import { GRADE_COLOR, GRADE_TAG } from "../utils/grades";
 import EvalGraph from "./EvalGraph";
 import BoltIcon from "./BoltIcon";
 
-export default function AnalysisPanel({ siteAccuracy, activePuzzle, missedAttempt, puzzleSolved, puzzleFeedback, eng, rushMode, rushResult, toggleAnalyze, analyzing, analysisBusy, pz, rushBandIdx, quizOpening, moveList, quizFeedback, activeOpening, replayIndex, grading, gradeProgress, reviewing, moveGrades, mode, pastedGame, playerColor, gradeDetail, reviewIndex, setReviewIndex, practiceQueue, practice, startPractice, info, evalLabel, sweetheart, uiT, playerAdvantageCp }) {
+export default function AnalysisPanel({ siteAccuracy, activePuzzle, missedAttempt, puzzleSolved, puzzleFeedback, eng, rushMode, rushResult, toggleAnalyze, analyzing, analysisBusy, pz, rushBandIdx, quizOpening, moveList, quizFeedback, activeOpening, replayIndex, grading, gradeProgress, reviewing, moveGrades, mode, pastedGame, playerColor, gradeDetail, reviewIndex, setReviewIndex, practiceQueue, practice, startPractice, info, evalLabel, sweetheart, uiT, playerAdvantageCp, onShareReview }) {
   /* The tab itself is already named (Rush/Puzzle/Quiz/Opening/Analysis via
      analysisLabel), so no state repeats a heading inside its own content
      anymore -- each shows one small context chip where it earns its place,
@@ -43,10 +43,10 @@ export default function AnalysisPanel({ siteAccuracy, activePuzzle, missedAttemp
        player: a single clean move counts as 3000, so the average runs far too
        high. That mapping was built to nudge a dial, not to be averaged into a
        rating, so it stays off until it's calibrated on real games. */
+    const acc = gradeDetail ? gameAccuracies(gradeDetail.plyScores) : null;
     const sideStats = (parity) => {
-      if (!gradeDetail) return null;
-      const acc = sideAccuracy(gradeDetail.plyScores.filter((m, i) => m && i % 2 === parity));
-      return acc == null ? null : { acc: Math.round(acc) };
+      const a = acc?.[parity === 0 ? "white" : "black"];
+      return a == null ? null : { acc: a };
     };
     return {
       cols: [
@@ -174,6 +174,17 @@ export default function AnalysisPanel({ siteAccuracy, activePuzzle, missedAttemp
               className={`mt-3 w-full rounded-lg border px-3 py-2 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 ${uiT.ring} ${sweetheart ? "border-sh-lgold/40 bg-sh-lgold/10 text-sh-lgold hover:border-sh-lgold/70 hover:bg-sh-lgold/18" : "border-yellow/30 bg-yellow/8 text-yellow hover:border-yellow/60 hover:bg-yellow/14"}`}
             >
               🎯 Practice your mistakes ({practiceQueue.length})
+            </button>
+          )}
+          {/* A link to this review: the preview shows both accuracies, and
+              it opens graded for whoever taps it. */}
+          {onShareReview && gradeReport.cols.every((c) => c.stats) && (
+            <button
+              type="button"
+              onClick={onShareReview}
+              className={`mt-2 w-full rounded-lg border bg-transparent px-3 py-2 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 ${uiT.ring} ${sweetheart ? "border-sh-rose/30 text-sh-lteal hover:border-sh-rose/60" : "border-violet/40 text-cyan hover:border-cyan/60"}`}
+            >
+              Share this review
             </button>
           )}
         </div>

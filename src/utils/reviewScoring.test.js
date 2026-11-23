@@ -70,3 +70,16 @@ describe("accuracy", () => {
     expect(sideAccuracy([{ ...bad, forced: true }])).toBeNull();
   });
 });
+
+describe("shared review accuracy", () => {
+  test("round trips through the link", async () => {
+    const { accuracyParam, readAccuracyParam } = await import("./reviewScoring");
+    expect(accuracyParam({ white: 87, black: 72 })).toBe("87-72");
+    expect(readAccuracyParam("87-72")).toEqual({ white: 87, black: 72 });
+    expect(accuracyParam({ white: 87, black: null })).toBe(null);
+  });
+  test("nonsense reads as no accuracy", async () => {
+    const { readAccuracyParam } = await import("./reviewScoring");
+    for (const bad of ["", null, "101-5", "87", "a-b", "87-72-1", "-1-5"]) expect(readAccuracyParam(bad)).toBe(null);
+  });
+});

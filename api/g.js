@@ -4,6 +4,7 @@
    title, summary and a picture of the final position (api/card.js), since
    they don't run the site's script. */
 import { readGame, escapeHtml } from "./_game.js";
+import { readAccuracyParam } from "../src/utils/reviewScoring.js";
 
 export const config = { runtime: "edge" };
 
@@ -14,10 +15,14 @@ export default async function handler(req) {
   const page = await fetch(`${origin}/index.html`).then((r) => r.text());
   const game = readGame(code);
   if (!game) return new Response(page, { headers: { "Content-Type": "text/html; charset=utf-8" } });
-  const title = escapeHtml(`${game.title} · Zlegend2700`);
-  const description = escapeHtml(`${game.title === "A game on Zlegend2700" ? "" : game.title + ", "}${game.summary}. Replay every move.`);
-  const image = `${origin}/api/card?c=${encodeURIComponent(code)}`;
-  const link = `${origin}/g/${encodeURIComponent(code)}`;
+  /* A shared review (?a=87-72): its accuracy goes in the preview. */
+  const acc = readAccuracyParam(url.searchParams.get("a"));
+  const accText = acc ? `Accuracy: White ${acc.white}%, Black ${acc.black}%. ` : "";
+  const title = escapeHtml(`${acc ? "Game review: " : ""}${game.title} · Zlegend2700`);
+  const description = escapeHtml(`${accText}${game.title === "A game on Zlegend2700" ? "" : game.title + ", "}${game.summary}. ${acc ? "See every move graded." : "Replay every move."}`);
+  const aq = acc ? `&a=${acc.white}-${acc.black}` : "";
+  const image = `${origin}/api/card?c=${encodeURIComponent(code)}${aq}`;
+  const link = `${origin}/g/${encodeURIComponent(code)}${acc ? `?a=${acc.white}-${acc.black}` : ""}`;
   const swap = (html, attr, name, value) => html.replace(new RegExp(`(<meta ${attr}="${name}" content=")[^"]*(")`), `$1${value}$2`);
   let html = page;
   html = swap(html, "property", "og:title", title);

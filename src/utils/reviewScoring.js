@@ -55,3 +55,25 @@ export function sideAccuracy(moves) {
   }
   return count ? Math.max(0, 100 - SHORTFALL_STRETCH * (100 - sum / count)) : null;
 }
+
+/** Both sides' accuracy for a graded game, rounded: { white, black }, each
+ *  null when that side had nothing to score. `plyScores` is gradeDetail's
+ *  list, White's moves at even indexes. Used by the report card and by a
+ *  shared review link, so the two always agree. */
+export function gameAccuracies(plyScores) {
+  const side = (parity) => {
+    const acc = sideAccuracy((plyScores || []).filter((m, i) => m && i % 2 === parity));
+    return acc == null ? null : Math.round(acc);
+  };
+  return { white: side(0), black: side(1) };
+}
+
+/** The "?a=87-72" part of a shared review link, and back. Only whole
+ *  numbers 0 to 100; anything else reads as no accuracy. */
+export const accuracyParam = ({ white, black }) => (white == null || black == null ? null : `${white}-${black}`);
+export function readAccuracyParam(text) {
+  const m = /^(\d{1,3})-(\d{1,3})$/.exec(text || "");
+  if (!m) return null;
+  const white = Number(m[1]), black = Number(m[2]);
+  return white <= 100 && black <= 100 ? { white, black } : null;
+}

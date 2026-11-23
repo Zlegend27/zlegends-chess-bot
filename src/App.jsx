@@ -26,7 +26,7 @@ import { BALANCED, randomStyle, byStyle, pickPersonality } from "./utils/persona
 import { detectOpening } from "./utils/openingDetect";
 import { todayKey, dailyPuzzle, loadDailyPuzzle } from "./utils/dailyPuzzle";
 import { materialState } from "./utils/material";
-import { RECHECK_LOSS, pointsLost } from "./utils/reviewScoring";
+import { RECHECK_LOSS, pointsLost, gameAccuracies, accuracyParam, readAccuracyParam } from "./utils/reviewScoring";
 import { readRankBotTest } from "./utils/rankBotTest";
 import { judgePuzzleMove } from "./utils/puzzleSession";
 import { clearLiveGame, isResumable, loadLiveGame, saveLiveGame } from "./utils/liveGame";
@@ -2315,6 +2315,18 @@ export default function ZlegendsBot() {
     track("review_run", { source: game.site, ok: r.ok });
     return r;
   };
+  /* A shared review link (/g/<code>?a=87-72) opens as that review, graded
+     here again (same engine settings, so the same numbers), instead of a
+     plain replay. Once, on arrival. */
+  useEffect(() => {
+    if (!initialShared || !readAccuracyParam(new URLSearchParams(window.location.search).get("a"))) return;
+    const text = initialShared.moveList.map((san, i) => (i % 2 === 0 ? `${i / 2 + 1}. ${san}` : san)).join(" ");
+    const r = loadPgnText(text, { side: initialShared.playerColor });
+    track("review_run", { source: "shared", ok: r.ok });
+    /* Read once: don't carry ?a= on to the next page. */
+    history.replaceState(history.state, "", window.location.pathname + window.location.hash);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   /* Saved games know which side the player was on, so they open from that
      side, the way Chess.com keeps you at the bottom by default. */
   const reviewSavedGame = (game) => {
@@ -2360,11 +2372,15 @@ export default function ZlegendsBot() {
         and the player would think Share was just broken. */
   const onShare = async () => {
     const hash = encodeGame(playerColor, moveList);
+    /* A graded review shares its accuracy too (?a=87-72): the preview card
+       shows it, and the link opens the review, graded again on arrival. */
+    const acc = reviewing && gradeDetail && !grading ? accuracyParam(gameAccuracies(gradeDetail.plyScores)) : null;
     /* /g/<code>: the server gives link previews a picture of the game. */
-    const url = `${window.location.origin}/g/${hash}`;
+    const url = `${window.location.origin}/g/${hash}${acc ? `?a=${acc}` : ""}`;
+    track("share", { review: !!acc });
     if (navigator.share) {
       try {
-        await navigator.share({ title: "Zlegend2700", text: "Check out this game!", url });
+        await navigator.share({ title: "Zlegend2700", text: acc ? "My game review" : "Check out this game!", url });
         return;
       } catch (e) {
         if (e && e.name === "AbortError") return; // player closed the native share sheet
@@ -2505,7 +2521,7 @@ export default function ZlegendsBot() {
      this screen (ExploreDock/BottomNav only render in the play view). */
   const playerAdvantageCp = playerColor === 1 ? evalCp : -evalCp;
   const analysisContent = (
-    <AnalysisPanel siteAccuracy={pastedGame ? reviewInfo?.siteAccuracy : null} activePuzzle={activePuzzle} missedAttempt={missedAttempt} puzzleSolved={puzzleSolved} puzzleFeedback={puzzleFeedback} eng={eng} rushMode={rushMode} rushResult={rushResult} toggleAnalyze={toggleAnalyze} analyzing={analyzing} analysisBusy={analysisBusy} pz={pz} rushBandIdx={rushBandIdx} quizOpening={quizOpening} moveList={moveList} quizFeedback={quizFeedback} activeOpening={activeOpening} replayIndex={replayIndex} grading={grading} gradeProgress={gradeProgress} reviewing={reviewing} moveGrades={moveGrades} mode={mode} pastedGame={pastedGame} playerColor={playerColor} gradeDetail={gradeDetail} reviewIndex={reviewIndex} setReviewIndex={setReviewIndex} practiceQueue={practiceQueue} practice={practice} startPractice={startPractice} info={info} evalLabel={evalLabel} sweetheart={sweetheart} uiT={uiT} playerAdvantageCp={playerAdvantageCp} />
+    <AnalysisPanel siteAccuracy={pastedGame ? reviewInfo?.siteAccuracy : null} activePuzzle={activePuzzle} missedAttempt={missedAttempt} puzzleSolved={puzzleSolved} puzzleFeedback={puzzleFeedback} eng={eng} rushMode={rushMode} rushResult={rushResult} toggleAnalyze={toggleAnalyze} analyzing={analyzing} analysisBusy={analysisBusy} pz={pz} rushBandIdx={rushBandIdx} quizOpening={quizOpening} moveList={moveList} quizFeedback={quizFeedback} activeOpening={activeOpening} replayIndex={replayIndex} grading={grading} gradeProgress={gradeProgress} reviewing={reviewing} moveGrades={moveGrades} mode={mode} pastedGame={pastedGame} playerColor={playerColor} gradeDetail={gradeDetail} reviewIndex={reviewIndex} setReviewIndex={setReviewIndex} practiceQueue={practiceQueue} practice={practice} startPractice={startPractice} info={info} evalLabel={evalLabel} sweetheart={sweetheart} uiT={uiT} playerAdvantageCp={playerAdvantageCp} onShareReview={onShare} />
   );
 
   const inChk = eng.inCheckNow() && !result;

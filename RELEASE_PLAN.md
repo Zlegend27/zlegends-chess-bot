@@ -446,7 +446,16 @@ it wrong after "Next puzzle"). Prerendered page and sitemap entry; Puzzles
 links to it. vercel.json lists it (routes.test caught the trailing-slash
 rule missing it).
 
-Next: Game Review share link (F4). Owner: A6 Search Console, L4 device
+Then, F4 Game Review share link: a graded review has "Share this
+review" under its report (the menu's Share does the same then). The link
+is /g/<code>?a=87-72: the preview title, text and picture show both
+accuracies, and opening it starts that review graded on arrival (same
+settings, same numbers; checked in dev: shared 38/100, opened 38/100).
+The accuracy in the link is only for the preview; the app grades again.
+One-tap review from Game History already existed.
+
+Next: the 1v1 lobby redesign (owner, 2026-11-23: no more tables and
+seats). Owner: A6 Search Console, L4 device
 test day (two signed-in phones for invite links; a real Feedback send),
 L5 link previews.
 
