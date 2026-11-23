@@ -112,7 +112,7 @@ export default function PlayPage({ levels, hasLiveGame, onPick, onResume, onQuit
             </svg>
             <img src={cburnettPieceSvgUrl(1, false)} alt="" width="36" height="36" style={{ transform: "scaleX(-1)" }} />
           </span>
-          {label("1v1", "Play a real person online.")}
+          {label("1v1", "Play a real person online, or invite a friend.")}
         </button>
 
         {/* Play with yourself: move both sides to try out ideas. */}

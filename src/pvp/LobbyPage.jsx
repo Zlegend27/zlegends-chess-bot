@@ -9,7 +9,9 @@
    development a guest identity per tab stands in, so two tabs can test
    it.
    ================================================================ */
+import { useEffect, useState } from "react";
 import { TIME_CONTROLS, timeControl } from "../utils/lobby";
+import { inviteLink, pendingInvite, clearPendingInvite } from "../utils/invite";
 import { getUiTheme } from "../utils/uiTheme";
 import SubPage from "../components/SubPage";
 import PlayerSprite from "../components/PlayerSprite";
@@ -20,13 +22,35 @@ export default function LobbyPage({ session, profile, displayName, avatar, piece
   const T = getUiTheme(sweetheart);
   const { me, signedIn } = useLobbyMe({ session, profile, displayName, avatar });
   const lobby = useLobby({ me, rating });
-  const { supabase, connected, players, tables, seat, tcId, setTcId, ranked, setRanked, match, note, standing, sit, standUp, leaveMatch } = lobby;
+  const { supabase, connected, players, tables, seat, tcId, setTcId, ranked, setRanked, match, note, standing, sit, standUp, leaveMatch, inviteTable } = lobby;
+  /* A friend's invite link brought us here: sit at their table as soon as
+     the lobby is connected (utils/invite.js). */
+  const [arrivedByInvite] = useState(() => pendingInvite());
+  useEffect(() => {
+    const code = pendingInvite();
+    if (!code || !connected || !me || seat || match) return;
+    clearPendingInvite();
+    lobby.joinInvite(code);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected, me, seat, match]);
+  /* The link to my private table, once I've opened one. */
+  const [copied, setCopied] = useState(false);
+  const myInviteCode = inviteTable && seat?.side === 0 ? String(inviteTable.id).slice(4) : null;
+  const link = myInviteCode ? inviteLink(myInviteCode) : null;
+  const copyLink = async () => {
+    try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* the link is on screen to copy by hand */ }
+  };
+  const shareLink = () => navigator.share?.({ title: "Play me at chess", text: "Play me at chess on Zlegend2700", url: link }).catch(() => {});
 
   if (!me) {
     return (
       <SubPage onBack={onBack} sweetheart={sweetheart}>
         <div className="boxHead">Play a real person</div>
-        <p className={"m-0 text-sm " + T.ink}>Log in to join the lobby. Your name and your look come from your profile.</p>
+        <p className={"m-0 text-sm " + T.ink}>
+          {arrivedByInvite
+            ? "A friend invited you to play. Log in and you'll be seated at their table."
+            : "Log in to join the lobby. Your name and your look come from your profile."}
+        </p>
         <button type="button" className="btn gold" style={{ width: "100%" }} onClick={onSignIn}>Log in</button>
       </SubPage>
     );
@@ -93,7 +117,42 @@ export default function LobbyPage({ session, profile, displayName, avatar, piece
           <button type="button" role="radio" aria-checked={ranked} disabled={!!seat} className={chip(ranked)} onClick={() => setRanked(true)}>Ranked</button>
           <span className={"self-center text-xs " + T.dimText}>{ranked ? "Win or lose, your rating moves." : "Just for fun. No rating change."}</span>
         </div>
+        {!seat && (
+          <button type="button" className="btn ghost" style={{ minHeight: 44 }} disabled={!connected} onClick={() => lobby.invite()}>
+            Invite a friend
+          </button>
+        )}
       </div>
+
+      {/* My private table: the link to send, until my friend sits down. */}
+      {inviteTable && !inviteTable.full && (
+        <div className={`flex flex-col gap-2.5 rounded-2xl border p-3 ${sweetheart ? "border-sh-lteal" : "border-cyan"} ${T.panelBg}`}>
+          <div className={label}>{seat.side === 0 ? "Your private table" : "Your friend's table"} · {timeControl(inviteTable.tc ?? tcId).label}</div>
+          {seat.side === 0 ? (
+            <>
+              <p className={"m-0 text-sm " + T.ink}>Send this link to a friend. The game starts as soon as they open it. Keep this page open until then.</p>
+              <input
+                readOnly
+                value={link ?? ""}
+                aria-label="Invite link"
+                onFocus={(e) => e.target.select()}
+                className={`min-h-11 w-full rounded-lg border ${T.cardBorder} bg-transparent px-3 font-mono text-xs ${T.ink}`}
+              />
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className="btn ghost" style={{ minHeight: 44, flex: 1 }} onClick={copyLink}>{copied ? "Copied" : "Copy link"}</button>
+                {typeof navigator !== "undefined" && navigator.share && (
+                  <button type="button" className="btn ghost" style={{ minHeight: 44, flex: 1 }} onClick={shareLink}>Share</button>
+                )}
+              </div>
+            </>
+          ) : (
+            <p className={"m-0 text-sm " + T.ink} role="status">You&apos;re at your friend&apos;s table. The game starts when they&apos;re here.</p>
+          )}
+          <button type="button" className={"cursor-pointer self-start border-0 bg-transparent p-0 py-1 text-xs underline " + T.dimText} onClick={standUp}>
+            {seat.side === 0 ? "Cancel the invite" : "Leave the table"}
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-col gap-2">
         <div className={label}>Tables</div>

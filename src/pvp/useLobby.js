@@ -12,7 +12,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getSupabase } from "../utils/supabase";
 import { loadSetting, saveSetting } from "../utils/storage";
-import { playersFrom, tablesFrom, holdsSeat, matchAt } from "../utils/lobby";
+import { playersFrom, tablesFrom, holdsSeat, matchAt, tableOfSeat, inviteTableId, newInviteCode, isInviteTable } from "../utils/lobby";
 import { DEFAULT_AVATAR } from "../utils/avatar";
 import { cleanName } from "../utils/cleanName";
 import { openChannel } from "./channel";
@@ -92,12 +92,12 @@ export function useLobby({ me, rating = null, room = "lobby-v1", activeKey = "pv
   /* Lost a seat to someone who got there first; or a table filled: start. */
   useEffect(() => {
     if (!seat || match || !mePresent?.seat) return;
-    if (!holdsSeat(mePresent, tables)) {
+    if (!holdsSeat(mePresent, tables, players)) {
       setSeat(null);
-      setNote("Someone sat there a moment before you.");
+      setNote(isInviteTable(seat.table) ? "Someone else already took that invite." : "Someone sat there a moment before you.");
       return;
     }
-    const found = matchAt(tables[seat.table], matchPrefix);
+    const found = matchAt(tableOfSeat(seat, tables, players), matchPrefix);
     if (!found) return;
     const other = found.white.id === me.id ? found.black : found.white;
     if (blocked.includes(other.id)) {
@@ -106,7 +106,7 @@ export function useLobby({ me, rating = null, room = "lobby-v1", activeKey = "pv
       return;
     }
     setMatch({ ...found, seat });
-  }, [tables, seat, match, mePresent, matchPrefix, blocked, me]);
+  }, [tables, players, seat, match, mePresent, matchPrefix, blocked, me]);
 
   return {
     supabase, connected, players, tables, seat, tcId, setTcId, ranked, setRanked, blocked, block, match, note,
@@ -115,6 +115,12 @@ export function useLobby({ me, rating = null, room = "lobby-v1", activeKey = "pv
     /** Players in the room who are neither seated nor playing. */
     standing: players.filter((p) => !p.seat && !p.playing),
     sit: (table, side) => { setNote(null); setSeat({ table, side, at: Date.now() }); },
+    /** Opens a private table and returns its code, for a link to a friend. */
+    invite: () => { const code = newInviteCode(); setNote(null); setSeat({ table: inviteTableId(code), side: 0, at: Date.now() }); return code; },
+    /** Sits at a friend's private table (the other seat to theirs). */
+    joinInvite: (code) => { setNote(null); setSeat({ table: inviteTableId(code), side: 1, at: Date.now() }); },
+    /** The private table I'm at, if any (who's there, its clock). */
+    inviteTable: seat && isInviteTable(seat.table) ? tableOfSeat(seat, tables, players) : null,
     standUp: () => setSeat(null),
     leaveMatch: () => { setMatch(null); setSeat(null); },
   };

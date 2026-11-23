@@ -34,21 +34,43 @@ const firstClaim = (a, b) => (a.seat.at - b.seat.at) || (a.id < b.id ? -1 : 1);
  *  seats, the time control (set by whoever sat first) and whether a match
  *  is on. */
 export function tablesFrom(players, count = TABLE_COUNT) {
-  return Array.from({ length: count }, (_, id) => {
-    const seats = [0, 1].map((side) => players
-      .filter((p) => p.seat?.table === id && p.seat.side === side)
-      .sort(firstClaim)[0] ?? null);
-    const held = seats.filter(Boolean).sort(firstClaim);
-    /* Whoever sat first sets the table: its clock, and whether it's ranked. */
-    return { id, seats, tc: held[0]?.tc ?? null, ranked: !!held[0]?.ranked, full: held.length === 2 };
-  });
+  return Array.from({ length: count }, (_, id) => tableById(players, id));
 }
 
+/** One table as everyone sees it. `id` is a public table's number, or a
+ *  private table's "inv-…" id (an invite link: it isn't listed in the
+ *  lobby, only the two people with the link sit at it). */
+export function tableById(players, id) {
+  const seats = [0, 1].map((side) => players
+    .filter((p) => p.seat?.table === id && p.seat.side === side)
+    .sort(firstClaim)[0] ?? null);
+  const held = seats.filter(Boolean).sort(firstClaim);
+  /* Whoever sat first sets the table: its clock, and whether it's ranked. */
+  return { id, seats, tc: held[0]?.tc ?? null, ranked: !!held[0]?.ranked, full: held.length === 2 };
+}
+
+/* ---- Invite links: a private table for two friends ---- */
+const INVITE_PREFIX = "inv-";
+export const isInviteTable = (id) => typeof id === "string" && id.startsWith(INVITE_PREFIX);
+export const inviteTableId = (code) => INVITE_PREFIX + code;
+/** A fresh invite code: 10 letters and digits, hard to guess. */
+export function newInviteCode(random = () => crypto.getRandomValues(new Uint32Array(1))[0] / 2 ** 32) {
+  const abc = "abcdefghjkmnpqrstuvwxyz23456789";
+  return Array.from({ length: 10 }, () => abc[Math.floor(random() * abc.length)]).join("");
+}
+/** A code from a link, or null if it isn't one of ours. */
+export const cleanInviteCode = (code) => (typeof code === "string" && /^[a-z0-9]{6,16}$/.test(code) ? code : null);
+
+/** The table a seat is at: a public one from `tables`, or a private one
+ *  worked out from the players. */
+export const tableOfSeat = (seat, tables, players) => (seat ? (isInviteTable(seat.table) ? tableById(players, seat.table) : tables[seat.table]) : null);
+
 /** Whether `me` really holds the seat they claim (false if someone else got
- *  there first, or they claim none). */
-export function holdsSeat(me, tables) {
+ *  there first, or they claim none). `players` is needed for private
+ *  tables. */
+export function holdsSeat(me, tables, players = []) {
   if (!me?.seat) return false;
-  return tables[me.seat.table]?.seats[me.seat.side]?.id === me.id;
+  return tableOfSeat(me.seat, tables, players)?.seats[me.seat.side]?.id === me.id;
 }
 
 /** A tiny stable hash, so both players flip the same coin. */

@@ -7,6 +7,7 @@ import { readHandoffLanding } from "./utils/authHandoff";
 import SignInSheet from "./components/SignInSheet";
 import { startTracking, trackError } from "./utils/track";
 import { reloadIfStaleBuild } from "./utils/staleBuild";
+import { rememberInviteFromUrl } from "./utils/invite";
 import "./index.css";
 
 /* With registerType "autoUpdate" this reloads the page as soon as a new
@@ -16,6 +17,9 @@ import "./index.css";
    happens at page load, so an in-progress game can't be yanked away
    mid-session. */
 registerSW({ immediate: true });
+
+/* A 1v1 invite link: kept before the app tidies the address (utils/invite.js). */
+rememberInviteFromUrl();
 
 /* A page whose code loads on demand failed to load: almost always a tab left
    open across a deploy (the old files are gone). Reload once for the new

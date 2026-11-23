@@ -75,3 +75,42 @@ describe("ranked tables", () => {
     expect(rematchOf(second).id).toBe("t0-5-aaaaaaaa-bbbbbbbb-r2");
   });
 });
+
+import { tableById, tableOfSeat, inviteTableId, newInviteCode, cleanInviteCode, isInviteTable } from "./lobby";
+describe("invite links", () => {
+  const inv = inviteTableId("k3x9mnp2qr");
+  test("a private table isn't one of the listed tables", () => {
+    const host = player("hosthost-1", { table: inv, side: 0, at: 10 });
+    expect(tablesFrom([host]).every((t) => t.seats.every((s) => s === null))).toBe(true);
+    expect(tableById([host], inv).seats[0].id).toBe("hosthost-1");
+  });
+  test("the friend joining fills it, and both agree on the match", () => {
+    const host = player("hosthost-1", { table: inv, side: 0, at: 10 }, { tc: "3+2" });
+    const friend = player("friendxx-2", { table: inv, side: 1, at: 50 }, { tc: "10+0" });
+    const table = tableById([host, friend], inv);
+    expect(table.full).toBe(true);
+    expect(table.tc).toBe("3+2"); // the host's clock
+    expect(matchAt(table)).toEqual(matchAt(tableById([friend, host], inv)));
+    /* Both players' ids are in the match id: the database lets only them in. */
+    expect(matchAt(table).id).toContain("hosthost");
+    expect(matchAt(table).id).toContain("friendxx");
+  });
+  test("a third person with the same link loses the seat", () => {
+    const host = player("hosthost-1", { table: inv, side: 0, at: 10 });
+    const friend = player("friendxx-2", { table: inv, side: 1, at: 50 });
+    const late = player("latelate-3", { table: inv, side: 1, at: 60 });
+    const players = [host, late, friend];
+    expect(holdsSeat(friend, tablesFrom(players), players)).toBe(true);
+    expect(holdsSeat(late, tablesFrom(players), players)).toBe(false);
+    expect(tableOfSeat(late.seat, tablesFrom(players), players).id).toBe(inv);
+  });
+  test("codes are fresh and only our own shape is accepted from a link", () => {
+    const a = newInviteCode(), b = newInviteCode();
+    expect(a).not.toBe(b);
+    expect(cleanInviteCode(a)).toBe(a);
+    expect(cleanInviteCode("<script>")).toBeNull();
+    expect(cleanInviteCode(null)).toBeNull();
+    expect(isInviteTable(2)).toBe(false);
+    expect(isInviteTable(inv)).toBe(true);
+  });
+});
