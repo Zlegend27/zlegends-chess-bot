@@ -25,8 +25,8 @@ describe("difficulty tiers", () => {
     expect(levelIdxFor("Casual")).toBe(-1);
   });
 
-  test("the Elo tiers come first, then Rank Bot, then the homemade engine", () => {
-    expect(DIFFICULTIES.map((d) => d.label)).toEqual(["1000 Elo", "1500 Elo", "2000 Elo", "Rank Bot", "Engine"]);
+  test("the Elo tiers come first, then Rank Bot, then the homemade engine, then later additions", () => {
+    expect(DIFFICULTIES.map((d) => d.label)).toEqual(["1000 Elo", "1500 Elo", "2000 Elo", "Rank Bot", "Engine", "Dumb Bot"]);
     expect(DIFFICULTIES.find((d) => d.id === "rank")).toBeTruthy();
   });
 });
@@ -108,5 +108,16 @@ describe("the daily puzzle calendar", () => {
     const { PUZZLES } = await import("./puzzles");
     const fromCalendar = await loadDailyPuzzle();
     expect(fromCalendar).toEqual(dailyPuzzle(PUZZLES));
+  });
+});
+
+import { LEVELS_BY_STRENGTH } from "./difficulties";
+describe("bot levels", () => {
+  test("levels saved by position keep their place (new ones go at the end)", () => {
+    expect(DIFFICULTIES.slice(0, 5).map((d) => d.label)).toEqual(["1000 Elo", "1500 Elo", "2000 Elo", "Rank Bot", "Engine"]);
+    expect(DIFFICULTIES[5].label).toBe("Dumb Bot");
+  });
+  test("they're offered weakest first", () => {
+    expect(LEVELS_BY_STRENGTH.map((i) => DIFFICULTIES[i].label)).toEqual(["Dumb Bot", "1000 Elo", "1500 Elo", "2000 Elo", "Rank Bot", "Engine"]);
   });
 });

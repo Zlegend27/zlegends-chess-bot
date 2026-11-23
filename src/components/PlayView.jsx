@@ -11,7 +11,7 @@ import GamePanel from "../components/GamePanel";
 import BotBubble from "../components/BotBubble";
 import MoodImg from "./MoodImg";
 import { GRADE_COLOR, GRADE_TAG } from "../utils/grades";
-import { DIFFICULTIES } from "../utils/difficulties";
+import { DIFFICULTIES, LEVELS_BY_STRENGTH } from "../utils/difficulties";
 import { RANK_BOT_ASSESSMENT_EVERY } from "../utils/rankBotMath";
 import { RUSH_DURATIONS } from "../utils/rushDurations";
 import { moveCounter } from "../utils/moveNumber";
@@ -471,7 +471,7 @@ export default function PlayView({ mateFxProps, rechecking, betterMoveLine, rank
               </button>
               {(moveList.length === 0 || !!result) && (
                 <select value={difficultyIdx} onChange={e => onDifficultyChange(Number(e.target.value))}>
-                  {DIFFICULTIES.map((d, i) => <option key={i} value={i}>{d.adaptive ? d.label : "Level: " + d.label}</option>)}
+                  {LEVELS_BY_STRENGTH.map((i) => { const d = DIFFICULTIES[i]; return <option key={i} value={i}>{d.adaptive ? d.label : "Level: " + d.label}</option>; })}
                 </select>
               )}
               {liveGame && (

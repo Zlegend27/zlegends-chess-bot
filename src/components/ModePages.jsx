@@ -3,7 +3,7 @@ import SubPage from "./SubPage";
 import RushThemeArt from "./RushThemeArt";
 import PixelAvatar, { BPAL, BPIX, PPAL, PPIX } from "./PixelAvatar";
 
-import { DIFFICULTIES } from "../utils/difficulties";
+import { DIFFICULTIES, LEVELS_BY_STRENGTH } from "../utils/difficulties";
 import { RUSH_DURATIONS } from "../utils/rushDurations";
 import { OPENINGS } from "../utils/openings";
 
@@ -45,13 +45,13 @@ export default function ModePages({ siteView, openLeaderboard, puzzlesInBand, pz
               <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
                 White
                 <select value={spectateWhiteIdx} onChange={e => setSpectateWhiteIdx(Number(e.target.value))}>
-                  {DIFFICULTIES.map((d, i) => !d.adaptive && <option key={i} value={i}>{d.label}</option>)}
+                  {LEVELS_BY_STRENGTH.map((i) => { const d = DIFFICULTIES[i]; return !d.adaptive && <option key={i} value={i}>{d.label}</option>; })}
                 </select>
               </label>
               <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
                 Black
                 <select value={spectateBlackIdx} onChange={e => setSpectateBlackIdx(Number(e.target.value))}>
-                  {DIFFICULTIES.map((d, i) => !d.adaptive && <option key={i} value={i}>{d.label}</option>)}
+                  {LEVELS_BY_STRENGTH.map((i) => { const d = DIFFICULTIES[i]; return !d.adaptive && <option key={i} value={i}>{d.label}</option>; })}
                 </select>
               </label>
               <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>

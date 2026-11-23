@@ -19,7 +19,7 @@ import { claimAnonymousData } from "./utils/accountMigration";
 import { loadSetting, saveSetting } from "./utils/storage";
 const RushThemeArt = lazy(() => import("./components/RushThemeArt"));
 import { getUiTheme } from "./utils/uiTheme";
-import { CURRENT_LIST_VERSION, DIFFICULTIES, levelIdxFor, savedLevelIdx } from "./utils/difficulties";
+import { CURRENT_LIST_VERSION, DIFFICULTIES, LEVELS_BY_STRENGTH, levelIdxFor, savedLevelIdx } from "./utils/difficulties";
 import { RANK_BOT_DEFAULT_ELO, RANK_BOT_OPENING_PLIES, RANK_BOT_MIN_TRACKED_MOVES, RANK_BOT_ASSESSMENT_EVERY, nextRankRating } from "./utils/rankBotMath";
 import { BALANCED, randomStyle, byStyle, pickPersonality } from "./utils/personalities";
 import { detectOpening } from "./utils/openingDetect";
@@ -82,8 +82,8 @@ const PIECE_NAME = { 1: "pawn", 2: "knight", 3: "bishop", 4: "rook", 5: "queen",
 const SHADOW_MIN_THINK_MS = 700;
 const MATE_FX_MS = 4600;
 /* Rank Bot first: he's the one to suggest. */
-const PLAY_LEVELS = DIFFICULTIES
-  .map((d, idx) => (d.id === "rank" ? { label: "Zlegend2700 (Rank Bot)", suggested: true, idx } : { label: d.label, idx }))
+const PLAY_LEVELS = LEVELS_BY_STRENGTH
+  .map((idx) => { const d = DIFFICULTIES[idx]; return d.id === "rank" ? { label: "Zlegend2700 (Rank Bot)", suggested: true, idx } : { label: d.label, idx }; })
   .sort((a, b) => Number(!!b.suggested) - Number(!!a.suggested));
 
 const formatClock = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
@@ -2671,6 +2671,7 @@ export default function ZlegendsBot() {
       <HomePage
         onEnter={enterMode}
         onPlay={() => onSection("play")}
+        onTactica={() => { leaveActivity(); setTacticaStart(null); setSiteView("tactica"); }}
         hasLiveGame={hasLiveGame}
         firstVisit={isFirstVisitRef.current}
         rankElo={rankBotAssessedElo ?? (rankBotGames > 0 ? rankBotElo : null)}

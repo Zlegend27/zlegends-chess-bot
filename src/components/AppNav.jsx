@@ -9,7 +9,7 @@ import { getUiTheme } from "../utils/uiTheme";
    by each page, so it never disappears or redraws as the player moves
    around. On a phone the sections sit in a bottom bar within thumb reach; on
    a computer they sit in the header. The logo is the Home button. */
-const SECTIONS = [
+export const SECTIONS = [
   { id: "home", label: "Home", icon: "M12 3 2 12h3v8h5v-6h4v6h5v-8h3L12 3z" },
   { id: "play", label: "Play", icon: "M12 2a4 4 0 0 0-2.6 7.04L8 10.5V12h2c0 3-1.2 5-3 7h10c-1.8-2-3-4-3-7h2v-1.5l-1.4-1.46A4 4 0 0 0 12 2zM6 20h12v2H6z" },
   { id: "puzzles", label: "Puzzles", icon: "M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5C13 2.12 11.88 1 10.5 1S8 2.12 8 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.49 0 2.7 1.21 2.7 2.7s-1.21 2.7-2.7 2.7H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.49 1.21-2.7 2.7-2.7s2.7 1.21 2.7 2.7V22H17c1.1 0 2-.9 2-2v-4h1.5c1.38 0 2.5-1.12 2.5-2.5S21.88 11 20.5 11z" },
