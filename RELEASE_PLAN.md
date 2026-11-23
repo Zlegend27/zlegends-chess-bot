@@ -410,8 +410,23 @@ opens the trainer on that course, and the address follows whichever
 course is open, so it can be shared or refreshed. Back still goes to Home.
 Unknown names (/openings/bongcloud) get the real 404.
 
-Next: empty and error states (D8), feedback link (F8), Game Review share
-link (F4), /daily (F5).
+Pushed 2026-11-23 (ebad5e5) and checked live: /openings/sicilian-defence
+has its own title and canonical, the sitemap lists all 12, and
+/openings/bongcloud is a real 404.
+
+Then, D8 empty and error states:
+- Leaderboard: a failed load (offline, server trouble) now says
+  "Couldn't load the scores" with Try again, instead of "No scores yet
+  here. Be the first!". (Not seen live: needs the network to fail.)
+- 1v1 lobby: if it can't connect (an error, or nothing after 12 s) it
+  says so with Try again, instead of "Connecting…" forever; seen in dev.
+  When you're the only one there, it says so and what to do (sit and
+  wait, or invite a friend).
+- Game Review: an empty game list says a game shows up once it's over,
+  to check the spelling, or to use Paste a game. (Not found, site busy
+  and can't reach the site already had their own messages.)
+
+Next: feedback link (F8), Game Review share link (F4), /daily (F5).
 
 Sources for the search notes:
 - Chess.com, Game Review for members: https://www.chess.com/news/view/chesscom-releases-new-game-review

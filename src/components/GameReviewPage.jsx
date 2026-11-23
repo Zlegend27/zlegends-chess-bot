@@ -235,7 +235,7 @@ export default function GameReviewPage({ onBack, sweetheart, onReview, onImport,
               <div>
                 <h2 className={"m-0 mb-1 " + eyebrow}>{list.name}&apos;s latest games</h2>
                 {list.games.length === 0
-                  ? <p className={"m-0 text-sm " + T.dimText}>No finished games found for {list.name}.</p>
+                  ? <p className={"m-0 text-sm leading-relaxed " + T.dimText}>No finished games found for {list.name}. A game shows up here once it&apos;s over; check the spelling, or bring a game in with Paste a game.</p>
                   : list.games.slice(0, list.shown).map((g) => <ImportedRow key={g.id} game={g} onOpen={open} />)}
                 {(list.shown < list.games.length || list.more) && (
                   <button type="button" className="btn ghost" style={{ width: "100%", marginTop: 10 }} disabled={loading === site} onClick={() => showOlder(site)}>

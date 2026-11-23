@@ -22,7 +22,7 @@ export default function LobbyPage({ session, profile, displayName, avatar, piece
   const T = getUiTheme(sweetheart);
   const { me, signedIn } = useLobbyMe({ session, profile, displayName, avatar });
   const lobby = useLobby({ me, rating });
-  const { supabase, connected, players, tables, seat, tcId, setTcId, ranked, setRanked, match, note, standing, sit, standUp, leaveMatch, inviteTable } = lobby;
+  const { supabase, connected, stuck, retry, players, tables, seat, tcId, setTcId, ranked, setRanked, match, note, standing, sit, standUp, leaveMatch, inviteTable } = lobby;
   /* A friend's invite link brought us here: sit at their table as soon as
      the lobby is connected (utils/invite.js). */
   const [arrivedByInvite] = useState(() => pendingInvite());
@@ -100,9 +100,16 @@ export default function LobbyPage({ session, profile, displayName, avatar, piece
         <h1 className="boxHead m-0">1v1 Lobby</h1>
         <span className={"inline-flex items-center gap-1.5 text-xs font-bold " + T.dimText} role="status">
           <i className="block size-2 rounded-full" style={{ background: connected ? "#6FCF97" : "var(--dim)" }} aria-hidden="true" />
-          {connected ? `${players.length} online` : "Connecting…"}
+          {connected ? `${players.length} online` : stuck ? "Not connected" : "Connecting…"}
         </span>
       </div>
+
+      {stuck && !connected && (
+        <div role="alert" className={`flex flex-col gap-2 rounded-2xl border p-3 ${T.cardBorder} ${T.panelBg}`}>
+          <p className={"m-0 text-sm " + T.ink}>Couldn&apos;t reach the lobby. Check your connection, then try again.</p>
+          <button type="button" className="btn ghost" style={{ minHeight: 44 }} onClick={retry}>Try again</button>
+        </div>
+      )}
 
       {/* The table you open: its clock, and whether it counts for rating. */}
       <div className="flex flex-col gap-2">
@@ -156,6 +163,10 @@ export default function LobbyPage({ session, profile, displayName, avatar, piece
 
       <div className="flex flex-col gap-2">
         <div className={label}>Tables</div>
+        {/* At launch the room will often be empty: say so, and what to do. */}
+        {connected && players.length <= 1 && !seat && (
+          <p className={"m-0 text-sm leading-relaxed " + T.dimText}>You&apos;re the only one here right now. Sit at a table and anyone who comes in can join you, or invite a friend with a link.</p>
+        )}
         {tables.map((table) => {
           const busy = table.seats.some((p) => p?.playing);
           const open = table.seats.filter(Boolean).length;

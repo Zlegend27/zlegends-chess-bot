@@ -38,8 +38,10 @@ export async function submitRushScore({ duration, solved, displayName, mode = "r
  *  falls back to the table. Before 009 has been run the view has no `mode`:
  *  Puzzle Rush then reads it unfiltered (every row is Puzzle Rush) and
  *  Tactica has no scores. Names that aren't fit to show become "Player".
- *  Returns [] on any failure/misconfiguration so the leaderboard UI can
- *  just show "no scores yet" either way. */
+ *  Returns [] when there's no database set up, and LOAD_FAILED when the
+ *  scores couldn't be fetched (offline, server trouble), so the page can
+ *  say so instead of "no scores yet". */
+export const LOAD_FAILED = "failed";
 export async function fetchLeaderboard(duration, limit = 10, mode = "rush") {
   const supabase = await getSupabase();
   if (!supabase) return [];
@@ -56,10 +58,10 @@ export async function fetchLeaderboard(duration, limit = 10, mode = "rush") {
     };
     let key = "player_key";
     let { data, error } = await top("rush_leaderboard", key, true);
-    if (error && mode !== "rush") return [];
+    if (error && mode !== "rush") return LOAD_FAILED;
     if (error) ({ data, error } = await top("rush_leaderboard", key, false));
     if (error) { key = "client_id"; ({ data, error } = await top("rush_scores", key, false)); }
-    if (error || !data) return [];
+    if (error || !data) return LOAD_FAILED;
     const seen = new Set();
     const best = [];
     for (const row of data) {
@@ -70,7 +72,7 @@ export async function fetchLeaderboard(duration, limit = 10, mode = "rush") {
     }
     return best;
   } catch {
-    return [];
+    return LOAD_FAILED;
   }
 }
 
@@ -97,7 +99,7 @@ export async function submitRunScore({ score, floor, won = false, hard = false, 
 
 /** The top Rogue Chess Run players: best score first, then the furthest
  *  floor, then whoever got there first; one row per player (their best).
- *  [] on any failure, or before 010 has been run. */
+ *  LOAD_FAILED when it couldn't be fetched (or before 010 has been run). */
 export async function fetchRunLeaderboard(limit = 10) {
   const supabase = await getSupabase();
   if (!supabase) return [];
@@ -109,7 +111,7 @@ export async function fetchRunLeaderboard(limit = 10) {
       .order("floor", { ascending: false })
       .order("created_at", { ascending: true })
       .limit(limit * 10);
-    if (error || !data) return [];
+    if (error || !data) return LOAD_FAILED;
     const seen = new Set();
     const best = [];
     for (const row of data) {
@@ -120,6 +122,6 @@ export async function fetchRunLeaderboard(limit = 10) {
     }
     return best;
   } catch {
-    return [];
+    return LOAD_FAILED;
   }
 }

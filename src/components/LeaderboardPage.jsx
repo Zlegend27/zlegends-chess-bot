@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import StarField from "./StarField";
-import { fetchLeaderboard, fetchRunLeaderboard, TACTICA_RUSH_SECONDS } from "../utils/leaderboard";
+import { fetchLeaderboard, fetchRunLeaderboard, LOAD_FAILED, TACTICA_RUSH_SECONDS } from "../utils/leaderboard";
 import { RUSH_DURATIONS } from "../utils/rushDurations";
 import { getUiTheme } from "../utils/uiTheme";
 import { overlayOpen } from "../utils/routes";
@@ -32,6 +32,8 @@ export default function LeaderboardPage({ initialDuration = 60, initialBoard = "
   const [board, setBoard] = useState(initialBoard);
   const [duration, setDuration] = useState(initialDuration);
   const [rows, setRows] = useState(null);
+  /* Bumped by "Try again" to fetch the same board once more. */
+  const [attempt, setAttempt] = useState(0);
   const T = getUiTheme(sweetheart);
   const RANK_ACCENT = getRankAccent(sweetheart);
 
@@ -40,7 +42,7 @@ export default function LeaderboardPage({ initialDuration = 60, initialBoard = "
     let current = true;
     (board === "run" ? fetchRunLeaderboard(10) : fetchLeaderboard(board === "tactica" ? TACTICA_RUSH_SECONDS : duration, 10, board)).then((r) => { if (current) setRows(r); });
     return () => { current = false; };
-  }, [duration, board]);
+  }, [duration, board, attempt]);
 
   useEffect(() => {
     const onKeyDown = (e) => { if (e.key === "Escape" && !overlayOpen()) onBack(); };
@@ -91,6 +93,14 @@ export default function LeaderboardPage({ initialDuration = 60, initialBoard = "
       <div className={`mt-4 w-full max-w-md overflow-hidden rounded-2xl border ${T.cardBorder} ${T.panelBg} backdrop-blur-sm`}>
         {rows === null ? (
           <div className={"px-4 py-6 text-center text-sm " + T.dimText}>Loading…</div>
+        ) : rows === LOAD_FAILED ? (
+          <div role="alert" className="flex flex-col items-center gap-2 px-4 py-8 text-center">
+            <p className={"m-0 text-sm " + T.ink}>Couldn&apos;t load the scores.</p>
+            <p className={"m-0 text-xs " + T.dimText}>Check your connection, then try again.</p>
+            <button type="button" onClick={() => setAttempt((n) => n + 1)} className={`mt-1 min-h-11 rounded-lg border ${T.cardBorder} bg-transparent px-4 text-sm font-bold ${T.ink} focus-visible:outline-none focus-visible:ring-2 ${T.ring}`}>
+              Try again
+            </button>
+          </div>
         ) : rows.length === 0 ? (
           <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
             <svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor" className={T.mutedIcon} aria-hidden="true">

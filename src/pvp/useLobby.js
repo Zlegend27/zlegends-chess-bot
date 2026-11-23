@@ -43,6 +43,16 @@ export function useLobbyMe({ session, profile, displayName, avatar }) {
 export function useLobby({ me, rating = null, room = "lobby-v1", activeKey = "pvpActive", tcKey = "pvpTc", matchPrefix = "" }) {
   const [supabase, setSupabase] = useState(null);
   const [connected, setConnected] = useState(false);
+  /* The room can't be reached (offline, or the server refused): said on
+     the page with a "Try again", instead of "Connecting…" forever. */
+  const [stuck, setStuck] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const retry = () => { setStuck(false); setAttempt((n) => n + 1); };
+  useEffect(() => {
+    if (connected) { setStuck(false); return; }
+    const t = setTimeout(() => setStuck(true), 12000);
+    return () => clearTimeout(t);
+  }, [connected, attempt]);
   const [players, setPlayers] = useState([]);
   const [seat, setSeat] = useState(null); // { table, side, at }
   const [tcId, setTcId] = useState(() => loadSetting(tcKey, "10+0"));
@@ -72,10 +82,13 @@ export function useLobby({ me, rating = null, room = "lobby-v1", activeKey = "pv
         /* Other players' names pass the name filter before anyone sees them. */
         channel.on("presence", { event: "sync" }, () => setPlayers(playersFrom(channel.presenceState()).map((p) => ({ ...p, name: cleanName(p.name) }))));
       },
-      onStatus: (status) => setConnected(status === "SUBSCRIBED"),
+      onStatus: (status) => {
+        setConnected(status === "SUBSCRIBED");
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") setStuck(true);
+      },
     });
     return () => { joined.close(); channelRef.current = null; setConnected(false); };
-  }, [supabase, me, room]);
+  }, [supabase, me, room, attempt]);
 
   /* Tell the room where I am, whenever that changes. */
   useEffect(() => {
@@ -109,7 +122,7 @@ export function useLobby({ me, rating = null, room = "lobby-v1", activeKey = "pv
   }, [tables, players, seat, match, mePresent, matchPrefix, blocked, me]);
 
   return {
-    supabase, connected, players, tables, seat, tcId, setTcId, ranked, setRanked, blocked, block, match, note,
+    supabase, connected, stuck, retry, players, tables, seat, tcId, setTcId, ranked, setRanked, blocked, block, match, note,
     /** Both players asked for another game: on to it, same seats. */
     rematch: (next) => setMatch((m) => ({ ...next, seat: m?.seat ?? seat })),
     /** Players in the room who are neither seated nor playing. */
