@@ -761,9 +761,6 @@ select:hover{ border-color:var(--cyan); }
 .trainerStage.engine{ color:var(--yellow); }
 .trainerStage.free{ color:var(--dim); }
 .trainerMoves{ font-family:var(--font-mono); font-size:12px; color:var(--liliac); line-height:1.45; margin:2px 0 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-/* Beats .botBubbleRow's own width, which is set later in this file. */
-.botBubbleRow.trainerCoach{ width:100%; margin-bottom:8px; }
-.trainerCoach .botBubble{ line-height:1.4; height:calc(6 * 1.4em + 14px); overflow-y:auto; padding-top:7px; padding-bottom:7px; font-size:13px; }
 /* Always two rows tall, so the board stays put when Black's choices show. */
 .trainerActions{ display:flex; flex-wrap:wrap; align-content:flex-start; gap:6px; min-height:74px; }
 .trainerActions .btn{ min-height:34px; padding:5px 10px; font-size:11px; }
@@ -810,6 +807,10 @@ select:hover{ border-color:var(--cyan); }
   border-radius:var(--r-md) var(--r-md) var(--r-md) var(--r-2xs); padding:10px 30px 10px 14px;
   font-size:13.5px; color:var(--liliac); line-height:1.5; cursor:pointer; backdrop-blur:8px; }
 .botBubbleCaret{ color:var(--cyan); animation:blink 1s infinite; }
+/* Both layers in one grid cell: the hidden full line sets the size. */
+.botBubbleText{ display:grid; }
+.botBubbleText > *{ grid-area:1 / 1; }
+.botBubbleGhost{ visibility:hidden; }
 .botBubbleClose{ position:absolute; top:2px; right:2px; width:44px; height:44px; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:700; line-height:1; border-radius:50%; color:var(--white); border:none; background:#8B2FC92E;
   cursor:pointer; transition:color .15s ease, background .15s ease; }
 .botBubbleClose:hover{ color:var(--white); background:#8B2FC933; }

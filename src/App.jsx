@@ -2353,7 +2353,7 @@ export default function ZlegendsBot() {
     const url = `${window.location.origin}/g/${hash}`;
     if (navigator.share) {
       try {
-        await navigator.share({ title: "Zlegend's Chess Bot", text: "Check out this game!", url });
+        await navigator.share({ title: "Zlegend2700", text: "Check out this game!", url });
         return;
       } catch (e) {
         if (e && e.name === "AbortError") return; // player closed the native share sheet

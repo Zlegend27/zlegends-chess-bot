@@ -6,6 +6,7 @@ import HandoffLanding from "./components/HandoffLanding.jsx";
 import { readHandoffLanding } from "./utils/authHandoff";
 import SignInSheet from "./components/SignInSheet";
 import { startTracking, trackError } from "./utils/track";
+import { startVitals } from "./utils/vitals";
 import { reloadIfStaleBuild } from "./utils/staleBuild";
 import { rememberInviteFromUrl } from "./utils/invite";
 import "./index.css";
@@ -42,7 +43,7 @@ class ErrorBoundary extends React.Component {
       return (
         <div className="errBox">
           <h1>Something went sideways</h1>
-          <p>Zlegend's Chess Bot hit a snag. Reloading usually fixes it.</p>
+          <p>Zlegend2700 hit a snag. Reloading usually fixes it.</p>
           <button className="btn" onClick={() => window.location.reload()}>Reload</button>
         </div>
       );
@@ -52,7 +53,7 @@ class ErrorBoundary extends React.Component {
 }
 
 const handoff = readHandoffLanding(window.location.search);
-if (!handoff) startTracking();
+if (!handoff) { startTracking(); startVitals(); }
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

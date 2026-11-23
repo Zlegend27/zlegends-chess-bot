@@ -38,6 +38,9 @@ function flush() {
   restPost("events", rows).then((status) => { if (status === 404 || status === 401 || status === 403) off = true; }, () => {});
 }
 
+/** Sends what's queued now, for events recorded as the page is left. */
+export const flushEvents = flush;
+
 /** Records that something happened. `detail` is a small plain object. */
 export function track(name, detail = null) {
   try {

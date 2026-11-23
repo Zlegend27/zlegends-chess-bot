@@ -372,9 +372,33 @@ Pushed 2026-11-23 (9c15e4b):
   owner asked for it (2026-11-16). Asked the owner whether to allow pinch
   but keep blocking double-tap.
 
-Next: C5 (focus returns after popups), C6 (colour-only cues), C7 an
-accessibility page, P3 images, P5 real-visitor speed numbers, opening
-pages (A8).
+Pushed 2026-11-23 (42eb490):
+- C4 zoom, matched to Lichess and Chess.com after the owner asked: pinch
+  zoom works on every page except on the board itself; double-tap zoom is
+  off (touch-action: manipulation). Viewport keeps minimum-scale=1.
+- C5 focus goes back to the button that opened a popup (or the menu
+  button, when the menu item that opened it is gone).
+- C6 the board's grade badge is spoken ("Graded: Blunder") instead of
+  being colour and an icon only.
+- C7 /accessibility page (what works, what doesn't yet, how to tell us),
+  linked from Home's footer, prerendered and in the sitemap.
+
+Pushed 2026-11-23 (this batch):
+- P3 lesson-coach.webp 176 KB to 8 KB, blueeyes.webp 114 KB to 9 KB
+  (resized to 3x the size they're shown at).
+- P5 real-visitor speed: utils/vitals.js sends LCP, INP, CLS (and TTFB,
+  width, connection type) once per visit as a "vitals" event, no library.
+  Read with query 10 in supabase/stats.sql (p75 per page, phone vs
+  computer). Privacy Policy mentions it.
+- Found by measuring while building P5: Home's greeting bubble grew as it
+  typed and pushed the page down 72 times (CLS 0.178, Google's "good" is
+  under 0.1). The bubble now holds its final size from the first frame:
+  CLS 0.010.
+- Leftover "Zlegend's Chess Bot" names (Privacy, Terms, crash screen,
+  share title) changed to Zlegend2700.
+
+Next: opening pages (A8), empty and error states (D8), feedback link (F8),
+Game Review share link (F4), /daily (F5).
 
 Sources for the search notes:
 - Chess.com, Game Review for members: https://www.chess.com/news/view/chesscom-releases-new-game-review

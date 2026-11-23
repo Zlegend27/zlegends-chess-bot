@@ -5,7 +5,7 @@
    Flavor only -- never blocks anything, always dismissible, and a new
    `line` value just replaces whatever was showing instead of queuing. */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import PixelAvatar, { ZPAL, ZPIX } from "./PixelAvatar";
 import { charBlip } from "../utils/lessonVoice";
 
@@ -13,7 +13,6 @@ const TYPE_MS = 18;
 
 export default function BotBubble({ line, muted = false, onDismiss, avatarSize = 40, className = "" }) {
   const [typedLen, setTypedLen] = useState(0);
-  const bubbleRef = useRef(null);
 
   useEffect(() => {
     setTypedLen(0);
@@ -28,21 +27,26 @@ export default function BotBubble({ line, muted = false, onDismiss, avatarSize =
     return () => clearInterval(t);
   }, [line, muted]);
 
-  /* A bubble with a fixed height scrolls along with the typing. */
-  useEffect(() => {
-    const el = bubbleRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [typedLen]);
-
   if (!line) return null;
   const typedDone = typedLen >= line.length;
 
   return (
     <div className={"botBubbleRow " + className}>
       <PixelAvatar rows={ZPIX} pal={ZPAL} size={avatarSize} />
-      <div className="botBubble" ref={bubbleRef} onClick={() => setTypedLen(line.length)}>
-        <span>{line.slice(0, typedLen)}</span>
-        {!typedDone && <span className="botBubbleCaret">▌</span>}
+      <div className="botBubble" onClick={() => setTypedLen(line.length)}>
+        {/* The whole line, invisible, holds the bubble at its final size
+            from the first frame, and the typing is drawn over it: a
+            growing bubble pushed everything below it down line by line
+            (layout shift, which Google counts against the page). Screen
+            readers get the line once, not letter by letter. */}
+        <span className="botBubbleText">
+          <span className="botBubbleGhost" aria-hidden="true">{line}</span>
+          <span aria-hidden="true">
+            {line.slice(0, typedLen)}
+            {!typedDone && <span className="botBubbleCaret">▌</span>}
+          </span>
+        </span>
+        <span className="sr-only">{line}</span>
         {onDismiss && (
           <button className="botBubbleClose" onClick={(e) => { e.stopPropagation(); onDismiss(); }} aria-label="Dismiss">✕</button>
         )}

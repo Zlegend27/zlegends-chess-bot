@@ -81,3 +81,18 @@ select (detail->>'floor')::int as floor, detail->>'world' as world,
 from public.events
 where name = 'tactica_floor' and created_at > now() - interval '30 days'
 group by 1, 2 order by 1;
+
+-- 10. Speed for real visitors (Core Web Vitals, last 28 days), by first page
+-- and phone vs computer. Google's "good" lines: LCP under 2500 ms, INP under
+-- 200 ms, CLS under 0.1, judged at the 75th percentile (p75) as here.
+-- Safari sends no LCP or INP, so those columns count other browsers only.
+select detail->>'path' as page,
+  case when (detail->>'width')::int < 768 then 'phone' else 'computer' end as device,
+  count(*) as visits,
+  percentile_cont(0.75) within group (order by (detail->>'lcp')::numeric) as lcp_p75_ms,
+  percentile_cont(0.75) within group (order by (detail->>'inp')::numeric) as inp_p75_ms,
+  percentile_cont(0.75) within group (order by (detail->>'cls')::numeric) as cls_p75,
+  round(100.0 * count(*) filter (where (detail->>'lcp')::numeric <= 2500) / nullif(count(detail->>'lcp'), 0)) as lcp_good_pct
+from public.events
+where name = 'vitals' and created_at > now() - interval '28 days'
+group by 1, 2 having count(*) >= 5 order by visits desc;

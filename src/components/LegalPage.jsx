@@ -21,7 +21,7 @@ function Privacy({ T }) {
   return (
     <>
       <Section title="Who we are" T={T}>
-        <p className="m-0">Zlegend&apos;s Chess Bot (www.zlegend2700.com) is a free chess site run by Zlegend27. Questions about your data: <a href={`mailto:${CONTACT}`}>{CONTACT}</a>.</p>
+        <p className="m-0">Zlegend2700 (www.zlegend2700.com) is a free chess site run by Zlegend27. Questions about your data: <a href={`mailto:${CONTACT}`}>{CONTACT}</a>.</p>
       </Section>
       <Section title="If you play without an account" T={T}>
         <p className="m-0">Your settings, ratings and any game in progress are kept in your own browser. The site also makes a random ID for your browser (not linked to your name) and saves these with it:</p>
@@ -50,7 +50,7 @@ function Privacy({ T }) {
           <li>Chess.com and Lichess: only if you bring a game in by username or link in Game Review. Your browser asks that site for the player&apos;s public games; the username stays on your device and is never sent to us</li>
           <li>YouTube: the video on the home page is a YouTube player; YouTube&apos;s own policy applies when you play it</li>
         </ul>
-        <p className="m-0">To improve the site we keep our own simple record of which features get used (for example that a page was opened or a puzzle solved), how you arrived, and crashes. These records aren&apos;t tied to you: they carry no account and no saved ID, only a number made up for that one visit and then forgotten, so two visits can&apos;t be linked. There are no ads and no third-party tracking or analytics tools, and we never sell your information.</p>
+        <p className="m-0">To improve the site we keep our own simple record of which features get used (for example that a page was opened or a puzzle solved), how you arrived, how fast pages load for you, and crashes. These records aren&apos;t tied to you: they carry no account and no saved ID, only a number made up for that one visit and then forgotten, so two visits can&apos;t be linked. There are no ads and no third-party tracking or analytics tools, and we never sell your information.</p>
       </Section>
       <Section title="Age" T={T}>
         <p className="m-0">You need to be 13 or older to make an account. If you believe a child under 13 has made one, email us and we&apos;ll delete it.</p>
@@ -69,7 +69,7 @@ function Terms({ T }) {
   return (
     <>
       <Section title="Using the site" T={T}>
-        <p className="m-0">Zlegend&apos;s Chess Bot is free, for fun and for learning chess. Donations through the Support link are voluntary, go through Ko-fi under its own terms, and don&apos;t buy anything on the site. By using it you agree to these terms. You need to be 13 or older to make an account, and you are responsible for keeping access to it (your Google, Discord or email).</p>
+        <p className="m-0">Zlegend2700 is free, for fun and for learning chess. Donations through the Support link are voluntary, go through Ko-fi under its own terms, and don&apos;t buy anything on the site. By using it you agree to these terms. You need to be 13 or older to make an account, and you are responsible for keeping access to it (your Google, Discord or email).</p>
       </Section>
       <Section title="Play fair, be kind" T={T}>
         <ul className="m-0 pl-5">
