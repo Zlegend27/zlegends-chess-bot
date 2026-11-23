@@ -21,6 +21,9 @@ registerSW({ immediate: true });
 /* A 1v1 invite link: kept before the app tidies the address (utils/invite.js). */
 rememberInviteFromUrl();
 
+/* Development only: __a11y() in the console checks the page (utils/devA11y.js). */
+if (import.meta.env.DEV) window.__a11y = () => import("./utils/devA11y").then((m) => m.a11y());
+
 /* A page whose code loads on demand failed to load: almost always a tab left
    open across a deploy (the old files are gone). Reload once for the new
    build (staleBuild.js keeps it from looping). */

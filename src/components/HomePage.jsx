@@ -43,6 +43,11 @@ export default function HomePage({ onEnter, onPlay, onTactica, hasLiveGame, firs
   return (
     <div className="root">
       <StarField sweetheart={sweetheart} />
+      {/* On a phone everything stacks. On a laptop or wider, the buttons
+          sit on the left and the TV beside them, instead of a phone-width
+          column in the middle of an empty screen. */}
+      <div className="relative z-10 flex w-full flex-col items-center lg:flex-row lg:items-start lg:justify-center lg:gap-12">
+      <div className="flex w-full max-w-md flex-col items-center">
       {!dismissed && <BotBubble line={welcomeLine} onDismiss={() => setDismissed(true)} />}
 
       <div className="relative z-10 mt-3 flex w-full max-w-md flex-col gap-3">
@@ -93,8 +98,10 @@ export default function HomePage({ onEnter, onPlay, onTactica, hasLiveGame, firs
         )}
       </div>
 
-      <div className="relative z-10 mt-6">
+      </div>
+      <div className="relative z-10 mt-6 lg:mt-3 lg:shrink-0">
         <Suspense fallback={<div style={{ height: 300 }} aria-hidden="true" />}><YouTubeTv /></Suspense>
+      </div>
       </div>
 
       <SocialBanner />

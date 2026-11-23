@@ -135,7 +135,7 @@ export default function LessonsPage({ onOpenings, sweetheart }) {
         {!lesson && (
           <button
             onClick={() => setTrainerOpen(true)}
-            className={`rounded-2xl border ${featureBorder} bg-gradient-to-br ${featureGradientFrom} ${featureGradientTo} px-4 py-3 text-left backdrop-blur-sm transition hover:-translate-y-0.5 ${featureBorderHover} focus-visible:outline-none focus-visible:ring-2 ${T.ring}`}
+            className={`rounded-2xl border ${featureBorder} bg-transparent bg-gradient-to-br ${featureGradientFrom} ${featureGradientTo} px-4 py-3 text-left backdrop-blur-sm transition hover:-translate-y-0.5 ${featureBorderHover} focus-visible:outline-none focus-visible:ring-2 ${T.ring}`}
           >
             <div className={"font-bold " + T.ink}>Opening Trainer</div>
             <div className={"mt-1 text-xs " + T.dimText}>Learn 12 openings the right way: the ideas, the replies players at your level make, and how to punish their mistakes. The openings library is in here too.</div>
