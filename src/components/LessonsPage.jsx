@@ -78,6 +78,30 @@ export default function LessonsPage({ onOpenings, sweetheart }) {
     );
   }
 
+  /* One course in the list: its picture if it has one, name, line, and how
+     much of it is ready. */
+  const courseCard = (l) => {
+    const ready = l.chapters.filter(c => !c.comingSoon).length;
+    return (
+      <button
+        key={l.id}
+        onClick={() => setLessonId(l.id)}
+        className={`flex items-center gap-3 rounded-2xl border ${T.cardBorder} ${T.panelBg} px-4 py-3 text-left backdrop-blur-sm transition hover:-translate-y-0.5 ${cardHoverBorder} focus-visible:outline-none focus-visible:ring-2 ${T.ring}`}
+      >
+        {l.cover && (
+          <img src={l.cover} alt="" className={`h-14 w-14 flex-none rounded-xl border ${T.cardBorder} object-cover`} />
+        )}
+        <div className="min-w-0">
+          <div className={"font-bold " + T.ink}>{l.title}</div>
+          <div className={"mt-1 text-xs " + T.dimText}>{l.desc}</div>
+          <div className={"mt-2 text-[11px] font-bold uppercase tracking-[0.14em] " + T.interactiveText}>
+            {ready < l.chapters.length ? `Coming soon · ${ready === 1 ? "chapter 1" : `${ready} chapters`} open now` : `${ready} chapters`}
+          </div>
+        </div>
+      </button>
+    );
+  };
+
   return (
     <div className="root">
       <StarField sweetheart={sweetheart} />
@@ -106,6 +130,8 @@ export default function LessonsPage({ onOpenings, sweetheart }) {
       )}
 
       <div className="mt-4 flex w-full max-w-md flex-col gap-3">
+        {/* The beginner course leads: it's where someone new starts. */}
+        {!lesson && LESSONS.filter((l) => l.id === "how-to-play").map((l) => courseCard(l))}
         {!lesson && (
           <button
             onClick={() => setTrainerOpen(true)}
@@ -116,27 +142,7 @@ export default function LessonsPage({ onOpenings, sweetheart }) {
           </button>
         )}
         {!lesson ? (
-          LESSONS.map(l => {
-            const ready = l.chapters.filter(c => !c.comingSoon).length;
-            return (
-              <button
-                key={l.id}
-                onClick={() => setLessonId(l.id)}
-                className={`flex items-center gap-3 rounded-2xl border ${T.cardBorder} ${T.panelBg} px-4 py-3 text-left backdrop-blur-sm transition hover:-translate-y-0.5 ${cardHoverBorder} focus-visible:outline-none focus-visible:ring-2 ${T.ring}`}
-              >
-                {l.cover && (
-                  <img src={l.cover} alt="" className={`h-14 w-14 flex-none rounded-xl border ${T.cardBorder} object-cover`} />
-                )}
-                <div className="min-w-0">
-                  <div className={"font-bold " + T.ink}>{l.title}</div>
-                  <div className={"mt-1 text-xs " + T.dimText}>{l.desc}</div>
-                  <div className={"mt-2 text-[11px] font-bold uppercase tracking-[0.14em] " + T.interactiveText}>
-                    {ready < l.chapters.length ? `Coming soon · ${ready === 1 ? "chapter 1" : `${ready} chapters`} open now` : `${ready} chapters`}
-                  </div>
-                </div>
-              </button>
-            );
-          })
+          LESSONS.filter((l) => l.id !== "how-to-play").map((l) => courseCard(l))
         ) : (
           <>
             {lesson.chapters.map(c => (

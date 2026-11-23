@@ -345,7 +345,22 @@ Built, committed, NOT pushed yet (waiting for the owner's OK):
 - D1: Home "New here?" card under the buttons (Hide remembers).
 - F2: Dumb Bot (below 1000), offered first after Rank Bot in every list.
 
-Next: invite links (F1), How to play (F3), then the desktop layout (D2).
+Pushed 2026-11-23 (cedd5c4) and checked live: /review, /puzzles, /tactica
+send their own titles, /puzzles.html redirects, the sitemap is generated.
+
+Also built and pushed:
+- F1 invite links: "Invite a friend" in the 1v1 lobby opens a private table
+  (seat at "inv-<code>", not listed) with a link to copy or share
+  (/lobby?invite=<code>); the friend is seated there, through sign-in too
+  (utils/invite.js, 2-hour expiry). No new SQL. Unit-tested; the live
+  two-player flow is NOT tested (guests can't join since public access was
+  turned off; needs two signed-in accounts).
+- F3 How to play chess: a 5-chapter beginner course, first in Learn
+  (lessons can now start from their own position, startFen, and a puzzle
+  can accept any checkmate, acceptMate). lessons.test.js replays every
+  lesson. Played chapter 2 through in the browser.
+
+Next: the desktop layout (D2), then accessibility checks (C1, axe).
 
 Sources for the search notes:
 - Chess.com, Game Review for members: https://www.chess.com/news/view/chesscom-releases-new-game-review

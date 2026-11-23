@@ -54,6 +54,10 @@ export default function LessonPlayer({ chapter, orientation = "white", pieceSetI
   const speakerRef = useRef(null);
   if (!speakerRef.current) speakerRef.current = createSpeaker();
 
+  /* A chapter starts from the normal starting position, or from its own
+     (`startFen`: a beginner lesson's board with just a few pieces). */
+  const startPosition = (e) => { if (chapter.startFen) e.loadFen(chapter.startFen); else e.reset(); };
+
   const [beatIdx, setBeatIdx] = useState(0);
   const [, setTick] = useState(0);
   const rerender = () => setTick(t => t + 1);
@@ -133,7 +137,7 @@ export default function LessonPlayer({ chapter, orientation = "white", pieceSetI
      transition, playthrough step, branch view, and analyze-resume goes
      through, so the board can never drift from the current beat. */
   const gotoPly = (ply, extraMoves = []) => {
-    eng.reset();
+    startPosition(eng);
     const allMoves = chapter.mainLine.slice(0, ply).concat(extraMoves);
     replayIntoEngine(eng, allMoves);
     setLastMove(lastMoveFromSan(allMoves));
@@ -145,6 +149,7 @@ export default function LessonPlayer({ chapter, orientation = "white", pieceSetI
   function lastMoveFromSan(moveList) {
     if (!moveList.length) return null;
     const probe = createEngine();
+    startPosition(probe);
     replayIntoEngine(probe, moveList.slice(0, -1));
     const mv = probe.legalMoves().find(m => probe.sanOf(m) === moveList[moveList.length - 1]);
     return mv ? { from: mFrom(mv), to: mTo(mv) } : null;
@@ -246,6 +251,20 @@ export default function LessonPlayer({ chapter, orientation = "white", pieceSetI
       return; // think never plays the move -- it's a guess, not a commitment
     }
     // puzzle
+    /* "Checkmate in one" with more than one mate: any mate counts. */
+    if (beat.acceptMate) {
+      eng.make(move);
+      if (eng.inCheckNow() && eng.legalMoves().length === 0) {
+        setLastMove({ from: mFrom(move), to: mTo(move) });
+        setSelected(-1); setTargets([]);
+        setPuzzleFeedback(null);
+        setPuzzleSolved(true);
+        setPuzzleProgress(beat.solution.length);
+        rerender();
+        return;
+      }
+      eng.unmake();
+    }
     const expected = beat.solution[puzzleProgress];
     if (san !== expected) {
       setPuzzleFeedback("Not quite — try again");
