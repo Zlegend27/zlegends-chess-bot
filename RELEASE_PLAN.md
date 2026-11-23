@@ -426,7 +426,18 @@ Then, D8 empty and error states:
   to check the spelling, or to use Paste a game. (Not found, site busy
   and can't reach the site already had their own messages.)
 
-Next: feedback link (F8), Game Review share link (F4), /daily (F5).
+Pushed 2026-11-23 (82056db).
+
+Then, F8 Feedback: "Feedback" in the profile menu opens a popup (a bug or
+an idea, a text box, Send), saved as a "feedback" event with the page,
+browser and screen width, no name or email; Discord and the support
+email are offered too. Read with query 11 in supabase/stats.sql. The
+Privacy Policy and track.js say feedback is the one event with the
+player's own words. Text is trimmed to fit the table's 2 KB limit (tested
+with emoji and non-Latin text). Checked in dev, both themes, contrast
+clean; a real send from the live site is NOT tested yet (dev only logs).
+
+Next: Game Review share link (F4), /daily (F5).
 
 Sources for the search notes:
 - Chess.com, Game Review for members: https://www.chess.com/news/view/chesscom-releases-new-game-review

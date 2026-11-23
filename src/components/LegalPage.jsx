@@ -50,7 +50,7 @@ function Privacy({ T }) {
           <li>Chess.com and Lichess: only if you bring a game in by username or link in Game Review. Your browser asks that site for the player&apos;s public games; the username stays on your device and is never sent to us</li>
           <li>YouTube: the video on the home page is a YouTube player; YouTube&apos;s own policy applies when you play it</li>
         </ul>
-        <p className="m-0">To improve the site we keep our own simple record of which features get used (for example that a page was opened or a puzzle solved), how you arrived, how fast pages load for you, and crashes. These records aren&apos;t tied to you: they carry no account and no saved ID, only a number made up for that one visit and then forgotten, so two visits can&apos;t be linked. There are no ads and no third-party tracking or analytics tools, and we never sell your information.</p>
+        <p className="m-0">To improve the site we keep our own simple record of which features get used (for example that a page was opened or a puzzle solved), how you arrived, how fast pages load for you, and crashes. If you send feedback from the menu, we keep what you write with the page you were on and your browser. These records aren&apos;t tied to you: they carry no account and no saved ID, only a number made up for that one visit and then forgotten, so two visits can&apos;t be linked. There are no ads and no third-party tracking or analytics tools, and we never sell your information.</p>
       </Section>
       <Section title="Age" T={T}>
         <p className="m-0">You need to be 13 or older to make an account. If you believe a child under 13 has made one, email us and we&apos;ll delete it.</p>

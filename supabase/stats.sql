@@ -96,3 +96,11 @@ select detail->>'path' as page,
 from public.events
 where name = 'vitals' and created_at > now() - interval '28 days'
 group by 1, 2 having count(*) >= 5 order by visits desc;
+
+-- 11. Feedback sent from the menu (newest first): what they wrote, bug or
+-- idea, the page they were on, and their browser.
+select created_at, detail->>'kind' as kind, detail->>'text' as text, detail->>'view' as page,
+  detail->>'browser' as browser, (detail->>'width')::int as width, app_version
+from public.events
+where name = 'feedback'
+order by created_at desc limit 50;

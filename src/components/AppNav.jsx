@@ -21,6 +21,7 @@ const BOOK_ICON = "M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c
 const MUSIC_ICON = "M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z";
 const SHARE_ICON = "M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11A2.99 2.99 0 1 0 15 5c0 .24.04.47.09.7L8.04 9.81a3 3 0 1 0 0 4.38l7.12 4.16c-.05.21-.08.43-.08.65a2.92 2.92 0 1 0 2.92-2.92z";
 const LOGOUT_ICON = "M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5-5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z";
+const FEEDBACK_ICON = "M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 12h-2v-2h2v2zm0-4h-2V6h2v4z";
 const HEART_ICON = "M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z";
 const CHEVRON_ICON = "M8.59 16.59 13.17 12 8.59 7.41 10 6l6 6-6 6z";
 const PERSON_ICON = "M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5z";
@@ -62,7 +63,7 @@ function MenuItem({ onClick, T, icon, children }) {
    account page, so there's no separate row for it), then History, Music
    and Settings, the socials, and Log out. Signed out, the top is a Log in
    button instead. */
-function ProfileMenu({ profile, avatar, email, onClose, onSignIn, onSignOut, onProfile, onShare, hasMoves, onYourGames, onSettings, onMusic, surface, T }) {
+function ProfileMenu({ profile, avatar, email, onClose, onSignIn, onSignOut, onProfile, onShare, hasMoves, onYourGames, onSettings, onMusic, onFeedback, surface, T }) {
   useEffect(() => {
     const onKeyDown = (e) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKeyDown);
@@ -105,6 +106,7 @@ function ProfileMenu({ profile, avatar, email, onClose, onSignIn, onSignOut, onP
         <MenuItem onClick={choose(onYourGames)} T={T} icon={BOOK_ICON}>History</MenuItem>
         <MenuItem onClick={choose(onMusic)} T={T} icon={MUSIC_ICON}>Music</MenuItem>
         <MenuItem onClick={choose(onSettings)} T={T} icon={COG_ICON}>Settings</MenuItem>
+        <MenuItem onClick={choose(onFeedback)} T={T} icon={FEEDBACK_ICON}>Feedback</MenuItem>
         {hasMoves && <MenuItem onClick={choose(onShare)} T={T} icon={SHARE_ICON}>Share this game</MenuItem>}
         <MenuItem onClick={choose(() => window.open(SUPPORT_URL, "_blank", "noopener"))} T={T} icon={HEART_ICON}>Support Zlegend</MenuItem>
         <div className={divider} />

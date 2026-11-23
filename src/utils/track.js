@@ -7,7 +7,8 @@
    What's sent with each: its name, a small detail object, a random number
    made for this visit only (never stored), whether the player is signed
    in, and the build. No account id, no stored browser id, no names, emails
-   or free text typed by the player. The Privacy Policy
+   or free text typed by the player (except feedback they choose to send,
+   sendFeedback below). The Privacy Policy
    describes this; change both together. */
 /* global __APP_VERSION__ */
 import { isConfigured, restPost, storedSession } from "./restApi";
@@ -56,6 +57,39 @@ export function track(name, detail = null) {
     queue.push({ name, detail: { ...(detail ?? {}), signedIn }, client_id: VISIT_ID, user_id: null, app_version: VERSION });
     if (!timer) timer = setTimeout(flush, FLUSH_MS);
   } catch { /* never in the way */ }
+}
+
+/* The events table holds at most 2 KB of detail per row, and 1000
+   characters of emoji or non-Latin script can be three times that in
+   bytes: trim whole characters until it fits. */
+export function fitBytes(text, max) {
+  const enc = new TextEncoder();
+  let chars = [...text];
+  while (chars.length && enc.encode(chars.join("")).length > max) chars = chars.slice(0, Math.floor(chars.length * 0.9));
+  return chars.join("");
+}
+
+/** Feedback typed into the menu's Feedback box: the one event that carries
+ *  the player's own words (they choose to send it, and the Privacy Policy
+ *  says so). Sent at once, and says whether it arrived, so the box can
+ *  tell them. Local development only logs it. */
+export async function sendFeedback(text, kind) {
+  const detail = {
+    text: fitBytes(String(text).trim().slice(0, 1000), 1400),
+    kind,
+    view: window.location.pathname,
+    browser: navigator.userAgent.slice(0, 200),
+    width: window.innerWidth,
+    signedIn: (() => { const s = storedSession(); return !!(s && s.expires_at * 1000 > Date.now()); })(),
+  };
+  if (import.meta.env?.DEV) { console.info("feedback (not sent from dev):", detail); return true; }
+  if (!isConfigured()) return false;
+  try {
+    const status = await restPost("events", [{ name: "feedback", detail, client_id: VISIT_ID, user_id: null, app_version: VERSION }]);
+    return status >= 200 && status < 300;
+  } catch {
+    return false;
+  }
 }
 
 /** A crash or failed promise, trimmed and capped per visit. */

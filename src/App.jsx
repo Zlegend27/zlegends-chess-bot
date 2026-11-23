@@ -43,6 +43,7 @@ import { submitRushScore } from "./utils/leaderboard";
 const LeaderboardPage = lazy(() => import("./components/LeaderboardPage"));
 const PuzzlesHomePage = lazy(() => import("./components/PuzzlesHomePage"));
 const LessonsPage = lazy(() => import("./components/LessonsPage"));
+const FeedbackModal = lazy(() => import("./components/FeedbackModal"));
 const GameReviewPage = lazy(() => import("./components/GameReviewPage"));
 const AppPopups = lazy(() => import("./components/AppPopups"));
 const ModePages = lazy(() => import("./components/ModePages"));
@@ -298,6 +299,8 @@ export default function ZlegendsBot() {
   const [shareLinkFallback, setShareLinkFallback] = useState(null);
   const [pgnToast, setPgnToast] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /* Feedback (profile menu): report a bug or send an idea. */
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const openSettings = () => setSettingsOpen(true);
   /* Sign-in: Google, Discord or an email code (see utils/auth.js, SignInSheet). watchAuthState fires once
      immediately with whatever session already exists (page reload after
@@ -2937,7 +2940,11 @@ export default function ZlegendsBot() {
         onYourGames={() => enterMode("history")}
         onSettings={openSettings}
         onMusic={() => setMusicOpen(true)}
+        onFeedback={() => setFeedbackOpen(true)}
       />}
+      {feedbackOpen && (
+        <Suspense fallback={null}><FeedbackModal open onClose={() => setFeedbackOpen(false)} /></Suspense>
+      )}
       {welcomeOpen && siteView === "home" && (
         <Suspense fallback={null}>
           <WelcomeSheet open onClose={closeWelcome} onPlay={() => { closeWelcome(); onSection("play"); }} />
