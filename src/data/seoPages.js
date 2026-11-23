@@ -143,7 +143,7 @@ export const SEO_PAGES = [
     title: "Play chess online 1v1",
     description: "Play chess against a real person online, ranked or casual, in your browser.",
     heading: "1v1 chess",
-    intro: ["Sit at a table and play a real person, ranked or casual, with a clock. Signing in is needed to play."],
+    intro: ["Press Play and get matched with a real person on the same clock, ranked or casual, or play someone who is already waiting. Invite a friend with a link. Signing in is needed to play."],
     links: ["/play"],
   },
   {

@@ -12,7 +12,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getSupabase } from "../utils/supabase";
 import { loadSetting, saveSetting } from "../utils/storage";
-import { playersFrom, tablesFrom, holdsSeat, matchAt, tableOfSeat, inviteTableId, newInviteCode, isInviteTable } from "../utils/lobby";
+import { playersFrom, tablesFrom, holdsSeat, matchAt, tableOfSeat, inviteTableId, newInviteCode, isInviteTable, isSeekTable, seekTableId, openSeeks, matchingSeek, olderTwin } from "../utils/lobby";
 import { DEFAULT_AVATAR } from "../utils/avatar";
 import { cleanName } from "../utils/cleanName";
 import { openChannel } from "./channel";
@@ -102,12 +102,23 @@ export function useLobby({ me, rating = null, room = "lobby-v1", activeKey = "pv
   const tables = useMemo(() => tablesFrom(players), [players]);
   const mePresent = players.find((p) => p.id === me?.id);
 
+  /* Seeks: everyone else waiting for a game, and whether I am. */
+  const seeks = useMemo(() => openSeeks(players, me?.id, blocked), [players, me, blocked]);
+  const searching = !!seat && !match && isSeekTable(seat.table) && seat.side === 0;
+  /* Pressed Play at the same moment as someone with the same settings:
+     the later of the two joins the earlier (olderTwin), so they play. */
+  useEffect(() => {
+    if (!searching || !mePresent?.seat) return;
+    const twin = olderTwin(seeks, { tc: tcId, ranked, at: seat.at, meId: me.id });
+    if (twin) setSeat({ table: twin.table, side: 1, at: Date.now() });
+  }, [searching, seeks, tcId, ranked, seat, me, mePresent]);
+
   /* Lost a seat to someone who got there first; or a table filled: start. */
   useEffect(() => {
     if (!seat || match || !mePresent?.seat) return;
     if (!holdsSeat(mePresent, tables, players)) {
       setSeat(null);
-      setNote(isInviteTable(seat.table) ? "Someone else already took that invite." : "Someone sat there a moment before you.");
+      setNote(isInviteTable(seat.table) ? "Someone else already took that invite." : isSeekTable(seat.table) ? "Someone else took that game a moment before you." : "Someone sat there a moment before you.");
       return;
     }
     const found = matchAt(tableOfSeat(seat, tables, players), matchPrefix);
@@ -135,6 +146,17 @@ export function useLobby({ me, rating = null, room = "lobby-v1", activeKey = "pv
     /** The private table I'm at, if any (who's there, its clock). */
     inviteTable: seat && isInviteTable(seat.table) ? tableOfSeat(seat, tables, players) : null,
     standUp: () => setSeat(null),
+    /** Others waiting for a game, oldest first, and whether I'm waiting. */
+    seeks, searching,
+    /** Play: join someone waiting with the same clock and game type, or
+     *  wait for the next person myself. */
+    seek: () => {
+      setNote(null);
+      const m = matchingSeek(seeks, tcId, ranked);
+      setSeat(m ? { table: m.table, side: 1, at: Date.now() } : { table: seekTableId(), side: 0, at: Date.now() });
+    },
+    /** Play someone who's waiting, on their clock and game type. */
+    accept: (s) => { setNote(null); setSeat({ table: s.table, side: 1, at: Date.now() }); },
     leaveMatch: () => { setMatch(null); setSeat(null); },
   };
 }

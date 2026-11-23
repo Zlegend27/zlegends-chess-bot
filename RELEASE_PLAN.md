@@ -454,8 +454,28 @@ settings, same numbers; checked in dev: shared 38/100, opened 38/100).
 The accuracy in the link is only for the preview; the app grades again.
 One-tap review from Game History already existed.
 
-Next: the 1v1 lobby redesign (owner, 2026-11-23: no more tables and
-seats). Owner: A6 Search Console, L4 device
+Then, the 1v1 lobby redesign (owner asked: no more tables and seats,
+fewer buttons at once). Research: Chess.com and Lichess quick pairing
+both put one Play with a default clock up front; for a small player base
+the fix that matters is never leaving two people waiting apart. Now:
+- One card: "Your game: 10 min · Casual" with Change (clock and
+  ranked/casual in a popup), a gold Play, and "Invite a friend with a
+  link".
+- Play joins the oldest person waiting with the same settings, or waits
+  for the next one ("Looking for an opponent…", a timer, Cancel, Invite
+  a friend). Two people pressing Play together: the later one joins the
+  earlier (both clients agree). Unit-tested.
+- "Waiting for an opponent" lists everyone waiting, with their clock and
+  type; Play on a row joins them on their settings.
+- "Online now": everyone else here.
+- Underneath it's the same presence protocol (a seek is a private table,
+  "seek-<random>"), so matches, rematches, ranked and the database rule
+  are unchanged. Chess Tactica's own 1v1 screen still uses tables.
+- Seen in dev with a temporary fake room (removed): both themes,
+  contrast clean. The live two-player flow is NOT tested yet (owner
+  will test).
+
+Owner: A6 Search Console, L4 device
 test day (two signed-in phones for invite links; a real Feedback send),
 L5 link previews.
 

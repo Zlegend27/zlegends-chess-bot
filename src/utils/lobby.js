@@ -61,9 +61,43 @@ export function newInviteCode(random = () => crypto.getRandomValues(new Uint32Ar
 /** A code from a link, or null if it isn't one of ours. */
 export const cleanInviteCode = (code) => (typeof code === "string" && /^[a-z0-9]{6,16}$/.test(code) ? code : null);
 
-/** The table a seat is at: a public one from `tables`, or a private one
- *  worked out from the players. */
-export const tableOfSeat = (seat, tables, players) => (seat ? (isInviteTable(seat.table) ? tableById(players, seat.table) : tables[seat.table]) : null);
+/* ---- Seeks: "Play" in the lobby ----
+   A player looking for a game opens their own table ("seek-…") and waits
+   on its first seat; whoever takes the other seat plays them. The lobby
+   lists the open ones, so with only a few people around nobody waits
+   alone at one table while someone else waits at another. */
+const SEEK_PREFIX = "seek-";
+export const isSeekTable = (id) => typeof id === "string" && id.startsWith(SEEK_PREFIX);
+export const seekTableId = () => SEEK_PREFIX + newInviteCode();
+
+/** Everyone else waiting for a game, oldest first: { table, player, tc,
+ *  ranked }. Skips my own, full ones, and players I've blocked. */
+export function openSeeks(players, meId, blocked = []) {
+  return players
+    .filter((p) => p.seat && isSeekTable(p.seat.table) && p.seat.side === 0 && !p.playing && p.id !== meId && !blocked.includes(p.id))
+    .map((p) => ({ table: tableById(players, p.seat.table), player: p }))
+    .filter(({ table }) => !table.full && table.seats[0]?.id !== meId)
+    .map(({ table, player }) => ({ table: table.id, player, tc: table.tc ?? TIME_CONTROLS[1].id, ranked: table.ranked, at: player.seat.at }))
+    .sort((a, b) => a.at - b.at || (a.player.id < b.player.id ? -1 : 1));
+}
+
+/** The seek "Play" should join: the oldest one with the same clock and
+ *  game type, or null (then I open my own). */
+export const matchingSeek = (seeks, tc, ranked) => seeks.find((s) => s.tc === tc && !!s.ranked === !!ranked) ?? null;
+
+/** Two people pressed Play at the same moment with the same settings, and
+ *  each opened a seek. The one who opened later joins the earlier one;
+ *  both clients agree which, so they never swap places. Returns the seek
+ *  to move to, or null. */
+export function olderTwin(seeks, mine) {
+  if (!mine) return null;
+  return seeks.find((s) => s.tc === mine.tc && !!s.ranked === !!mine.ranked
+    && (s.at < mine.at || (s.at === mine.at && s.player.id < mine.meId))) ?? null;
+}
+
+/** The table a seat is at: a public one from `tables`, or a private or
+ *  seek one worked out from the players. */
+export const tableOfSeat = (seat, tables, players) => (seat ? (typeof seat.table === "string" ? tableById(players, seat.table) : tables[seat.table]) : null);
 
 /** Whether `me` really holds the seat they claim (false if someone else got
  *  there first, or they claim none). `players` is needed for private

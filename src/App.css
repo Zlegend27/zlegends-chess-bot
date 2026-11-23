@@ -1005,3 +1005,7 @@ html.noPinch, html.noPinch body{ touch-action:manipulation; }
 .tacticaNote { animation: tacticaNoteIn .2s ease both; }
 .tacticaNote.fades { animation: tacticaNoteInOut 3.2s ease both; }
 @media (prefers-reduced-motion: reduce) { .tacticaNote, .tacticaNote.fades { animation: none; } }
+/* 1v1 lobby: the dot beside "Looking for an opponent…". */
+.lobbyPulse{ flex:none; width:14px; height:14px; border-radius:50%; background:var(--cyan); box-shadow:0 0 0 0 color-mix(in srgb, var(--cyan) 60%, transparent); animation:lobbyPulse 1.6s ease-out infinite; }
+@keyframes lobbyPulse{ 70%{ box-shadow:0 0 0 12px transparent; } 100%{ box-shadow:0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce){ .lobbyPulse{ animation:none; } }

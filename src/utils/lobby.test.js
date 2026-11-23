@@ -114,3 +114,45 @@ describe("invite links", () => {
     expect(isInviteTable(inv)).toBe(true);
   });
 });
+
+import { openSeeks, matchingSeek, olderTwin, seekTableId, isSeekTable } from "./lobby";
+describe("seeks (Play in the lobby)", () => {
+  const seeker = (id, at, extra = {}) => player(id, { table: `seek-${id}`, side: 0, at }, extra);
+  test("a seek table is its own kind, not listed among the numbered tables", () => {
+    expect(isSeekTable(seekTableId())).toBe(true);
+    expect(isSeekTable(inviteTableId("abcdefgh"))).toBe(false);
+    expect(tablesFrom([seeker("aaaa", 5)]).every((t) => t.seats.every((s) => s === null))).toBe(true);
+  });
+  test("lists others waiting, oldest first, not me, not blocked, not full", () => {
+    const players = [seeker("bbbb", 20), seeker("aaaa", 10), seeker("meme", 5), seeker("badd", 1),
+      seeker("full", 2), player("join", { table: "seek-full", side: 1, at: 3 })];
+    const list = openSeeks(players, "meme", ["badd"]);
+    expect(list.map((s) => s.player.id)).toEqual(["aaaa", "bbbb"]);
+  });
+  test("Play joins the oldest seek with the same clock and game type", () => {
+    const players = [seeker("aaaa", 10, { tc: "3+2" }), seeker("bbbb", 20, { tc: "10+0" }), seeker("cccc", 30, { tc: "10+0", ranked: true })];
+    const seeks = openSeeks(players, "meme");
+    expect(matchingSeek(seeks, "10+0", false).player.id).toBe("bbbb");
+    expect(matchingSeek(seeks, "10+0", true).player.id).toBe("cccc");
+    expect(matchingSeek(seeks, "5+0", false)).toBe(null);
+  });
+  test("two seeks opened at once: only the later one moves, and both agree", () => {
+    const a = seeker("aaaa", 10, { tc: "10+0" }), b = seeker("bbbb", 12, { tc: "10+0" });
+    const fromA = olderTwin(openSeeks([a, b], "aaaa"), { tc: "10+0", ranked: false, at: 10, meId: "aaaa" });
+    const fromB = olderTwin(openSeeks([a, b], "bbbb"), { tc: "10+0", ranked: false, at: 12, meId: "bbbb" });
+    expect(fromA).toBe(null);
+    expect(fromB.player.id).toBe("aaaa");
+    /* Same moment: the smaller id stays. */
+    const c = seeker("cccc", 10, { tc: "10+0" });
+    expect(olderTwin(openSeeks([a, c], "aaaa"), { tc: "10+0", ranked: false, at: 10, meId: "aaaa" })).toBe(null);
+    expect(olderTwin(openSeeks([a, c], "cccc"), { tc: "10+0", ranked: false, at: 10, meId: "cccc" }).player.id).toBe("aaaa");
+  });
+  test("joining a seek fills it and makes a match, held by the first claim", () => {
+    const host = seeker("hosthost-1", 10, { tc: "3+2" });
+    const guest = player("guestxxx-2", { table: "seek-hosthost-1", side: 1, at: 40 }, { tc: "10+0" });
+    const table = tableOfSeat(guest.seat, tablesFrom([host, guest]), [host, guest]);
+    expect(table.full).toBe(true);
+    expect(matchAt(table).tc).toBe("3+2");
+    expect(holdsSeat(guest, tablesFrom([host, guest]), [host, guest])).toBe(true);
+  });
+});
