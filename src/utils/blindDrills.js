@@ -10,16 +10,20 @@
    again without it counting. */
 import { createEngine, mFrom, mTo, M120TO64, WP, WK } from "../engine/chessEngine.js";
 import { OPENINGS } from "./openings.js";
-import { extractSquares, extractPiece, normalize, sanToSpeech, PIECE_SPOKEN } from "./blindChess.js";
+import { extractSquares, extractPiece, normalize, sanToSpeech, PIECE_SPOKEN, parseUtterance } from "./blindChess.js";
 
 export const MAX_LEVEL = 10;
 
 export const DRILLS = [
-  { id: "colors", name: "Square colours", desc: "Is a square light or dark?" },
-  { id: "reach", name: "Piece reach", desc: "Where can a knight or bishop go?" },
-  { id: "tracking", name: "Piece tracking", desc: "Follow the moves and find a piece." },
-  { id: "squares", name: "What's on the square?", desc: "Follow the moves and name what's there." },
-  { id: "openings", name: "Name the opening", desc: "Hear the first moves, name the opening." },
+  { id: "colors", group: "see", name: "Square colours", desc: "Is a square light or dark?" },
+  { id: "reach", group: "see", name: "Piece reach", desc: "Where can a knight or bishop go?" },
+  { id: "tracking", group: "see", name: "Piece tracking", desc: "Follow the moves and find a piece." },
+  { id: "squares", group: "see", name: "What's on the square?", desc: "Follow the moves and name what's there." },
+  { id: "openings", group: "see", name: "Name the opening", desc: "Hear the first moves, name the opening." },
+  { id: "checks", group: "tactics", name: "Find a check", desc: "Hear a small position, name a move that gives check." },
+  { id: "free", group: "tactics", name: "Free pieces", desc: "Hear a small position, take a piece for free." },
+  { id: "recapture", group: "tactics", name: "Take back", desc: "After a capture, which piece can take back?" },
+  { id: "mate", group: "tactics", name: "Mate in one", desc: "Hear a small position, find checkmate." },
 ];
 
 const FILES = "abcdefgh";
@@ -307,7 +311,207 @@ function openingsQuestion(level, rand) {
   };
 }
 
-const MAKERS = { colors: colorsQuestion, reach: reachQuestion, tracking: trackingQuestion, squares: squaresQuestion, openings: openingsQuestion };
+/* ---------------- small positions, read as a piece list ----------------
+   For checks, free pieces and mate in one: a handful of pieces placed at
+   random, kept only if the position is legal and the question has a
+   right answer (the engine decides). Read out as "White: king g1, queen
+   d1. Black: king h8, pawns g7 and h7." */
+const NAME_OF = { k: "king", q: "queen", r: "rook", b: "bishop", n: "knight", p: "pawn" };
+const ORDER = "kqrbnp";
+function fenFrom(pieces, side = "w") {
+  const grid = {};
+  for (const [square, ch] of pieces) grid[square] = ch;
+  const rows = [];
+  for (let r = 7; r >= 0; r--) {
+    let row = "", empty = 0;
+    for (let f = 0; f < 8; f++) {
+      const ch = grid[sq(f, r)];
+      if (ch) { if (empty) { row += empty; empty = 0; } row += ch; } else empty++;
+    }
+    rows.push(row + (empty || ""));
+  }
+  return rows.join("/") + ` ${side} - - 0 1`;
+}
+export function describePieces(pieces) {
+  const side = (white) => {
+    const mine = pieces.filter(([, ch]) => (ch === ch.toUpperCase()) === white).sort((a, b) => ORDER.indexOf(a[1].toLowerCase()) - ORDER.indexOf(b[1].toLowerCase()));
+    const groups = [];
+    for (const [square, ch] of mine) {
+      const name = NAME_OF[ch.toLowerCase()];
+      const g = groups.find((x) => x.name === name);
+      if (g) g.squares.push(square); else groups.push({ name, squares: [square] });
+    }
+    return groups.map((g) => (g.squares.length > 1 ? `${g.name}s ${g.squares.slice(0, -1).join(", ")} and ${g.squares[g.squares.length - 1]}` : `${g.name} ${g.squares[0]}`)).join(", ");
+  };
+  return `White: ${side(true)}. Black: ${side(false)}.`;
+}
+const randSquare = (rand, taken, avoid = () => false) => {
+  for (let i = 0; i < 200; i++) {
+    const s2 = sq(Math.floor(rand() * 8), Math.floor(rand() * 8));
+    if (!taken.has(s2) && !avoid(s2)) return s2;
+  }
+  return null;
+};
+const kingsTouch = (a, b) => Math.abs(fileOf(a) - fileOf(b)) <= 1 && Math.abs(rankOf(a) - rankOf(b)) <= 1;
+/* Places White's and Black's extra pieces (letters) at random around two
+   kings until `ok(eng, pieces)` accepts the position. */
+function randomPosition(rand, whiteExtra, blackExtra, ok, tries = 3000) {
+  for (let t = 0; t < tries; t++) {
+    const taken = new Set();
+    const wk = randSquare(rand, taken); taken.add(wk);
+    const bk = randSquare(rand, taken, (x) => kingsTouch(x, wk)); if (!bk) continue; taken.add(bk);
+    const pieces = [[wk, "K"], [bk, "k"]];
+    let bad = false;
+    for (const ch of [...whiteExtra, ...blackExtra]) {
+      const pawnRow = (x) => ch.toLowerCase() === "p" && (rankOf(x) === 0 || rankOf(x) === 7);
+      const at = randSquare(rand, taken, pawnRow);
+      if (!at) { bad = true; break; }
+      taken.add(at); pieces.push([at, ch]);
+    }
+    if (bad) continue;
+    const fen = fenFrom(pieces);
+    const eng = createEngine();
+    try { eng.loadFen(fen); } catch { continue; }
+    /* Black (who just moved) mustn't be in check, and White must have moves. */
+    const other = createEngine(); other.loadFen(fen.replace(" w ", " b "));
+    if (other.inCheckNow() || eng.inCheckNow() || !eng.legalMoves().length) continue;
+    const answer = ok(eng, pieces);
+    if (answer) return { eng, fen, pieces, ...answer };
+  }
+  return null;
+}
+const gives = (eng, m, test) => { eng.make(m); const r = test(eng); eng.unmake(); return r; };
+const isMate = (e) => e.inCheckNow() && e.legalMoves().length === 0;
+/* A capture the other side can't answer by taking back on that square. */
+const freeCapture = (eng, m) => {
+  if (!eng.pieceAt(M120TO64[mTo(m)])) return false;
+  eng.make(m);
+  const to = mTo(m);
+  const back = eng.legalMoves().some((r) => mTo(r) === to);
+  eng.unmake();
+  return !back;
+};
+
+/* Reads a move answer: notation ("Qg7", "Qxg7#") or words ("queen to
+   g7"). Returns the matching legal moves (several if it's unclear which
+   piece was meant). */
+function readMove(eng, text) {
+  const clean = String(text || "").trim().replace(/[+#!?]/g, "");
+  const bySan = eng.legalMoves().filter((m) => eng.sanOf(m).replace(/[+#]/g, "") === clean);
+  if (bySan.length) return bySan;
+  const parsed = parseUtterance(eng, text);
+  if (parsed.kind === "move" || parsed.kind === "promotion") return parsed.matches.map((x) => x.move);
+  /* Written like a move ("Ka1", "Nxe5") but not one that's possible here. */
+  return /^(O-O(-O)?|[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](=[QRBN])?)$/.test(clean) ? [] : null;
+}
+function moveCheck(fen, accept, explain) {
+  return (text) => {
+    const eng = createEngine(); eng.loadFen(fen);
+    const moves = readMove(eng, text);
+    if (!moves) return { understood: false };
+    /* Read as a move, but no piece can make it here. */
+    if (!moves.length) return { understood: false, retry: "That move isn't possible in this position. Check where the pieces are, then try again." };
+    const verdicts = moves.map((m) => accept(eng, m));
+    if (verdicts.some(Boolean) && !verdicts.every(Boolean)) return { understood: false, retry: "Which piece? Say where it starts, like knight from g1 to f3." };
+    return { understood: true, correct: verdicts[0], explanation: explain(eng, moves[0], verdicts[0]) };
+  };
+}
+const sanList = (eng, pred) => eng.legalMoves().filter((m) => pred(eng, m)).map((m) => eng.sanOf(m));
+
+/* ---------------- 6. find a check ---------------- */
+function checksQuestion(level, rand) {
+  const extra = level <= 3 ? ["R"] : level <= 6 ? ["Q", "N"] : ["B", "N", "R"];
+  const black = level <= 3 ? [] : level <= 6 ? ["p", "p"] : ["p", "p", "n"];
+  const pos = randomPosition(rand, extra, black, (eng) => {
+    const checks = sanList(eng, (e, m) => gives(e, m, (x) => x.inCheckNow()));
+    return checks.length ? { checks } : null;
+  });
+  const prompt = `${describePieces(pos.pieces)} White to move: name a move that gives check.`;
+  return {
+    kind: "move", fen: pos.fen, answer: pos.checks[0], prompt, spoken: prompt,
+    check: moveCheck(pos.fen, (e, m) => gives(e, m, (x) => x.inCheckNow()),
+      (e, m, ok) => (ok ? `Yes, ${e.sanOf(m)} gives check.` : `${e.sanOf(m)} doesn't give check. Checks here: ${pos.checks.join(", ")}.`)),
+  };
+}
+
+/* ---------------- 7. free pieces ---------------- */
+function freeQuestion(level, rand) {
+  const white = level <= 3 ? ["R"] : level <= 6 ? ["N", "B"] : ["Q", "N"];
+  const black = level <= 3 ? ["n"] : level <= 6 ? ["r", "p", "b"] : ["r", "n", "p", "p"];
+  const pos = randomPosition(rand, white, black, (eng) => {
+    const free = sanList(eng, freeCapture);
+    const traps = sanList(eng, (e, m) => !!e.pieceAt(M120TO64[mTo(m)]) && !freeCapture(e, m));
+    /* Higher levels need a tempting capture that isn't free, too. */
+    return free.length && (level < 5 || traps.length) ? { free } : null;
+  });
+  const prompt = `${describePieces(pos.pieces)} White to move: which piece can White take for free? Say the move.`;
+  return {
+    kind: "move", fen: pos.fen, answer: pos.free[0], prompt, spoken: prompt,
+    check: moveCheck(pos.fen, freeCapture, (e, m, ok) => {
+      const taken = e.pieceAt(M120TO64[mTo(m)]);
+      if (ok) return `Yes: ${e.sanOf(m)} wins the ${PIECE_SPOKEN[Math.abs(taken)]}, and Black can't take back.`;
+      return taken ? `${e.sanOf(m)} takes, but Black can take back. Free: ${pos.free.join(", ")}.` : `${e.sanOf(m)} doesn't take anything. Free: ${pos.free.join(", ")}.`;
+    }),
+  };
+}
+
+/* ---------------- 8. take back ---------------- */
+/* Every point in the openings' lines where a capture was just made and
+   the other side can take back. */
+const RECAPTURES = (() => {
+  const out = [];
+  for (const line of LINES) {
+    const eng = createEngine(); eng.reset();
+    for (let i = 0; i < line.length; i++) {
+      const m = eng.legalMoves().find((mv) => eng.sanOf(mv) === line[i]);
+      if (!m) break;
+      const capture = !!eng.pieceAt(M120TO64[mTo(m)]);
+      eng.make(m);
+      if (capture) {
+        const to = mTo(m);
+        const takers = [...new Set(eng.legalMoves().filter((r) => mTo(r) === to).map((r) => Math.abs(eng.pieceAt(M120TO64[mFrom(r)]))))];
+        if (takers.length) out.push({ moves: line.slice(0, i + 1), square: (() => { const t = M120TO64[to]; return sq(t % 8, (t / 8) | 0); })(), takers });
+      }
+    }
+  }
+  return out;
+})();
+function recaptureQuestion(level, rand) {
+  const pool = RECAPTURES.filter((r) => (level <= 4 ? r.moves.length <= 6 : true));
+  const r = pick(pool.length ? pool : RECAPTURES, rand);
+  const side = r.moves.length % 2 === 0 ? "White" : "Black";
+  const names = r.takers.map(pieceName);
+  const prompt = `${movesText(r.moves)}. Which ${side} piece can take back on ${r.square}?`;
+  return {
+    kind: "piece", moves: r.moves, fen: (() => { const { eng } = follow(r.moves); return eng.fen(); })(), answer: names[0],
+    prompt, spoken: `${movesSpoken(r.moves)} Which ${side} piece can take back on ${r.square}?`,
+    check: (text) => {
+      const piece = extractPiece(normalize(text));
+      if (piece === null) return { understood: false };
+      const ok = r.takers.includes(piece);
+      return { understood: true, correct: ok, explanation: `On ${r.square}, ${side} can take back with the ${names.join(" or the ")}.` };
+    },
+  };
+}
+
+/* ---------------- 9. mate in one ---------------- */
+function mateQuestion(level, rand) {
+  const white = level <= 3 ? ["Q"] : level <= 6 ? ["R", "R"] : ["Q", "N"];
+  const black = level <= 3 ? [] : level <= 6 ? ["p", "p"] : ["p", "p", "r"];
+  const pos = randomPosition(rand, white, black, (eng) => {
+    const mates = sanList(eng, (e, m) => gives(e, m, isMate));
+    /* One or two mates: a real puzzle, not a position where anything mates. */
+    return mates.length >= 1 && mates.length <= 2 ? { mates } : null;
+  }, 20000);
+  const prompt = `${describePieces(pos.pieces)} White to move: find checkmate in one.`;
+  return {
+    kind: "move", fen: pos.fen, answer: pos.mates[0], prompt, spoken: prompt,
+    check: moveCheck(pos.fen, (e, m) => gives(e, m, isMate),
+      (e, m, ok) => (ok ? `Checkmate! ${e.sanOf(m)}.` : `${e.sanOf(m)} isn't mate. The mate is ${pos.mates.join(" or ")}.`)),
+  };
+}
+
+const MAKERS = { colors: colorsQuestion, reach: reachQuestion, tracking: trackingQuestion, squares: squaresQuestion, openings: openingsQuestion, checks: checksQuestion, free: freeQuestion, recapture: recaptureQuestion, mate: mateQuestion };
 
 /** A question for `drill` at `level` (1 to 10). */
 export function makeQuestion(drill, level = 1, rand = Math.random) {
@@ -338,4 +542,4 @@ export function recordAnswer(progress, drill, correct) {
 }
 
 /* Exported for tests. */
-export const _internal = { follow, readSquare, readYesNo, readColour, readNumber, isDark, shortestUnique, NAMEABLE };
+export const _internal = { follow, readSquare, readYesNo, readColour, readNumber, isDark, shortestUnique, NAMEABLE, fenFrom, readMove, RECAPTURES };

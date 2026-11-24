@@ -14,9 +14,12 @@ chosen, Show the board after each answer, a days-in-a-row streak, and
 "Play a full game by voice". The voice game was fixed (listening now
 starts straight from the tap, speech is unlocked on the first tap, a
 clear message where voice input isn't available, such as the installed
-iPhone app) and moved from a cramped popup to the page. Not yet: phase
-3's drills (threats, hanging pieces, calculation, boardless mate in 1).
-Not tested on a real phone.
+iPhone app) and moved from a cramped popup to the page. Phase 3 built the same
+day: four tactics drills (Find a check, Free pieces, Take back, Mate in
+one) from small random positions read as a piece list, every answer
+checked by the engine; answers in notation or words; a clear message for
+a move that isn't possible. 013 run and confirmed. Not tested on a real
+phone.
 
 ## 1. What exists today (reviewed)
 

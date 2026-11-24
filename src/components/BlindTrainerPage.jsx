@@ -42,6 +42,7 @@ const RETRY = {
   yesno: "Answer yes or no.",
   piece: "Answer with a piece, like white knight, or say empty.",
   choice: "Pick one of the openings, or say its number.",
+  move: "Answer with a move, like Qg7 or queen to g7.",
 };
 
 export default function BlindTrainerPage({ onBack, sweetheart, pieceSetId = "classic", startScreen = "home", session: authSession }) {
@@ -123,8 +124,10 @@ export default function BlindTrainerPage({ onBack, sweetheart, pieceSetId = "cla
     if (!q || (verdict && !verdict.retry)) return;
     const r = q.check(text);
     if (!r.understood) {
-      setVerdict({ retry: `I didn't understand "${String(text).trim()}". ${RETRY[q.kind]}` });
-      say(RETRY[q.kind]);
+      const hint = r.retry || RETRY[q.kind];
+      /* A move that isn't possible was understood; anything else wasn't. */
+      setVerdict({ retry: r.retry ? `"${String(text).trim()}": ${hint}` : `I didn't understand "${String(text).trim()}". ${hint}` });
+      say(hint);
       return;
     }
     const next = { ...training, drills: recordAnswer(training.drills, q.drill, r.correct), streak: bumpStreak(training.streak) };
@@ -220,7 +223,7 @@ export default function BlindTrainerPage({ onBack, sweetheart, pieceSetId = "cla
                   ) : (
                     <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); submit(answer); }}>
                       <input ref={inputRef} value={answer} onChange={(e) => setAnswer(e.target.value)} aria-label="Your answer"
-                        placeholder={q.kind === "square" ? "A square, like e4" : q.kind === "number" ? "A number" : "Your answer"}
+                        placeholder={q.kind === "square" ? "A square, like e4" : q.kind === "number" ? "A number" : q.kind === "move" ? "A move, like Qg7" : "Your answer"}
                         autoCapitalize="off" autoCorrect="off" spellCheck={false} autoFocus
                         className={`min-h-12 min-w-0 flex-1 rounded-xl border ${T.cardBorder} bg-transparent px-3 text-base ${T.ink} ${focus}`} />
                       <button type="submit" className="btn gold" style={{ minHeight: 48 }}>Answer</button>
@@ -287,9 +290,10 @@ export default function BlindTrainerPage({ onBack, sweetheart, pieceSetId = "cla
               </label>
             </section>
 
-            <section className="flex flex-col gap-2">
-              <h2 className={`m-0 text-xs font-bold uppercase tracking-wider ${T.dimText}`}>Or pick a drill</h2>
-              {DRILLS.map((d) => {
+            {[["see", "Seeing the board"], ["tactics", "Tactics without a board"]].map(([group, title]) => (
+            <section key={group} className="flex flex-col gap-2">
+              <h2 className={`m-0 text-xs font-bold uppercase tracking-wider ${T.dimText}`}>{title}</h2>
+              {DRILLS.filter((d) => d.group === group).map((d) => {
                 const p = training.drills[d.id];
                 const acc = p.answered ? Math.round((p.correct / p.answered) * 100) : null;
                 return (
@@ -306,6 +310,7 @@ export default function BlindTrainerPage({ onBack, sweetheart, pieceSetId = "cla
                 );
               })}
             </section>
+            ))}
 
             <section className="flex flex-col gap-2">
               <h2 className={`m-0 text-xs font-bold uppercase tracking-wider ${T.dimText}`}>Play</h2>

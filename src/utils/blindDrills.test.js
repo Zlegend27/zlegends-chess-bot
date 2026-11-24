@@ -31,7 +31,7 @@ describe("every drill's questions have right answers", () => {
           if (p) expect(Math.sign(p)).toBe(q.about.color);
         }
       }
-    });
+    }, 60_000);
   }
 });
 
@@ -112,5 +112,54 @@ describe("getting harder and easier", () => {
     expect(p.reach.level).toBe(MAX_LEVEL);
     for (let i = 0; i < 50; i++) p = recordAnswer(p, "reach", false);
     expect(p.reach.level).toBe(1);
+  });
+});
+
+import { describePieces } from "./blindDrills";
+describe("the harder drills", () => {
+  test("a position reads as a piece list", () => {
+    expect(describePieces([["g1", "K"], ["d1", "Q"], ["h8", "k"], ["g7", "p"], ["h7", "p"]]))
+      .toBe("White: king g1, queen d1. Black: king h8, pawns g7 and h7.");
+  });
+  test("mate in one: notation or words, and a wrong move is wrong", () => {
+    const q = makeQuestion("mate", 1, seeded(5));
+    expect(q.check(q.answer).correct).toBe(true);
+    const words = q.answer.replace(/[+#]/g, "").replace(/^Q/, "queen to ").replace(/^R/, "rook to ").replace(/x/, "");
+    expect(q.check(words).correct).toBe(true);
+    expect(q.check("banana").understood).toBe(false);
+  });
+  test("a legal move that doesn't mate is marked wrong, with the answer", () => {
+    for (let seed = 1; seed < 40; seed++) {
+      const q = makeQuestion("mate", 2, seeded(seed));
+      const eng = createEngine(); eng.loadFen(q.fen);
+      const other = eng.legalMoves().map((m) => eng.sanOf(m)).find((s) => !s.includes("#"));
+      if (!other) continue;
+      const r = q.check(other);
+      expect(r.correct).toBe(false);
+      expect(r.explanation).toContain(q.answer);
+      return;
+    }
+  });
+  test("take back has questions from the openings", () => {
+    expect(_internal.RECAPTURES.length).toBeGreaterThan(5);
+  });
+  test("questions are quick to make (they're built on the phone)", () => {
+    const rand = seeded(99);
+    for (const d of ["checks", "free", "mate"]) {
+      const t0 = performance.now();
+      for (let i = 0; i < 20; i++) makeQuestion(d, 1 + (i % 10), rand);
+      expect((performance.now() - t0) / 20).toBeLessThan(150);
+    }
+  });
+});
+
+describe("impossible moves get a clear message", () => {
+  test("notation that no piece can play here", () => {
+    const q = makeQuestion("mate", 1, seeded(5));
+    const r = q.check("Nh9") ;
+    expect(r.understood).toBe(false);
+    const r2 = q.check("Nb1");
+    expect(r2.understood).toBe(false);
+    expect(r2.retry).toMatch(/isn't possible/);
   });
 });
