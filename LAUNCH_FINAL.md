@@ -82,7 +82,7 @@ hunt in section 3 is for):
     instead of a code (found 2026-11-16; check it was changed).
   - Attack Protection: leave CAPTCHA off for now; turn it on if spam
     accounts appear.
-- [ ] **Run supabase/013_blind_training.sql** in the SQL Editor (Blind
+- [x] **Run supabase/013_blind_training.sql** (done 2026-11-24, confirmed) in the SQL Editor (Blind
       Chess Trainer progress for accounts; until then it stays on each
       device and nothing breaks).
 - [ ] **Supabase > Realtime settings:** "Allow public access" stays OFF
