@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { WN, WB, WR, WQ, WK, mPromo } from "../engine/chessEngine";
 import PixelAvatar, { ZPAL, ZPIX } from "../components/PixelAvatar";
 import StarField from "../components/StarField";
@@ -37,7 +37,7 @@ function RankFeel({ outcome }) {
 /* The game screen: the board, the bot card, the move list and the controls
    for a live game, a puzzle, a review or a rush. Loaded when a game starts
    (see App.jsx). Everything it reads or does comes in as a prop. */
-export default function PlayView({ mateFxProps, rechecking, betterMoveLine, rankTestNote, RushThemeArt, Tray, activeOpening, activePuzzle, analysisBusy, analysisContent, analysisLabel, analysisMove, analyzing, arrowLine, beginRestartCountdown, bestArrow, boardColorId, boardRef, boardVars, botColor, botLine, botMood, botTaken, colorPick, curMoveIdx, difficultyIdx, difficultyRef, displayName, dragCellSize, dragFrom, dragPos, eng, evalLabel, evalPawns, exitMissedAttempt, exitPractice, exitPuzzle, exitReplay, exitRush, endRush, formatClock, gameStyle, gradeDetail, gradeProgress, grading, hideEvalBar, hideRushSummary, hinting, inChk, liveOpening, missedAttempt, missedStepIdx, mode, moveGrades, moveList, nameDraft, nameEditOpen, newGame, newGameConfirm, nextPuzzle, onCopyPgn, onDifficultyChange, onHint, onMissedSwipeEnd, onMissedSwipeStart, openLeaderboard, openReviewPage, pairs, pastedGame, pauseSpectate, pgnToast, pieceImgSrc, pieceSetId, playMove, playerAdvantageCp, playerColor, playerShare, practice, practiceMove, practiceNext, practiceReveal, promo, puzzleBand, puzzleFeedback, puzzleMove, puzzleSolved, pz, quizDoneToast, quizMove, quizOpening, rankBotAssessedElo, rankBotGames, playerRating, replayFull, replayIndex, replayPlaying, replayStep, restartCountdown, result, resumeSpectate, reviewIndex, reviewInfo, reviewMissedPuzzle, reviewing, rows, rushBandIdx, rushBestMap, rushDuration, rushLifetime, rushMilestone, rushMissed, rushMistakes, rushMode, rushResult, rushSolved, rushSummaryOpen, rushTimeLeft, saveDisplayName, setBotLine, setColorPick, setMissedStepIdx, setNameDraft, setNameEditOpen, setNewGameConfirm, setPlayerColor, setPromo, setReplayIndex, setReviewIndex, setRushSummaryOpen, setShareLinkFallback, setShareToast, setSiteView, shareLinkFallback, shareToast, spectateBlackIdx, spectateMode, spectateOpeningId, spectatePaused, spectateWhiteIdx, startPuzzle, startQuiz, startSpectate, status, stopSpectate, sweetheart, thinking, toggleAnalyze, toggleReplayPlay, uiT, undo, youDiff, youTaken, onQuit, profile, accountAvatar }) {
+export default function PlayView({ mateFxProps, rechecking, betterMoveLine, rankTestNote, Tray, activeOpening, activePuzzle, analysisBusy, analysisContent, analysisLabel, analysisMove, analyzing, arrowLine, bestArrow, boardColorId, boardRef, boardVars, botColor, botLine, botMood, botTaken, colorPick, curMoveIdx, difficultyIdx, difficultyRef, displayName, dragCellSize, dragFrom, dragPos, eng, evalLabel, evalPawns, exitMissedAttempt, exitPractice, exitPuzzle, exitReplay, exitRush, endRush, formatClock, gameStyle, gradeDetail, gradeProgress, grading, hideEvalBar, hideRushSummary, hinting, inChk, liveOpening, missedAttempt, mode, moveGrades, moveList, nameDraft, nameEditOpen, newGame, newGameConfirm, nextPuzzle, onCopyPgn, onDifficultyChange, onHint, openLeaderboard, openReviewPage, pairs, pastedGame, pauseSpectate, pgnToast, pieceImgSrc, pieceSetId, playMove, playerAdvantageCp, playerColor, playerShare, practice, practiceMove, practiceNext, practiceReveal, promo, puzzleBand, puzzleFeedback, puzzleMove, puzzleSolved, pz, quizDoneToast, quizMove, quizOpening, rankBotAssessedElo, rankBotGames, playerRating, replayFull, replayIndex, replayPlaying, replayStep, result, resumeSpectate, reviewIndex, reviewInfo, reviewMissedPuzzle, reviewing, rows, rushBandIdx, rushDuration, rushMilestone, rushMissed, rushMissedSolved = [], playAgain, rushMistakes, rushMode, rushResult, rushSolved, rushSummaryOpen, rushTimeLeft, saveDisplayName, setBotLine, setColorPick, setNameDraft, setNameEditOpen, setNewGameConfirm, setPlayerColor, setPromo, setReplayIndex, setReviewIndex, setRushSummaryOpen, setShareLinkFallback, setShareToast, setSiteView, shareLinkFallback, shareToast, spectateBlackIdx, spectateMode, spectateOpeningId, spectatePaused, spectateWhiteIdx, startPuzzle, startQuiz, startSpectate, status, stopSpectate, sweetheart, thinking, toggleAnalyze, toggleReplayPlay, uiT, undo, youDiff, youTaken, onQuit, profile, accountAvatar }) {
   /* Zoom on the game screen, the way Lichess and Chess.com do it (checked
      2026-11-23): the board itself never zooms (it takes its own touches),
      double-tap zoom is off everywhere (taps on buttons used to zoom the page
@@ -74,12 +74,11 @@ export default function PlayView({ mateFxProps, rechecking, betterMoveLine, rank
                   <span className="rushHudBand">{pz.RATING_BANDS[rushBandIdx]?.label || ""}</span>
                   <span className="rushHudSolved">Solved {rushSolved}</span>
                 </div>
-                <div className="rushMistakeBoxes" aria-label={`${rushMistakes} of 3 mistakes`}>
+                <div className="rushMistakeBoxes" role="img" aria-label={`${rushMistakes} of 3 mistakes`}>
                   {[0, 1, 2].map(i => (
                     <span key={i} className={"rushMistakeBox" + (i < rushMistakes ? " filled" : "")} />
                   ))}
                 </div>
-                <div className="rushHudLifetime">Lifetime solved: {rushLifetime}</div>
               </div>
             </div>
           ) : activePuzzle ? (
@@ -568,64 +567,43 @@ export default function PlayView({ mateFxProps, rechecking, betterMoveLine, rank
         </div>
       </div>
 
-      {/* Guarded outside Modal, not just via its `open` prop -- rushResult
-         is null except right when this is meant to show, and JSX children
-         are evaluated eagerly by the caller (React.createElement) before
-         Modal's own early-return ever runs, so rushResult.reason below
-         would throw on every other render without this. rushSummaryOpen
-         is the new bit: closing this (X/backdrop/Escape) calls
-         hideRushSummary, not exitRush -- rushMode/rushResult live on so
-         the final position stays on the board and puzzleCtrls' Results
-         button can bring this back up. */}
+      {/* Puzzle Rush results (2026-11-24 redesign: a plain card like the rest
+         of the site; the shattered-heart screen is gone). Closing it keeps
+         the final position on the board, and Results brings it back. The
+         missed puzzles are a short list to practise, ticked off once
+         solved. Guarded outside Modal because rushResult is null otherwise. */}
       {rushMode && rushResult && rushSummaryOpen && (
-        <Modal open onClose={hideRushSummary} closeLabel="Close results" className="rushThemeBox rushEndBox" minWidth={300} maxWidth={440} style={{ padding: 0 }}>
-          <div className="rushThemeInner">
-            <Suspense fallback={null}><RushThemeArt /></Suspense>
-            <div className="rushEndHead">
-              <p className="rushEndEyebrow">
-                Puzzle Rush &middot; {RUSH_DURATIONS.find(d => d.seconds === rushDuration)?.label}
-              </p>
-              <p className="rushEndSub">{rushResult.reason === "time" ? "Time's up." : rushResult.reason === "ended" ? "You called it." : "Three misses."} Your heart, and your streak, in pieces.</p>
-            </div>
-            <div className="rushEndStat">
-              <span className="rushEndStatNum">{rushResult.solved}</span>
-              <span className="rushEndStatLbl">puzzle{rushResult.solved === 1 ? "" : "s"} solved<br />best: {rushBestMap[rushDuration == null ? "none" : String(rushDuration)] || 0}</span>
-            </div>
-            {rushMissed.length > 0 && (
-              <div className="rushEndMissed" onPointerDown={onMissedSwipeStart} onPointerUp={onMissedSwipeEnd}>
-                <p className="rushEndMissedHead">
-                  Missed puzzles
-                  <span className="rushEndMissedXs" aria-label={`Missed puzzle ${missedStepIdx + 1} of ${rushMissed.length}`}>
-                    {rushMissed.map((_, i) => (
-                      <span key={i} className={"rushEndMissedX" + (i === missedStepIdx ? " current" : "")}>&#10005;</span>
-                    ))}
-                  </span>
-                </p>
-                <div className="rushEndStepperRow">
-                  <button className="rushEndStepperBtn" disabled={missedStepIdx === 0}
-                    onClick={() => setMissedStepIdx(i => Math.max(0, i - 1))} aria-label="Previous missed puzzle">&#8249;</button>
-                  <button className="rushEndRatingBtn" onClick={() => reviewMissedPuzzle(rushMissed[missedStepIdx])}>
-                    <span className="rushEndRatingNum">Rated {rushMissed[missedStepIdx].rating}</span>
-                    <span className="rushEndRatingLbl">Tap to retry this one</span>
+        <Modal open onClose={hideRushSummary} closeLabel="Close results" maxWidth={400} style={{ width: "min(400px, 92vw)", minWidth: undefined, color: "var(--white)" }}>
+          <div className="boxHead">Puzzle Rush · {RUSH_DURATIONS.find(d => d.seconds === rushDuration)?.label}</div>
+          <p className="rushReason" role="status">
+            {rushResult.reason === "time" ? "Time's up." : rushResult.reason === "ended" ? "You ended the run." : "Three misses ends the run."}
+          </p>
+          <div className="rushScore">
+            <span className="rushScoreNum">{rushResult.solved}</span>
+            <span className="rushScoreLbl">solved</span>
+          </div>
+          <p className={"rushBestLine" + (rushResult.newBest ? " new" : "")}>
+            {rushResult.newBest ? "New best!" : `Your best: ${rushResult.best ?? 0}`}
+          </p>
+          {rushMissed.length > 0 && (
+            <div className="rushMissedList">
+              <div className="rushSectionLbl">Practice your misses</div>
+              {rushMissed.map((p, i) => {
+                const done = rushMissedSolved.includes(p.id);
+                return (
+                  <button key={p.id + "-" + i} type="button" className={"rushMissedRow" + (done ? " done" : "")} onClick={() => reviewMissedPuzzle(p)}
+                    aria-label={`Puzzle ${i + 1}, rated ${p.rating}${done ? ", solved" : ""}. Try it again`}>
+                    <span className="rushMissedName">Puzzle {i + 1} <small>Rated {p.rating}</small></span>
+                    <span className="rushMissedAction">{done ? "✓ Solved" : "Try it"}</span>
                   </button>
-                  <button className="rushEndStepperBtn" disabled={missedStepIdx === rushMissed.length - 1}
-                    onClick={() => setMissedStepIdx(i => Math.min(rushMissed.length - 1, i + 1))} aria-label="Next missed puzzle">&#8250;</button>
-                </div>
-              </div>
-            )}
-            <div className="rushEndActions">
-              <button className="rushEndRestart" onClick={beginRestartCountdown} disabled={restartCountdown != null}
-                aria-label={restartCountdown != null ? `Starting in ${restartCountdown}` : "Try again"} title="Try again">
-                {restartCountdown != null ? (
-                  <span className="rushEndRestartCount">{restartCountdown}</span>
-                ) : (
-                  <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" /></svg>
-                )}
-              </button>
-              <button className="rushEndTrophy" onClick={() => openLeaderboard(rushDuration ?? 60)} aria-label="View leaderboard" title="View leaderboard">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M18 3h-2V1H8v2H6C4.9 3 4 3.9 4 5v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.95V17H9v2h6v-2h-3v-3.11c1.63-.32 2.98-1.45 3.61-2.95C18.08 10.63 20 8.55 20 6V5c0-1.1-.9-2-2-2zM6 6V5h2v3.82C6.84 8.4 6 7.3 6 6zm12 0c0 1.3-.84 2.4-2 2.82V5h2v1z" /></svg>
-              </button>
+                );
+              })}
             </div>
+          )}
+          <button type="button" className="btn gold" style={{ width: "100%" }} onClick={playAgain}>Play again</button>
+          <div className="rushEndLinks">
+            <button type="button" className="btn ghost" onClick={() => openLeaderboard(rushDuration ?? 60)}>Leaderboard</button>
+            <button type="button" className="btn ghost" onClick={exitRush}>Done</button>
           </div>
         </Modal>
       )}

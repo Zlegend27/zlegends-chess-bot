@@ -18,7 +18,7 @@ import { UNRATED_ELO } from "./utils/lobby";
 import { track } from "./utils/track";
 import { claimAnonymousData } from "./utils/accountMigration";
 import { loadSetting, saveSetting } from "./utils/storage";
-const RushThemeArt = lazy(() => import("./components/RushThemeArt"));
+
 import { getUiTheme } from "./utils/uiTheme";
 import { CURRENT_LIST_VERSION, DIFFICULTIES, LEVELS_BY_STRENGTH, levelIdxFor, savedLevelIdx } from "./utils/difficulties";
 import { RANK_BOT_DEFAULT_ELO, RANK_BOT_OPENING_PLIES, RANK_BOT_MIN_TRACKED_MOVES, RANK_BOT_ASSESSMENT_EVERY, nextRankRating } from "./utils/rankBotMath";
@@ -600,12 +600,14 @@ export default function ZlegendsBot() {
      stay put so the board keeps showing where the run ended, and the
      puzzleCtrls row below grows a Results button to bring it back. */
   const [rushSummaryOpen, setRushSummaryOpen] = useState(true);
-  /* Which of the (up to 3) missed puzzles the heartbreak screen's stepper
-     is currently showing -- resets with each new run. */
-  const [missedStepIdx, setMissedStepIdx] = useState(0);
-  /* Try again gets a 2-second "get ready" beat instead of dropping straight
-     into the next puzzle -- null while idle, else 2/1 counting down. */
-  const [restartCountdown, setRestartCountdown] = useState(null);
+  /* Missed puzzles from the last run that the player has since solved
+     (their ids), so the results list can tick them off. */
+  const [rushMissedSolved, setRushMissedSolved] = useState([]);
+  /* The run's clock counts down to a fixed moment (not one-second timers,
+     which run slow on a busy phone and stop while the app is in the
+     background), and a run finishes exactly once. */
+  const rushDeadlineRef = useRef(0);
+  const rushFinishedRef = useRef(false);
   /* Set while attempting a puzzle from the heartbreak screen's missed-
      puzzle stepper -- distinct from a normal Daily/Ranked attempt (its own
      Retry/Analyze/Exit control row) and distinct from live Rush (rushMode/
@@ -613,6 +615,10 @@ export default function ZlegendsBot() {
      drop straight back into the summary with the other missed puzzles
      still there instead of ending the rush session). */
   const [missedAttempt, setMissedAttempt] = useState(null);
+  /* For puzzleMove, a memoized callback that doesn't re-read state. */
+  const missedAttemptRef = useRef(null);
+  missedAttemptRef.current = missedAttempt;
+  const exitMissedAttemptRef = useRef(() => {});
   /* The board position at the moment a rush actually ended -- captured so
      a missed-puzzle attempt (which loads a different position onto the
      same shared engine) can be undone on Exit, restoring what Analyze on
@@ -1407,6 +1413,8 @@ export default function ZlegendsBot() {
     const inQuiz = !!quizOpening;
     const inPuzzle = !!activePuzzle;
     if (inPuzzle && puzzleSolved) return "blocked";
+    /* A finished Rush's board is for looking at (or Analyze), not more moves. */
+    if (inPuzzle && rushMode && rushResult && !missedAttempt && !analyzing) return "blocked";
     const legal = eng.legalMoves();
     const sq120 = M64TO120[i64];
     const sideToMove = (analyzing || inQuiz || inPractice) ? eng.getSide() : playerColor;
@@ -1624,8 +1632,8 @@ export default function ZlegendsBot() {
     setRushMode(false);
     setRushResult(null);
     setRushSummaryOpen(true);
-    setMissedStepIdx(0);
-    setRestartCountdown(null);
+    setRushMissedSolved([]);
+    clearTimeout(puzzleTimeoutRef.current);
 
     spectateModeRef.current = false;
     spectatePausedRef.current = false;
@@ -1817,11 +1825,13 @@ export default function ZlegendsBot() {
     setRushMistakes(0);
     setRushBandIdx(0);
     setRushMissed([]);
+    setRushMissedSolved([]);
     setRushResult(null);
     setRushSummaryOpen(true);
-    setMissedStepIdx(0);
-    setRestartCountdown(null);
     setMissedAttempt(null);
+    clearTimeout(puzzleTimeoutRef.current);
+    rushFinishedRef.current = false;
+    rushDeadlineRef.current = seconds == null ? 0 : Date.now() + seconds * 1000;
     setRushDuration(seconds);
     setRushTimeLeft(seconds);
     setRushMode(true);
@@ -1835,7 +1845,15 @@ export default function ZlegendsBot() {
   };
 
   const finishRush = (reason) => {
-    setRushResult({ reason, solved: rushSolvedRef.current });
+    if (rushFinishedRef.current) return;
+    rushFinishedRef.current = true;
+    /* A "next puzzle" or reply still waiting would otherwise load a new
+       puzzle behind the results, replacing the final position. */
+    clearTimeout(puzzleTimeoutRef.current);
+    /* Best before this run, read from storage (always current, unlike
+       state seen from inside puzzleMove), for "New best!". */
+    const prevBest = (loadSetting("rushBestByDuration", {}) || {})[rushDuration == null ? "none" : String(rushDuration)] || 0;
+    setRushResult({ reason, solved: rushSolvedRef.current, best: Math.max(prevBest, rushSolvedRef.current), newBest: rushSolvedRef.current > prevBest });
     setRushSummaryOpen(true);
     /* Snapshot so a later missed-puzzle attempt (which loads a different
        position onto this same shared engine) can be undone -- see
@@ -1867,37 +1885,6 @@ export default function ZlegendsBot() {
 
   const retryRush = () => startRush(rushDuration);
 
-  /* Try again's 2-second "get ready" beat -- startRush() itself resets
-     restartCountdown back to null, so this doesn't need to. */
-  const beginRestartCountdown = () => {
-    if (restartCountdown != null) return;
-    setRestartCountdown(2);
-  };
-  useEffect(() => {
-    if (restartCountdown == null) return;
-    if (restartCountdown === 0) { retryRush(); return; }
-    const t = setTimeout(() => setRestartCountdown(c => c - 1), 1000);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [restartCountdown]);
-
-  /* Swipe support for the missed-puzzle stepper, mobile and desktop both
-     via Pointer Events (one code path covers touch/mouse/pen) rather than
-     separate touch handlers. Attached to the whole card, not just the
-     arrow row, so a swipe anywhere on it works, same as any carousel.
-     Small movements (a tap on the rating button itself) never cross
-     SWIPE_THRESHOLD, so they still reach that button's own onClick. */
-  const SWIPE_THRESHOLD = 40;
-  const missedSwipeStartRef = useRef(null);
-  const onMissedSwipeStart = (e) => { missedSwipeStartRef.current = e.clientX; };
-  const onMissedSwipeEnd = (e) => {
-    if (missedSwipeStartRef.current == null) return;
-    const dx = e.clientX - missedSwipeStartRef.current;
-    missedSwipeStartRef.current = null;
-    if (dx > SWIPE_THRESHOLD) setMissedStepIdx(i => Math.max(0, i - 1));
-    else if (dx < -SWIPE_THRESHOLD) setMissedStepIdx(i => Math.min(rushMissed.length - 1, i + 1));
-  };
-
   /* Actually leaving Puzzle Rush (the "Puzzles" board-control button once
      a run has ended, or Escape/backdrop before a run's first result ever
      lands). Deliberately does NOT call exitPuzzle()/newGame(1) -- that
@@ -1922,11 +1909,6 @@ export default function ZlegendsBot() {
      summary back. */
   const hideRushSummary = () => setRushSummaryOpen(false);
 
-  const resetRushCounter = () => {
-    setRushLifetime(0);
-    rushLifetimePrevRef.current = 0;
-    saveSetting("rushLifetimeSolved", 0);
-  };
 
   /* Attempts a puzzle missed during the last rush. Deliberately does NOT
      touch rushMode/rushResult (unlike a normal Daily/Ranked puzzle) -- the
@@ -1961,6 +1943,7 @@ export default function ZlegendsBot() {
     setRushSummaryOpen(true);
     rerender();
   };
+  exitMissedAttemptRef.current = exitMissedAttempt;
 
   /* Confetti + fanfare every 50 lifetime rush solves. Driven off the
      lifetime counter itself (not the per-run solved count) via a
@@ -2076,11 +2059,16 @@ export default function ZlegendsBot() {
      player isn't even looking at. */
   useEffect(() => {
     if (!rushMode || rushResult || rushDuration == null || siteView !== "play") return;
-    if (rushTimeLeft <= 0) { finishRush("time"); return; }
-    const t = setTimeout(() => setRushTimeLeft(s => s - 1), 1000);
-    return () => clearTimeout(t);
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((rushDeadlineRef.current - Date.now()) / 1000));
+      setRushTimeLeft(left);
+      if (left <= 0) finishRush("time");
+    };
+    tick();
+    const t = setInterval(tick, 250);
+    return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rushMode, rushResult, rushTimeLeft, rushDuration, siteView]);
+  }, [rushMode, rushResult, rushDuration, siteView]);
 
   const puzzleMove = useCallback((m) => {
     const verdict = judgePuzzleMove(eng, activePuzzle, moveListRef.current, m);
@@ -2088,7 +2076,9 @@ export default function ZlegendsBot() {
     if (!verdict.ok) {
       try { audio.sfxWrong(); } catch { /* audio unavailable */ }
       setSelected(-1); setTargets([]);
-      if (rushMode) {
+      /* Practising a missed puzzle isn't the run: no mistake counted, no
+         new Rush puzzle, just try again. */
+      if (rushMode && !missedAttemptRef.current) {
         rushMistakesRef.current += 1;
         setRushMistakes(rushMistakesRef.current);
         rushMissedRef.current = [...rushMissedRef.current, activePuzzle];
@@ -2099,7 +2089,7 @@ export default function ZlegendsBot() {
         if (rushMistakesRef.current >= 3) {
           track("puzzle", { kind: "rush", solved: false, rating: activePuzzle.rating });
           setPuzzleFeedback("Wrong — that's 3 misses!");
-          puzzleTimeoutRef.current = setTimeout(() => finishRush("mistakes"), 400);
+          finishRush("mistakes");
         } else {
           track("puzzle", { kind: "rush", solved: false, rating: activePuzzle.rating });
           setPuzzleFeedback("Not quite — next puzzle!");
@@ -2134,6 +2124,15 @@ export default function ZlegendsBot() {
         const streak = nextStreak(dailyStreak, utcDay());
         setDailyStreak(streak);
         saveSetting("dailyStreak", streak);
+      }
+      /* A missed puzzle practised from the results: tick it off and go
+         back to the results after a moment. */
+      if (missedAttemptRef.current) {
+        const id = missedAttemptRef.current.id;
+        setRushMissedSolved((ids) => (ids.includes(id) ? ids : [...ids, id]));
+        puzzleTimeoutRef.current = setTimeout(() => exitMissedAttemptRef.current(), 900);
+        rerender();
+        return;
       }
       if (rushMode) {
         rushSolvedRef.current += 1;
@@ -2811,7 +2810,7 @@ export default function ZlegendsBot() {
   if (["openings", "watch", "ranked", "rush"].includes(siteView)) {
     return (
       <Suspense fallback={null}>
-        <ModePages siteView={siteView} openLeaderboard={openLeaderboard} puzzlesInBand={puzzlesInBand} pz={pz} resetRushCounter={resetRushCounter} rushDuration={rushDuration} rushLifetime={rushLifetime} setPuzzleBand={setPuzzleBand} setSiteView={setSiteView} setSpectateBlackIdx={setSpectateBlackIdx} setSpectateOpeningId={setSpectateOpeningId} setSpectateWhiteIdx={setSpectateWhiteIdx} spectateBlackIdx={spectateBlackIdx} spectateOpeningId={spectateOpeningId} spectateWhiteIdx={spectateWhiteIdx} startOpening={startOpening} startPuzzle={startPuzzle} startRush={startRush} startSpectate={startSpectate} sweetheart={sweetheart} />
+        <ModePages siteView={siteView} openLeaderboard={openLeaderboard} puzzlesInBand={puzzlesInBand} pz={pz} rushDuration={rushDuration} rushBestMap={rushBestMap} setPuzzleBand={setPuzzleBand} setSiteView={setSiteView} setSpectateBlackIdx={setSpectateBlackIdx} setSpectateOpeningId={setSpectateOpeningId} setSpectateWhiteIdx={setSpectateWhiteIdx} spectateBlackIdx={spectateBlackIdx} spectateOpeningId={spectateOpeningId} spectateWhiteIdx={spectateWhiteIdx} startOpening={startOpening} startPuzzle={startPuzzle} startRush={startRush} startSpectate={startSpectate} sweetheart={sweetheart} />
       </Suspense>
     );
   }
@@ -2948,7 +2947,7 @@ export default function ZlegendsBot() {
 
   return (
     <Suspense fallback={null}>
-      <PlayView mateFxProps={mateFxProps} rechecking={rechecking} betterMoveLine={betterMoveLine} rankTestNote={rankBotTest && difficultyRef.current.id === "rank" ? (rankTestNote || {}) : null} RushThemeArt={RushThemeArt} Tray={Tray} activeOpening={activeOpening} activePuzzle={activePuzzle} analysisBusy={analysisBusy} analysisContent={analysisContent} analysisLabel={analysisLabel} analysisMove={analysisMove} analyzing={analyzing} arrowLine={arrowLine} beginRestartCountdown={beginRestartCountdown} bestArrow={bestArrow} boardColorId={boardColorId} boardRef={boardRef} boardVars={boardVars} botColor={botColor} botLine={botLine} botMood={botMood} botTaken={botTaken} colorPick={colorPick} curMoveIdx={curMoveIdx} difficultyIdx={difficultyIdx} difficultyRef={difficultyRef} displayName={displayName} dragCellSize={dragCellSize} dragFrom={dragFrom} dragPos={dragPos} eng={eng} evalLabel={evalLabel} evalPawns={evalPawns} exitMissedAttempt={exitMissedAttempt} exitPractice={exitPractice} exitPuzzle={exitPuzzle} exitReplay={exitReplay} exitRush={exitRush} endRush={endRush} formatClock={formatClock} gameStyle={gameStyle} gradeDetail={gradeDetail} gradeProgress={gradeProgress} grading={grading} hideEvalBar={hideEvalBar} hideRushSummary={hideRushSummary} hinting={hinting} inChk={inChk} liveOpening={liveOpening} missedAttempt={missedAttempt} missedStepIdx={missedStepIdx} mode={mode} moveGrades={moveGrades} moveList={moveList} nameDraft={nameDraft} nameEditOpen={nameEditOpen} newGame={newGame} newGameConfirm={newGameConfirm} nextPuzzle={nextPuzzle} onCopyPgn={onCopyPgn} onDifficultyChange={onDifficultyChange} onHint={onHint} onMissedSwipeEnd={onMissedSwipeEnd} onMissedSwipeStart={onMissedSwipeStart} openLeaderboard={openLeaderboard} openReviewPage={openReviewPage} pairs={pairs} pastedGame={pastedGame} pauseSpectate={pauseSpectate} pgnToast={pgnToast} pieceImgSrc={pieceImgSrc} pieceSetId={pieceSetId} playMove={playMove} playerAdvantageCp={playerAdvantageCp} playerColor={playerColor} playerShare={playerShare} practice={practice} practiceMove={practiceMove} practiceNext={practiceNext} practiceReveal={practiceReveal} promo={promo} puzzleBand={puzzleBand} puzzleFeedback={puzzleFeedback} puzzleMove={puzzleMove} puzzleSolved={puzzleSolved} pz={pz} quizDoneToast={quizDoneToast} quizMove={quizMove} quizOpening={quizOpening} rankBotAssessedElo={rankBotAssessedElo} rankBotGames={rankBotGames} playerRating={playerRating} replayFull={replayFull} replayIndex={replayIndex} replayPlaying={replayPlaying} replayStep={replayStep} restartCountdown={restartCountdown} result={result} resumeSpectate={resumeSpectate} reviewIndex={reviewIndex} reviewInfo={reviewInfo} reviewMissedPuzzle={reviewMissedPuzzle} reviewing={reviewing} rows={rows} rushBandIdx={rushBandIdx} rushBestMap={rushBestMap} rushDuration={rushDuration} rushLifetime={rushLifetime} rushMilestone={rushMilestone} rushMissed={rushMissed} rushMistakes={rushMistakes} rushMode={rushMode} rushResult={rushResult} rushSolved={rushSolved} rushSummaryOpen={rushSummaryOpen} rushTimeLeft={rushTimeLeft} saveDisplayName={saveDisplayName} setBotLine={setBotLine} setColorPick={setColorPick} setMissedStepIdx={setMissedStepIdx} setNameDraft={setNameDraft} setNameEditOpen={setNameEditOpen} setNewGameConfirm={setNewGameConfirm} setPlayerColor={setPlayerColor} setPromo={setPromo} setReplayIndex={setReplayIndex} setReviewIndex={setReviewIndex} setRushSummaryOpen={setRushSummaryOpen} setShareLinkFallback={setShareLinkFallback} setShareToast={setShareToast} setSiteView={setSiteView} shareLinkFallback={shareLinkFallback} shareToast={shareToast} spectateBlackIdx={spectateBlackIdx} spectateMode={spectateMode} spectateOpeningId={spectateOpeningId} spectatePaused={spectatePaused} spectateWhiteIdx={spectateWhiteIdx} startPuzzle={startPuzzle} startQuiz={startQuiz} startSpectate={startSpectate} status={status} stopSpectate={stopSpectate} sweetheart={sweetheart} thinking={thinking} toggleAnalyze={toggleAnalyze} toggleReplayPlay={toggleReplayPlay} uiT={uiT} undo={undo} youDiff={youDiff} youTaken={youTaken} onQuit={quitGame} profile={session?.user?.id ? profile : null} accountAvatar={session?.user?.id ? avatarFromSession(session) : null} />
+      <PlayView mateFxProps={mateFxProps} rechecking={rechecking} betterMoveLine={betterMoveLine} rankTestNote={rankBotTest && difficultyRef.current.id === "rank" ? (rankTestNote || {}) : null} Tray={Tray} activeOpening={activeOpening} activePuzzle={activePuzzle} analysisBusy={analysisBusy} analysisContent={analysisContent} analysisLabel={analysisLabel} analysisMove={analysisMove} analyzing={analyzing} arrowLine={arrowLine} bestArrow={bestArrow} boardColorId={boardColorId} boardRef={boardRef} boardVars={boardVars} botColor={botColor} botLine={botLine} botMood={botMood} botTaken={botTaken} colorPick={colorPick} curMoveIdx={curMoveIdx} difficultyIdx={difficultyIdx} difficultyRef={difficultyRef} displayName={displayName} dragCellSize={dragCellSize} dragFrom={dragFrom} dragPos={dragPos} eng={eng} evalLabel={evalLabel} evalPawns={evalPawns} exitMissedAttempt={exitMissedAttempt} exitPractice={exitPractice} exitPuzzle={exitPuzzle} exitReplay={exitReplay} exitRush={exitRush} endRush={endRush} formatClock={formatClock} gameStyle={gameStyle} gradeDetail={gradeDetail} gradeProgress={gradeProgress} grading={grading} hideEvalBar={hideEvalBar} hideRushSummary={hideRushSummary} hinting={hinting} inChk={inChk} liveOpening={liveOpening} missedAttempt={missedAttempt} mode={mode} moveGrades={moveGrades} moveList={moveList} nameDraft={nameDraft} nameEditOpen={nameEditOpen} newGame={newGame} newGameConfirm={newGameConfirm} nextPuzzle={nextPuzzle} onCopyPgn={onCopyPgn} onDifficultyChange={onDifficultyChange} onHint={onHint} openLeaderboard={openLeaderboard} openReviewPage={openReviewPage} pairs={pairs} pastedGame={pastedGame} pauseSpectate={pauseSpectate} pgnToast={pgnToast} pieceImgSrc={pieceImgSrc} pieceSetId={pieceSetId} playMove={playMove} playerAdvantageCp={playerAdvantageCp} playerColor={playerColor} playerShare={playerShare} practice={practice} practiceMove={practiceMove} practiceNext={practiceNext} practiceReveal={practiceReveal} promo={promo} puzzleBand={puzzleBand} puzzleFeedback={puzzleFeedback} puzzleMove={puzzleMove} puzzleSolved={puzzleSolved} pz={pz} quizDoneToast={quizDoneToast} quizMove={quizMove} quizOpening={quizOpening} rankBotAssessedElo={rankBotAssessedElo} rankBotGames={rankBotGames} playerRating={playerRating} replayFull={replayFull} replayIndex={replayIndex} replayPlaying={replayPlaying} replayStep={replayStep} result={result} resumeSpectate={resumeSpectate} reviewIndex={reviewIndex} reviewInfo={reviewInfo} reviewMissedPuzzle={reviewMissedPuzzle} reviewing={reviewing} rows={rows} rushBandIdx={rushBandIdx} rushDuration={rushDuration} rushMilestone={rushMilestone} rushMissed={rushMissed} rushMissedSolved={rushMissedSolved} playAgain={retryRush} rushMistakes={rushMistakes} rushMode={rushMode} rushResult={rushResult} rushSolved={rushSolved} rushSummaryOpen={rushSummaryOpen} rushTimeLeft={rushTimeLeft} saveDisplayName={saveDisplayName} setBotLine={setBotLine} setColorPick={setColorPick} setNameDraft={setNameDraft} setNameEditOpen={setNameEditOpen} setNewGameConfirm={setNewGameConfirm} setPlayerColor={setPlayerColor} setPromo={setPromo} setReplayIndex={setReplayIndex} setReviewIndex={setReviewIndex} setRushSummaryOpen={setRushSummaryOpen} setShareLinkFallback={setShareLinkFallback} setShareToast={setShareToast} setSiteView={setSiteView} shareLinkFallback={shareLinkFallback} shareToast={shareToast} spectateBlackIdx={spectateBlackIdx} spectateMode={spectateMode} spectateOpeningId={spectateOpeningId} spectatePaused={spectatePaused} spectateWhiteIdx={spectateWhiteIdx} startPuzzle={startPuzzle} startQuiz={startQuiz} startSpectate={startSpectate} status={status} stopSpectate={stopSpectate} sweetheart={sweetheart} thinking={thinking} toggleAnalyze={toggleAnalyze} toggleReplayPlay={toggleReplayPlay} uiT={uiT} undo={undo} youDiff={youDiff} youTaken={youTaken} onQuit={quitGame} profile={session?.user?.id ? profile : null} accountAvatar={session?.user?.id ? avatarFromSession(session) : null} />
     </Suspense>
   );
   };

@@ -1,16 +1,16 @@
-import { Suspense } from "react";
+import { useState } from "react";
 import SubPage from "./SubPage";
-import RushThemeArt from "./RushThemeArt";
 import PixelAvatar, { BPAL, BPIX, PPAL, PPIX } from "./PixelAvatar";
 
 import { DIFFICULTIES, LEVELS_BY_STRENGTH } from "../utils/difficulties";
 import { RUSH_DURATIONS } from "../utils/rushDurations";
 import { OPENINGS } from "../utils/openings";
+import { loadSetting, saveSetting } from "../utils/storage";
 
 /* The feature pages one level below a section: Openings, Watch Bots, Ranked
    and Puzzle Rush. Loaded only when one of them is showing (see App.jsx).
    Everything they read or do comes in as a prop. */
-export default function ModePages({ siteView, openLeaderboard, puzzlesInBand, pz, resetRushCounter, rushDuration, rushLifetime, setPuzzleBand, setSiteView, setSpectateBlackIdx, setSpectateOpeningId, setSpectateWhiteIdx, spectateBlackIdx, spectateOpeningId, spectateWhiteIdx, startOpening, startPuzzle, startRush, startSpectate, sweetheart }) {
+export default function ModePages({ siteView, openLeaderboard, puzzlesInBand, pz, rushBestMap, setPuzzleBand, setSiteView, setSpectateBlackIdx, setSpectateOpeningId, setSpectateWhiteIdx, spectateBlackIdx, spectateOpeningId, spectateWhiteIdx, startOpening, startPuzzle, startRush, startSpectate, sweetheart }) {
   if (siteView === "openings") {
     return (
       <SubPage onBack={() => setSiteView("lessons")} sweetheart={sweetheart}>
@@ -96,41 +96,38 @@ export default function ModePages({ siteView, openLeaderboard, puzzlesInBand, pz
     );
   }
 
-  if (siteView === "rush") {
-    return (
-      <SubPage onBack={() => setSiteView("puzzlesHome")} boxClass="rushThemeBox" flush sweetheart={sweetheart}>
-            <div className="rushThemeInner">
-          {/* Same shattered-glass + corner-heart + sprite background as
-             the heartbreak screen (see RushThemeArt) -- this and that
-             screen are the two places that are explicitly her corner of
-             the app end to end, so they share one skin, not two. */}
-          <Suspense fallback={null}><RushThemeArt /></Suspense>
-          <div className="rushEndHead">
-            <p className="rushEndEyebrow">Puzzle Rush</p>
-            <p className="rushEndSub" style={{ fontSize: 12, fontWeight: 400, color: "var(--sh-dim)" }}>
-              Solve as many puzzles as you can before time runs out. Three wrong answers ends the rush early.
-            </p>
-          </div>
-          <div className="durationGrid">
-            {RUSH_DURATIONS.map(d => (
-              <button key={d.label} type="button" className="durationChip" onClick={() => startRush(d.seconds)}>
-                {d.label}
-                {d.seconds == null && <span className="newBadge">New</span>}
-              </button>
-            ))}
-          </div>
-          <div className="rushCounterRow" style={{ color: "var(--sh-dim)" }}>
-            <span>Lifetime solved: <b style={{ color: "var(--sh-text)" }}>{rushLifetime}</b></span>
-            <button className="btn ghost" style={{ padding: "4px 10px", fontSize: 10, minHeight: 44 }} onClick={resetRushCounter}>Reset</button>
-          </div>
-          <div style={{ display: "flex", justifyContent: "center" }}>
-            <button className="rushEndTrophy" onClick={() => openLeaderboard(rushDuration ?? 60)} aria-label="View leaderboard" title="View leaderboard">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M18 3h-2V1H8v2H6C4.9 3 4 3.9 4 5v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.95V17H9v2h6v-2h-3v-3.11c1.63-.32 2.98-1.45 3.61-2.95C18.08 10.63 20 8.55 20 6V5c0-1.1-.9-2-2-2zM6 6V5h2v3.82C6.84 8.4 6 7.3 6 6zm12 0c0 1.3-.84 2.4-2 2.82V5h2v1z" /></svg>
-            </button>
-          </div>
-        </div>
-      </SubPage>
-    );
-  }
+  if (siteView === "rush") return <RushStart {...{ setSiteView, startRush, openLeaderboard, rushBestMap, sweetheart }} />;
   return null;
+}
+
+/* Puzzle Rush's start: pick a time (each shows your best), then Start.
+   The leaderboard is a quiet link. Same look as the rest of the site
+   (2026-11-24 redesign: the shattered-heart theme is gone). */
+const SHORT = { 60: "1 min", 180: "3 min", 300: "5 min", null: "No clock" };
+function RushStart({ setSiteView, startRush, openLeaderboard, rushBestMap = {}, sweetheart }) {
+  const [pick, setPick] = useState(() => {
+    const saved = loadSetting("rushLastDuration", 60);
+    return RUSH_DURATIONS.some((d) => d.seconds === saved) ? saved : 60;
+  });
+  const choose = (seconds) => { setPick(seconds); saveSetting("rushLastDuration", seconds); };
+  return (
+    <SubPage onBack={() => setSiteView("puzzlesHome")} sweetheart={sweetheart}>
+      <h1 className="boxHead m-0">Puzzle Rush</h1>
+      <p className="rushIntro">Solve as many puzzles as you can before the clock runs out. They get harder as you go, and three misses ends the run.</p>
+      <div className="rushPick" role="radiogroup" aria-label="Time">
+        {RUSH_DURATIONS.map((d) => {
+          const best = rushBestMap[d.seconds == null ? "none" : String(d.seconds)] || 0;
+          return (
+            <button key={d.label} type="button" role="radio" aria-checked={pick === d.seconds}
+              className={"rushPickOption" + (pick === d.seconds ? " on" : "")} onClick={() => choose(d.seconds)}>
+              <span className="rushPickTime">{SHORT[d.seconds]}</span>
+              <span className="rushPickBest">{best ? `Best ${best}` : "No score yet"}</span>
+            </button>
+          );
+        })}
+      </div>
+      <button type="button" className="btn gold" style={{ width: "100%" }} onClick={() => startRush(pick)}>Start</button>
+      <button type="button" className="rushTextLink" onClick={() => openLeaderboard(pick ?? 60)}>See the leaderboard</button>
+    </SubPage>
+  );
 }
