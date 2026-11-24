@@ -18,6 +18,7 @@ import { createSpeaker, createRecognizer } from "../utils/speech";
 import { track } from "../utils/track";
 
 const BlindMode = lazy(() => import("./BlindMode"));
+const BlindPuzzles = lazy(() => import("./BlindPuzzles"));
 
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 const INSTALLED_IPHONE = typeof window !== "undefined" && /iPhone|iPad|iPod/.test(navigator.userAgent)
@@ -71,7 +72,7 @@ function revealFor(q) {
   return q.fen || null;
 }
 
-export default function BlindTrainerPage({ onBack, sweetheart, pieceSetId = "classic", startScreen = "home", session: authSession }) {
+export default function BlindTrainerPage({ onBack, onRegisterBack, sweetheart, pieceSetId = "classic", startScreen = "home", session: authSession }) {
   const T = getUiTheme(sweetheart);
   const focus = `focus-visible:outline-none focus-visible:ring-2 ${T.ring}`;
   const [screen, setScreen] = useState(startScreen); // home | session | done | game
@@ -86,6 +87,9 @@ export default function BlindTrainerPage({ onBack, sweetheart, pieceSetId = "cla
   const [showBoard, setShowBoard] = useState(false);
   const [listening, setListening] = useState(false);
   const [outcome, setOutcome] = useState(null); // end of session
+  /* The whole path is tucked away until asked for: the home screen shows
+     where you are and Continue. */
+  const [pathOpen, setPathOpen] = useState(false);
   const inputRef = useRef(null);
 
   const speaker = useMemo(() => createSpeaker(), []);
@@ -106,6 +110,21 @@ export default function BlindTrainerPage({ onBack, sweetheart, pieceSetId = "cla
     document.addEventListener("visibilitychange", off);
     return () => document.removeEventListener("visibilitychange", off);
   }, [speaker]);
+
+  /* The phone's Back steps out of a session (or a game, or puzzles) to
+     the trainer's home, and from there to Learn, instead of jumping
+     straight to Home (App.jsx onPopState). */
+  const screenRef = useRef(screen);
+  screenRef.current = screen;
+  useEffect(() => {
+    onRegisterBack?.(() => {
+      if (screenRef.current !== "home") { speaker.cancel(); recRef.current?.stop(); setScreen("home"); return "stay"; }
+      onBack();
+      return "moved";
+    });
+    return () => onRegisterBack?.(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* Signed in: bring this device's progress and the account's together. */
   const userId = authSession?.user?.id ?? null;
@@ -327,8 +346,13 @@ export default function BlindTrainerPage({ onBack, sweetheart, pieceSetId = "cla
       </section>
 
       <section className="flex flex-col gap-2" aria-label="Your path">
-        <h2 className={`m-0 text-xs font-bold uppercase tracking-wider ${T.dimText}`}>Your path</h2>
-        {STAGES.map((s, i) => {
+        <button type="button" aria-expanded={pathOpen} onClick={() => setPathOpen((o) => !o)}
+          className={`flex min-h-11 items-center justify-between gap-2 border-0 bg-transparent p-0 text-xs font-bold uppercase tracking-wider ${T.dimText} ${focus}`}>
+          <span>Your path · {STAGES.filter((s) => training.path[s.id].done).length} of {STAGES.length} done</span>
+          <span aria-hidden="true">{pathOpen ? "Hide ▲" : "Show ▼"}</span>
+        </button>
+        {STAGES.filter((s) => pathOpen || s.id === current).map((s) => {
+          const i = STAGES.indexOf(s);
           const p = training.path[s.id];
           const isOpen = open.includes(s.id);
           const st = stepOf(training.path, s.id);
@@ -359,6 +383,13 @@ export default function BlindTrainerPage({ onBack, sweetheart, pieceSetId = "cla
             <span className={`block text-xs ${T.dimText}`}>No board at all: say or type your moves against the bot.</span>
           </span>
         </button>
+        <button type="button" onClick={() => { speaker.prime(); setScreen("puzzles"); }} className="pathStage">
+          <span className="pathDot" aria-hidden="true">?</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-bold">Text puzzles with Zlegend2700</span>
+            <span className={`block text-xs ${T.dimText}`}>Real puzzles read to you as a list of pieces. Type or say the move.</span>
+          </span>
+        </button>
       </section>
     </>
   );
@@ -367,7 +398,14 @@ export default function BlindTrainerPage({ onBack, sweetheart, pieceSetId = "cla
     <div className="root">
       <StarField sweetheart={sweetheart} />
       <div className="relative z-10 flex w-full max-w-md flex-col gap-3">
-        {screen === "game" ? (
+        {screen === "puzzles" ? (
+          <>
+            {back("Blind Chess Trainer", () => setScreen("home"))}
+            <Suspense fallback={<p className={"m-0 text-sm " + T.dimText}>Loading…</p>}>
+              <BlindPuzzles sweetheart={sweetheart} pieceSetId={pieceSetId} />
+            </Suspense>
+          </>
+        ) : screen === "game" ? (
           <>
             {back("Blind Chess Trainer", () => setScreen("home"))}
             <div className={card + " p-4"}>

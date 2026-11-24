@@ -6,6 +6,10 @@
 import { getPieceSet } from "../utils/pieceSets";
 
 const PIECES = "pnbrqk";
+
+/** a1 is dark; colours alternate along every rank and file. (The first
+ *  version had this backwards, drawing a1 light.) */
+export const isLightSquare = (square) => ("abcdefgh".indexOf(square[0]) + Number(square[1])) % 2 === 0;
 const NAMES = { p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king" };
 
 export default function TapBoard({
@@ -31,7 +35,7 @@ export default function TapBoard({
     <div className={"tapBoard" + (colored ? "" : " plain")} role="group" aria-label={label}>
       {ranks.map((r) => [...files].map((f, fi) => {
         const name = f + r;
-        const light = ("abcdefgh".indexOf(f) + r) % 2 === 1;
+        const light = isLightSquare(name);
         const piece = grid[name];
         const mark = marks[name];
         /* Without colours every square is the same grey (two greys would

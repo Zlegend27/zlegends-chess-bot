@@ -964,3 +964,15 @@ html.noPinch, html.noPinch body{ touch-action:manipulation; }
 .viewBadge{ display:inline-flex; align-items:center; gap:6px; width:fit-content; padding:3px 10px; border-radius:var(--r-pill); font-size:11px; font-weight:700;
   background:color-mix(in srgb, var(--cyan) 14%, transparent); color:var(--cyan); }
 :root[data-theme="sweetheart"] .viewBadge{ color:#0E7C86; }
+/* Text puzzles: Zlegend2700 beside a big speech bubble. */
+.textPuzzleStage{ display:flex; align-items:flex-start; gap:10px; }
+.textPuzzleHost{ flex:none; width:72px; height:72px; display:grid; place-items:center; }
+.textPuzzleHost img{ width:72px; height:72px; object-fit:contain; }
+.textPuzzleBubble{ position:relative; flex:1; min-width:0; padding:14px 16px; border-radius:var(--r-md) var(--r-md) var(--r-md) var(--r-2xs);
+  background:color-mix(in srgb, var(--violet) 22%, var(--panel)); border:1px solid color-mix(in srgb, var(--violet) 55%, transparent);
+  color:var(--white); font-size:17px; line-height:1.5; }
+.textPuzzleBubble p{ margin:0 0 8px; }
+.textPuzzleBubble p:last-child{ margin-bottom:0; }
+.textPuzzleWho{ display:block; font-size:10px; font-weight:700; letter-spacing:.16em; text-transform:uppercase; color:var(--cyan); margin-bottom:4px; }
+:root[data-theme="sweetheart"] .textPuzzleBubble{ background:#FFF6E9; border-color:#F06BAE66; color:var(--sh-link); }
+:root[data-theme="sweetheart"] .textPuzzleWho{ color:#0E7C86; }

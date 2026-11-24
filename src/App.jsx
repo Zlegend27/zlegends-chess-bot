@@ -345,6 +345,9 @@ export default function ZlegendsBot() {
      Landing straight on a page puts Home underneath it, so that one step
      exists from the start. */
   const firstRouteRef = useRef(true);
+  /* Set by a page that handles Back itself (see onPopState). */
+  const backInterceptRef = useRef(null);
+  const innerViewRef = useRef("home");
   useEffect(() => {
     /* An opening's own address (/openings/vienna-game) is Learn too, and
        stays as it is: LessonsPage keeps it in step with the open course. */
@@ -385,6 +388,12 @@ export default function ZlegendsBot() {
         history.pushState({ subPage: true }, "", pathForView("play"));
         return;
       }
+      /* A page with its own screens (the Blind Chess Trainer) takes Back
+         first: "stay" means it stepped back inside itself, so its address
+         goes back on; "moved" means it went somewhere itself (to Learn). */
+      const inner = backInterceptRef.current?.();
+      if (inner === "stay") { history.pushState({ subPage: true }, "", window.location.pathname === "/" ? pathForView(innerViewRef.current) : window.location.pathname); return; }
+      if (inner === "moved") return;
       const view = viewForPath(window.location.pathname);
       setMusicOpen(false);
       setSettingsOpen(false);
@@ -2958,7 +2967,7 @@ export default function ZlegendsBot() {
   if (siteView === "blind") {
     return (
       <Suspense fallback={null}>
-        <BlindTrainerPage key={blindStart} startScreen={blindStart} onBack={() => setSiteView("lessons")} sweetheart={sweetheart} pieceSetId={pieceSetId} session={session} />
+        <BlindTrainerPage key={blindStart} startScreen={blindStart} onBack={() => setSiteView("lessons")} onRegisterBack={(fn) => { backInterceptRef.current = fn; innerViewRef.current = "blind"; }} sweetheart={sweetheart} pieceSetId={pieceSetId} session={session} />
       </Suspense>
     );
   }
