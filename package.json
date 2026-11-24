@@ -34,16 +34,21 @@
     "@tailwindcss/vite": "^4.3.2",
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
-    "@vitejs/plugin-legacy": "^5.4.3",
-    "@vitejs/plugin-react": "^4.2.1",
+    "@vitejs/plugin-legacy": "^8.2.4",
+    "@vitejs/plugin-react": "^5.2.0",
     "axe-core": "^4.10.2",
     "eslint": "^8.57.0",
     "eslint-plugin-react": "^7.34.1",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.6",
     "tailwindcss": "^4.3.2",
-    "vite": "^5.2.0",
+    "vite": "^8.3.8",
     "vite-plugin-pwa": "^1.3.0",
     "vitest": "^4.1.9"
+  },
+  "overrides": {
+    "workbox-build": {
+      "glob": "^14.0.2"
+    }
   }
 }

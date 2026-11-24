@@ -25,6 +25,19 @@ export default defineConfig({
   /* The build's date and time, sent with crash reports and events so a
      problem can be tied to the version that had it. */
   define: { __APP_VERSION__: JSON.stringify(new Date().toISOString().slice(0, 16)) },
+  build: {
+    rolldownOptions: {
+      output: {
+        /* three.js (Chess Tactica's 3D) gets its own chunk with a fixed
+           name, so the service worker can leave it out of the precache
+           below. Left alone, Vite 8 puts it in a shared chunk named after
+           whichever Tactica file it lands with. */
+        codeSplitting: {
+          groups: [{ name: 'three', test: /[\\/]node_modules[\\/]three[\\/]/ }],
+        },
+      },
+    },
+  },
   plugins: [
     preact(),
     tailwindcss(),
@@ -39,7 +52,7 @@ export default defineConfig({
         // cached the first time it's used instead (below). Precaching all of
         // it cost every first visit about 3.3 MB.
         globPatterns: ['index.html', 'assets/*.{js,css}', '*.{svg,png}'],
-        globIgnores: ['**/TacticaPage-*.js', '**/engineWorker-*.js', '**/maiaWorker-*.js', '**/ecoOpenings-*.js', '**/puzzles-*.js', 'sweetheart-*.png'],
+        globIgnores: ['**/TacticaPage-*.js', '**/three-*.js','**/engineWorker-*.js', '**/maiaWorker-*.js', '**/ecoOpenings-*.js', '**/puzzles-*.js', 'sweetheart-*.png'],
         // Stockfish's ~7MB wasm/js never changes without a version bump in
         // the file name here, so cache it long-term instead of re-fetching
         // every time a below-2000 difficulty tier is picked.
