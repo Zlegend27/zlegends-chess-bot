@@ -497,6 +497,12 @@ on the first-visit welcome sheet start a game against Rank Bot at once
 (a game already going resumes instead). Home's own Play still opens the
 Play menu.
 
+
+A6 done by the owner 2026-11-23: zlegend2700.com verified in Google
+Search Console (DNS TXT at Namecheap) and Bing Webmaster Tools (imported
+from Google); sitemap submitted (28 pages); indexing requested for / and
+/review. Check Pages and Performance there in a week or two.
+
 Owner: A6 Search Console, L4 device
 test day (two signed-in phones for invite links; a real Feedback send),
 L5 link previews.
