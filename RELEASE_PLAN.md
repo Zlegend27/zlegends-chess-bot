@@ -1,5 +1,7 @@
 # Public release plan (review written 2026-11-23)
 
+**2026-11-23: the plan to follow now is LAUNCH_FINAL.md** (blockers, the bug hunt, launch day). This file is the record of what was built.
+
 The owner asked for an intense review of the whole web app before the public
 release: functionality, accessibility, design, SEO, and renovation ideas.
 Nothing here is built yet. Sizes: S = under an hour, M = a session,
