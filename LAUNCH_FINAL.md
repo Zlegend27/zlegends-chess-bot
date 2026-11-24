@@ -82,6 +82,9 @@ hunt in section 3 is for):
     instead of a code (found 2026-11-16; check it was changed).
   - Attack Protection: leave CAPTCHA off for now; turn it on if spam
     accounts appear.
+- [ ] **Run supabase/013_blind_training.sql** in the SQL Editor (Blind
+      Chess Trainer progress for accounts; until then it stays on each
+      device and nothing breaks).
 - [ ] **Supabase > Realtime settings:** "Allow public access" stays OFF
       (the lobby uses private channels).
 - [ ] **Usage numbers:** in Supabase > SQL Editor, run queries 1, 2, 7 and
@@ -173,7 +176,12 @@ or your second account on a second phone).
 - [ ] iPhone: the board doesn't overlap anything (the old overlap bug).
 - [ ] Pinch zoom works on pages but not on the board; double-tap doesn't
       zoom.
-- [ ] Blind Chess: a few moves by voice (needs the microphone).
+- [ ] Blind Chess Trainer (/blind): a practice session typed, then one
+      by voice (Chrome on Android, Safari on iPhone, not the installed
+      iPhone app); "Read questions aloud"; Show the board; progress kept
+      after signing in on another device (after 013).
+- [ ] Blind Chess voice game: the first tap on the mic listens; the coach
+      talks on iPhone; a full game typed.
 - [ ] Watch Bots: a full game plays out.
 - [ ] Play with yourself (Practice).
 

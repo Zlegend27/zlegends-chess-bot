@@ -16,7 +16,7 @@ import { track } from "../utils/track";
  *  the player/trainer takes over the board. Same page-not-modal,
  *  own-page pattern as LeaderboardPage.jsx -- local state
  *  only, since nothing here touches the main Play board/engine. */
-export default function LessonsPage({ onOpenings, sweetheart }) {
+export default function LessonsPage({ onOpenings, onBlind, sweetheart }) {
   const [lessonId, setLessonId] = useState(null);
   const [chapterNumber, setChapterNumber] = useState(null);
   /* Arriving at an opening's own address (/openings/vienna-game) opens the
@@ -155,6 +155,13 @@ export default function LessonsPage({ onOpenings, sweetheart }) {
           >
             <div className={"font-bold " + T.ink}>Opening Trainer</div>
             <div className={"mt-1 text-xs " + T.dimText}>Learn 12 openings the right way: the ideas, the replies players at your level make, and how to punish their mistakes. The openings library is in here too.</div>
+          </button>
+        )}
+        {!lesson && onBlind && (
+          <button type="button" onClick={onBlind}
+            className={`rounded-2xl border ${T.cardBorder} ${T.panelBg} px-4 py-3 text-left backdrop-blur-sm transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 ${T.ring}`}>
+            <div className={"font-bold " + T.ink}>Blind Chess Trainer</div>
+            <div className={"mt-1 text-xs " + T.dimText}>See the board in your head: short drills with no board, by typing or by voice. Or play a whole game by voice.</div>
           </button>
         )}
         {!lesson ? (

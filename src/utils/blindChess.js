@@ -64,7 +64,7 @@ const CONNECTOR = new Set([
 
 export const sqName = (i64) => "abcdefgh"[i64 % 8] + (((i64 / 8) | 0) + 1);
 
-function normalize(text) {
+export function normalize(text) {
   return (text || "")
     .toLowerCase()
     .replace(/['’]/g, "")   // "what's" → "whats", so phrase regexes stay simple
@@ -111,7 +111,7 @@ function parseCommand(text) {
    parser (where "can i castle" would just castle!). Checked after
    commands, before moves. */
 
-function extractSquares(text) {
+export function extractSquares(text) {
   const tokens = tokenize(text);
   const squares = [];
   for (let i = 0; i < tokens.length; i++) {
@@ -124,7 +124,7 @@ function extractSquares(text) {
   }
   return squares;
 }
-function extractPiece(text) {
+export function extractPiece(text) {
   for (const t of tokenize(text)) if (PIECE_WORD[t] !== undefined) return PIECE_WORD[t];
   return null;
 }

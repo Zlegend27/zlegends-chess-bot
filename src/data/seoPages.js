@@ -110,7 +110,18 @@ export const SEO_PAGES = [
       "New to chess? How to play chess walks you through the board, how every piece moves, check and checkmate, castling and en passant, and a first plan for your games, with a puzzle to solve at every step.",
       `Then the Opening Trainer teaches 12 openings the right way: the ideas behind each move, the replies players at your level really make, and how to punish their mistakes. It covers ${OPENINGS_LIST}.`,
     ],
-    links: ["/openings", "/play", "/review"],
+    links: ["/openings", "/blind", "/play", "/review"],
+  },
+  {
+    path: "/blind",
+    title: "Blind chess trainer: see the board in your head",
+    description: "Free boardless chess drills for beginners: follow moves, find pieces, picture squares and name openings without a board, by typing or by voice.",
+    heading: "Blind Chess Trainer",
+    intro: [
+      "Train your mind's eye with short drills and no board: is f6 light or dark, where can a knight on g1 go, where is White's bishop after these moves, what's on e5 now, which opening is 1.e4 c5? Answer by tapping, typing or speaking, and the drills get harder as you improve.",
+      "A minute a day makes the board easier to see in your head, in your own games too. You can also play a full game by voice against the bot, with no board at all.",
+    ],
+    links: ["/lessons", "/play", "/puzzles"],
   },
   {
     path: "/openings",
@@ -213,6 +224,7 @@ export const LINK_TEXT = {
   "/ranked": "Ranked puzzles",
   "/leaderboard": "Leaderboards",
   "/lessons": "Learn chess",
+  "/blind": "Blind Chess Trainer",
   "/openings": "Openings library",
   "/watch": "Watch bots play",
   "/tactica": "Chess Tactica",

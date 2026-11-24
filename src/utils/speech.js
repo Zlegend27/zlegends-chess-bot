@@ -86,6 +86,7 @@ export function createSpeaker() {
      sentence of a multi-sentence announcement while the rest played on
      regardless (e.g. after closing the panel mid board-read). */
   let cancelToken = 0;
+  let primed = false;
 
   if (synth) loadVoices().then(vs => { if (!voice) voice = rankEnglishVoices(vs)[0] || null; });
 
@@ -141,6 +142,13 @@ export function createSpeaker() {
       if (!on && synth) { cancelToken++; synth.cancel(); }
     },
     setVoice(v) { voice = v || null; },
+    /** Call straight from a tap (Start, a mic tap): iPhone only lets a page
+     *  speak once speech has been started by a tap, and a sentence queued
+     *  a moment later doesn't count. A silent utterance unlocks it. */
+    prime() {
+      if (!synth || primed) return;
+      try { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; synth.speak(u); primed = true; } catch { /* nothing to unlock */ }
+    },
     get voiceName() { return voice ? voice.name : null; },
     get speaking() { return !!synth && synth.speaking; },
   };

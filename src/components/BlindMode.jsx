@@ -31,7 +31,7 @@ import {
   describeStanding, answerQuestion,
 } from "../utils/blindDescriber";
 import { logBlindMiss } from "../utils/blindMisses";
-import { createSpeaker, createRecognizer, requestMicPermission, loadVoices, rankEnglishVoices } from "../utils/speech";
+import { createSpeaker, createRecognizer, loadVoices, rankEnglishVoices } from "../utils/speech";
 
 const BLIND_LEVELS = [
   { label: "1320 Elo", elo: 1320 },
@@ -43,6 +43,10 @@ const BLIND_LEVELS = [
    transcript still has to resolve to a LEGAL move to get this far, so
    the floor only needs to catch genuinely garbled audio. */
 const CONFIDENCE_FLOOR = 0.6;
+/* The site added to an iPhone's home screen: Safari's speech recognition
+   isn't available there. */
+const INSTALLED_IPHONE = typeof window !== "undefined" && /iPhone|iPad|iPod/.test(navigator.userAgent)
+  && (window.navigator.standalone === true || window.matchMedia?.("(display-mode: standalone)").matches);
 const HINT_ELO = 2800;
 
 export default function BlindMode({ onClose }) {
@@ -68,6 +72,7 @@ export default function BlindMode({ onClose }) {
   const [handsFree, setHandsFree] = useState(() => loadSetting("blindHandsFree", false));
   const [voiceOn, setVoiceOn] = useState(true);
   const [input, setInput] = useState("");
+  const [moreOpen, setMoreOpen] = useState(false);
   const [resultText, setResultText] = useState(null);
   const [voices, setVoices] = useState([]);
   const [voiceName, setVoiceName] = useState(() => loadSetting("blindVoice", ""));
@@ -120,7 +125,7 @@ export default function BlindMode({ onClose }) {
     pendingSpeechRef.current++;
     setSpeaking(true);
     speakerRef.current.speak(text).then(() => {
-      pendingSpeechRef.current--;
+      pendingSpeechRef.current = Math.max(0, pendingSpeechRef.current - 1);
       if (pendingSpeechRef.current === 0) setSpeaking(false);
       maybeListen();
     });
@@ -136,7 +141,10 @@ export default function BlindMode({ onClose }) {
       onEnd: () => { setListening(false); if (handsFreeRef.current) setTimeout(maybeListen, 250); },
       onError: (err) => {
         setListening(false);
-        if (err === "not-allowed" || err === "service-not-allowed") {
+        if (err === "service-not-allowed" && INSTALLED_IPHONE) {
+          /* iPhone's home-screen app has no speech recognition at all. */
+          announce("Voice input doesn't work in the installed app on iPhone. Open zlegend2700.com in Safari to use your voice, or type your moves below.");
+        } else if (err === "not-allowed" || err === "service-not-allowed") {
           micGrantedRef.current = false;
           vibrate([15, 60, 15]);
           announce("I can't access the microphone — it's blocked for this site. Allow microphone access in your browser settings, then tap the mic again.");
@@ -427,6 +435,7 @@ export default function BlindMode({ onClose }) {
   handleUtteranceRef.current = handleUtterance;
 
   const startGame = (color) => {
+    speakerRef.current.prime();
     eng.reset();
     moveListRef.current = [];
     pendingRef.current = null;
@@ -442,6 +451,7 @@ export default function BlindMode({ onClose }) {
   };
 
   const resumeGame = () => {
+    speakerRef.current.prime();
     const saved = loadSetting("blindSavedGame", null);
     if (!saved?.moveList?.length) { setSavedGame(null); return; }
     eng.reset();
@@ -474,20 +484,20 @@ export default function BlindMode({ onClose }) {
      for a permission prompt) rather than from a timer -- the reliable
      pattern for mobile speech recognition. Tapping again while
      listening cancels that listen instead of doing nothing. */
-  const onMicTap = async () => {
+  /* Listening has to start in the tap itself: phones (iPhone Safari above
+     all) refuse speech recognition started after a wait, which is why the
+     old version, which first asked for the microphone separately and then
+     started listening, did nothing on the first tap. start() asks for the
+     microphone itself. The coach stops talking first so it can't hear
+     itself. */
+  const onMicTap = () => {
+    speakerRef.current.prime();
     if (listening) { recRef.current?.stop(); return; }
     if (phaseRef.current !== "playing" || botThinkingRef.current) return;
-    if (!micGrantedRef.current) {
-      const perm = await requestMicPermission();
-      if (!perm.ok) {
-        announce(perm.reason === "denied"
-          ? "Microphone access was denied. Allow it in your browser's site settings, then tap the mic again."
-          : "I couldn't access a microphone on this device — you can still play with the text box.");
-        return;
-      }
-      micGrantedRef.current = true;
-      recRef.current?.resetBlock();
-    }
+    speakerRef.current.cancel();
+    pendingSpeechRef.current = 0;
+    setSpeaking(false);
+    recRef.current?.resetBlock();
     recRef.current?.start();
   };
 
@@ -525,118 +535,114 @@ export default function BlindMode({ onClose }) {
   };
 
   return (
-    /* Backdrop click is ignored mid-game: a blind player can't see what a
-       stray tap hit. The ✕ still closes — the game autosaves, so nothing
-       is lost, and reopening offers Resume. */
-    <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget && phase !== "playing") handleClose(); }}>
-      <div className="promoBox blindBox">
-        <button className="modalCloseX" onClick={handleClose} aria-label="Close Blind Chess"
-          title={phase === "playing" ? "Close — your game is saved for resume" : "Close"}>✕</button>
-        <div className="boxHead">🕶️ Blind Chess</div>
-
-        {phase === "setup" && (
-          <div className="blindSetup">
-            <p className="blindHint">
-              Play a full game by voice — no board. Say moves like “knight to f3”,
-              ask “what’s the position?”, or say “repeat” any time.
-            </p>
+    /* Part of the Blind Chess Trainer page (BlindTrainerPage.jsx), not a
+       popup: the old popup squeezed eleven buttons into a small box. The
+       mic and the text box come first; the rarer commands are under More. */
+    <div className="blindGame">
+      {phase === "setup" && (
+        <div className="blindSetup">
+          <p className="blindHint">
+            Play a full game by voice, with no board. Say moves like “knight to f3”,
+            ask “what’s the position?”, or say “repeat” any time. You can always type instead.
+          </p>
+          <label className="blindLabel">
+            Opponent
+            <select value={levelIdx} onChange={e => setLevelIdx(Number(e.target.value))}>
+              {BLIND_LEVELS.map((l, i) => <option key={l.elo} value={i}>{l.label}</option>)}
+            </select>
+          </label>
+          {voices.length > 0 && (
             <label className="blindLabel">
-              Opponent
-              <select value={levelIdx} onChange={e => setLevelIdx(Number(e.target.value))}>
-                {BLIND_LEVELS.map((l, i) => <option key={l.elo} value={i}>{l.label}</option>)}
+              Coach voice
+              <select value={voiceName} onChange={e => pickVoice(e.target.value)}>
+                <option value="">Auto (best available)</option>
+                {voices.map(v => <option key={v.name} value={v.name}>{v.name}</option>)}
               </select>
             </label>
-            {voices.length > 0 && (
-              <label className="blindLabel">
-                Coach voice
-                <select value={voiceName} onChange={e => pickVoice(e.target.value)}>
-                  <option value="">Auto (best available)</option>
-                  {voices.map(v => <option key={v.name} value={v.name}>{v.name}</option>)}
-                </select>
-              </label>
-            )}
-            {!micSupported && (
-              <p className="blindHint">Voice input isn’t supported in this browser — you can still play with the text box.</p>
-            )}
-            {savedGame && (
-              <button className="btn gold" onClick={resumeGame}>
-                Resume Game ({fullMoves(savedGame.moveList.length)} {fullMoves(savedGame.moveList.length) === 1 ? "move" : "moves"} in)
-              </button>
-            )}
-            <div className="ctrls">
-              <button className={"btn " + (savedGame ? "ghost" : "gold")} onClick={() => startGame(1)}>Play as White</button>
-              <button className="btn ghost" onClick={() => startGame(-1)}>Play as Black</button>
-            </div>
+          )}
+          {(!micSupported || INSTALLED_IPHONE) && (
+            <p className="blindHint">
+              {INSTALLED_IPHONE
+                ? "Voice input doesn't work in the installed app on iPhone: open zlegend2700.com in Safari to speak your moves, or type them here."
+                : "Voice input isn’t available in this browser: type your moves instead (Chrome, Edge and Safari can listen)."}
+            </p>
+          )}
+          {savedGame && (
+            <button className="btn gold" onClick={resumeGame}>
+              Resume game ({fullMoves(savedGame.moveList.length)} {fullMoves(savedGame.moveList.length) === 1 ? "move" : "moves"} in)
+            </button>
+          )}
+          <div className="ctrls">
+            <button className={"btn " + (savedGame ? "ghost" : "gold")} onClick={() => startGame(1)}>Play as White</button>
+            <button className="btn ghost" onClick={() => startGame(-1)}>Play as Black</button>
           </div>
-        )}
+        </div>
+      )}
 
-        {phase !== "setup" && (
-          <>
-            <div className="blindStatus">
-              {phase === "over" ? resultText
-                : botThinking ? "Bot is thinking…"
-                : speaking ? "Speaking…"
-                : listening ? "Listening…"
-                : "Your move — tap the mic or type"}
-            </div>
-            <div className="blindLog" aria-live="polite">
-              {log.map((entry, i) => (
-                <div key={i} className={"blindMsg " + entry.who}>
-                  <span className="blindWho">{entry.who === "bot" ? "Coach" : "You"}</span>
-                  {entry.text}
-                </div>
-              ))}
-              <div ref={logEndRef} />
-            </div>
+      {phase !== "setup" && (
+        <>
+          <div className="blindStatus" role="status">
+            {phase === "over" ? resultText
+              : botThinking ? "The bot is thinking…"
+              : listening ? "Listening…"
+              : speaking ? "Coach is talking (tap the mic to interrupt)"
+              : "Your move: tap the mic or type"}
+          </div>
+          <div className="blindLog" aria-live="polite">
+            {log.map((entry, i) => (
+              <div key={i} className={"blindMsg " + entry.who}>
+                <span className="blindWho">{entry.who === "bot" ? "Coach" : "You"}</span>
+                {entry.text}
+              </div>
+            ))}
+            <div ref={logEndRef} />
+          </div>
 
-            {phase === "playing" && (
-              <>
-                <form className="blindInputRow" onSubmit={submitText}>
-                  <input
-                    type="text" value={input} onChange={e => setInput(e.target.value)}
-                    placeholder='Type a move or command… e.g. "knight f3"'
-                    aria-label="Move or command"
-                  />
-                  <button className="btn gold" type="submit">Send</button>
-                </form>
-                <div className="ctrls blindCtrls">
-                  {micSupported && (
-                    <>
-                      <button className={"btn " + (listening ? "gold" : "ghost")} onClick={onMicTap}
-                        disabled={botThinking} title={handsFree ? "Hands Free is on — tap to interrupt/stop" : "Tap, then speak your move"}>
-                        {listening ? "🎙 Listening… (tap to stop)" : "🎙 Tap to speak"}
-                      </button>
-                      <button className={"btn ghost" + (handsFree ? " active" : "")} onClick={toggleHandsFree}
-                        title="Hands Free re-listens automatically after every turn instead of needing a tap each time — best on desktop, less reliable on phones">
-                        {handsFree ? "🔁 Hands Free: On" : "🔁 Hands Free: Off"}
-                      </button>
-                    </>
-                  )}
-                  {speaking && (
-                    <button className="btn ghost" onClick={() => speakerRef.current.cancel()}>⏹ Stop talking</button>
-                  )}
-                  <button className="btn ghost" onClick={toggleVoice}>{voiceOn ? "🔊 Voice" : "🔇 Muted"}</button>
-                  <button className="btn ghost" onClick={() => runCommand("repeat")}>Repeat</button>
+          {phase === "playing" && (
+            <>
+              {micSupported && !INSTALLED_IPHONE && (
+                <button className={"btn " + (listening ? "gold" : "ghost") + " blindMic"} onClick={onMicTap} disabled={botThinking}>
+                  {listening ? "Listening… tap to stop" : "Tap to speak"}
+                </button>
+              )}
+              <form className="blindInputRow" onSubmit={submitText}>
+                <input
+                  type="text" value={input} onChange={e => setInput(e.target.value)}
+                  placeholder='Type a move, e.g. "knight f3"' aria-label="Move or command"
+                  autoCapitalize="off" autoCorrect="off" spellCheck={false}
+                />
+                <button className="btn ghost" type="submit">Send</button>
+              </form>
+              <div className="blindQuick">
+                <button className="btn ghost" onClick={() => runCommand("repeat")}>Repeat</button>
+                <button className="btn ghost" onClick={() => runCommand("board")}>Read board</button>
+                <button className="btn ghost" onClick={() => runCommand("hint")}>Hint</button>
+                <button className="btn ghost" aria-expanded={moreOpen} onClick={() => setMoreOpen(o => !o)}>{moreOpen ? "Less" : "More"}</button>
+              </div>
+              {moreOpen && (
+                <div className="blindQuick">
                   <button className="btn ghost" onClick={() => runCommand("position")}>Position</button>
-                  <button className="btn ghost" onClick={() => runCommand("board")}>Read board</button>
-                  <button className="btn ghost" onClick={() => runCommand("hint")}>Hint</button>
                   <button className="btn ghost" onClick={() => runCommand("undo")}>Undo</button>
                   <button className="btn ghost" onClick={() => runCommand("help")}>Help</button>
+                  <button className="btn ghost" onClick={toggleVoice}>{voiceOn ? "Mute coach" : "Unmute coach"}</button>
+                  {micSupported && !INSTALLED_IPHONE && (
+                    <button className="btn ghost" aria-pressed={handsFree} onClick={toggleHandsFree}>{handsFree ? "Hands free: on" : "Hands free: off"}</button>
+                  )}
                   <button className="btn ghost" onClick={() => runCommand("resign")}>Resign</button>
                 </div>
-              </>
-            )}
+              )}
+            </>
+          )}
 
-            {phase === "over" && (
-              <div className="ctrls">
-                <button className="btn gold" onClick={() => startGame(playerColor)}>New Game</button>
-                <button className="btn ghost" onClick={() => setPhase("setup")}>Change Settings</button>
-                <button className="btn ghost" onClick={handleClose}>Exit</button>
-              </div>
-            )}
-          </>
-        )}
-      </div>
+          {phase === "over" && (
+            <div className="ctrls">
+              <button className="btn gold" onClick={() => startGame(playerColor)}>New game</button>
+              <button className="btn ghost" onClick={() => setPhase("setup")}>Change settings</button>
+              <button className="btn ghost" onClick={handleClose}>Back to the trainer</button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

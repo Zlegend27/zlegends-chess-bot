@@ -763,27 +763,32 @@ html.noPinch, html.noPinch body{ touch-action:manipulation; }
 }
 
 /* ---- Blind Chess (voice mode) ---- */
-.blindBox{ flex-direction:column; gap:10px; width:min(92vw,420px); max-height:85vh; padding:20px 22px; }
+.blindGame{ display:flex; flex-direction:column; gap:10px; }
 .blindSetup{ display:flex; flex-direction:column; gap:12px; }
-.blindHint{ font-size:12px; color:var(--liliac); line-height:1.5; margin:0; }
+.blindHint{ font-size:13px; color:var(--liliac); line-height:1.5; margin:0; }
 .blindLabel{ display:flex; flex-direction:column; gap:6px; font-size:11px; font-weight:700;
   letter-spacing:.14em; text-transform:uppercase; color:var(--dim); }
-.blindStatus{ font-size:11px; font-weight:700; letter-spacing:.2em; text-transform:uppercase;
-  color:var(--yellow); text-shadow:0 0 8px #F5D93E44; }
-.blindLog{ flex:1 1 auto; min-height:180px; max-height:44vh; overflow-y:auto; display:flex;
+.blindStatus{ font-size:12px; font-weight:700; color:var(--yellow); }
+:root[data-theme="sweetheart"] .blindStatus{ color:#8A5A00; }
+.blindLog{ flex:1 1 auto; min-height:200px; max-height:48vh; overflow-y:auto; display:flex;
   flex-direction:column; gap:6px; padding:8px; border:1px solid #8B2FC94D; border-radius:var(--r-xs);
   background:#150C2488; }
-.blindMsg{ font-size:13px; line-height:1.255; color:var(--liliac); }
+.blindMsg{ font-size:15px; line-height:1.4; color:var(--liliac); }
 .blindMsg.you{ color:var(--cyan); }
-.blindWho{ display:block; font-size:9px; font-weight:700; letter-spacing:.18em;
+.blindWho{ display:block; font-size:10px; font-weight:700; letter-spacing:.18em;
   text-transform:uppercase; color:var(--dim); }
 .blindInputRow{ display:flex; gap:8px; }
-.blindInputRow input[type=text]{ flex:1; min-width:0; font-family:inherit; font-size:13px;
+.blindInputRow input[type=text]{ flex:1; min-width:0; min-height:44px; font-family:inherit; font-size:16px;
   border-radius:var(--r-sm); padding:9px 10px; background:#1D1038; color:var(--liliac);
   border:1px solid #8B2FC966; }
 .blindInputRow input[type=text]:focus{ outline:none; border-color:var(--cyan); }
-.blindCtrls .btn{ font-size:10px; padding:8px 10px; }
-.blindCtrls .btn.ghost.active{ box-shadow:0 3px 0 #150C24, 0 0 10px #3EE7F588; color:var(--cyan); }
+/* The mic is the big button; the commands sit in even rows below. */
+.blindMic{ width:100%; min-height:56px; font-size:15px; }
+.blindQuick{ display:grid; grid-template-columns:repeat(2, 1fr); gap:6px; }
+@media (min-width:420px){ .blindQuick{ grid-template-columns:repeat(4, 1fr); } }
+.blindQuick .btn{ min-height:44px; font-size:11px; padding:6px 8px; }
+:root[data-theme="sweetheart"] .blindLog{ background:#FFF6E9; border-color:#F06BAE66; }
+:root[data-theme="sweetheart"] .blindInputRow input[type=text]{ background:#FFF6E9; color:var(--sh-link); border-color:#F06BAE66; }
 
 /* Respect the OS "reduce motion" preference: kill the ambient/looping
    animations (twinkling stars, pulsing highlights, blinking badges) and
@@ -914,3 +919,8 @@ html.noPinch, html.noPinch body{ touch-action:manipulation; }
 :root[data-theme="sweetheart"] .rushMissedRow.done .rushMissedAction{ color:#177A45; }
 .rushEndLinks{ display:flex; gap:8px; }
 .rushEndLinks .btn{ flex:1; min-height:44px; }
+/* Blind Chess Trainer: the verdict after an answer. */
+.blindRight{ color:#6FCF97; }
+.blindWrong{ color:#FF7B9C; }
+:root[data-theme="sweetheart"] .blindRight{ color:#177A45; }
+:root[data-theme="sweetheart"] .blindWrong{ color:var(--sh-red); }

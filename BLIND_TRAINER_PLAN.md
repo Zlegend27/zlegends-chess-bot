@@ -1,8 +1,22 @@
 # Blind Chess Trainer: plan
 
 Written 2026-11-24 from the owner's concept, after reviewing the current
-Blind Chess code. Nothing is built yet: the decisions in section 2 come
-first.
+Blind Chess code.
+
+**Status (2026-11-24): phases 1, 2 and 4 built.** Owner's decisions: keep
+the voice game as a choice; no AI (engine and templates); no widget for
+now; it lives in Learn (/blind); progress on the device, synced to the
+account (supabase/013_blind_training.sql, OWNER MUST RUN IT). Built: five
+drills (square colours, piece reach, piece tracking, what's on the
+square, name the opening) at levels 1-10 that adapt (4 right in a row
+up, 2 wrong down), answered by tapping, typing or voice, read aloud if
+chosen, Show the board after each answer, a days-in-a-row streak, and
+"Play a full game by voice". The voice game was fixed (listening now
+starts straight from the tap, speech is unlocked on the first tap, a
+clear message where voice input isn't available, such as the installed
+iPhone app) and moved from a cramped popup to the page. Not yet: phase
+3's drills (threats, hanging pieces, calculation, boardless mate in 1).
+Not tested on a real phone.
 
 ## 1. What exists today (reviewed)
 

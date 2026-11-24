@@ -16,7 +16,7 @@ import { PGlite } from "@electric-sql/pglite";
 const FILES = [
   "../supabase_setup.sql", "001_link_accounts.sql", "002_ios_sign_in_handoff.sql", "003_rank_bot_detail.sql",
   "004_delete_account.sql", "005_events.sql", "006_leaderboard_safety.sql", "007_private_data.sql", "008_lobby_access.sql",
-  "009_tactica_leaderboard.sql", "010_run_leaderboard.sql", "012_abuse_limits.sql",
+  "009_tactica_leaderboard.sql", "010_run_leaderboard.sql", "012_abuse_limits.sql", "013_blind_training.sql",
 ];
 const ALICE = "11111111-1111-4111-8111-111111111111";
 const BOB = "22222222-2222-4222-8222-222222222222";
@@ -309,5 +309,38 @@ describe("size limits and flood guard (012)", () => {
     });
     /* Other tables are unaffected. */
     await as(null, () => db.query("insert into events (name, client_id) values ('page', 'flood-test')"));
+  });
+});
+
+describe("Blind Chess Trainer progress (013)", () => {
+  const CAROL = "33333333-3333-4333-8333-333333333333";
+  test("a player saves and reads their own progress; nobody else can see or change it", async () => {
+    await db.query("insert into auth.users (id) values ($1) on conflict do nothing", [CAROL]);
+    await as(CAROL, async () => {
+      await db.query("insert into blind_training (user_id, data) values ($1, $2)", [CAROL, JSON.stringify({ drills: { colors: { level: 3 } } })]);
+      await db.query("update blind_training set data = $2 where user_id = $1", [CAROL, JSON.stringify({ drills: { colors: { level: 4 } } })]);
+      expect((await rows("select data from blind_training"))[0].data.drills.colors.level).toBe(4);
+    });
+    await as(ALICE, async () => {
+      expect(await rows("select * from blind_training")).toHaveLength(0);
+      await db.query("update blind_training set data = '{}' where user_id = $1", [CAROL]);
+      await expect(db.query("insert into blind_training (user_id, data) values ($1, '{}')", [CAROL])).rejects.toThrow();
+    });
+    expect((await rows("select data from blind_training where user_id = $1", [CAROL]))[0].data.drills.colors.level).toBe(4);
+  });
+  test("a visitor who isn't signed in can't use it at all", async () => {
+    await as(null, async () => {
+      await expect(db.query("select * from blind_training")).rejects.toThrow(/permission denied/);
+      await expect(db.query("insert into blind_training (user_id, data) values ($1, '{}')", [ALICE])).rejects.toThrow();
+    });
+  });
+  test("oversized progress is refused", async () => {
+    await as(ALICE, async () => {
+      await expect(db.query("insert into blind_training (user_id, data) values ($1, $2)", [ALICE, JSON.stringify({ pad: "x".repeat(9000) })])).rejects.toThrow();
+    });
+  });
+  test("deleting the account deletes it", async () => {
+    await as(CAROL, () => db.query("select delete_my_account()"));
+    expect(await rows("select 1 from blind_training where user_id = $1", [CAROL])).toHaveLength(0);
   });
 });

@@ -33,7 +33,7 @@ function Privacy({ T }) {
         </ul>
       </Section>
       <Section title="If you make an account" T={T}>
-        <p className="m-0">You can log in with Google, Discord or an email code. We then keep your email address, the name and profile picture that Google or Discord share, the name and look you choose on your profile, and your games and scores. Anything you did on this browser before logging in is moved onto your account.</p>
+        <p className="m-0">You can log in with Google, Discord or an email code. We then keep your email address, the name and profile picture that Google or Discord share, the name and look you choose on your profile, your games and scores, and your Blind Chess Trainer progress. Anything you did on this browser before logging in is moved onto your account.</p>
       </Section>
       <Section title="Playing other people" T={T}>
         <p className="m-0">In the 1v1 lobbies, other players see your name, your look and where you are sitting. Your moves are sent to your opponent as you play, and the game is saved to your history.</p>

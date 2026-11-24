@@ -73,7 +73,7 @@ import "./App.css";
 
 /* Loaded on demand: blind mode brings its own parser/describer/speech
    stack, none of which the main board ever needs. */
-const BlindMode = lazy(() => import("./components/BlindMode"));
+const BlindTrainerPage = lazy(() => import("./components/BlindTrainerPage"));
 const TacticaPage = lazy(() => import("./tactica/TacticaPage"));
 
 const FILES = "abcdefgh";
@@ -143,7 +143,12 @@ export default function ZlegendsBot() {
   }, [sweetheart]);
   const uiT = getUiTheme(sweetheart);
   const [musicOpen, setMusicOpen] = useState(false);
-  const [blindOpen, setBlindOpen] = useState(false);
+  /* Blind Chess (the voice game and the trainer) is its own page; music
+     pauses while it's open so the coach can be heard. */
+  const blindOpen = siteView === "blind";
+  /* Which screen /blind opens on: the trainer's menu, or straight into the
+     voice game (from Play's Blind Chess card). */
+  const [blindStart, setBlindStart] = useState("home");
   const { volume, audio, musicSource, mp3Tracks, mp3Idx, mp3Duration, mp3CurrentTime, mp3Buffering, mp3Shuffle, trackName, setMusicSource, toggleShuffle, sfxOn, toggleSfx, pickMp3Track, toggleMusic, nextTrack, prevTrack, onVolume, seekMp3, fmtTime, isMp3Source, jbTrackLabel, jbPlaying, jbDisabled } = useMusic({ musicOpen, blindOpen });
   /* The eval bar is off unless the player turns it on in Settings. (A new
      key, evalBarOn, so everyone started with it hidden when this changed.) */
@@ -1674,7 +1679,6 @@ export default function ZlegendsBot() {
     setQuizOpening(null);
     setQuizFeedback(null);
     setActiveOpening(null);
-    setBlindOpen(false);
 
     if (mode === "replay") {
       history.replaceState(history.state, "", window.location.pathname + window.location.search);
@@ -2001,12 +2005,11 @@ export default function ZlegendsBot() {
       else if (shareLinkFallback) setShareLinkFallback(null);
       else if (newGameConfirm) setNewGameConfirm(false);
       else if (rushMode && rushResult && rushSummaryOpen) hideRushSummary();
-      else if (blindOpen) setBlindOpen(false);
       else if (musicOpen) closeMusic();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [pieceDesignsOpen, boardColorsOpen, settingsOpen, nameEditOpen, shareLinkFallback, newGameConfirm, rushMode, rushResult, rushSummaryOpen, blindOpen, musicOpen]);
+  }, [pieceDesignsOpen, boardColorsOpen, settingsOpen, nameEditOpen, shareLinkFallback, newGameConfirm, rushMode, rushResult, rushSummaryOpen, musicOpen]);
 
   /* Modal accessibility, applied generically rather than per-modal: this
      app has ~15 separate .promoOv/.promoBox blocks (one per open-state
@@ -2693,7 +2696,7 @@ export default function ZlegendsBot() {
     if (modeId === "puzzles") { setSiteView("puzzlesHome"); ensurePuzzlesLoaded(); return; }
     if (modeId === "openings" || modeId === "rush") { setSiteView(modeId); return; }
     if (modeId === "spectate") { setSiteView("watch"); return; }
-    if (modeId === "blind") { setBlindOpen(true); return; }
+    if (modeId === "blind") { setBlindStart("game"); setSiteView("blind"); return; }
     setSiteView("play");
     if (modeId === "rank") {
       const idx = DIFFICULTIES.findIndex(d => d.id === "rank");
@@ -2748,21 +2751,6 @@ export default function ZlegendsBot() {
   const boardVars = { "--boardLight": getBoardColor(boardColorId).light, "--boardDark": getBoardColor(boardColorId).dark };
   const appOverlays = (
     <div className="appOverlays" style={boardVars}>
-      {blindOpen && (
-        <Suspense fallback={
-          <div className="promoOv" style={{ position: "fixed", inset: 0, zIndex: 50 }}>
-            <div className="promoBox" style={{ flexDirection: "column", gap: 12, minWidth: 260, maxWidth: 360, padding: "20px 24px" }} role="status" aria-label="Loading Blind Chess">
-              <div className="boxHead">Blind Chess</div>
-              <div style={{ height: 10, borderRadius: 999, overflow: "hidden", background: "#150C24" }}>
-                <div className="loadingBarFill" style={{ width: "60%", height: "100%", borderRadius: 999, background: "var(--cyan)" }} />
-              </div>
-            </div>
-          </div>
-        }>
-          <BlindMode onClose={() => setBlindOpen(false)} />
-        </Suspense>
-      )}
-
       {(musicOpen || settingsOpen || pieceDesignsOpen || boardColorsOpen) && (
         <Suspense fallback={null}>
           <AppPopups sweetheart={sweetheart} chooseTheme={chooseTheme} sfxOn={sfxOn} toggleSfx={toggleSfx} boardColorId={boardColorId} boardColorsOpen={boardColorsOpen} chooseBoardColor={chooseBoardColor} choosePieceSet={choosePieceSet} closeMusic={closeMusic} closeSettings={closeSettings} fmtTime={fmtTime} hideEvalBar={hideEvalBar} isMp3Source={isMp3Source} jbDisabled={jbDisabled} jbPlaying={jbPlaying} jbTrackLabel={jbTrackLabel} mp3Buffering={mp3Buffering} mp3CurrentTime={mp3CurrentTime} mp3Duration={mp3Duration} mp3Idx={mp3Idx} mp3Shuffle={mp3Shuffle} mp3Tracks={mp3Tracks} musicOpen={musicOpen} musicSource={musicSource} nextTrack={nextTrack} onVolume={onVolume} pickMp3Track={pickMp3Track} pieceDesignsOpen={pieceDesignsOpen} pieceImgSrc={pieceImgSrc} pieceSetId={pieceSetId} prevTrack={prevTrack} seekMp3={seekMp3} setBoardColorsOpen={setBoardColorsOpen} setMusicSource={setMusicSource} setPieceDesignsOpen={setPieceDesignsOpen} setSettingsOpen={setSettingsOpen} settingsOpen={settingsOpen} toggleEvalBar={toggleEvalBar} showCoords={showCoords} toggleCoords={toggleCoords} pieceSpeed={pieceSpeed} choosePieceSpeed={choosePieceSpeed} toggleMusic={toggleMusic} toggleShuffle={toggleShuffle} trackName={trackName} volume={volume} />
@@ -2967,9 +2955,18 @@ export default function ZlegendsBot() {
     );
   }
 
+  if (siteView === "blind") {
+    return (
+      <Suspense fallback={null}>
+        <BlindTrainerPage key={blindStart} startScreen={blindStart} onBack={() => setSiteView("lessons")} sweetheart={sweetheart} pieceSetId={pieceSetId} session={session} />
+      </Suspense>
+    );
+  }
+
   if (siteView === "lessons") {
     return (
       <LessonsPage
+        onBlind={() => { setBlindStart("home"); setSiteView("blind"); }}
         onOpenings={() => enterMode("openings")}
         sweetheart={sweetheart}
       />

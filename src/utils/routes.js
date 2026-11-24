@@ -12,6 +12,7 @@ const VIEW_PATHS = {
   leaderboard: "/leaderboard",
   review: "/review",
   lessons: "/lessons",
+  blind: "/blind",
   profile: "/profile",
   openings: "/openings",
   watch: "/watch",
@@ -53,7 +54,7 @@ export const hiddenHeadingFor = (view) => HIDDEN_HEADINGS[view] ?? null;
 const SITE = "Zlegend2700";
 const TITLES = {
   playHub: "Play", play: "Game", puzzlesHome: "Puzzles", leaderboard: "Leaderboards", daily: "Daily chess puzzle", review: "Game Review",
-  lessons: "Learn", openings: "Openings", watch: "Watch bots play", ranked: "Ranked puzzles", rush: "Puzzle Rush",
+  lessons: "Learn", blind: "Blind Chess Trainer", openings: "Openings", watch: "Watch bots play", ranked: "Ranked puzzles", rush: "Puzzle Rush",
   profile: "Profile", avatar: "Your avatar", history: "Game History", lobby: "1v1 lobby", practice: "Play with yourself", tactica: "Chess Tactica",
   privacy: "Privacy Policy", terms: "Terms of Service", accessibility: "Accessibility",
 };
@@ -70,7 +71,7 @@ export function viewForPath(path) {
  *  screen, but as far as the player knows they're still in that section. */
 export function sectionForView({ siteView, rushMode, activePuzzle, pastedGame }) {
   if (["puzzlesHome", "daily", "leaderboard", "ranked", "rush"].includes(siteView)) return "puzzles";
-  if (siteView === "lessons" || siteView === "openings") return "learn";
+  if (siteView === "lessons" || siteView === "openings" || siteView === "blind") return "learn";
   if (siteView === "review") return "review";
   if (siteView === "home") return "home";
   if (["profile", "avatar", "history", "privacy", "terms", "accessibility"].includes(siteView)) return "";
