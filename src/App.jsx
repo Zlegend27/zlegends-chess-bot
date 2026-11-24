@@ -93,6 +93,8 @@ const PLAY_LEVELS = LEVELS_BY_STRENGTH
 const formatClock = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 /* Matches the .15s used for the app's other quick UI transitions. */
 const PIECE_SLIDE_MS = 150;
+/* Watch Bots: the pause between the bots' moves, in ms. */
+const SPECTATE_SPEEDS = { fast: 150, normal: 600, slow: 1600 };
 /* Settings > Piece movement: how long a move slides on the board. */
 const PIECE_SPEEDS = { normal: PIECE_SLIDE_MS, slow: 320, off: 0 };
 /* The board part of the engine's FEN: which position an analysis arrow
@@ -215,7 +217,7 @@ export default function ZlegendsBot() {
       pendingSearchesRef.current.set(id, resolve);
       engineWorker().postMessage({
         id, moveList: searchMoveList, timeMs, blunderChance,
-        personality: opts.personality, useBook: !!opts.useBook, bookStyle: opts.bookStyle || null,
+        personality: opts.personality, useBook: !!opts.useBook, bookStyle: opts.bookStyle || null, startFen: opts.startFen || null,
       });
     });
   }, [engineWorker]);
@@ -667,6 +669,14 @@ export default function ZlegendsBot() {
   const [spectateWhiteIdx, setSpectateWhiteIdx] = useState(2);
   const [spectateBlackIdx, setSpectateBlackIdx] = useState(2);
   const [spectateOpeningId, setSpectateOpeningId] = useState("");
+  /* Watch Bots: a pasted starting position (FEN; "" for none), and how
+     fast the bots move. */
+  const [spectateFen, setSpectateFen] = useState("");
+  const spectateStartFenRef = useRef(null);
+  const [spectateSpeed, setSpectateSpeedState] = useState(() => (SPECTATE_SPEEDS[loadSetting("spectateSpeed", "normal")] ? loadSetting("spectateSpeed", "normal") : "normal"));
+  const spectateSpeedRef = useRef(spectateSpeed);
+  spectateSpeedRef.current = spectateSpeed;
+  const setSpectateSpeed = (id) => { setSpectateSpeedState(id); saveSetting("spectateSpeed", id); };
   const spectateModeRef = useRef(false);
   const spectatePausedRef = useRef(false);
   const spectateWhiteRef = useRef(DIFFICULTIES[2]);
@@ -728,7 +738,7 @@ export default function ZlegendsBot() {
      opening/shared replay -- anywhere the board is showing a fixed,
      already-decided position rather than a live game the player is
      mid-move in. */
-  const canAnalyze = reviewing || mode === "replay" || (spectateMode && spectatePaused) || (rushMode && !!rushResult) || !!missedAttempt;
+  const canAnalyze = reviewing || mode === "replay" || (spectateMode && (spectatePaused || !!result)) || (rushMode && !!rushResult) || !!missedAttempt;
 
   /* Arrow keys step through a review or replay, which is how Chess.com's
      Game Review moves too: left/right one move, up/down to the ends.
@@ -753,10 +763,10 @@ export default function ZlegendsBot() {
   useEffect(() => {
     if (!reviewing) {
       reviewFirstRun.current = true;
-      if (mode !== "replay" && !(spectateMode && spectatePaused)) { setAnalyzing(false); setBestArrow(null); setAnalysisExtra([]); }
+      if (mode !== "replay" && !(spectateMode && (spectatePaused || result))) { setAnalyzing(false); setBestArrow(null); setAnalysisExtra([]); }
       return;
     }
-    eng.reset();
+    if (spectateModeRef.current && spectateStartFenRef.current) eng.loadFen(spectateStartFenRef.current); else eng.reset();
     setAnalysisExtra([]);
     const { applied, lastCaptured } = replayIntoEngine(eng, moveList.slice(0, reviewIndex));
     if (applied.length) {
@@ -1228,7 +1238,7 @@ export default function ZlegendsBot() {
     const personality = pickPersonality(gameStyleRef.current, eng.plyCount(), 0);
     const searchPromise = diff.stockfishElo
       ? stockfishMove(diff)
-      : runSearch(moveListRef.current, diff.ms, diff.blunderChance || 0, { personality, useBook: diff.book, bookStyle: diff.styleBook ? gameStyleRef.current.label : null });
+      : runSearch(moveListRef.current, diff.ms, diff.blunderChance || 0, { personality, useBook: diff.book && !spectateStartFenRef.current, bookStyle: diff.styleBook ? gameStyleRef.current.label : null, startFen: spectateStartFenRef.current });
     searchPromise.then((res) => {
       if (res && res.move && spectateModeRef.current && moveListRef.current === askedAt) {
         const cap = isCaptureMove(res.move);
@@ -1245,7 +1255,7 @@ export default function ZlegendsBot() {
         setResult(over);
         setThinking(false);
         rerender();
-        if (!over) setTimeout(() => { if (!spectatePausedRef.current) spectateMoveRef.current(); }, 500);
+        if (!over) setTimeout(() => { if (!spectatePausedRef.current) spectateMoveRef.current(); }, SPECTATE_SPEEDS[spectateSpeedRef.current] ?? 600);
       } else {
         setThinking(false);
         rerender();
@@ -1261,14 +1271,16 @@ export default function ZlegendsBot() {
   const spectateMoveRef = useRef(spectateMove);
   spectateMoveRef.current = spectateMove;
 
-  const startSpectate = (whiteIdx, blackIdx, openingId) => {
+  /* `fen`: start from a pasted position (already checked by checkFen). */
+  const startSpectate = (whiteIdx, blackIdx, openingId, fen = null) => {
     setSiteView("play");
     maybeSaveAbandonedGame();
     setSpectateWhiteIdx(whiteIdx); setSpectateBlackIdx(blackIdx);
     spectateWhiteRef.current = DIFFICULTIES[whiteIdx];
     spectateBlackRef.current = DIFFICULTIES[blackIdx];
-    eng.reset();
-    const opening = openingId ? OPENINGS.find(op => op.id === openingId) : null;
+    spectateStartFenRef.current = fen || null;
+    if (fen) eng.loadFen(fen); else eng.reset();
+    const opening = !fen && openingId ? OPENINGS.find(op => op.id === openingId) : null;
     const { applied } = opening ? replayIntoEngine(eng, opening.moves) : { applied: [] };
     const startMoves = opening ? opening.moves.slice(0, applied.length) : [];
     moveListRef.current = startMoves;
@@ -1284,8 +1296,12 @@ export default function ZlegendsBot() {
     setSpectatePaused(false);
     spectateModeRef.current = true;
     setSpectateMode(true);
+    /* A starting line can already be over (Scholar's Mate ends in mate):
+       show the result instead of asking a bot to move. */
+    const over = checkGameOver();
+    setResult(over);
     rerender();
-    setTimeout(() => spectateMoveRef.current(), 60);
+    if (!over) setTimeout(() => spectateMoveRef.current(), 60);
   };
 
   const stopSpectate = () => {
@@ -1309,11 +1325,26 @@ export default function ZlegendsBot() {
     spectatePausedRef.current = false;
     setSpectatePaused(false);
     setAnalyzing(false); setBestArrow(null); setAnalysisExtra([]);
-    eng.reset();
+    if (spectateStartFenRef.current) eng.loadFen(spectateStartFenRef.current); else eng.reset();
     replayIntoEngine(eng, moveListRef.current);
     setPosVersion(v => v + 1);
     rerender();
     setTimeout(() => spectateMoveRef.current(), 60);
+  };
+
+  /* A finished bot game into Game Review: every move graded, the report,
+     the graph. (Game Review only takes games from the normal start, so a
+     game from a pasted position gets Analyze on the board instead.) */
+  const reviewSpectateGame = () => {
+    const white = `${DIFFICULTIES[spectateWhiteIdx].label} (bot)`, black = `${DIFFICULTIES[spectateBlackIdx].label} (bot)`;
+    const text = moveListRef.current.map((san, i) => (i % 2 === 0 ? `${i / 2 + 1}. ${san}` : san)).join(" ");
+    const outcome = result?.reason ?? null;
+    spectateModeRef.current = false;
+    spectatePausedRef.current = false;
+    setSpectateMode(false);
+    setSpectatePaused(false);
+    const r = loadPgnText(text, { side: 1, info: { white, black, outcome } });
+    track("review_run", { source: "watch", ok: r.ok });
   };
 
   const finishRankBotGame = () => {
@@ -2810,7 +2841,7 @@ export default function ZlegendsBot() {
   if (["openings", "watch", "ranked", "rush"].includes(siteView)) {
     return (
       <Suspense fallback={null}>
-        <ModePages siteView={siteView} openLeaderboard={openLeaderboard} puzzlesInBand={puzzlesInBand} pz={pz} rushDuration={rushDuration} rushBestMap={rushBestMap} setPuzzleBand={setPuzzleBand} setSiteView={setSiteView} setSpectateBlackIdx={setSpectateBlackIdx} setSpectateOpeningId={setSpectateOpeningId} setSpectateWhiteIdx={setSpectateWhiteIdx} spectateBlackIdx={spectateBlackIdx} spectateOpeningId={spectateOpeningId} spectateWhiteIdx={spectateWhiteIdx} startOpening={startOpening} startPuzzle={startPuzzle} startRush={startRush} startSpectate={startSpectate} sweetheart={sweetheart} />
+        <ModePages siteView={siteView} openLeaderboard={openLeaderboard} puzzlesInBand={puzzlesInBand} pz={pz} rushDuration={rushDuration} rushBestMap={rushBestMap} setPuzzleBand={setPuzzleBand} setSiteView={setSiteView} setSpectateBlackIdx={setSpectateBlackIdx} setSpectateOpeningId={setSpectateOpeningId} spectateFen={spectateFen} setSpectateFen={setSpectateFen} spectateSpeed={spectateSpeed} setSpectateSpeed={setSpectateSpeed} setSpectateWhiteIdx={setSpectateWhiteIdx} spectateBlackIdx={spectateBlackIdx} spectateOpeningId={spectateOpeningId} spectateWhiteIdx={spectateWhiteIdx} startOpening={startOpening} startPuzzle={startPuzzle} startRush={startRush} startSpectate={startSpectate} sweetheart={sweetheart} />
       </Suspense>
     );
   }
@@ -2947,7 +2978,7 @@ export default function ZlegendsBot() {
 
   return (
     <Suspense fallback={null}>
-      <PlayView mateFxProps={mateFxProps} rechecking={rechecking} betterMoveLine={betterMoveLine} rankTestNote={rankBotTest && difficultyRef.current.id === "rank" ? (rankTestNote || {}) : null} Tray={Tray} activeOpening={activeOpening} activePuzzle={activePuzzle} analysisBusy={analysisBusy} analysisContent={analysisContent} analysisLabel={analysisLabel} analysisMove={analysisMove} analyzing={analyzing} arrowLine={arrowLine} bestArrow={bestArrow} boardColorId={boardColorId} boardRef={boardRef} boardVars={boardVars} botColor={botColor} botLine={botLine} botMood={botMood} botTaken={botTaken} colorPick={colorPick} curMoveIdx={curMoveIdx} difficultyIdx={difficultyIdx} difficultyRef={difficultyRef} displayName={displayName} dragCellSize={dragCellSize} dragFrom={dragFrom} dragPos={dragPos} eng={eng} evalLabel={evalLabel} evalPawns={evalPawns} exitMissedAttempt={exitMissedAttempt} exitPractice={exitPractice} exitPuzzle={exitPuzzle} exitReplay={exitReplay} exitRush={exitRush} endRush={endRush} formatClock={formatClock} gameStyle={gameStyle} gradeDetail={gradeDetail} gradeProgress={gradeProgress} grading={grading} hideEvalBar={hideEvalBar} hideRushSummary={hideRushSummary} hinting={hinting} inChk={inChk} liveOpening={liveOpening} missedAttempt={missedAttempt} mode={mode} moveGrades={moveGrades} moveList={moveList} nameDraft={nameDraft} nameEditOpen={nameEditOpen} newGame={newGame} newGameConfirm={newGameConfirm} nextPuzzle={nextPuzzle} onCopyPgn={onCopyPgn} onDifficultyChange={onDifficultyChange} onHint={onHint} openLeaderboard={openLeaderboard} openReviewPage={openReviewPage} pairs={pairs} pastedGame={pastedGame} pauseSpectate={pauseSpectate} pgnToast={pgnToast} pieceImgSrc={pieceImgSrc} pieceSetId={pieceSetId} playMove={playMove} playerAdvantageCp={playerAdvantageCp} playerColor={playerColor} playerShare={playerShare} practice={practice} practiceMove={practiceMove} practiceNext={practiceNext} practiceReveal={practiceReveal} promo={promo} puzzleBand={puzzleBand} puzzleFeedback={puzzleFeedback} puzzleMove={puzzleMove} puzzleSolved={puzzleSolved} pz={pz} quizDoneToast={quizDoneToast} quizMove={quizMove} quizOpening={quizOpening} rankBotAssessedElo={rankBotAssessedElo} rankBotGames={rankBotGames} playerRating={playerRating} replayFull={replayFull} replayIndex={replayIndex} replayPlaying={replayPlaying} replayStep={replayStep} result={result} resumeSpectate={resumeSpectate} reviewIndex={reviewIndex} reviewInfo={reviewInfo} reviewMissedPuzzle={reviewMissedPuzzle} reviewing={reviewing} rows={rows} rushBandIdx={rushBandIdx} rushDuration={rushDuration} rushMilestone={rushMilestone} rushMissed={rushMissed} rushMissedSolved={rushMissedSolved} playAgain={retryRush} rushMistakes={rushMistakes} rushMode={rushMode} rushResult={rushResult} rushSolved={rushSolved} rushSummaryOpen={rushSummaryOpen} rushTimeLeft={rushTimeLeft} saveDisplayName={saveDisplayName} setBotLine={setBotLine} setColorPick={setColorPick} setNameDraft={setNameDraft} setNameEditOpen={setNameEditOpen} setNewGameConfirm={setNewGameConfirm} setPlayerColor={setPlayerColor} setPromo={setPromo} setReplayIndex={setReplayIndex} setReviewIndex={setReviewIndex} setRushSummaryOpen={setRushSummaryOpen} setShareLinkFallback={setShareLinkFallback} setShareToast={setShareToast} setSiteView={setSiteView} shareLinkFallback={shareLinkFallback} shareToast={shareToast} spectateBlackIdx={spectateBlackIdx} spectateMode={spectateMode} spectateOpeningId={spectateOpeningId} spectatePaused={spectatePaused} spectateWhiteIdx={spectateWhiteIdx} startPuzzle={startPuzzle} startQuiz={startQuiz} startSpectate={startSpectate} status={status} stopSpectate={stopSpectate} sweetheart={sweetheart} thinking={thinking} toggleAnalyze={toggleAnalyze} toggleReplayPlay={toggleReplayPlay} uiT={uiT} undo={undo} youDiff={youDiff} youTaken={youTaken} onQuit={quitGame} profile={session?.user?.id ? profile : null} accountAvatar={session?.user?.id ? avatarFromSession(session) : null} />
+      <PlayView mateFxProps={mateFxProps} rechecking={rechecking} betterMoveLine={betterMoveLine} rankTestNote={rankBotTest && difficultyRef.current.id === "rank" ? (rankTestNote || {}) : null} Tray={Tray} activeOpening={activeOpening} activePuzzle={activePuzzle} analysisBusy={analysisBusy} analysisContent={analysisContent} analysisLabel={analysisLabel} analysisMove={analysisMove} analyzing={analyzing} arrowLine={arrowLine} bestArrow={bestArrow} boardColorId={boardColorId} boardRef={boardRef} boardVars={boardVars} botColor={botColor} botLine={botLine} botMood={botMood} botTaken={botTaken} colorPick={colorPick} curMoveIdx={curMoveIdx} difficultyIdx={difficultyIdx} difficultyRef={difficultyRef} displayName={displayName} dragCellSize={dragCellSize} dragFrom={dragFrom} dragPos={dragPos} eng={eng} evalLabel={evalLabel} evalPawns={evalPawns} exitMissedAttempt={exitMissedAttempt} exitPractice={exitPractice} exitPuzzle={exitPuzzle} exitReplay={exitReplay} exitRush={exitRush} endRush={endRush} formatClock={formatClock} gameStyle={gameStyle} gradeDetail={gradeDetail} gradeProgress={gradeProgress} grading={grading} hideEvalBar={hideEvalBar} hideRushSummary={hideRushSummary} hinting={hinting} inChk={inChk} liveOpening={liveOpening} missedAttempt={missedAttempt} mode={mode} moveGrades={moveGrades} moveList={moveList} nameDraft={nameDraft} nameEditOpen={nameEditOpen} newGame={newGame} newGameConfirm={newGameConfirm} nextPuzzle={nextPuzzle} onCopyPgn={onCopyPgn} onDifficultyChange={onDifficultyChange} onHint={onHint} openLeaderboard={openLeaderboard} openReviewPage={openReviewPage} pairs={pairs} pastedGame={pastedGame} pauseSpectate={pauseSpectate} pgnToast={pgnToast} pieceImgSrc={pieceImgSrc} pieceSetId={pieceSetId} playMove={playMove} playerAdvantageCp={playerAdvantageCp} playerColor={playerColor} playerShare={playerShare} practice={practice} practiceMove={practiceMove} practiceNext={practiceNext} practiceReveal={practiceReveal} promo={promo} puzzleBand={puzzleBand} puzzleFeedback={puzzleFeedback} puzzleMove={puzzleMove} puzzleSolved={puzzleSolved} pz={pz} quizDoneToast={quizDoneToast} quizMove={quizMove} quizOpening={quizOpening} rankBotAssessedElo={rankBotAssessedElo} rankBotGames={rankBotGames} playerRating={playerRating} replayFull={replayFull} replayIndex={replayIndex} replayPlaying={replayPlaying} replayStep={replayStep} result={result} resumeSpectate={resumeSpectate} reviewSpectateGame={reviewSpectateGame} spectateFromFen={!!spectateStartFenRef.current} spectateFen={spectateFen} reviewIndex={reviewIndex} reviewInfo={reviewInfo} reviewMissedPuzzle={reviewMissedPuzzle} reviewing={reviewing} rows={rows} rushBandIdx={rushBandIdx} rushDuration={rushDuration} rushMilestone={rushMilestone} rushMissed={rushMissed} rushMissedSolved={rushMissedSolved} playAgain={retryRush} rushMistakes={rushMistakes} rushMode={rushMode} rushResult={rushResult} rushSolved={rushSolved} rushSummaryOpen={rushSummaryOpen} rushTimeLeft={rushTimeLeft} saveDisplayName={saveDisplayName} setBotLine={setBotLine} setColorPick={setColorPick} setNameDraft={setNameDraft} setNameEditOpen={setNameEditOpen} setNewGameConfirm={setNewGameConfirm} setPlayerColor={setPlayerColor} setPromo={setPromo} setReplayIndex={setReplayIndex} setReviewIndex={setReviewIndex} setRushSummaryOpen={setRushSummaryOpen} setShareLinkFallback={setShareLinkFallback} setShareToast={setShareToast} setSiteView={setSiteView} shareLinkFallback={shareLinkFallback} shareToast={shareToast} spectateBlackIdx={spectateBlackIdx} spectateMode={spectateMode} spectateOpeningId={spectateOpeningId} spectatePaused={spectatePaused} spectateWhiteIdx={spectateWhiteIdx} startPuzzle={startPuzzle} startQuiz={startQuiz} startSpectate={startSpectate} status={status} stopSpectate={stopSpectate} sweetheart={sweetheart} thinking={thinking} toggleAnalyze={toggleAnalyze} toggleReplayPlay={toggleReplayPlay} uiT={uiT} undo={undo} youDiff={youDiff} youTaken={youTaken} onQuit={quitGame} profile={session?.user?.id ? profile : null} accountAvatar={session?.user?.id ? avatarFromSession(session) : null} />
     </Suspense>
   );
   };

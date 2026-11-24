@@ -10,12 +10,13 @@ const eng = createEngine();
 const MAX_BOOK_PLIES = 20; // ~10 full moves; opening theory thins out past this anyway
 
 self.onmessage = async (e) => {
-  const { id, moveList, timeMs, blunderChance, personality, useBook, bookStyle } = e.data;
-  eng.reset();
+  const { id, moveList, timeMs, blunderChance, personality, useBook, bookStyle, startFen } = e.data;
+  /* startFen: a game that began from a pasted position (Watch Bots). */
+  if (startFen) eng.loadFen(startFen); else eng.reset();
   replayIntoEngine(eng, moveList);
   eng.setPersonality(personality);
 
-  if (useBook && moveList.length < MAX_BOOK_PLIES) {
+  if (useBook && !startFen && moveList.length < MAX_BOOK_PLIES) {
     /* bookStyle (Casual only) tilts the weighted opening pick toward the
        bot's daily personality -- see STYLE_BOOK_BIAS in openingBook.js. */
     const bookSan = getBookMove(eng.fen(), moveList, { style: bookStyle || null });

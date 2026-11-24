@@ -6,11 +6,17 @@ import { DIFFICULTIES, LEVELS_BY_STRENGTH } from "../utils/difficulties";
 import { RUSH_DURATIONS } from "../utils/rushDurations";
 import { OPENINGS } from "../utils/openings";
 import { loadSetting, saveSetting } from "../utils/storage";
+import { checkFen } from "../utils/fenCheck";
+
+/* The "Starting position" choice that shows the FEN box. */
+const PASTE = "__paste";
 
 /* The feature pages one level below a section: Openings, Watch Bots, Ranked
    and Puzzle Rush. Loaded only when one of them is showing (see App.jsx).
    Everything they read or do comes in as a prop. */
-export default function ModePages({ siteView, openLeaderboard, puzzlesInBand, pz, rushBestMap, setPuzzleBand, setSiteView, setSpectateBlackIdx, setSpectateOpeningId, setSpectateWhiteIdx, spectateBlackIdx, spectateOpeningId, spectateWhiteIdx, startOpening, startPuzzle, startRush, startSpectate, sweetheart }) {
+export default function ModePages({ siteView, openLeaderboard, puzzlesInBand, pz, rushBestMap, spectateFen = "", setSpectateFen, spectateSpeed = "normal", setSpectateSpeed, setPuzzleBand, setSiteView, setSpectateBlackIdx, setSpectateOpeningId, setSpectateWhiteIdx, spectateBlackIdx, spectateOpeningId, spectateWhiteIdx, startOpening, startPuzzle, startRush, startSpectate, sweetheart }) {
+  /* Watch Bots: a pasted position's error, shown under the box. */
+  const [fenError, setFenError] = useState(null);
   if (siteView === "openings") {
     return (
       <SubPage onBack={() => setSiteView("lessons")} sweetheart={sweetheart}>
@@ -56,14 +62,39 @@ export default function ModePages({ siteView, openLeaderboard, puzzlesInBand, pz
               </label>
               <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
                 Starting position
-                <select value={spectateOpeningId} onChange={e => setSpectateOpeningId(e.target.value)}>
+                <select value={spectateOpeningId} onChange={e => { setSpectateOpeningId(e.target.value); setFenError(null); }}>
                   <option value="">Standard start</option>
                   {OPENINGS.map(op => <option key={op.id} value={op.id}>{op.name}</option>)}
+                  <option value={PASTE}>Paste a position (FEN)…</option>
                 </select>
               </label>
+              {spectateOpeningId === PASTE && (
+                <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
+                  Position (FEN)
+                  <textarea className="modalInput mono" rows={2} value={spectateFen} spellCheck={false} autoCapitalize="off"
+                    placeholder="r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3"
+                    onChange={e => { setSpectateFen(e.target.value); setFenError(null); }} />
+                  <span style={{ opacity: 0.75 }}>From Chess.com or Lichess: Share or Export, then copy the FEN.</span>
+                </label>
+              )}
+              {fenError && <p role="alert" className="pasteError m-0 text-[13px] font-bold">{fenError}</p>}
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
+                Speed
+                <div className="speedPick" role="radiogroup" aria-label="Speed">
+                  {[["fast", "Fast"], ["normal", "Normal"], ["slow", "Slow"]].map(([id, name]) => (
+                    <button key={id} type="button" role="radio" aria-checked={spectateSpeed === id} className={"speedOption" + (spectateSpeed === id ? " on" : "")} onClick={() => setSpectateSpeed(id)}>{name}</button>
+                  ))}
+                </div>
+              </div>
             </div>
             <button className="btn gold" style={{ fontSize: 12, padding: "8px 12px" }}
-              onClick={() => startSpectate(spectateWhiteIdx, spectateBlackIdx, spectateOpeningId)}>Start Spectating</button>
+              onClick={() => {
+                if (spectateOpeningId !== PASTE) { startSpectate(spectateWhiteIdx, spectateBlackIdx, spectateOpeningId); return; }
+                const checked = checkFen(spectateFen);
+                if (checked.error) { setFenError(checked.error); return; }
+                setSpectateFen(checked.fen);
+                startSpectate(spectateWhiteIdx, spectateBlackIdx, "", checked.fen);
+              }}>Start Spectating</button>
       </SubPage>
     );
   }
