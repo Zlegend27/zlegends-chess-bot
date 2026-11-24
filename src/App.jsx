@@ -93,6 +93,8 @@ const PLAY_LEVELS = LEVELS_BY_STRENGTH
 const formatClock = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 /* Matches the .15s used for the app's other quick UI transitions. */
 const PIECE_SLIDE_MS = 150;
+/* Settings > Piece movement: how long a move slides on the board. */
+const PIECE_SPEEDS = { normal: PIECE_SLIDE_MS, slow: 320, off: 0 };
 /* The board part of the engine's FEN: which position an analysis arrow
    was worked out for. */
 const posKey = (eng) => eng.fen().split(" ").slice(0, 2).join(" ");
@@ -2229,6 +2231,13 @@ export default function ZlegendsBot() {
   const choosePieceSet = (id) => { setPieceSetId(id); saveSetting("pieceSet", id); };
   const chooseBoardColor = (id) => { setBoardColorId(id); saveSetting("boardColor", id); };
   const toggleEvalBar = () => { setHideEvalBar(v => { saveSetting("evalBarOn", v); return !v; }); };
+  /* Settings: the a-h and 1-8 labels on the board, and how moves slide. */
+  const [showCoords, setShowCoords] = useState(() => loadSetting("boardCoords", true) !== false);
+  const toggleCoords = () => setShowCoords((v) => { saveSetting("boardCoords", !v); return !v; });
+  const [pieceSpeed, setPieceSpeed] = useState(() => (PIECE_SPEEDS[loadSetting("pieceSpeed", "normal")] != null ? loadSetting("pieceSpeed", "normal") : "normal"));
+  const choosePieceSpeed = (id) => { setPieceSpeed(id); saveSetting("pieceSpeed", id); };
+  const pieceSpeedRef = useRef(pieceSpeed);
+  pieceSpeedRef.current = pieceSpeed;
 
   const onCopyPgn = async () => {
     const pgn = buildPgn(moveList, result ? result.text : "*");
@@ -2491,8 +2500,8 @@ export default function ZlegendsBot() {
             {p !== EMPTY && !isDragFrom && !(showMateFx && mateFx.sq === i64) && <img className={"pc " + (p > 0 ? "w" : "b") + (pieceSetId === "sweetheart" && Math.abs(p) === 6 ? " kingBoost" : "") + (pieceSetId === "sweetheart" && p === -2 ? " knightBoost" : "")} src={pieceImgSrc(Math.abs(p), p > 0)} alt="" draggable="false" />}
             {gradeHere && lastMove && lastMove.to === sq120 && <span className={"boardGrade " + gradeHere} role="img" aria-label={`Graded: ${gradeHere}`} title={gradeHere}>{GRADE_TAG[gradeHere]}</span>}
             {isTarget && <span className={"dot" + (p !== EMPTY ? " ring" : "")} />}
-            {vf === 0 && <span className="coord rk">{r + 1}</span>}
-            {vr === 7 && <span className="coord fl">{FILES[f]}</span>}
+            {showCoords && vf === 0 && <span className="coord rk">{r + 1}</span>}
+            {showCoords && vr === 7 && <span className="coord fl">{FILES[f]}</span>}
           </div>
         );
       }
@@ -2502,7 +2511,7 @@ export default function ZlegendsBot() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eng, flipped, selected, targets, lastMove, hintMove, isBotLastMove, isPlayerLastMove,
       moveList, reviewIndex, replayIndex, replayFull, analysisExtra, mode, pieceSetId, dragFrom, dragOverSquare,
-      reviewing, moveGrades]);
+      reviewing, moveGrades, showCoords]);
 
   const pairs = [];
   for (let i = 0; i < moveList.length; i += 2) pairs.push([moveList[i], moveList[i + 1]]);
@@ -2568,6 +2577,8 @@ export default function ZlegendsBot() {
     const board = boardRef.current;
     if (!lastMove || !steppedForward || dragged || !board) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const slideMs = PIECE_SPEEDS[pieceSpeedRef.current] ?? PIECE_SLIDE_MS;
+    if (!slideMs) return;
     const squareSize = board.clientWidth / 8;
     const slide = (a, b) => {
       const cell = board.children[Math.floor(b.y)]?.children[Math.floor(b.x)];
@@ -2581,7 +2592,7 @@ export default function ZlegendsBot() {
       cell.style.zIndex = 4; // ride above the squares it crosses
       const anim = piece.animate(
         [{ transform: `translate(${dx}px, ${dy}px) ${rest}` }, { transform: rest || "none" }],
-        { duration: PIECE_SLIDE_MS, easing: "ease-out" },
+        { duration: slideMs, easing: "ease-out" },
       );
       const done = () => { cell.style.zIndex = ""; };
       anim.onfinish = done;
@@ -2724,7 +2735,7 @@ export default function ZlegendsBot() {
 
       {(musicOpen || settingsOpen || pieceDesignsOpen || boardColorsOpen) && (
         <Suspense fallback={null}>
-          <AppPopups sweetheart={sweetheart} chooseTheme={chooseTheme} sfxOn={sfxOn} toggleSfx={toggleSfx} boardColorId={boardColorId} boardColorsOpen={boardColorsOpen} chooseBoardColor={chooseBoardColor} choosePieceSet={choosePieceSet} closeMusic={closeMusic} closeSettings={closeSettings} fmtTime={fmtTime} hideEvalBar={hideEvalBar} isMp3Source={isMp3Source} jbDisabled={jbDisabled} jbPlaying={jbPlaying} jbTrackLabel={jbTrackLabel} mp3Buffering={mp3Buffering} mp3CurrentTime={mp3CurrentTime} mp3Duration={mp3Duration} mp3Idx={mp3Idx} mp3Shuffle={mp3Shuffle} mp3Tracks={mp3Tracks} musicOpen={musicOpen} musicSource={musicSource} nextTrack={nextTrack} onVolume={onVolume} pickMp3Track={pickMp3Track} pieceDesignsOpen={pieceDesignsOpen} pieceImgSrc={pieceImgSrc} pieceSetId={pieceSetId} prevTrack={prevTrack} seekMp3={seekMp3} setBoardColorsOpen={setBoardColorsOpen} setMusicSource={setMusicSource} setPieceDesignsOpen={setPieceDesignsOpen} setSettingsOpen={setSettingsOpen} settingsOpen={settingsOpen} toggleEvalBar={toggleEvalBar} toggleMusic={toggleMusic} toggleShuffle={toggleShuffle} trackName={trackName} volume={volume} />
+          <AppPopups sweetheart={sweetheart} chooseTheme={chooseTheme} sfxOn={sfxOn} toggleSfx={toggleSfx} boardColorId={boardColorId} boardColorsOpen={boardColorsOpen} chooseBoardColor={chooseBoardColor} choosePieceSet={choosePieceSet} closeMusic={closeMusic} closeSettings={closeSettings} fmtTime={fmtTime} hideEvalBar={hideEvalBar} isMp3Source={isMp3Source} jbDisabled={jbDisabled} jbPlaying={jbPlaying} jbTrackLabel={jbTrackLabel} mp3Buffering={mp3Buffering} mp3CurrentTime={mp3CurrentTime} mp3Duration={mp3Duration} mp3Idx={mp3Idx} mp3Shuffle={mp3Shuffle} mp3Tracks={mp3Tracks} musicOpen={musicOpen} musicSource={musicSource} nextTrack={nextTrack} onVolume={onVolume} pickMp3Track={pickMp3Track} pieceDesignsOpen={pieceDesignsOpen} pieceImgSrc={pieceImgSrc} pieceSetId={pieceSetId} prevTrack={prevTrack} seekMp3={seekMp3} setBoardColorsOpen={setBoardColorsOpen} setMusicSource={setMusicSource} setPieceDesignsOpen={setPieceDesignsOpen} setSettingsOpen={setSettingsOpen} settingsOpen={settingsOpen} toggleEvalBar={toggleEvalBar} showCoords={showCoords} toggleCoords={toggleCoords} pieceSpeed={pieceSpeed} choosePieceSpeed={choosePieceSpeed} toggleMusic={toggleMusic} toggleShuffle={toggleShuffle} trackName={trackName} volume={volume} />
         </Suspense>
       )}
     </div>

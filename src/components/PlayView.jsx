@@ -472,7 +472,7 @@ export default function PlayView({ mateFxProps, rechecking, betterMoveLine, rank
                 {hinting ? "Thinking…" : "Best Move"}
               </button>
               {(moveList.length === 0 || !!result) && (
-                <select value={difficultyIdx} onChange={e => onDifficultyChange(Number(e.target.value))}>
+                <select aria-label="Bot level" value={difficultyIdx} onChange={e => onDifficultyChange(Number(e.target.value))}>
                   {LEVELS_BY_STRENGTH.map((i) => { const d = DIFFICULTIES[i]; return <option key={i} value={i}>{d.adaptive ? d.label : "Level: " + d.label}</option>; })}
                 </select>
               )}

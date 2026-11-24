@@ -1,7 +1,29 @@
 # UI Overhaul Plan
 
-Status: approved. Phases 0 to 3 are built. Phase 4 is next.
-Last updated: 2026-10-31.
+Status: all six phases are built. What's left moved to RELEASE_PLAN.md
+(the launch plan), which is now the plan to follow.
+Last updated: 2026-11-23.
+
+Checked against each phase's "done when" on 2026-11-23:
+- Phase 0: every screen has an address (src/utils/routes.js); back goes
+  to Home in one step, refresh stays put.
+- Phase 1: one header and bottom bar on every page (AppNav.jsx), with the
+  profile menu.
+- Phase 2: Home leads with Play and Game Review; a newcomer gets the
+  "New here?" card, and its "Play a bot" starts a game in one tap.
+- Phase 3: Play, Puzzles, Learn and Review are section pages; Openings,
+  Watch Bots, Rush and Ranked are pages of their own.
+- Phase 4: Settings is real rows (switches and choices): piece designs,
+  board colour, eval bar, coordinates, piece movement, theme. Game
+  Review is its own section; name, look and rating live on Profile, with
+  the log-in nudge there. Decision 4 went with "Music" (the menu, the
+  popup and its close button all say Music).
+- Phase 5: leaving a game works the same everywhere (the logo or the
+  menu; a stray back swipe mid-game is undone on purpose).
+- Phase 6: page transitions (.pageIn), empty and error states (D8 in
+  RELEASE_PLAN), keyboard and screen readers (C1 to C7), 44px tap targets.
+  Still needing real devices: small phones, tablets and iPhone
+  home-screen mode (RELEASE_PLAN L4).
 
 The goal is for the whole app to feel like one finished product: the same
 header everywhere, a home screen that gets you playing fast, and every option

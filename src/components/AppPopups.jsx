@@ -20,10 +20,10 @@ const JbIcon = ({ name, size = 20 }) => (
 /* The Juice Box, Settings, Piece Designs and Board Colors popups. Loaded only
    when one of them is open (see App.jsx). Everything they read comes in as a
    prop, so this file holds no state of its own. */
-export default function AppPopups({ sweetheart, chooseTheme, sfxOn, toggleSfx, boardColorId, boardColorsOpen, chooseBoardColor, choosePieceSet, closeMusic, closeSettings, fmtTime, hideEvalBar, isMp3Source, jbDisabled, jbPlaying, jbTrackLabel, mp3Buffering, mp3CurrentTime, mp3Duration, mp3Idx, mp3Shuffle, mp3Tracks, musicOpen, musicSource, nextTrack, onVolume, pickMp3Track, pieceDesignsOpen, pieceImgSrc, pieceSetId, prevTrack, seekMp3, setBoardColorsOpen, setMusicSource, setPieceDesignsOpen, setSettingsOpen, settingsOpen, toggleEvalBar, toggleMusic, toggleShuffle, trackName, volume }) {
+export default function AppPopups({ sweetheart, chooseTheme, sfxOn, toggleSfx, boardColorId, boardColorsOpen, chooseBoardColor, choosePieceSet, closeMusic, closeSettings, fmtTime, hideEvalBar, isMp3Source, jbDisabled, jbPlaying, jbTrackLabel, mp3Buffering, mp3CurrentTime, mp3Duration, mp3Idx, mp3Shuffle, mp3Tracks, musicOpen, musicSource, nextTrack, onVolume, pickMp3Track, pieceDesignsOpen, pieceImgSrc, pieceSetId, prevTrack, seekMp3, setBoardColorsOpen, setMusicSource, setPieceDesignsOpen, setSettingsOpen, settingsOpen, toggleEvalBar, showCoords, toggleCoords, pieceSpeed, choosePieceSpeed, toggleMusic, toggleShuffle, trackName, volume }) {
   return (
     <>
-      <Modal open={musicOpen} onClose={closeMusic} closeLabel="Close Juice Box"
+      <Modal open={musicOpen} onClose={closeMusic} closeLabel="Close Music"
         className="jbBox" style={{ width: "min(440px, 92vw)", minWidth: undefined, maxWidth: undefined }}>
             <div className="jbTitle">Music</div>
             <div className="jbVolume">
@@ -137,6 +137,30 @@ export default function AppPopups({ sweetheart, chooseTheme, sfxOn, toggleSfx, b
                 >
                   <span className="toggleThumb" />
                 </button>
+              </div>
+              <div style={{ padding: "8px 2px", borderBottom: "1px solid #8B2FC92E", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                <div>
+                  <div style={{ fontWeight: 700 }}>Coordinates</div>
+                  <div style={{ fontSize: 11, opacity: 0.75 }}>{showCoords ? "a–h and 1–8 on the board's edge" : "Hidden"}</div>
+                </div>
+                <button
+                  type="button" role="switch" aria-checked={showCoords} aria-label="Board coordinates"
+                  className={"toggleSwitch" + (showCoords ? " on" : "")}
+                  onClick={toggleCoords}
+                >
+                  <span className="toggleThumb" />
+                </button>
+              </div>
+              <div style={{ padding: "8px 2px", borderBottom: "1px solid #8B2FC92E", display: "flex", flexDirection: "column", gap: 6 }}>
+                <div>
+                  <div style={{ fontWeight: 700 }}>Piece movement</div>
+                  <div style={{ fontSize: 11, opacity: 0.75 }}>How moves slide across the board</div>
+                </div>
+                <div className="speedPick" role="radiogroup" aria-label="Piece movement">
+                  {[["normal", "Normal"], ["slow", "Slow"], ["off", "Instant"]].map(([id, name]) => (
+                    <button key={id} type="button" role="radio" aria-checked={pieceSpeed === id} className={"speedOption" + (pieceSpeed === id ? " on" : "")} onClick={() => choosePieceSpeed(id)}>{name}</button>
+                  ))}
+                </div>
               </div>
             </div>
             <div className="themePick" role="group" aria-label="App theme">

@@ -503,6 +503,16 @@ Search Console (DNS TXT at Namecheap) and Bing Webmaster Tools (imported
 from Google); sitemap submitted (28 pages); indexing requested for / and
 /review. Check Pages and Performance there in a week or two.
 
+
+Then, D7: UI_PLAN.md walked phase by phase and marked complete; what's
+left (real-device checks) is L4 here.
+F7 settings: Coordinates (on/off) and Piece movement (Normal, Slow,
+Instant) in Settings, saved per device. Move confirmation and 1v1
+premoves NOT built: they change how 1v1 moves are sent, so they wait
+until the new lobby has been tested on phones. Found while checking:
+the game screen's level dropdown had no name for screen readers (fixed),
+and the Music popup's close button still said "Juice Box" (fixed).
+
 Owner: A6 Search Console, L4 device
 test day (two signed-in phones for invite links; a real Feedback send),
 L5 link previews.
