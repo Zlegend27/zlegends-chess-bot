@@ -513,6 +513,46 @@ until the new lobby has been tested on phones. Found while checking:
 the game screen's level dropdown had no name for screen readers (fixed),
 and the Music popup's close button still said "Juice Box" (fixed).
 
+
+Security and privacy review (2026-11-23), done as an attacker would:
+- Secrets: none in the repo, its history or the built site; the service
+  key is only read from the local .env by scripts/backup.mjs.
+- Database, probed live with the public key: games, players, scores and
+  Rank Bot moves read back empty; events, run scores and sign-in
+  handoffs are refused; leaderboards show a one-way hash, never the
+  browser's secret id. Good.
+- FOUND: no size limits on saved games, Rank Bot moves, Blind Chess
+  phrases and player rows, and no rate limit except Rush scores, so a
+  script could fill the free 500 MB database. FIX WRITTEN, OWNER MUST
+  RUN IT: supabase/012_abuse_limits.sql (size limits on every column the
+  public writes, and a per-minute cap per table across the site, far
+  above real use). Tested locally in supabase/rules.test.js.
+- FOUND: the preview-picture functions drew a picture for any made-up
+  address, so they could be made to render without end. Now unknown
+  pages and bad game codes get a cheap 404, and long or junk codes are
+  refused before they're replayed. Fixed and pushed.
+- Code: nothing renders raw HTML or runs text as code; every new-tab link
+  has noopener; the YouTube player uses youtube-nocookie.com; no
+  third-party tracker. Headers were already good (HTTPS forced, framing
+  blocked); added to the content security policy: no plugins, base
+  address fixed, forms only to the site, upgrade any http request.
+- Dependencies: safe fixes applied. Left: Vite's development-server
+  issues (only matter while npm run dev runs on your computer; needs a
+  major Vite upgrade, its own task) and satori's SVG escaping (needs
+  attacker-written text on a picture; ours is our own text).
+- Known limits, not fixed (need a server to referee): 1v1 games and
+  ranked results are trusted to the two browsers; someone could show up
+  in the lobby under another player's name (they still can't join that
+  player's games: the database rule checks the real account); a player
+  can set their own Rank Bot rating. Worth a server check before ranked
+  1v1 ratings are shown anywhere public.
+- Owner checks in the Supabase dashboard (Authentication):
+  * URL Configuration: Site URL https://www.zlegend2700.com, and Redirect
+    URLs list only your own addresses (zlegend2700.com, www, localhost
+    for development). No wildcards like https://*.vercel.app.
+  * Rate Limits: keep the email sign-in limits low (the defaults are fine).
+  * Attack Protection: turn on CAPTCHA for sign-in if spam accounts show up.
+
 Owner: A6 Search Console, L4 device
 test day (two signed-in phones for invite links; a real Feedback send),
 L5 link previews.

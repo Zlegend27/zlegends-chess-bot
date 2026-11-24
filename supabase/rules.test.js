@@ -16,7 +16,7 @@ import { PGlite } from "@electric-sql/pglite";
 const FILES = [
   "../supabase_setup.sql", "001_link_accounts.sql", "002_ios_sign_in_handoff.sql", "003_rank_bot_detail.sql",
   "004_delete_account.sql", "005_events.sql", "006_leaderboard_safety.sql", "007_private_data.sql", "008_lobby_access.sql",
-  "009_tactica_leaderboard.sql", "010_run_leaderboard.sql",
+  "009_tactica_leaderboard.sql", "010_run_leaderboard.sql", "012_abuse_limits.sql",
 ];
 const ALICE = "11111111-1111-4111-8111-111111111111";
 const BOB = "22222222-2222-4222-8222-222222222222";
@@ -281,5 +281,33 @@ describe("deleting an account", () => {
     /* Alice is untouched. */
     expect(await rows("select 1 from auth.users where id = $1", [ALICE])).toHaveLength(1);
     expect(Number((await rows("select count(*) as n from games where user_id = $1", [ALICE]))[0].n)).toBeGreaterThan(0);
+  });
+});
+
+describe("size limits and flood guard (012)", () => {
+  const big = "x".repeat(20001);
+  test("oversized rows are refused, normal ones still go in", async () => {
+    await as(null, async () => {
+      await expect(db.query("insert into games (client_id, pgn) values ('size-test', $1)", [big])).rejects.toThrow(/games_sane/);
+      await expect(db.query("insert into games (client_id, pgn) values ($1, '1. e4')", ["c".repeat(65)])).rejects.toThrow(/games_sane/);
+      await expect(db.query("insert into blind_utterances (client_id, text) values ('size-test', $1)", ["y".repeat(501)])).rejects.toThrow(/blind_utterances_sane/);
+      await db.query("insert into blind_utterances (client_id, text) values ('size-test', 'knight to eff three')");
+      await expect(db.query("insert into rank_bot_moves (client_id, game_uid, ply, loss, elo_before, elo_after, detail) values ('size-test', gen_random_uuid(), 1, 0, 1000, 1000, $1)", [JSON.stringify({ pad: "z".repeat(3000) })])).rejects.toThrow(/rank_bot_moves_sane/);
+    });
+    await game("size-test");
+  });
+
+  test("the guard can't be called directly", async () => {
+    await expect(as(null, () => db.query("select flood_guard()"))).rejects.toThrow();
+  });
+
+  test("a table takes its cap of new rows a minute, then refuses more", async () => {
+    const recent = Number((await rows("select count(*) as n from games where created_at > now() - interval '1 minute'"))[0].n);
+    await as(null, async () => {
+      for (let i = recent; i < 120; i++) await db.query("insert into games (client_id, pgn) values ('flood-test', '1. e4')");
+      await expect(db.query("insert into games (client_id, pgn) values ('flood-test', '1. e4')")).rejects.toThrow(/Too many new rows/);
+    });
+    /* Other tables are unaffected. */
+    await as(null, () => db.query("insert into events (name, client_id) values ('page', 'flood-test')"));
   });
 });

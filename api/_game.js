@@ -7,8 +7,11 @@ import { gameResult } from "../src/utils/gameResult.js";
 
 /** { board: 64 piece codes (a1 first), side, moves, title, summary } or null. */
 export function readGame(code) {
-  const game = code ? decodeGame(code) : null;
-  if (!game || game.moveList.length > 600) return null;
+  /* A real game's code is a few KB at most; anything longer, or with moves
+     that aren't short strings, is junk and isn't replayed. */
+  if (!code || code.length > 12000) return null;
+  const game = decodeGame(code);
+  if (!game || game.moveList.length > 600 || !game.moveList.every((m) => typeof m === "string" && m.length <= 10)) return null;
   const eng = createEngine();
   eng.reset();
   const { applied } = replayIntoEngine(eng, game.moveList.slice(0, 600));

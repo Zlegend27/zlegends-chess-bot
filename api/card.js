@@ -12,6 +12,9 @@ export default function handler(req) {
   const params = new URL(req.url).searchParams;
   const code = params.get("c");
   const game = readGame(code);
+  /* Not a real game code: refuse before drawing anything (made-up codes
+     shouldn't each cost a picture). */
+  if (!game) return new Response("Not found", { status: 404, headers: { "Cache-Control": "public, max-age=3600" } });
   /* A shared review (?a=87-72) shows both sides' accuracy. */
   const acc = game ? readAccuracyParam(params.get("a")) : null;
   const tree = h("div", { style: { width: 1200, height: 630, display: "flex", alignItems: "center", background: BG, padding: 35, gap: 50, fontFamily: "sans-serif" } },

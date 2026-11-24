@@ -30,7 +30,10 @@ function boardFor(path) {
 
 export default function handler(req) {
   const path = new URL(req.url).searchParams.get("p") || "/";
-  const page = SEO_PAGES.find((p) => p.path === path) ?? SEO_PAGES[0];
+  const page = SEO_PAGES.find((p) => p.path === path);
+  /* Only our own pages: anything else is refused before any drawing, so
+     made-up addresses can't make this render pictures without end. */
+  if (!page) return new Response("Not found", { status: 404, headers: { "Cache-Control": "public, max-age=3600" } });
   const { board, flipped } = boardFor(page.path);
   /* Long descriptions stop at the end of a sentence that fits, not mid-phrase. */
   const description = shorten(page.description, 150);
