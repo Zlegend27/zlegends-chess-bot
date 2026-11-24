@@ -4,21 +4,25 @@
    progress stays on the device. Never throws. */
 import { getSupabase } from "./supabase";
 import { storedSession } from "./restApi";
-import { DRILLS } from "./blindDrills";
+import { STAGES } from "./blindPath";
 
-/** Merges two progress records: for each drill the one practised more,
- *  and the more recent streak. */
+/* How far along a stage is, for choosing between two records of it. */
+const reach = (r) => (r ? (r.done ? 1000 : 0) + (r.step || 0) * 10 + Math.min(9, r.sessions || 0) : -1);
+
+/** Merges two progress records: for each stage the one further along, and
+ *  the more recent streak. A record without a path (the first version's)
+ *  counts as none. */
 export function mergeTraining(a, b) {
-  if (!b) return a;
-  if (!a) return b;
-  const drills = {};
-  for (const d of DRILLS) {
-    const x = a.drills?.[d.id], y = b.drills?.[d.id];
-    drills[d.id] = !y ? x : !x ? y : (y.answered || 0) > (x.answered || 0) ? y : x;
+  if (!b || !b.path) return a;
+  if (!a || !a.path) return b;
+  const path = {};
+  for (const s of STAGES) {
+    const x = a.path[s.id], y = b.path[s.id];
+    path[s.id] = reach(y) > reach(x) ? y : x;
   }
   const sa = a.streak || { last: null, count: 0 }, sb = b.streak || { last: null, count: 0 };
   const streak = (sb.last || "") > (sa.last || "") ? sb : (sa.last || "") > (sb.last || "") ? sa : (sb.count > sa.count ? sb : sa);
-  return { drills, streak, updatedAt: Math.max(a.updatedAt || 0, b.updatedAt || 0) };
+  return { path, streak, updatedAt: Math.max(a.updatedAt || 0, b.updatedAt || 0) };
 }
 
 export async function syncTraining(local) {
@@ -32,7 +36,7 @@ export async function syncTraining(local) {
     /* No table yet (013 not run): stay on the device. */
     if (error) return null;
     const merged = mergeTraining(local, data?.data || null);
-    await supabase.from("blind_training").upsert({ user_id: userId, data: { drills: merged.drills, streak: merged.streak }, updated_at: new Date().toISOString() });
+    await supabase.from("blind_training").upsert({ user_id: userId, data: { version: 2, path: merged.path, streak: merged.streak }, updated_at: new Date().toISOString() });
     return merged;
   } catch {
     return null;

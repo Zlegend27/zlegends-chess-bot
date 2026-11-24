@@ -3,6 +3,19 @@
 Written 2026-11-24 from the owner's concept, after reviewing the current
 Blind Chess code.
 
+**Update 2026-11-24 (later): the trainer is now a path** (src/utils/blindPath.js),
+after the owner asked for board answers first and a gradual climb to text
+only. Ten stages open one at a time, starting with Find the square (tap
+the square you're told, as in the Lichess and Chess.com coordinate
+trainers). Each stage steps from "With the board" (pieces shown, answer by
+tapping squares, which light up) to "Board, no pieces" (empty grid with
+coordinates) to "No board" (text or voice). Sessions of 5: 5 right jumps
+two steps, 4 one, 3 stays, 2 or fewer goes back one (adaptive fading,
+which research found beats a fixed schedule). The next stage opens at
+this one's first no-board step. The colour drill's board is one even grey
+so it can't give the answer away. Progress is a new record
+(blindTrainingV2); the first version's levels were set aside.
+
 **Status (2026-11-24): phases 1, 2 and 4 built.** Owner's decisions: keep
 the voice game as a choice; no AI (engine and templates); no widget for
 now; it lives in Learn (/blind); progress on the device, synced to the

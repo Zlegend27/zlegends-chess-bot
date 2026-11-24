@@ -15,6 +15,7 @@ import { extractSquares, extractPiece, normalize, sanToSpeech, PIECE_SPOKEN, par
 export const MAX_LEVEL = 10;
 
 export const DRILLS = [
+  { id: "coords", group: "see", name: "Find the square", desc: "Tap the square you're told." },
   { id: "colors", group: "see", name: "Square colours", desc: "Is a square light or dark?" },
   { id: "reach", group: "see", name: "Piece reach", desc: "Where can a knight or bishop go?" },
   { id: "tracking", group: "see", name: "Piece tracking", desc: "Follow the moves and find a piece." },
@@ -78,6 +79,23 @@ function readColourWord(text) {
   if (w.includes("white")) return 1;
   if (w.includes("black")) return -1;
   return 0;
+}
+
+/* ---------------- 0. find the square (answered on the board) ---------------- */
+function coordsQuestion(level, rand) {
+  /* The middle of the board first: edge squares are the easy ones. */
+  const inner = level <= 1;
+  const f = inner ? 1 + Math.floor(rand() * 6) : Math.floor(rand() * 8);
+  const r = inner ? 1 + Math.floor(rand() * 6) : Math.floor(rand() * 8);
+  const target = sq(f, r);
+  return {
+    kind: "square", answer: target, prompt: `Tap ${target}.`, spoken: `Find ${target}.`, about: null, target,
+    check: (text) => {
+      const a = readSquare(text);
+      if (!a) return { understood: false };
+      return { understood: true, correct: a === target, explanation: a === target ? `That's ${target}.` : `That was ${a}. ${target} is ${"abcdefgh"[f]}-file, rank ${r + 1}.` };
+    },
+  };
 }
 
 /* ---------------- 1. square colours ---------------- */
@@ -247,8 +265,15 @@ function squaresQuestion(level, rand) {
   const there = origin[target] || null;
   const what = there ? `a ${SIDE(there.color).toLowerCase()} ${pieceName(there.piece)}` : "nothing";
   const prompt = `${movesText(moves)}. What is on ${target} now?`;
+  /* Four options to tap on the board steps: the answer, the same piece in
+     the other colour, empty, and another piece. */
+  const cap = (t) => t[0].toUpperCase() + t.slice(1);
+  const label = (p, c) => `${c === 1 ? "White" : "Black"} ${pieceName(p)}`;
+  const right = there ? label(there.piece, there.color) : "Empty";
+  const pool = there ? [label(there.piece, -there.color), "Empty", label(there.piece === WP ? 2 : WP, there.color)] : [label(WP, 1), label(2, -1), label(3, 1)];
+  const choices = [right, ...pool].map(cap).sort(() => rand() - 0.5);
   return {
-    kind: "piece", moves, fen: eng.fen(), answer: there ? `${SIDE(there.color).toLowerCase()} ${pieceName(there.piece)}` : "empty", about: { square: target, piece: there?.piece ?? 0, color: there?.color ?? 0 },
+    kind: "piece", moves, fen: eng.fen(), choices, answer: there ? `${SIDE(there.color).toLowerCase()} ${pieceName(there.piece)}` : "empty", about: { square: target, piece: there?.piece ?? 0, color: there?.color ?? 0 },
     prompt, spoken: `${movesSpoken(moves)} What is on ${target} now?`,
     check: (text) => {
       const empty = readEmpty(text);
@@ -397,6 +422,12 @@ const freeCapture = (eng, m) => {
    piece was meant). */
 function readMove(eng, text) {
   const clean = String(text || "").trim().replace(/[+#!?]/g, "");
+  /* Tapped on the board: from-square then to-square, "e2e4". */
+  const tap = /^([a-h][1-8])-?([a-h][1-8])$/.exec(clean.toLowerCase());
+  if (tap) {
+    const name = (i120) => { const t = M120TO64[i120]; return sq(t % 8, (t / 8) | 0); };
+    return eng.legalMoves().filter((m) => name(mFrom(m)) === tap[1] && name(mTo(m)) === tap[2]);
+  }
   const bySan = eng.legalMoves().filter((m) => eng.sanOf(m).replace(/[+#]/g, "") === clean);
   if (bySan.length) return bySan;
   const parsed = parseUtterance(eng, text);
@@ -482,8 +513,10 @@ function recaptureQuestion(level, rand) {
   const side = r.moves.length % 2 === 0 ? "White" : "Black";
   const names = r.takers.map(pieceName);
   const prompt = `${movesText(r.moves)}. Which ${side} piece can take back on ${r.square}?`;
+  const others = [2, 3, 4, 5, WP, WK].filter((p) => !r.takers.includes(p));
+  const choices = [...r.takers.slice(0, 2), ...others.sort(() => rand() - 0.5)].slice(0, 4).map((p) => { const n = pieceName(p); return n[0].toUpperCase() + n.slice(1); }).sort(() => rand() - 0.5);
   return {
-    kind: "piece", moves: r.moves, fen: (() => { const { eng } = follow(r.moves); return eng.fen(); })(), answer: names[0],
+    kind: "piece", moves: r.moves, choices, fen: (() => { const { eng } = follow(r.moves); return eng.fen(); })(), answer: names[0],
     prompt, spoken: `${movesSpoken(r.moves)} Which ${side} piece can take back on ${r.square}?`,
     check: (text) => {
       const piece = extractPiece(normalize(text));
@@ -511,7 +544,7 @@ function mateQuestion(level, rand) {
   };
 }
 
-const MAKERS = { colors: colorsQuestion, reach: reachQuestion, tracking: trackingQuestion, squares: squaresQuestion, openings: openingsQuestion, checks: checksQuestion, free: freeQuestion, recapture: recaptureQuestion, mate: mateQuestion };
+const MAKERS = { coords: coordsQuestion, colors: colorsQuestion, reach: reachQuestion, tracking: trackingQuestion, squares: squaresQuestion, openings: openingsQuestion, checks: checksQuestion, free: freeQuestion, recapture: recaptureQuestion, mate: mateQuestion };
 
 /** A question for `drill` at `level` (1 to 10). */
 export function makeQuestion(drill, level = 1, rand = Math.random) {

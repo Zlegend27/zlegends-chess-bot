@@ -2,7 +2,7 @@ import { describe, test, expect } from "vitest";
 import { bumpStreak, liveStreak } from "./blindTrainerStore";
 import { mergeTraining } from "./blindTrainerSync";
 import { loneFen } from "../components/BlindTrainerPage";
-import { emptyProgress } from "./blindDrills";
+import { emptyPath } from "./blindPath";
 
 describe("practice streak", () => {
   test("counts days in a row, resets after a missed day", () => {
@@ -20,16 +20,17 @@ describe("practice streak", () => {
 });
 
 describe("merging device and account progress", () => {
-  test("keeps each drill's more-practised record and the latest streak", () => {
-    const device = { drills: { ...emptyProgress(), colors: { level: 5, answered: 40, correct: 30, right: 0, wrong: 0, best: 6 } }, streak: { last: "2026-11-24", count: 3 } };
-    const account = { drills: { ...emptyProgress(), colors: { level: 2, answered: 10, correct: 5, right: 0, wrong: 0, best: 2 }, reach: { level: 4, answered: 20, correct: 15, right: 0, wrong: 0, best: 5 } }, streak: { last: "2026-11-20", count: 9 } };
+  test("keeps each stage's further record and the latest streak", () => {
+    const device = { path: { ...emptyPath(), coords: { step: 2, done: true, answered: 20, correct: 19, sessions: 4 }, colors: { step: 1, done: false, answered: 5, correct: 3, sessions: 1 } }, streak: { last: "2026-11-24", count: 3 } };
+    const account = { path: { ...emptyPath(), coords: { step: 1, done: false, answered: 10, correct: 8, sessions: 2 }, colors: { step: 3, done: false, answered: 15, correct: 13, sessions: 3 } }, streak: { last: "2026-11-20", count: 9 } };
     const m = mergeTraining(device, account);
-    expect(m.drills.colors.level).toBe(5);
-    expect(m.drills.reach.level).toBe(4);
+    expect(m.path.coords.done).toBe(true);
+    expect(m.path.colors.step).toBe(3);
     expect(m.streak).toEqual({ last: "2026-11-24", count: 3 });
   });
-  test("nothing on the account keeps the device's", () => {
-    const device = { drills: emptyProgress(), streak: { last: null, count: 0 } };
+  test("an account record from the first version doesn't replace the device's", () => {
+    const device = { path: emptyPath(), streak: { last: null, count: 0 } };
+    expect(mergeTraining(device, { drills: {}, streak: { last: "2026-11-24", count: 1 } })).toBe(device);
     expect(mergeTraining(device, null)).toBe(device);
   });
 });

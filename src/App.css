@@ -924,3 +924,43 @@ html.noPinch, html.noPinch body{ touch-action:manipulation; }
 .blindWrong{ color:#FF7B9C; }
 :root[data-theme="sweetheart"] .blindRight{ color:#177A45; }
 :root[data-theme="sweetheart"] .blindWrong{ color:var(--sh-red); }
+/* Blind Chess Trainer: the board you answer on by tapping. */
+:root{ --tapGrey:#4C4166; --tapLine:#2A2240; }
+:root[data-theme="sweetheart"]{ --tapGrey:#E2D6C8; --tapLine:#BFAF9F; }
+.tapBoard.plain{ gap:1px; background:var(--tapLine); }
+.tapBoard{ display:grid; grid-template-columns:repeat(8, 1fr); width:min(100%, 360px); aspect-ratio:1; margin:0 auto;
+  border-radius:var(--r-sm); overflow:hidden; box-shadow:0 0 0 1px color-mix(in srgb, var(--violet) 50%, transparent); touch-action:manipulation; }
+.tapSq{ position:relative; border:0; padding:0; margin:0; cursor:pointer; display:flex; align-items:center; justify-content:center;
+  -webkit-tap-highlight-color:transparent; transition:box-shadow .12s ease, filter .12s ease; }
+.tapSq:disabled{ cursor:default; }
+.tapSq img{ width:88%; height:88%; object-fit:contain; pointer-events:none; }
+.tapSq:active:not(:disabled), .tapSq.picked{ box-shadow:inset 0 0 0 999px color-mix(in srgb, var(--cyan) 45%, transparent); }
+.tapSq:focus-visible{ outline:2px solid var(--cyan); outline-offset:-2px; z-index:1; }
+.tapSq.right{ box-shadow:inset 0 0 0 999px #3FBF7F99; }
+.tapSq.wrong{ box-shadow:inset 0 0 0 999px #FF4C5B99; }
+.tapSq.hint{ box-shadow:inset 0 0 0 3px var(--yellow); }
+.tapRank, .tapFile{ position:absolute; font-size:10px; font-weight:700; line-height:1; color:#1D1038; opacity:.75; pointer-events:none; }
+.tapRank{ top:3px; left:3px; }
+.tapFile{ bottom:3px; right:4px; }
+/* Trainer path and question screen. */
+.pathStage{ display:flex; align-items:center; gap:12px; width:100%; min-height:64px; padding:10px 12px; border-radius:var(--r-md); text-align:left; cursor:pointer;
+  border:1px solid color-mix(in srgb, var(--violet) 40%, transparent); background:color-mix(in srgb, var(--panel) 85%, transparent); color:var(--white); font:inherit;
+  backdrop-filter:blur(4px); transition:border-color .15s ease, transform .15s ease; }
+.pathStage:hover:not(:disabled){ border-color:var(--cyan); transform:translateY(-1px); }
+.pathStage:disabled{ cursor:default; opacity:.55; }
+.pathStage.current{ border-color:var(--cyan); box-shadow:0 0 18px color-mix(in srgb, var(--cyan) 25%, transparent); }
+.pathStage:focus-visible{ outline:2px solid var(--cyan); outline-offset:2px; }
+.pathDot{ flex:none; display:grid; place-items:center; width:36px; height:36px; border-radius:50%; font-weight:900; font-size:15px;
+  background:color-mix(in srgb, var(--violet) 30%, transparent); color:var(--white); }
+.pathStage.doneStage .pathDot{ background:#3FBF7F; color:#0B2A18; }
+.pathStage.current .pathDot{ background:var(--cyan); color:#06232A; }
+.pathBar{ height:6px; border-radius:var(--r-pill); background:color-mix(in srgb, var(--violet) 25%, transparent); overflow:hidden; margin-top:6px; }
+.pathBar > span{ display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg, var(--violet), var(--cyan)); }
+.qDots{ display:flex; gap:6px; }
+.qDots > span{ flex:1; height:6px; border-radius:var(--r-pill); background:color-mix(in srgb, var(--violet) 25%, transparent); }
+.qDots > span.right{ background:#3FBF7F; }
+.qDots > span.wrong{ background:#FF4C5B; }
+.qDots > span.now{ background:var(--cyan); }
+.viewBadge{ display:inline-flex; align-items:center; gap:6px; width:fit-content; padding:3px 10px; border-radius:var(--r-pill); font-size:11px; font-weight:700;
+  background:color-mix(in srgb, var(--cyan) 14%, transparent); color:var(--cyan); }
+:root[data-theme="sweetheart"] .viewBadge{ color:#0E7C86; }

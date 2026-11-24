@@ -1,6 +1,6 @@
 import { describe, test, expect } from "vitest";
 import { DRILLS, makeQuestion, recordAnswer, emptyProgress, reachOf, MAX_LEVEL, _internal } from "./blindDrills";
-import { createEngine } from "../engine/chessEngine";
+import { createEngine, M120TO64, mFrom, mTo } from "../engine/chessEngine";
 
 /* A repeatable random source, so a failure can be replayed. */
 function seeded(seed) {
@@ -161,5 +161,35 @@ describe("impossible moves get a clear message", () => {
     const r2 = q.check("Nb1");
     expect(r2.understood).toBe(false);
     expect(r2.retry).toMatch(/isn't possible/);
+  });
+});
+
+describe("answers given by tapping", () => {
+  test("the choices for what's on a square: exactly one is right", () => {
+    for (let seed = 1; seed < 80; seed++) {
+      const q = makeQuestion("squares", 1 + (seed % 10), seeded(seed));
+      expect(new Set(q.choices).size).toBe(4);
+      expect(q.choices.filter((c) => q.check(c).correct)).toHaveLength(1);
+    }
+  });
+  test("take back: the right pieces are among the choices", () => {
+    for (let seed = 1; seed < 40; seed++) {
+      const q = makeQuestion("recapture", 3, seeded(seed));
+      expect(q.choices.some((c) => q.check(c).correct)).toBe(true);
+    }
+  });
+  test("a move tapped from-square then to-square", () => {
+    const q = makeQuestion("mate", 1, seeded(5));
+    const eng = createEngine(); eng.loadFen(q.fen);
+    const name = (i120) => { const t = M120TO64[i120]; return "abcdefgh"[t % 8] + (((t / 8) | 0) + 1); };
+    const mate = eng.legalMoves().find((x) => eng.sanOf(x) === q.answer);
+    expect(q.check(name(mFrom(mate)) + name(mTo(mate))).correct).toBe(true);
+    const other = eng.legalMoves().find((x) => !eng.sanOf(x).includes("#"));
+    expect(q.check(name(mFrom(other)) + name(mTo(other))).correct).toBe(false);
+  });
+  test("find the square", () => {
+    const q = makeQuestion("coords", 1, seeded(2));
+    expect(q.check(q.target).correct).toBe(true);
+    expect(q.check(q.target === "e4" ? "d5" : "e4").correct).toBe(false);
   });
 });

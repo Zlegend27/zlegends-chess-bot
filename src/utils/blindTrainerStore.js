@@ -1,10 +1,12 @@
-/* Blind Chess Trainer progress, kept on this device: each drill's level
-   and totals (blindDrills.js), and the days-in-a-row practice streak.
-   Synced to the account by blindTrainerSync.js when signed in. */
+/* Blind Chess Trainer progress, kept on this device: where the player is
+   on the path (blindPath.js: each stage's step, whether it's done,
+   totals) and the days-in-a-row practice streak. Synced to the account by
+   blindTrainerSync.js when signed in. (Version 2, 2026-11-24: the path
+   replaced per-drill levels; the old record is set aside.) */
 import { loadSetting, saveSetting } from "./storage";
-import { DRILLS, emptyProgress } from "./blindDrills";
+import { STAGES, emptyPath } from "./blindPath";
 
-const KEY = "blindTraining";
+const KEY = "blindTrainingV2";
 
 /* A local calendar day, "2026-11-24": the streak follows the player's own
    midnight, not UTC. */
@@ -12,9 +14,9 @@ export const dayKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMont
 
 export function loadTraining() {
   const saved = loadSetting(KEY, null) || {};
-  const drills = { ...emptyProgress(), ...(saved.drills || {}) };
-  for (const d of DRILLS) drills[d.id] = { ...emptyProgress()[d.id], ...(drills[d.id] || {}) };
-  return { drills, streak: saved.streak || { last: null, count: 0 }, updatedAt: saved.updatedAt || 0 };
+  const path = emptyPath();
+  for (const s of STAGES) path[s.id] = { ...path[s.id], ...(saved.path?.[s.id] || {}) };
+  return { path, streak: saved.streak || { last: null, count: 0 }, updatedAt: saved.updatedAt || 0 };
 }
 
 export function saveTraining(t) {
