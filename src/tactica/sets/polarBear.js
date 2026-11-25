@@ -11,7 +11,8 @@ import * as THREE from "three";
 import { track, glbLoader } from "./art.js";
 import { play as playSound } from "../sound.js";
 
-import { wrapBoss, commandPath, COMMAND_HEIGHT } from "./bossFx.js";
+import { wrapBoss, commandPath, COMMAND_HEIGHT, sharpOn } from "./bossFx.js";
+import { sharpenBoss } from "../film3d/anime.js";
 
 /* A photographed, rigged bear (CC BY, credited in public/tactica/models/
    CREDITS.txt) replaces the drawn body when its files are there. Without
@@ -313,6 +314,8 @@ export function buildPolarBear(ts) {
       if (o.isBone && o.name === "Bone011") legEnd = o;
     });
     const face = addJaw(model, headBone, { mouthDark, mouthMat, gumMat, toothMat, glow: puff() });
+    /* Sharp style: cel shading and an ink outline, so he stands off the snow. */
+    if (sharpOn("bear")) sharpenBoss(model, { fraction: 0.004 });
     const jawBone = face?.jaw ?? null;
     const mixer = new THREE.AnimationMixer(model);
     const action = gltf.animations[0] ? mixer.clipAction(gltf.animations[0]).play() : null;

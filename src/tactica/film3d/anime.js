@@ -36,10 +36,11 @@ function toToon(m) {
 }
 
 /** Cel-shades everything under `root` (materials only; shapes untouched). */
-export function toonify(root) {
+export function toonify(root, { flat = false } = {}) {
   root.traverse((o) => {
     if (!o.isMesh || o.userData.ink) return;
-    o.material = Array.isArray(o.material) ? o.material.map(toToon) : toToon(o.material);
+    const swap = (m) => { const t = toToon(m); if (flat && t !== m && !t.flatShading) { t.flatShading = true; t.needsUpdate = true; } return t; };
+    o.material = Array.isArray(o.material) ? o.material.map(swap) : swap(o.material);
   });
 }
 
@@ -74,7 +75,9 @@ export function outline(root, { color = "#140a06", width = 0.02, minSize = 0.06 
   for (const o of parts) {
     /* A skinned part (the game's characters) gets a skinned outline on the
        same bones, so the ink moves with it. */
-    const ink = o.isSkinnedMesh ? new THREE.SkinnedMesh(o.geometry, inkMaterial(color, width)) : new THREE.Mesh(o.geometry, inkMaterial(color, width));
+    /* `width` may be a number, or a function giving each part its own. */
+    const w = typeof width === "function" ? width(o) : width;
+    const ink = o.isSkinnedMesh ? new THREE.SkinnedMesh(o.geometry, inkMaterial(color, w)) : new THREE.Mesh(o.geometry, inkMaterial(color, w));
     ink.userData.ink = true;
     ink.renderOrder = -1;
     o.add(ink);
@@ -126,4 +129,33 @@ export function crease(root, { color = "#160a26", angle = 28, minSize = 0.03 } =
     lines.userData.ink = true;
     o.add(lines);
   }
+}
+
+
+/**
+ * The sharp style for a boss, loaded or built: cel shading that keeps its
+ * own textures and glow (`flat` also cuts it into flat facets, for a low-poly
+ * model), and an ink outline sized to the boss: a `fraction` of its size,
+ * whatever units each part is in, so every boss reads the same. `color`
+ * picks the ink: dark for most, a glowing colour for a dark boss against a
+ * dark sky. Animated (skinned) parts get an outline that moves with them.
+ * No crease lines here: they wouldn't follow the bones.
+ */
+export function sharpenBoss(root, { color = "#160a26", fraction = 0.005, flat = false } = {}) {
+  toonify(root, { flat });
+  root.updateMatrixWorld(true);
+  const rootInverse = root.matrixWorld.clone().invert();
+  const rootScale = root.getWorldScale(new THREE.Vector3()).x || 1;
+  const size = new THREE.Box3().setFromObject(root).getSize(new THREE.Vector3()).length() / rootScale;
+  const rel = new THREE.Matrix4(), s = new THREE.Vector3(), q = new THREE.Quaternion(), p = new THREE.Vector3();
+  outline(root, {
+    color,
+    minSize: 0,
+    width: (o) => {
+      rel.multiplyMatrices(rootInverse, o.matrixWorld).decompose(p, q, s);
+      /* Rounded to two figures: each width compiles its own ink shader, and
+         a boss's parts mostly share a scale, so this keeps it to a few. */
+      return Number(((fraction * size) / (Math.abs(s.x) || 1)).toPrecision(2));
+    },
+  });
 }

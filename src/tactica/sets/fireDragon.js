@@ -12,7 +12,8 @@
 import * as THREE from "three";
 import { track, glbLoader } from "./art.js";
 import { play as playSound } from "../sound.js";
-import { wrapBoss } from "./bossFx.js";
+import { wrapBoss, sharpOn } from "./bossFx.js";
+import { sharpenBoss } from "../film3d/anime.js";
 
 const MODEL = "/tactica/models/fire_dragon/dragon.glb";
 const ease = (t) => t * t * (3 - 2 * t);
@@ -101,6 +102,8 @@ export function buildFireDragon(ts) {
         o.material = Array.isArray(o.material) ? mats : mats[0];
       }
     });
+    /* Sharp style: flat-faceted cel shading (he is low-poly already) and an ink outline. */
+    if (sharpOn("dragon")) sharpenBoss(model, { flat: true, fraction: 0.004 });
     root.add(model);
     model.updateMatrixWorld(true);
     /* Each animated bone with its rest turn and its parent's turn in model

@@ -9,6 +9,21 @@ import { play as playSound } from "../sound.js";
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/* Which bosses get the sharp style (film3d/anime.js sharpenBoss): only
+   where it was seen to look better, side by side. On the dev server,
+   window.__sharp = { pizza: false } (and so on) overrides it for comparing. */
+/* Compared 2026-11-25: the pizza monster, polar bear and fire dragon read
+   clearer (the bear most) for almost nothing (600, 20,000 and 2,500 extra
+   triangles). The demon's armour already has glowing cracks, so his gain was
+   small, and his outline adds 54,000 triangles on the busiest floor: off. */
+export const SHARP_BOSSES = { pizza: true, bear: true, dragon: true, demon: false };
+export const sharpOn = (id) => {
+  if (import.meta.env.DEV && typeof localStorage !== "undefined") {
+    try { const o = JSON.parse(localStorage.getItem("devSharp") || "{}"); if (id in o) return o[id]; } catch { /* none */ }
+  }
+  return SHARP_BOSSES[id];
+};
+
 /** How high over a piece a boss's hand stays while it commands it. */
 export const COMMAND_HEIGHT = 2.1;
 

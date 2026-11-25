@@ -13,7 +13,8 @@ import * as THREE from "three";
 import { play as playSound } from "../sound.js";
 import { dress, track, glbLoader } from "./art.js";
 
-import { wrapBoss, commandPath, COMMAND_HEIGHT } from "./bossFx.js";
+import { wrapBoss, commandPath, COMMAND_HEIGHT, sharpOn } from "./bossFx.js";
+import { sharpenBoss } from "../film3d/anime.js";
 
 /* The demon lord himself: a photographed armoured figure ("Demon Lord –
    Ember-Cracked Corrupted Armor" by Pigcraft, CC BY 4.0, cut down from 1.9
@@ -162,9 +163,12 @@ export function buildDemon(ts, zap) {
     model.position.set(-(box.min.x + box.max.x) / 2, -box.min.y, -(box.min.z + box.max.z) / 2);
     const holder = new THREE.Group();
     holder.add(model);
+    /* Sharp style: cel shading and an ember outline, so his dark armour
+       stands off the dark sky (a dark ink line would vanish there). */
+    if (sharpOn("demon")) sharpenBoss(model, { color: "#c2410c", fraction: 0.0035 });
     const mats = [];
     model.traverse((o) => {
-      if (!o.isMesh) return;
+      if (!o.isMesh || o.userData.ink) return;
       o.castShadow = true;
       o.material.emissive?.set("#ff5a20");
       if (o.material.map) { o.material.emissiveMap = o.material.map; o.material.emissiveIntensity = 0.14; }
@@ -335,6 +339,8 @@ export function buildDemon(ts, zap) {
       });
       body.visible = !real ? false : body.visible;
       if (real) for (const m of real.mats) { m.transparent = true; m.needsUpdate = true; }
+      /* His outline goes as he does. */
+      real?.holder.traverse((o) => { if (o.userData.ink) o.visible = false; });
       await new Promise((resolve) => ts.tween(2000, (k) => {
         breaking = k;
         if (real) { for (const m of real.mats) { m.opacity = 1 - k; m.emissiveIntensity = 0.6 * (1 - k); } real.holder.position.y = -k * 2; }

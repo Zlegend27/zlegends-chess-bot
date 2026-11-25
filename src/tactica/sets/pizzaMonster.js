@@ -18,7 +18,8 @@ import { track } from "./art.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { play as playSound } from "../sound.js";
 
-import { wrapBoss, commandPath, COMMAND_HEIGHT } from "./bossFx.js";
+import { wrapBoss, commandPath, COMMAND_HEIGHT, sharpOn } from "./bossFx.js";
+import { sharpenBoss } from "../film3d/anime.js";
 
 /* A photographed pepperoni slice ("Pizza" by gatoperdido, CC BY 4.0,
    credited in public/tactica/models/CREDITS.txt and Settings > Credits)
@@ -158,6 +159,8 @@ export function buildPizzaMonster(ts) {
     slice.position.set(-(box.min.x + box.max.x) / 2, -1.75 - box.min.y, 0.2 - box.max.z);
     slice.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.material.emissiveMap = o.material.map; o.material.emissive.set("#ffffff"); o.material.emissiveIntensity = 0.3; } });
     for (const m of drawn) m.visible = false;
+    /* Sharp style: cel shading and an ink outline. */
+    if (sharpOn("pizza")) sharpenBoss(slice, { fraction: 0.004 });
     group.add(slice);
     ts.wake?.();
   }).catch(() => {});
