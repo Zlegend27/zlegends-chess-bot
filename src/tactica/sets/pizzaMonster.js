@@ -18,6 +18,10 @@ import { track } from "./art.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { play as playSound } from "../sound.js";
 
+/* How high over a piece a boss's hand stays while it commands the piece to
+   move (bosses never touch the pieces). */
+const COMMAND_HEIGHT = 2.1;
+
 /* A photographed pepperoni slice ("Pizza" by gatoperdido, CC BY 4.0,
    credited in public/tactica/models/CREDITS.txt and Settings > Credits)
    becomes his body when it loads; the drawn slice stays if it doesn't. */
@@ -303,15 +307,24 @@ export function buildPizzaMonster(ts) {
     async reach(point) {
       const arm = nearestArm(point);
       arm.speed = 9;
-      arm.goal = local(point.clone().setY(point.y + 0.95));
+      /* High over the piece, commanding it (he doesn't touch it). */
+      arm.goal = local(point.clone().setY(point.y + COMMAND_HEIGHT));
       playSound("cloth2", { volume: 0.5, rate: 0.7 });
       await wait(330);
       return arm;
     },
     /** The reaching hand moves on to `point` over `ms`, as the piece does. */
     carry(arm, point, ms) {
-      const from = arm.goal.clone(), to = local(point.clone().setY(point.y + 0.95));
-      return new Promise((resolve) => ts.tween(ms, (k) => { arm.goal = from.clone().lerp(to, ease(k)); arm.goal.y += Math.sin(k * Math.PI) * 0.5; }, resolve));
+      /* He never touches the pieces: the hand stays high over the board and
+       sweeps toward the square, with an angry shake, and the piece obeys. */
+      const from = arm.goal.clone(), target = local(point.clone().setY(point.y + COMMAND_HEIGHT));
+      const to = from.clone().lerp(target, 0.65);
+      playSound("swish", { volume: 0.55, rate: 0.8 });
+      return new Promise((resolve) => ts.tween(ms, (k) => {
+        arm.goal = from.clone().lerp(to, ease(k));
+        arm.goal.y += Math.sin(k * Math.PI) * 0.3;
+        arm.goal.x += Math.sin(k * Math.PI * 7) * 0.08 * (1 - k);
+      }, resolve));
     },
     rest() { for (const arm of arms) { arm.goal = arm.home; arm.speed = 5; } },
     /** A fist comes down on the board at `point`. Resolves at the blow. */

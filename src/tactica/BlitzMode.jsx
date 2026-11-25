@@ -13,6 +13,10 @@ import { submitRushScore, TACTICA_RUSH_SECONDS } from "../utils/leaderboard";
 import { levelsOf, recordMove, levelUpText, applyStory } from "./bonds";
 import { poolNear, expandPuzzle, warmPool } from "./puzzlePool";
 
+/* How much of a move's animation (and the next puzzle's loading) the clock
+   still counts; see hold() in BlitzMode. */
+const HOLD_GRACE_MS = 500;
+
 /* Puzzle Rush Tactica: three minutes to solve as many puzzles as you can.
    Puzzles start easy and climb. A wrong move costs time and ends the combo;
    every few in a row gives a little time back. The board is seen whole;
@@ -66,12 +70,19 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
   const gameIdRef = useRef(0);
   /* The second last ticked, so each of the final ten ticks once. */
   const tickRef = useRef(null);
-  /* The clock stands still while moves animate and the next puzzle comes
-     in (holdRef: when it stopped), so only thinking time counts. */
+  /* While moves animate and the next puzzle comes in, the clock runs for the
+     first half second (HOLD_GRACE_MS: a move costs real time, like a chess
+     clock) and then stands still, so a long capture or a slow connection
+     doesn't eat the clock but animations aren't free thinking time either.
+     holdRef: when it stops (can be a moment ahead). Never below a second. */
   const holdRef = useRef(null);
-  const hold = () => { if (holdRef.current == null) holdRef.current = performance.now(); };
-  const release = () => { if (holdRef.current != null) { deadlineRef.current += performance.now() - holdRef.current; holdRef.current = null; } };
-  const timeLeftNow = () => deadlineRef.current - (holdRef.current ?? performance.now());
+  const hold = () => {
+    if (holdRef.current != null) return;
+    const now = performance.now();
+    holdRef.current = now + Math.min(HOLD_GRACE_MS, Math.max(0, deadlineRef.current - now - 1000));
+  };
+  const release = () => { if (holdRef.current != null) { deadlineRef.current += Math.max(0, performance.now() - holdRef.current); holdRef.current = null; } };
+  const timeLeftNow = () => deadlineRef.current - Math.min(performance.now(), holdRef.current ?? Infinity);
   /* A tap or drop on a square while a move was still animating: played as
      soon as it's over, instead of being ignored (that felt sticky). */
   const pendingRef = useRef(null);
@@ -205,7 +216,7 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
     let leftWhenHidden = null;
     const onVisibility = () => {
       if (document.hidden) leftWhenHidden = timeLeftNow();
-      else if (leftWhenHidden != null) { deadlineRef.current = (holdRef.current ?? performance.now()) + leftWhenHidden; leftWhenHidden = null; }
+      else if (leftWhenHidden != null) { deadlineRef.current = Math.min(performance.now(), holdRef.current ?? Infinity) + leftWhenHidden; leftWhenHidden = null; }
     };
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);

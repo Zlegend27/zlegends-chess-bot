@@ -26,6 +26,10 @@ import { WORLDS, FLOORS_PER_WORLD, BOSS_STORY, WORLD_STORY, LAST_FLOOR, worldInd
 import { levelsOf, loadBonds, recordMove, levelUpText, applyStory } from "./bonds";
 import { poolNear, expandPuzzle, warmPool } from "./puzzlePool";
 
+/* How much of each move's animation the floor clock still counts (see
+   pauseTimer in RunMode). */
+const ANIMATION_GRACE_MS = 1000;
+
 /* The Rogue Chess Run: forty floors across four worlds (worlds.js), and
    then the run is won. Each floor is a battle of a few real puzzles
    (phases), played as one colour, with one shared health bar for the whole
@@ -392,7 +396,8 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
   const pausedRef = useRef(false);
   const openPause = () => {
     pausedRef.current = true;
-    pausedWasRunning.current = timerRef.current.running;
+    /* Running only for an animation's grace: the animation's end restarts it. */
+    pausedWasRunning.current = timerRef.current.running && !timerRef.current.graceTimer;
     pauseTimer();
     runRef.current.pauses = (runRef.current.pauses ?? 0) + 1;
     duckMusic(true);
@@ -407,14 +412,29 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
   };
   const closePauseRef = useRef(null);
   closePauseRef.current = closePause;
-  const pauseTimer = () => {
+  /* Stops the clock. With `grace` (ms), it keeps running that long first:
+     a move's animation costs real time, like a chess clock, but a long
+     attack or punishment doesn't eat the clock (the owner's middle ground:
+     a fully stopped clock made every animation free thinking time). The
+     grace never takes the clock below a second. */
+  const pauseTimer = (grace = 0) => {
     const t = timerRef.current;
+    clearTimeout(t.graceTimer);
+    t.graceTimer = null;
     if (!t.running) return;
-    t.left = Math.max(0, t.deadline - performance.now());
+    const left = t.deadline - performance.now();
+    const g = Math.min(grace, Math.max(0, left - 1000));
+    if (g > 0) {
+      t.graceTimer = setTimeout(() => { if (timerRef.current === t) pauseTimer(); }, g);
+      return;
+    }
+    t.left = Math.max(0, left);
     t.running = false;
   };
   const resumeTimer = () => {
     const t = timerRef.current;
+    clearTimeout(t.graceTimer);
+    t.graceTimer = null;
     if (t.running) return;
     /* Paused: an animation finishing behind the pause screen doesn't start
        the clock; Resume does. */
@@ -1011,7 +1031,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
     busyRef.current = true;
     setBusy(true);
     setChosen(null);
-    pauseTimer();
+    pauseTimer(ANIMATION_GRACE_MS);
     const run = runIdRef.current;
     const gone = () => run !== runIdRef.current;
     try {

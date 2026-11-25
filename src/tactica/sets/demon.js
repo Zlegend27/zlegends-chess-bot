@@ -13,6 +13,10 @@ import * as THREE from "three";
 import { play as playSound } from "../sound.js";
 import { dress, track, glbLoader } from "./art.js";
 
+/* How high over a piece a boss's hand stays while it commands the piece to
+   move (bosses never touch the pieces). */
+const COMMAND_HEIGHT = 2.1;
+
 /* The demon lord himself: a photographed armoured figure ("Demon Lord –
    Ember-Cracked Corrupted Armor" by Pigcraft, CC BY 4.0, cut down from 1.9
    million triangles to about 54 thousand; credited in Settings). He has no
@@ -252,13 +256,22 @@ export function buildDemon(ts, zap) {
     async reach(point) {
       const a = armBy("hand");
       a.speed = 7;
-      a.goal = point.clone().setY(point.y + 1.0);
+      /* High over the piece, commanding it (he doesn't touch it). */
+      a.goal = point.clone().setY(point.y + COMMAND_HEIGHT);
       await wait(380);
       return a;
     },
     carry(a, point, ms) {
-      const from = a.goal.clone(), to = point.clone().setY(point.y + 1.0);
-      return new Promise((resolve) => ts.tween(ms, (k) => { a.goal = from.clone().lerp(to, ease(k)); a.goal.y += Math.sin(k * Math.PI) * 0.5; }, resolve));
+      /* He never touches the pieces: the hand stays high over the board and
+       sweeps toward the square, with an angry shake, and the piece obeys. */
+      const from = a.goal.clone(), target = point.clone().setY(point.y + COMMAND_HEIGHT);
+      const to = from.clone().lerp(target, 0.65);
+      playSound("swish", { volume: 0.55, rate: 0.8 });
+      return new Promise((resolve) => ts.tween(ms, (k) => {
+        a.goal = from.clone().lerp(to, ease(k));
+        a.goal.y += Math.sin(k * Math.PI) * 0.3;
+        a.goal.x += Math.sin(k * Math.PI * 7) * 0.08 * (1 - k);
+      }, resolve));
     },
     rest() { for (const a of arms) { a.goal = null; a.speed = 5; a.swing = 0; } },
     /** One of his weapons comes down on `point`, with lightning. */

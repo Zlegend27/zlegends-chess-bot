@@ -11,6 +11,10 @@ import * as THREE from "three";
 import { track, glbLoader } from "./art.js";
 import { play as playSound } from "../sound.js";
 
+/* How high over a piece a boss's hand stays while it commands the piece to
+   move (bosses never touch the pieces). */
+const COMMAND_HEIGHT = 2.1;
+
 /* A photographed, rigged bear (CC BY, credited in public/tactica/models/
    CREDITS.txt) replaces the drawn body when its files are there. Without
    them the drawn bear is used, so the game never depends on it. */
@@ -474,14 +478,23 @@ export function buildPolarBear(ts) {
       torso.localToWorld(shoulderWorld.set(0.9, 0.7, 2.9));
       if (!paw.goal) paw.at.copy(shoulderWorld);
       paw.speed = 9;
-      paw.goal = point.clone().setY(point.y + 0.9);
+      /* High over the piece, commanding it (he doesn't touch it). */
+      paw.goal = point.clone().setY(point.y + COMMAND_HEIGHT);
       playSound("cloth2", { volume: 0.5, rate: 0.6 });
       await wait(360);
       return paw;
     },
     carry(arm, point, ms) {
-      const from = arm.goal.clone(), to = point.clone().setY(point.y + 0.9);
-      return new Promise((resolve) => ts.tween(ms, (k) => { arm.goal = from.clone().lerp(to, ease(k)); arm.goal.y += Math.sin(k * Math.PI) * 0.4; }, resolve));
+      /* He never touches the pieces: the hand stays high over the board and
+       sweeps toward the square, with an angry shake, and the piece obeys. */
+      const from = arm.goal.clone(), target = point.clone().setY(point.y + COMMAND_HEIGHT);
+      const to = from.clone().lerp(target, 0.65);
+      playSound("swish", { volume: 0.55, rate: 0.8 });
+      return new Promise((resolve) => ts.tween(ms, (k) => {
+        arm.goal = from.clone().lerp(to, ease(k));
+        arm.goal.y += Math.sin(k * Math.PI) * 0.3;
+        arm.goal.x += Math.sin(k * Math.PI * 7) * 0.08 * (1 - k);
+      }, resolve));
     },
     rest() { paw.goal = null; },
     /** The paw comes down on the board at `point`. Resolves at the blow. */

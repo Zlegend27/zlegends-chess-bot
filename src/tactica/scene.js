@@ -2182,7 +2182,20 @@ export class TacticaScene {
       aim(e);
       const p = raycaster.ray.intersectPlane(drag.plane, new THREE.Vector3());
       if (p) drag.at = { x: p.x - drag.offset.x, z: p.z - drag.offset.z };
-      return drag.at ? this.squareAt(drag.at) : null;
+      return drag.at ? this.squareAt(standsOn(drag.at)) : null;
+    };
+    /* Where a lifted character looks to stand, seen from the camera: its
+       base, carried along the line of sight down to the board. The square
+       straight below it is nearer the camera than the one it appears over
+       (the board is seen at an angle), and players let go when it looks
+       right: it used to land a square short. */
+    const eye = new THREE.Vector3(), base = new THREE.Vector3();
+    const standsOn = (at) => {
+      this.camera.getWorldPosition(eye);
+      base.set(at.x, DRAG_LIFT, at.z).sub(eye);
+      if (eye.y <= DRAG_LIFT + 0.05 || base.y >= -1e-6) return at;
+      const k = -eye.y / base.y;
+      return { x: eye.x + base.x * k, z: eye.z + base.z * k };
     };
     const follow = (e) => {
       const sq = dragTo(e);
@@ -2278,7 +2291,9 @@ export class TacticaScene {
           const home = this.worldOf(down.sq);
           drag = {
             sq: down.sq, piece: this.pieces.get(down.sq), wasHeld,
-            plane: new THREE.Plane(new THREE.Vector3(0, 1, 0), -grab.y),
+            /* The grabbed point is lifted with the character, so the finger
+               follows it at its lifted height and stays on it. */
+            plane: new THREE.Plane(new THREE.Vector3(0, 1, 0), -(grab.y + DRAG_LIFT)),
             offset: { x: grab.x - home.x, z: grab.z - home.z },
             at: null,
           };
