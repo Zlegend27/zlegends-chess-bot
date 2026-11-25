@@ -5,7 +5,7 @@ import { dressTrashBin } from "./sets/trashBin";
 import { artSettled } from "./sets/art";
 import { BOND_KINDS, KIND_NAMES, LOOKS, MAX_LEVEL, loadBonds, levelsOf, progress } from "./bonds";
 import { Medal, useLostRebuild } from "./ui";
-import { playMusic, stopMusic, soundOn, setSoundOn, onSoundChange, soundLevel, setSoundLevel, canVibrate, vibrateOn, setVibrateOn, buzz, play } from "./sound";
+import { playMusic, stopMusic, soundOn, setSoundOn, onSoundChange, soundLevel, setSoundLevel, musicVolume, setMusicVolume, canVibrate, vibrateOn, setVibrateOn, buzz, play } from "./sound";
 import { loadSetting } from "../utils/storage";
 import { loadStory, saveStory, bondsOpen, redEyes, isHard, hardLocked, canSwitchHard, setHardSwitch, resetBond } from "./story";
 
@@ -67,10 +67,11 @@ export default function MenuScreen({ onPick, onExit, onOpening, blitzBest, sweet
   const [bonds] = useState(loadBonds);
   const [sound, setSound] = useState(soundOn);
   const [volume, setVolume] = useState(() => Math.round(soundLevel() * 100));
+  const [musicVol, setMusicVol] = useState(() => Math.round(musicVolume() * 100));
   const [vibes, setVibes] = useState(vibrateOn);
   useEffect(() => onSoundChange(setSound), []);
-  /* The front screen's theme: "The Old Tower Inn" by RandomMind (CC0,
-     public/tactica/music/menu.mp3), looping. Never during play. */
+  /* The front screen's theme: "Woodland Fantasy" by Matthew Pablo (CC BY
+     3.0, public/tactica/music/menu.mp3), looping. */
   useEffect(() => {
     /* The track is 2.5 MB: it waits for the scene's art (skies, textures)
        so it doesn't slow the first picture on a phone's connection. Once
@@ -206,6 +207,17 @@ export default function MenuScreen({ onPick, onExit, onOpening, blitzBest, sweet
               />
               <span className="w-10 text-right text-xs tabular-nums text-[var(--tc-cream-dim)]">{volume}%</span>
             </label>
+            {/* Music on its own (under the main volume): some players want the
+                hits and no music, or the other way round. */}
+            <label className="flex items-center justify-between gap-3">
+              <span className="tc-display text-sm">Music</span>
+              <input
+                type="range" min="0" max="100" step="5" value={musicVol} disabled={!sound}
+                className="tc-range flex-1" aria-valuetext={`${musicVol}%`}
+                onChange={(e) => { const v = Number(e.target.value); setMusicVol(v); setMusicVolume(v / 100); }}
+              />
+              <span className="w-10 text-right text-xs tabular-nums text-[var(--tc-cream-dim)]">{musicVol}%</span>
+            </label>
             {canVibrate() && (
               <div className="flex items-center justify-between gap-3">
                 <span className="tc-display text-sm">Vibration</span>
@@ -254,6 +266,7 @@ export default function MenuScreen({ onPick, onExit, onOpening, blitzBest, sweet
                 Demon lord: &ldquo;Demon Lord &ndash; Ember-Cracked Corrupted Armor&rdquo; by Pigcraft (Sketchfab), CC BY 4.0, simplified.
                 Fire dragon: &ldquo;Dragon Rigged&rdquo; by na3ee1 (Poly Pizza), CC BY 4.0, recoloured and animated.
                 Textures, skies and props: Poly Haven and ambientCG, public domain.
+                Music: &ldquo;Woodland Fantasy&rdquo;, &ldquo;Wasteland Overdrive&rdquo;, &ldquo;Snowland&rdquo;, &ldquo;Dark Descent (Extended Cut)&rdquo; and &ldquo;Blackmoor Colossus&rdquo; by Matthew Pablo (www.matthewpablo.com), CC BY 3.0, re-encoded smaller.
               </p>
             </div>
           </div>

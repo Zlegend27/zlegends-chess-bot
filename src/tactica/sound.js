@@ -30,11 +30,15 @@ export const ATTACK_CUES = {
   king: [[0.55, "bell", 0.55], [1.55, "draw", 0.55], [1.95, "chop", 0.9], [2.25, "thud", 0.7], [2.42, "tap", 0.45], [2.58, "tap", 0.35], [2.72, "tap", 0.25], [2.95, "soft", 0.5]],
 };
 
-let ctx = null, master = null;
+/* Everything goes through `master` (the on/off switch and the volume);
+   music (real tracks and the code-made score) also goes through `musicBus`,
+   its own level, so players can keep the effects and quiet the music. */
+let ctx = null, master = null, musicBus = null;
 const buffers = new Map();
 let enabled = loadSetting(KEY, true) !== false;
 let level = Math.min(1, Math.max(0, Number(loadSetting("tacticaVolume", 1)) || 0));
 let vibrate = loadSetting("tacticaVibrate", true) !== false;
+let musicLevel = Math.min(1, Math.max(0, Number(loadSetting("tacticaMusicVolume", 1)) || 0));
 const gainNow = () => (enabled ? MASTER * level : 0);
 let flyTimer = null, fliesWanted = false;
 const listeners = new Set();
@@ -56,6 +60,14 @@ export function setSoundLevel(v) {
   level = Math.min(1, Math.max(0, Number(v) || 0));
   saveSetting("tacticaVolume", level);
   if (master) master.gain.value = gainNow();
+}
+
+/** The music's own level, 0 to 1 (under the main volume). */
+export const musicVolume = () => musicLevel;
+export function setMusicVolume(v) {
+  musicLevel = Math.min(1, Math.max(0, Number(v) || 0));
+  saveSetting("tacticaMusicVolume", musicLevel);
+  if (musicBus) musicBus.gain.value = musicLevel;
 }
 
 /* Vibration. Android has the real thing (navigator.vibrate). iPhones don't,
@@ -104,6 +116,9 @@ export function unlock() {
       master = ctx.createGain();
       master.gain.value = gainNow();
       master.connect(ctx.destination);
+      musicBus = ctx.createGain();
+      musicBus.gain.value = musicLevel;
+      musicBus.connect(master);
       for (const name of NAMES) {
         fetch(`/tactica/sfx/${name}.mp3`)
           .then((r) => r.arrayBuffer())
@@ -114,7 +129,7 @@ export function unlock() {
       if (fliesWanted) scheduleFly();
       /* Music asked for before the first touch (the menu's) starts now. */
       if (pendingMusic) { const p = pendingMusic; pendingMusic = null; playMusic(p.name, p); }
-      if (scoreMoodNow && !stopScore && enabled && !music?.src) stopScore = startScore(ctx, master, scoreMoodNow, { volume: 0.5 });
+      if (scoreMoodNow && !stopScore && enabled && !music?.src) stopScore = startScore(ctx, musicBus, scoreMoodNow, { volume: 0.5 });
     }
     if (ctx.state === "suspended") ctx.resume();
   } catch { /* no audio on this device */ }
@@ -218,6 +233,28 @@ const trackFile = (name) => {
   }
   return trackFiles.get(name);
 };
+/* Where a track's sound starts and ends: an MP3 carries a few milliseconds
+   of silence at each end, which would be a gap at every loop. Worked out
+   once per track. */
+const loops = new WeakMap();
+function loopPoints(buf) {
+  if (!loops.has(buf)) {
+    const d = buf.getChannelData(0), n = d.length, quiet = 0.0015;
+    let a = 0, b = n - 1;
+    while (a < n - 1 && Math.abs(d[a]) < quiet) a++;
+    while (b > a && Math.abs(d[b]) < quiet) b--;
+    /* Never trim more than half a second: a real pause in the music stays. */
+    a = Math.min(a, buf.sampleRate * 0.5);
+    b = Math.max(b, n - 1 - buf.sampleRate * 0.5);
+    loops.set(buf, [a / buf.sampleRate, (b + 1) / buf.sampleRate]);
+  }
+  return loops.get(buf);
+}
+/** The track playing (or starting) now, or null: for checking on the dev server. */
+export const musicNow = () => (music ? { name: music.name, playing: !!music.src } : null);
+/** Starts downloading a track now (say, the next world's) so it can start
+ *  at once later. Nothing plays. */
+export function preloadMusic(name) { trackFile(name).catch(() => {}); }
 const trackBuffer = (name) => {
   if (!trackBuffers.has(name)) {
     /* decodeAudioData takes the bytes over, so it gets its own copy. */
@@ -227,6 +264,8 @@ const trackBuffer = (name) => {
   return trackBuffers.get(name);
 };
 export function playMusic(name, { volume = 0.55, loop = false, fade = 1.2 } = {}) {
+  /* Asked for again (the next floor of the same world): it carries on. */
+  if (music?.name === name || pendingMusic?.name === name) return;
   stopMusic(fade);
   if (!ctx) { pendingMusic = { name, volume, loop, fade }; trackFile(name).catch(() => {}); return; }
   const mine = (music = { name, gain: null, src: null });
@@ -236,11 +275,12 @@ export function playMusic(name, { volume = 0.55, loop = false, fade = 1.2 } = {}
       mine.src = ctx.createBufferSource();
       mine.src.buffer = buf;
       mine.src.loop = loop;
+      if (loop) { const [a, b] = loopPoints(buf); mine.src.loopStart = a; mine.src.loopEnd = b; }
       mine.gain = ctx.createGain();
       mine.gain.gain.setValueAtTime(0.0001, ctx.currentTime);
       mine.gain.gain.exponentialRampToValueAtTime(volume, ctx.currentTime + fade);
-      mine.src.connect(mine.gain).connect(master);
-      mine.src.start();
+      mine.src.connect(mine.gain).connect(musicBus);
+      mine.src.start(ctx.currentTime, loop ? mine.src.loopStart : 0);
       /* A real track replaces the music made in code. */
       setScore(null);
     })
@@ -256,7 +296,7 @@ export function setScore(mood) {
   stopScore?.();
   stopScore = null;
   if (!mood || !ctx || !enabled || music?.src) return;
-  stopScore = startScore(ctx, master, mood, { volume: 0.5 });
+  stopScore = startScore(ctx, musicBus, mood, { volume: 0.5 });
 }
 
 /** A short phrase for the end of a game: "win", "lose" or "draw". */

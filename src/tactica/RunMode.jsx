@@ -8,7 +8,7 @@ import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin, placeEscapeProps } from "./sets/trashBin";
 import { artSettled } from "./sets/art";
 import { BrassButton, MapButton, MenuButton, useViewSource, LearnHints, useLostRebuild } from "./ui";
-import { play as playSound, buzz, setScore as setMusicMood } from "./sound";
+import { play as playSound, buzz, setScore as setMusicMood, playMusic, stopMusic, preloadMusic } from "./sound";
 import { track } from "../utils/track";
 import { makeEscape, movesOf, apply, escaped, strikerOf, piecesOf, fenOf, escapeClock, closeRing, outerRing, ringSquares, allStuck } from "./escape";
 import { loadSetting, saveSetting } from "../utils/storage";
@@ -22,7 +22,7 @@ import {
   rushDamage, pickPuzzle, effectFloors, offer, choose, floorScore, maxPliesFor, minPliesFor, rememberSeen, isBonusAfter, HARD_MODE_RATING,
 } from "./binRun";
 import { loadStory, saveStory, isHard, beatStory } from "./story";
-import { WORLDS, FLOORS_PER_WORLD, BOSS_STORY, WORLD_STORY, LAST_FLOOR, worldIndex, worldOf, floorInWorld, firstFloorOf, isWorldStart, isBossFloor, isSnowFloor, isIntense, isIntensify } from "./worlds";
+import { WORLDS, FLOORS_PER_WORLD, BOSS_STORY, WORLD_STORY, LAST_FLOOR, worldIndex, worldOf, floorInWorld, firstFloorOf, isWorldStart, isBossFloor, isSnowFloor, isIntense, isIntensify, floorTrack } from "./worlds";
 import { levelsOf, loadBonds, recordMove, levelUpText, applyStory } from "./bonds";
 import { poolNear, expandPuzzle, warmPool } from "./puzzlePool";
 
@@ -323,12 +323,24 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
   /** Shows a boss's card and waits for Continue. */
   const showCard = (title, lines, mood = null) => new Promise((resolve) => { setBossCard({ title, lines, mood }); setStage("bossCard"); cardRef.current = resolve; });
 
-  /* Music for the story moments between floors (made in code until real
-     tracks come): dread before a boss and at the omen, a fanfare when one
-     falls, sorrow when a run is lost. Never during play. The arrival and
-     ending films choose their own. */
+  /* Music. On a floor (and its world card and reward choice) the floor's
+     track plays (floorTrack in worlds.js), carrying on from floor to floor
+     in the same world. Story moments between floors fade it out for their
+     own music made in code: dread before a boss and at the omen, a fanfare
+     when one falls, sorrow when a run is lost. The arrival and ending films
+     choose their own. */
   useEffect(() => {
-    if (stage === "arrive" || stage === "ending") return;
+    if (stage === "arrive" || stage === "ending") { stopMusic(1.2); return; }
+    const track = stage === "playing" || stage === "choice" || stage === "story" ? floorTrack(floor) : null;
+    if (track) {
+      setMusicMood(null);
+      playMusic(track, { loop: true, volume: 0.38, fade: 1.5 });
+      /* The next floor's track, if it changes, starts downloading now. */
+      const next = floor < LAST_FLOOR ? floorTrack(floor + 1) : null;
+      if (next && next !== track) preloadMusic(next);
+      return;
+    }
+    stopMusic(1.5);
     const mood = stage === "omen" || stage === "cursed" ? "dread"
       : stage === "bossCard" ? bossCard?.mood ?? null
       : stage === "defeat" ? "sorrow"
@@ -337,9 +349,9 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
       : null;
     setMusicMood(mood);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, bossCard]);
+  }, [stage, bossCard, floor]);
   /* Leaving the run stops whatever was playing. */
-  useEffect(() => () => setMusicMood(null), []);
+  useEffect(() => () => { setMusicMood(null); stopMusic(1); }, []);
 
   /* Arriving in a new world: its short film (EntryFilm, film3d/worldFilms.js)
      plays while the world's scenery builds behind it, then the world's

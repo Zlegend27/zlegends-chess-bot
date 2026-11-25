@@ -74,3 +74,23 @@ export const isBossFloor = (floor) => floorInWorld(floor) === FLOORS_PER_WORLD &
 /** The bin's last two floors: the lid is open and it's snowing. The second
  *  is where the pizza monster is fought. */
 export const isSnowFloor = (floor) => worldIndex(floor) === 0 && floorInWorld(floor) >= 9;
+
+/* Music under play: a file in public/tactica/music/ (credits in
+   Settings > Credits and public/tactica/music/README.txt). The bin's first
+   half plays Wasteland Overdrive without its choir, the harder half (after
+   the omen) with it; the pizza monster has Dark Descent; the icy lake
+   Snowland; the demon Blackmoor Colossus. Worlds and bosses without a track
+   yet (the polar bear, the volcano and the fire dragon, the demon's realm
+   before him) stay quiet under play, as before. */
+const FLOOR_MUSIC = {
+  bin: { calm: "bin", intense: "bin-intense", boss: "boss-bin" },
+  ice: { calm: "ice", intense: "ice", boss: null },
+  volcano: { calm: null, intense: null, boss: null },
+  demon: { calm: null, intense: null, boss: "boss-demon" },
+};
+/** The track a floor plays under, or null for none. */
+export function floorTrack(floor) {
+  const m = FLOOR_MUSIC[worldOf(floor).id];
+  if (!m) return null;
+  return isBossFloor(floor) ? m.boss : isIntense(floor) ? m.intense : m.calm;
+}

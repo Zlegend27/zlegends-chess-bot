@@ -1,18 +1,21 @@
 Chess Tactica's music goes in this folder, as .mp3 files with these names.
-A track that isn't here simply doesn't play.
+A track that isn't here simply doesn't play. Only put music here that you
+have the right to publish: this folder is part of the public site.
 
-  opening.mp3   the opening film (loops if it is shorter than the film;
-                the film runs about two minutes, longer if the player
-                takes their time over the question)
+In use (all by Matthew Pablo, www.matthewpablo.com, CC BY 3.0, from
+OpenGameArt.org; re-encoded to 128 kbps, loops made from his looped WAVs
+where he made them). Credited in Tactica > Settings > Credits and in the
+end credits.
 
-Planned, not yet used by the game:
-  menu.mp3      the Tactica menu (in use: "The Old Tower Inn" by RandomMind,
-                OpenGameArt, CC0)
-  bin.mp3       world 1, the bin
-  ice.mp3       world 2, the icy lake
-  volcano.mp3   world 3, the volcano
-  demon.mp3     world 4, the demon's realm
-  boss.mp3      boss floors
+  menu.mp3         the Tactica menu: "Woodland Fantasy"
+  bin.mp3          the bin, floors 1-5: "Wasteland Overdrive" (no choir, looped)
+  bin-intense.mp3  the bin, floors 6-9: "Wasteland Overdrive" (looped)
+  boss-bin.mp3     the pizza monster, floor 10: "Dark Descent (Extended Cut)"
+  ice.mp3          the icy lake, floors 11-19: "Snowland" (looped)
+  boss-demon.mp3   the demon, floor 40: "Blackmoor Colossus" (Colossal Boss
+                   Battle Theme, looped)
 
-Only put music here that you have the right to publish: this folder is
-part of the public site.
+Slots with no track yet (silent under play): boss-ice (the polar bear),
+volcano and boss-volcano (the fire dragon), demon (floors 31-39), and
+opening.mp3 (the opening film; the film uses music made in code instead).
+Which floor plays which file: FLOOR_MUSIC in src/tactica/worlds.js.

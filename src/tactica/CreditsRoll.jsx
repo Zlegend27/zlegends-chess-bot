@@ -12,6 +12,7 @@ const SECTIONS = [
   { title: "The bosses", lines: WORLDS.map((w) => w.boss).filter(Boolean) },
   { title: "The games they remembered", lines: ["Paul Morphy", "Adolf Anderssen", "Richard Réti", "Bobby Fischer", "Edward Lasker", "Fernando Saavedra", "François-André Philidor", "Luis Ramírez de Lucena"] },
   { title: "Models", lines: ["Polar bear by kenchoo", "Pizza by gatoperdido", "Demon lord by Pigcraft", "Fire dragon by na3ee1", "(CC BY 4.0)"] },
+  { title: "Music by", lines: ["Matthew Pablo", "www.matthewpablo.com", "(CC BY 3.0)"] },
   { title: "Textures, skies and props", lines: ["Poly Haven", "ambientCG"] },
   { title: "Puzzles", lines: ["The Lichess puzzle database"] },
   { title: "Bots", lines: ["Stockfish"] },
