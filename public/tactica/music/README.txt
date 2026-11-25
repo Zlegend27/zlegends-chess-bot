@@ -18,6 +18,8 @@ Rogue Chess Run (calm = floors 1-5 of a world, intense = after the omen)
                      cut to its action part (0:34.3 to 2:42.1), looped; this cut
                      is shared under CC BY-SA 3.0 too
   volcano.mp3        "Welcome to Com-Mecha", Matthew Pablo, CC BY 3.0
+  volcano-intense.mp3  floors 26-29: "HellDrake" (short version), Centurion_of_war,
+                     CC BY 4.0: the dragon's theme, before he comes
   boss-volcano.mp3   the fire dragon: "HellDrake (extended)", Centurion_of_war,
                      CC BY 4.0 (starts at its first big hit, 0:20.6)
   demon.mp3          "Blackmoor Colossus" (no vocals, looped), Matthew Pablo, CC BY 3.0

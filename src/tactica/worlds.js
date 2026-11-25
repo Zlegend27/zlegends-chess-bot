@@ -82,13 +82,15 @@ export const isSnowFloor = (floor) => worldIndex(floor) === 0 && floorInWorld(fl
      bin      Wasteland Overdrive, no choir / with choir; the pizza monster
               Dark Descent
      ice      Snowland; the polar bear Imminent Threat (its action part)
-     volcano  Welcome to Com-Mecha; the fire dragon HellDrake
+     volcano  Welcome to Com-Mecha / HellDrake (the short version: the
+              dragon's theme warns he's coming); the fire dragon HellDrake
+              (extended)
      demon    Blackmoor Colossus, no choir / with choir; the demon
               The Boss Approaches */
 const FLOOR_MUSIC = {
   bin: { calm: "bin", intense: "bin-intense", boss: "boss-bin" },
   ice: { calm: "ice", intense: "ice", boss: "boss-ice" },
-  volcano: { calm: "volcano", intense: "volcano", boss: "boss-volcano" },
+  volcano: { calm: "volcano", intense: "volcano-intense", boss: "boss-volcano" },
   demon: { calm: "demon", intense: "demon-intense", boss: "boss-demon" },
 };
 /** The track a floor plays under, or null for none. */
