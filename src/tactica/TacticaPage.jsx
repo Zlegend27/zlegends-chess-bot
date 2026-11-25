@@ -1,4 +1,5 @@
-import { Component, useEffect, useState } from "react";
+import { Component, useEffect, useRef, useState } from "react";
+import { backLayer } from "./ui";
 import { loadSetting, saveSetting } from "../utils/storage";
 import { noteTacticaChange } from "./accountSync.js";
 import { track } from "../utils/track";
@@ -60,7 +61,7 @@ export default function TacticaPage(props) {
   return <TacticaGuard onExit={props.onExit}><TacticaPageInner {...props} /></TacticaGuard>;
 }
 
-function TacticaPageInner({ pieceImgSrc, sweetheart, player, start = null, onExit, onLeaderboard = null }) {
+function TacticaPageInner({ pieceImgSrc, sweetheart, player, start = null, onExit, onLeaderboard = null, onRegisterBack = null }) {
   /* A 1v1 game still on (a refresh mid-game) goes straight back to it. */
   const [screen, setScreen] = useState(() => (loadSetting("tacticaPvpActive", null) ? "versus" : start ?? (loadStory().seen ? "menu" : "opening")));
   /* Whether the opening on screen is a rewatch (where Skip leads). */
@@ -96,6 +97,30 @@ function TacticaPageInner({ pieceImgSrc, sweetheart, player, start = null, onExi
     else if (button.classList.contains("tc-plank") || button.classList.contains("tc-round")) play("plank", { volume: 0.35 });
     else if (button.classList.contains("tc-frame")) play("tap", { volume: 0.4 });
   };
+
+  /* Back and Escape: the open overlay or screen steps back first (each
+     registers itself with useBackLayer, ui.jsx); with none, a mode goes to
+     Tactica's menu (or back where it was opened from), and the menu leaves
+     Tactica. The phone's Back used to leave Tactica from anywhere, even in
+     the middle of a run. */
+  const stepBack = useRef(null);
+  stepBack.current = () => {
+    if (backLayer()) return "stay";
+    if (screen !== "menu" && !(start && screen === start)) { goTo("menu"); return "stay"; }
+    onExit();
+    return "moved";
+  };
+  useEffect(() => {
+    onRegisterBack?.(() => stepBack.current());
+    const onKey = (e) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      /* Escape never leaves Tactica itself; only the phone's Back does. */
+      if (backLayer()) e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => { onRegisterBack?.(null); window.removeEventListener("keydown", onKey); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   let page;
   if (screen === "opening") page = <Suspense fallback={null}><Film3D skippable onDone={openingDone} /></Suspense>;

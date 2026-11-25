@@ -6,7 +6,7 @@ import { play as playSound, setScore, playMusic, stopMusic, setFlies } from "../
 import { NARRATOR } from "./lines";
 import { toonify, outline, partsNamed } from "./anime";
 import { buildAttic, YARD } from "./attic";
-import { BrassButton } from "../ui";
+import { BrassButton, useBackLayer } from "../ui";
 
 /* The opening as a 3D anime cinematic, on the game's own scene and
    characters: cel-shaded and inked, with a film's grammar on top
@@ -61,6 +61,8 @@ export default function Film3D({ onDone, skippable = false }) {
   const [begun, setBegun] = useState(false);
   const doneRef = useRef(false);
   const finish = (answer) => { if (doneRef.current) return; doneRef.current = true; onDone?.(answer); };
+  /* Back (the phone's, or Escape) skips the opening, like Skip. */
+  useBackLayer(skippable, () => finish(null));
   const canvasA = useRef(null), canvasB = useRef(null);
   const linesRef = useRef(null);
   const [act, setAct] = useState(1);

@@ -11,9 +11,7 @@ import * as THREE from "three";
 import { track, glbLoader } from "./art.js";
 import { play as playSound } from "../sound.js";
 
-/* How high over a piece a boss's hand stays while it commands the piece to
-   move (bosses never touch the pieces). */
-const COMMAND_HEIGHT = 2.1;
+import { wrapBoss, commandPath, COMMAND_HEIGHT } from "./bossFx.js";
 
 /* A photographed, rigged bear (CC BY, credited in public/tactica/models/
    CREDITS.txt) replaces the drawn body when its files are there. Without
@@ -281,7 +279,8 @@ export function buildPolarBear(ts) {
   for (const b of breaths) ts.scene.add(b.sp);
 
   root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
-  ts.scene.add(root);
+  /* In a holder only the hit effects move (bossFx.js). */
+  const fx = wrapBoss(ts, root);
   ts.addSeeThrough?.(root);
 
   /* The real bear, laid in when (and if) he loads. */
@@ -474,28 +473,30 @@ export function buildPolarBear(ts) {
     },
     get risen() { return stage === 2; },
     /** The paw comes over the board to a point just above it. */
-    async reach(point) {
+    async reach(point, { small = false } = {}) {
       torso.localToWorld(shoulderWorld.set(0.9, 0.7, 2.9));
       if (!paw.goal) paw.at.copy(shoulderWorld);
       paw.speed = 9;
       /* High over the piece, commanding it (he doesn't touch it). */
-      paw.goal = point.clone().setY(point.y + COMMAND_HEIGHT);
+      const over = point.clone().setY(point.y + COMMAND_HEIGHT);
+      paw.goal = small ? over.lerp(root.getWorldPosition(new THREE.Vector3()).setY(over.y), 0.55) : over;
       playSound("cloth2", { volume: 0.5, rate: 0.6 });
       await wait(360);
       return paw;
     },
-    carry(arm, point, ms) {
-      /* He never touches the pieces: the hand stays high over the board and
-       sweeps toward the square, with an angry shake, and the piece obeys. */
-      const from = arm.goal.clone(), target = point.clone().setY(point.y + COMMAND_HEIGHT);
-      const to = from.clone().lerp(target, 0.65);
-      playSound("swish", { volume: 0.55, rate: 0.8 });
-      return new Promise((resolve) => ts.tween(ms, (k) => {
-        arm.goal = from.clone().lerp(to, ease(k));
-        arm.goal.y += Math.sin(k * Math.PI) * 0.3;
-        arm.goal.x += Math.sin(k * Math.PI * 7) * 0.08 * (1 - k);
-      }, resolve));
+    carry(arm, point, ms, opts = {}) {
+      /* He never touches the pieces: the paw sweeps toward the square, with
+         an angry shake, and the piece obeys; an attack ends in a jab. */
+      const path = commandPath(arm.goal.clone(), point, root.getWorldPosition(new THREE.Vector3()), opts);
+      playSound("swish", { volume: opts.small ? 0.35 : 0.55, rate: 0.8 });
+      if (opts.attack) playSound("punch", { volume: 0.7, delay: (ms * 0.8) / 1000 });
+      return new Promise((resolve) => ts.tween(ms, (k) => { arm.goal = path(k).clone(); }, resolve));
     },
+    /** A good move lands on him: he's knocked back (bossFx.js). */
+    hurt(power = 1) { return fx.hurt(power); },
+    /** The winning blow, before he falls. */
+    defeat() { return fx.defeat(); },
+
     rest() { paw.goal = null; },
     /** The paw comes down on the board at `point`. Resolves at the blow. */
     async slam(point) {
@@ -541,6 +542,6 @@ export function buildPolarBear(ts) {
       root.visible = false;
       await wait(400);
     },
-    dispose() { ts.scene.remove(root); for (const b of breaths) ts.scene.remove(b.sp); ts.removeSeeThrough?.(root); },
+    dispose() { fx.dispose(); for (const b of breaths) ts.scene.remove(b.sp); ts.removeSeeThrough?.(root); },
   };
 }

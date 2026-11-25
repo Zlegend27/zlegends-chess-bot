@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createEngine, mFrom, mTo, M120TO64, EMPTY } from "../engine/chessEngine";
 import { useBestMove, scoreLabel } from "../utils/useBestMove";
+import { useBackLayer } from "./ui";
 
 /* Analyse the game: steps a finished Tactica game move by move on the 3D
    board. For every position a green arrow shows Stockfish's best move and,
@@ -13,6 +14,8 @@ const sqOf = (sq120) => M120TO64[sq120];
 
 /* `onQuit` (optional): leave the mode altogether, straight from the review. */
 export default function GameReview({ sceneRef, moves, ending = null, onDone, onQuit = null, quitLabel = "Back to the menu" }) {
+  /* Back (the phone's, or Escape) closes the review, like Done. */
+  useBackLayer(true, () => onDone?.());
   const engRef = useRef(null);
   if (!engRef.current) engRef.current = createEngine();
   const eng = engRef.current;

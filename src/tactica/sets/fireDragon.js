@@ -12,6 +12,7 @@
 import * as THREE from "three";
 import { track, glbLoader } from "./art.js";
 import { play as playSound } from "../sound.js";
+import { wrapBoss } from "./bossFx.js";
 
 const MODEL = "/tactica/models/fire_dragon/dragon.glb";
 const ease = (t) => t * t * (3 - 2 * t);
@@ -54,7 +55,8 @@ export function buildFireDragon(ts) {
   const root = new THREE.Group();
   root.position.copy(SPOTS[0].pos);
   root.scale.setScalar(SPOTS[0].scale);
-  ts.scene.add(root);
+  /* In a holder only the hit effects move (bossFx.js). */
+  const fx = wrapBoss(ts, root);
   /* The whole dragon is one mesh: while it swoops over the board (only
      then) the whole of it may fade where it covers a piece. */
   root.userData.seeAll = false;
@@ -344,6 +346,10 @@ export function buildFireDragon(ts) {
       breathing = null;
       await this.roar();
     },
-    dispose() { ts.scene.remove(root); ts.scene.remove(fire); ts.removeSeeThrough?.(root); },
+    /** A good move lands on him: he's knocked back (bossFx.js). */
+    hurt(power = 1) { return fx.hurt(power); },
+    /** The winning blow, before he falls. */
+    defeat() { return fx.defeat(); },
+    dispose() { fx.dispose(); ts.scene.remove(fire); ts.removeSeeThrough?.(root); },
   };
 }

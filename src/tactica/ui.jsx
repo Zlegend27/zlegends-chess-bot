@@ -7,6 +7,30 @@ import { SET_BOARD } from "./scene";
 /* Tactica's shared controls, in the carved wood and brass look of
    tactica.css. Every screen uses these, so they stay the same everywhere. */
 
+/* Back, one way for all of Tactica. Every screen or overlay that can be
+   stepped out of registers how (useBackLayer); the newest open one wins.
+   The phone's Back (through App's onPopState) and Escape both call
+   backLayer(). Nothing registered: TacticaPage decides (the menu, then out). */
+const layers = [];
+/** While `active`, Back (or Escape) calls `onBack` instead of leaving. */
+export function useBackLayer(active, onBack) {
+  const ref = useRef(onBack);
+  ref.current = onBack;
+  useEffect(() => {
+    if (!active) return undefined;
+    const entry = { ref };
+    layers.push(entry);
+    return () => { const i = layers.indexOf(entry); if (i >= 0) layers.splice(i, 1); };
+  }, [active]);
+}
+/** Steps back one layer; false if nothing was open to step out of. */
+export function backLayer() {
+  const top = layers[layers.length - 1];
+  if (!top) return false;
+  top.ref.current();
+  return true;
+}
+
 /** The one primary action on a screen: a brass button. */
 export function BrassButton({ children, className = "", ...props }) {
   return (

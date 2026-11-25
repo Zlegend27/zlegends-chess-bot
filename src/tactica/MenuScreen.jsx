@@ -4,7 +4,7 @@ import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
 import { artSettled } from "./sets/art";
 import { BOND_KINDS, KIND_NAMES, LOOKS, MAX_LEVEL, loadBonds, levelsOf, progress } from "./bonds";
-import { Medal, useLostRebuild } from "./ui";
+import { Medal, useLostRebuild, useBackLayer } from "./ui";
 import { playMusic, stopMusic, soundOn, setSoundOn, onSoundChange, soundLevel, setSoundLevel, musicVolume, setMusicVolume, canVibrate, vibrateOn, setVibrateOn, buzz, play } from "./sound";
 import { loadSetting } from "../utils/storage";
 import { loadStory, saveStory, bondsOpen, redEyes, isHard, hardLocked, canSwitchHard, setHardSwitch, resetBond } from "./story";
@@ -64,6 +64,11 @@ export default function MenuScreen({ onPick, onExit, onOpening, blitzBest, sweet
   /* The furthest world reached in the run (0 is the bin). */
   const reached = Number(loadSetting("tacticaRunReached", 0)) || 0;
   const [confirmReset, setConfirmReset] = useState(false);
+  const [creditsOpen, setCreditsOpen] = useState(false);
+  /* Settings, Bonds and Regular Chess close with their Back button, a tap
+     anywhere above them, Escape or the phone's Back. */
+  const closePage = () => { setConfirmReset(false); setCreditsOpen(false); setPage("modes"); };
+  useBackLayer(page !== "modes", closePage);
   const [bonds] = useState(loadBonds);
   const [sound, setSound] = useState(soundOn);
   const [volume, setVolume] = useState(() => Math.round(soundLevel() * 100));
@@ -130,7 +135,7 @@ export default function MenuScreen({ onPick, onExit, onOpening, blitzBest, sweet
       {/* Settings (sound, hard mode, the bond) behind a cog in the other top corner. */}
       <button
         type="button"
-        className="tc-round absolute top-3 left-3"
+        className="tc-round absolute top-3 left-3 z-10"
         onClick={() => setPage((p) => (p === "settings" ? "modes" : "settings"))}
         aria-label="Settings"
         aria-pressed={page === "settings"}
@@ -141,7 +146,7 @@ export default function MenuScreen({ onPick, onExit, onOpening, blitzBest, sweet
       {/* Bonds: a round wood and brass button in the top corner. */}
       <button
         type="button"
-        className="tc-round absolute top-3 right-3"
+        className="tc-round absolute top-3 right-3 z-10"
         onClick={() => setPage((p) => (p === "bonds" ? "modes" : "bonds"))}
         aria-label="Bonds"
         aria-pressed={page === "bonds"}
@@ -152,13 +157,16 @@ export default function MenuScreen({ onPick, onExit, onOpening, blitzBest, sweet
       {/* Memories: famous games played with ghost pieces, under Bonds. */}
       <button
         type="button"
-        className="tc-round absolute top-16 right-3"
+        className="tc-round absolute top-16 right-3 z-10"
         onClick={() => onPick("memories")}
         aria-label="Memories"
         title="Memories"
       >
         <MemoryIcon />
       </button>
+      {page !== "modes" && (
+        <button type="button" aria-label="Close" tabIndex={-1} className="absolute inset-0 z-[1] block cursor-default appearance-none border-0 bg-transparent p-0" onClick={closePage} />
+      )}
       {page === "modes" ? (
         <nav aria-label="Tactica modes" className="absolute inset-x-0 bottom-0 flex flex-col gap-2.5 bg-gradient-to-t from-black/90 via-black/65 to-transparent px-4 pt-14 pb-[calc(1rem+env(safe-area-inset-bottom))]">
           {MODES.map((m) => (
@@ -179,7 +187,7 @@ export default function MenuScreen({ onPick, onExit, onOpening, blitzBest, sweet
           </button>
         </nav>
       ) : page === "regular" ? (
-        <nav aria-label="Regular Chess" className="absolute inset-x-0 bottom-0 flex flex-col gap-2.5 bg-gradient-to-t from-black/90 via-black/65 to-transparent px-4 pt-14 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+        <nav aria-label="Regular Chess" className="absolute inset-x-0 bottom-0 z-[2] pointer-events-none [&>*]:pointer-events-auto flex flex-col gap-2.5 bg-gradient-to-t from-black/90 via-black/65 to-transparent px-4 pt-14 pb-[calc(1rem+env(safe-area-inset-bottom))]">
           <h2 className="tc-title m-0 text-2xl">Regular Chess</h2>
           {REGULAR.map((m) => (
             <button key={m.id} type="button" className="tc-plank tc-menu" onClick={() => onPick(m.id)}>
@@ -190,7 +198,7 @@ export default function MenuScreen({ onPick, onExit, onOpening, blitzBest, sweet
           <button type="button" className="tc-plank tc-center tc-small" onClick={() => setPage("modes")}>Back</button>
         </nav>
       ) : page === "settings" ? (
-        <section aria-labelledby="tacticaSettingsTitle" className="absolute inset-x-0 bottom-0 flex max-h-[82%] flex-col gap-3 overflow-y-auto bg-gradient-to-t from-black/95 via-black/80 to-transparent px-4 pt-16 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+        <section aria-labelledby="tacticaSettingsTitle" className="absolute inset-x-0 bottom-0 z-[2] pointer-events-none [&>*]:pointer-events-auto flex max-h-[82%] flex-col gap-3 overflow-y-auto bg-gradient-to-t from-black/95 via-black/80 to-transparent px-4 pt-16 pb-[calc(1rem+env(safe-area-inset-bottom))]">
           <h2 id="tacticaSettingsTitle" className="tc-title m-0 text-2xl">Settings</h2>
           <div className="tc-panel flex flex-col gap-4 p-4">
             <div className="flex items-center justify-between gap-3">
@@ -258,22 +266,23 @@ export default function MenuScreen({ onPick, onExit, onOpening, blitzBest, sweet
               )}
               {confirmReset && <p className="m-0 text-xs text-[var(--tc-cream-dim)]">The opening plays again and you answer afresh. Your bond levels are kept.</p>}
             </div>
+            {/* The credits stay folded away until asked for. */}
             <div className="flex flex-col gap-1.5">
-              <span className="tc-display text-sm">Credits</span>
-              <p className="m-0 text-xs text-[var(--tc-cream-dim)]">
+              <button type="button" className="tc-link self-start" aria-expanded={creditsOpen} aria-controls="tacticaCredits" onClick={() => setCreditsOpen((o) => !o)}>{creditsOpen ? "Hide credits" : "Credits"}</button>
+              {creditsOpen && <p id="tacticaCredits" className="m-0 text-xs text-[var(--tc-cream-dim)]">
                 Polar bear model: &ldquo;Polar Bear&rdquo; by kenchoo (Sketchfab), CC BY 4.0, mouth added.
                 Pizza monster&apos;s slice: &ldquo;Pizza&rdquo; by gatoperdido (Sketchfab), CC BY 4.0, face added.
                 Demon lord: &ldquo;Demon Lord &ndash; Ember-Cracked Corrupted Armor&rdquo; by Pigcraft (Sketchfab), CC BY 4.0, simplified.
                 Fire dragon: &ldquo;Dragon Rigged&rdquo; by na3ee1 (Poly Pizza), CC BY 4.0, recoloured and animated.
                 Textures, skies and props: Poly Haven and ambientCG, public domain.
                 Music: &ldquo;Woodland Fantasy&rdquo;, &ldquo;Wasteland Overdrive&rdquo;, &ldquo;Snowland&rdquo;, &ldquo;Dark Descent (Extended Cut)&rdquo; and &ldquo;Blackmoor Colossus&rdquo; by Matthew Pablo (www.matthewpablo.com), CC BY 3.0, re-encoded smaller; &ldquo;Imminent Threat&rdquo; by Matthew Pablo, CC BY-SA 3.0, cut to its action part (the cut is CC BY-SA 3.0 too).
-              </p>
+              </p>}
             </div>
           </div>
-          <button type="button" className="tc-plank tc-center tc-small" onClick={() => { setConfirmReset(false); setPage("modes"); }}>Back</button>
+          <button type="button" className="tc-plank tc-center tc-small" onClick={closePage}>Back</button>
         </section>
       ) : (
-        <section aria-labelledby="tacticaBondsTitle" className="absolute inset-x-0 bottom-0 flex max-h-[78%] flex-col gap-3 overflow-y-auto bg-gradient-to-t from-black/95 via-black/80 to-transparent px-4 pt-16 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
+        <section aria-labelledby="tacticaBondsTitle" className="absolute inset-x-0 bottom-0 z-[2] pointer-events-none [&>*]:pointer-events-auto flex max-h-[78%] flex-col gap-3 overflow-y-auto bg-gradient-to-t from-black/95 via-black/80 to-transparent px-4 pt-16 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
           <div>
             <h2 id="tacticaBondsTitle" className="tc-title m-0 text-2xl">Bonds</h2>
             <p className="m-0 mt-1 text-sm text-[var(--tc-cream-dim)]">Every correct puzzle move grows that character&apos;s bond. Captures and finishing moves grow it more.</p>

@@ -382,18 +382,20 @@ export default function ZlegendsBot() {
   const leaveActivityRef = useRef(null);
   useEffect(() => {
     const onPopState = () => {
+      /* A page with its own screens (the Blind Chess Trainer, Chess Tactica)
+         takes Back first: "stay" means it stepped back inside itself, so its
+         own address goes back on; "moved" means it went somewhere itself.
+         (Tactica used to fall into the stray-swipe rule below, which did
+         nothing and changed the address to /game.) */
+      const inner = backInterceptRef.current?.();
+      if (inner === "stay") { history.pushState({ subPage: true }, "", pathForView(innerViewRef.current)); return; }
+      if (inner === "moved") return;
       /* A stray edge swipe shouldn't pull anyone out of a game, so undo it.
          Leaving is still one tap away on the logo. */
       if (focusedRef.current) {
         history.pushState({ subPage: true }, "", pathForView("play"));
         return;
       }
-      /* A page with its own screens (the Blind Chess Trainer) takes Back
-         first: "stay" means it stepped back inside itself, so its address
-         goes back on; "moved" means it went somewhere itself (to Learn). */
-      const inner = backInterceptRef.current?.();
-      if (inner === "stay") { history.pushState({ subPage: true }, "", window.location.pathname === "/" ? pathForView(innerViewRef.current) : window.location.pathname); return; }
-      if (inner === "moved") return;
       const view = viewForPath(window.location.pathname);
       setMusicOpen(false);
       setSettingsOpen(false);
@@ -2850,6 +2852,7 @@ export default function ZlegendsBot() {
           pieceImgSrc={pieceImgSrc} sweetheart={sweetheart}
           start={tacticaStart} onExit={() => (tacticaStart === "self" ? setSiteView("practice") : onSection(tacticaStart ? "puzzles" : "play"))}
           onLeaderboard={(board) => openLeaderboard(180, board)}
+          onRegisterBack={(fn) => { backInterceptRef.current = fn; innerViewRef.current = "tactica"; }}
           player={{ session, profile, displayName, avatar: avatarFromSession(session), onSignIn: openSignIn, rating: playerRating, onRated }}
         />
       </Suspense>

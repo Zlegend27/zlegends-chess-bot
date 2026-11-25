@@ -8,7 +8,7 @@ import { useLobby, useLobbyMe } from "../pvp/useLobby";
 import { usePvpMatch } from "../pvp/usePvpMatch";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
-import { BrassButton, MapButton, MenuButton, PromotionPicker, useViewSource, LearnHints, useLostRebuild } from "./ui";
+import { BrassButton, MapButton, MenuButton, PromotionPicker, useViewSource, LearnHints, useLostRebuild, useBackLayer } from "./ui";
 import { track } from "../utils/track";
 import { play as playSound, sting } from "./sound";
 import { applyStory } from "./bonds";
@@ -338,12 +338,9 @@ function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, selected, chosen, shownPly, myTurn, busy, dragging, over]);
 
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onKey = (e) => { if (e.key === "Escape") setMenuOpen(false); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [menuOpen]);
+  /* Back (the phone's, or Escape) opens the game menu, and closes it if open:
+     a stray swipe never leaves a live game. */
+  useBackLayer(!reviewing || menuOpen, () => setMenuOpen((o) => !o));
 
   /* ---- Input ---- */
   const play = (target, piece = null) => {

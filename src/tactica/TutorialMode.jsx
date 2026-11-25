@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createEngine, mFrom, mPromo, mTo, M120TO64, EMPTY } from "../engine/chessEngine";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
-import { BrassButton, MapButton, MenuButton, useViewSource } from "./ui";
+import { BrassButton, MapButton, MenuButton, useViewSource, useBackLayer } from "./ui";
 import { play as playSound } from "./sound";
 import { applyStory } from "./bonds";
 
@@ -226,12 +226,8 @@ export default function TutorialMode({ pieceImgSrc, sweetheart, onExit }) {
   const swipeRef = useRef(null);
   swipeRef.current = cycleCharacter;
 
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onKey = (e) => { if (e.key === "Escape") setMenuOpen(false); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [menuOpen]);
+  /* Back (the phone's, or Escape) opens the menu, and closes it if open. */
+  useBackLayer(true, () => setMenuOpen((o) => !o));
 
   const squareName = (sq) => `${"abcdefgh"[sq % 8]}${((sq / 8) | 0) + 1}`;
   const pieceName = (sq) => ["", "Pawn", "Knight", "Bishop", "Rook", "Queen", "King"][Math.abs(eng.pieceAt(sq))] + ` on ${squareName(sq)}`;

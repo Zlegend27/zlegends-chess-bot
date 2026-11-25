@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { WORLDS } from "./worlds";
+import { useBackLayer } from "./ui";
 
 /* The credits, rolled after the ending film when the story is beaten. The
    music is the "triumph" mood (RunMode picks it for this stage). A tap ends
@@ -21,6 +22,8 @@ const SECTIONS = [
 export default function CreditsRoll({ onDone }) {
   const doneRef = useRef(onDone);
   doneRef.current = onDone;
+  /* Back (the phone's, or Escape) ends the roll, like a tap. */
+  useBackLayer(true, () => doneRef.current?.());
   const finished = useRef(false);
   const finish = () => { if (finished.current) return; finished.current = true; doneRef.current(); };
   const [canSkip, setCanSkip] = useState(false);

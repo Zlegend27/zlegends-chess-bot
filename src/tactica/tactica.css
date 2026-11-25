@@ -101,7 +101,9 @@
 .tactica .tc-round:active:not(:disabled) { transform: translateY(2px); box-shadow: inset 0 0 0 2px var(--tc-brass), 0 1px 0 #1a0b04; transition-duration: 34ms; }
 
 /* Text link: the quietest action (Skip, Keep practising). */
-.tactica .tc-link { border: 0; background: transparent; padding: 6px; color: var(--tc-cream-dim); font-family: var(--tc-font-body); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
+/* Text links ("Back to the menu", "End run", "Skip", "Credits") are full
+   44px tap targets: at 30px they were easy to miss on a phone. */
+.tactica .tc-link { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; border: 0; background: transparent; padding: 6px 10px; color: var(--tc-cream-dim); font-family: var(--tc-font-body); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
 
 /* Panel: dark lacquer with a brass hairline, for pop-up menus and notes. */
 .tactica .tc-panel {

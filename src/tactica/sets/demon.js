@@ -13,9 +13,7 @@ import * as THREE from "three";
 import { play as playSound } from "../sound.js";
 import { dress, track, glbLoader } from "./art.js";
 
-/* How high over a piece a boss's hand stays while it commands the piece to
-   move (bosses never touch the pieces). */
-const COMMAND_HEIGHT = 2.1;
+import { wrapBoss, commandPath, COMMAND_HEIGHT } from "./bossFx.js";
 
 /* The demon lord himself: a photographed armoured figure ("Demon Lord –
    Ember-Cracked Corrupted Armor" by Pigcraft, CC BY 4.0, cut down from 1.9
@@ -183,7 +181,8 @@ export function buildDemon(ts, zap) {
 
   root.position.copy(SPOTS[0].pos);
   root.scale.setScalar(SPOTS[0].scale);
-  ts.scene.add(root);
+  /* In a holder only the hit effects move (bossFx.js). */
+  const fx = wrapBoss(ts, root);
   ts.addSeeThrough?.(root);
 
   let t = 0, stage = 0, move = null, rage = 0, rageGoal = 0, breaking = 0;
@@ -253,26 +252,28 @@ export function buildDemon(ts, zap) {
     /** Gone from the scene (the ending film, after he is beaten). */
     hide() { root.visible = false; },
     /** His empty hand reaches over the board. */
-    async reach(point) {
+    async reach(point, { small = false } = {}) {
       const a = armBy("hand");
       a.speed = 7;
       /* High over the piece, commanding it (he doesn't touch it). */
-      a.goal = point.clone().setY(point.y + COMMAND_HEIGHT);
+      const over = point.clone().setY(point.y + COMMAND_HEIGHT);
+      a.goal = small ? over.lerp(root.getWorldPosition(new THREE.Vector3()).setY(over.y), 0.55) : over;
       await wait(380);
       return a;
     },
-    carry(a, point, ms) {
-      /* He never touches the pieces: the hand stays high over the board and
-       sweeps toward the square, with an angry shake, and the piece obeys. */
-      const from = a.goal.clone(), target = point.clone().setY(point.y + COMMAND_HEIGHT);
-      const to = from.clone().lerp(target, 0.65);
-      playSound("swish", { volume: 0.55, rate: 0.8 });
-      return new Promise((resolve) => ts.tween(ms, (k) => {
-        a.goal = from.clone().lerp(to, ease(k));
-        a.goal.y += Math.sin(k * Math.PI) * 0.3;
-        a.goal.x += Math.sin(k * Math.PI * 7) * 0.08 * (1 - k);
-      }, resolve));
+    carry(a, point, ms, opts = {}) {
+      /* He never touches the pieces: the hand sweeps toward the square, with
+         an angry shake, and the piece obeys; an attack ends in a jab. */
+      const path = commandPath(a.goal.clone(), point, root.getWorldPosition(new THREE.Vector3()), opts);
+      playSound("swish", { volume: opts.small ? 0.35 : 0.55, rate: 0.8 });
+      if (opts.attack) playSound("punch", { volume: 0.7, delay: (ms * 0.8) / 1000 });
+      return new Promise((resolve) => ts.tween(ms, (k) => { a.goal = path(k).clone(); }, resolve));
     },
+    /** A good move lands on him: he's knocked back (bossFx.js). */
+    hurt(power = 1) { return fx.hurt(power); },
+    /** The winning blow, before he falls. */
+    defeat() { return fx.defeat(); },
+
     rest() { for (const a of arms) { a.goal = null; a.speed = 5; a.swing = 0; } },
     /** One of his weapons comes down on `point`, with lightning. */
     async slam(point) {
@@ -349,6 +350,6 @@ export function buildDemon(ts, zap) {
       for (const p of points.slice(0, 5)) await this.slam(p);
       await this.roar();
     },
-    dispose() { for (const s of shards) ts.scene.remove(s.mesh); ts.scene.remove(root); ts.removeSeeThrough?.(root); },
+    dispose() { for (const s of shards) ts.scene.remove(s.mesh); fx.dispose(); ts.removeSeeThrough?.(root); },
   };
 }

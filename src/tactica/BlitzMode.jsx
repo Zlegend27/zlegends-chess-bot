@@ -6,7 +6,7 @@ import { PUZZLES } from "../utils/puzzles";
 import { judgePuzzleMove } from "../utils/puzzleSession";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
-import { BrassButton, useLostRebuild } from "./ui";
+import { BrassButton, useLostRebuild, useBackLayer } from "./ui";
 import { play as playSound } from "./sound";
 import { track } from "../utils/track";
 import { submitRushScore, TACTICA_RUSH_SECONDS } from "../utils/leaderboard";
@@ -90,6 +90,9 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
   const nextPickRef = useRef(null);
 
   const [phase, setPhase] = useState("ready"); // ready | playing | done
+  /* During a rush, Back (a stray edge swipe) does nothing rather than end
+     it; End run is on screen. Before and after, Back leaves. */
+  useBackLayer(phase === "playing", () => {});
   const [puzzle, setPuzzle] = useState(null);
   const [played, setPlayed] = useState([]);
   const [selected, setSelected] = useState(null);

@@ -7,7 +7,7 @@ import { judgePuzzleMove } from "../utils/puzzleSession";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin, placeEscapeProps } from "./sets/trashBin";
 import { artSettled } from "./sets/art";
-import { BrassButton, MapButton, MenuButton, useViewSource, LearnHints, useLostRebuild } from "./ui";
+import { BrassButton, MapButton, MenuButton, useViewSource, LearnHints, useLostRebuild, useBackLayer } from "./ui";
 import { play as playSound, buzz, setScore as setMusicMood, playMusic, stopMusic, preloadMusic, prepareMusic, duckMusic } from "./sound";
 import { track } from "../utils/track";
 import { makeEscape, movesOf, apply, escaped, strikerOf, piecesOf, fenOf, escapeClock, closeRing, outerRing, ringSquares, allStuck } from "./escape";
@@ -163,6 +163,11 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
   const [floor, setFloor] = useState(1);
   /* The boss of this floor has made his entrance (his music starts then). */
   const [bossIn, setBossIn] = useState(false);
+  /* How many moves the boss has commanded this floor: the first is a big
+     gesture over the board, the rest stay back, out of the way. */
+  const commandsRef = useRef(0);
+  /* A white flash over everything, for a boss's last blow. */
+  const [whiteout, setWhiteout] = useState(false);
   /* Which world's set is built. */
   const kindOf = (f) => ["bin", "ice", "volcano", "demon"][worldIndex(f)];
   const setKind = kindOf(floor);
@@ -323,7 +328,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
     sceneRef.current?.setBossRoom(live && isBossFloor(floor) && w > 0 ? 1 : 0);
   }, [floor, stage, setKind, setReady]);
   /* For checking a floor while building: jump straight to it. */
-  if (import.meta.env.DEV) window.__run = { floor: (f) => { runIdRef.current++; usedRef.current = new Set(); runRef.current = { from: f, wrong: 0, rushes: 0, cleared: 0, bosses: 0, startedAt: Date.now() }; setHealth(START_HEALTH); beginFloor(f, null); }, bin: () => binRef.current, scene: () => sceneRef.current, eng, state: { stage, busy: busyRef.current }, tap: (sq) => tapRef.current?.(sq), lose: () => endRunRef.current?.("lost"), clear: () => nextRef.current?.() };
+  if (import.meta.env.DEV) window.__run = { floor: (f) => { runIdRef.current++; usedRef.current = new Set(); runRef.current = { from: f, wrong: 0, rushes: 0, cleared: 0, bosses: 0, startedAt: Date.now() }; setHealth(START_HEALTH); beginFloor(f, null); }, bin: () => binRef.current, scene: () => sceneRef.current, eng, puzzle, played, state: { stage, busy: busyRef.current }, tap: (sq) => tapRef.current?.(sq), lose: () => endRunRef.current?.("lost"), clear: () => nextRef.current?.() };
   /** The bin's boss, if this is his floor. */
   const bossOn = (f) => (isBossFloor(f) ? binRef.current?.monster ?? null : null);
   /** Shows a boss's card and waits for Continue. */
@@ -501,12 +506,11 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
     return () => document.removeEventListener("visibilitychange", onVisibility);
   }, []);
 
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onKey = (e) => { if (e.key === "Escape") closePauseRef.current(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [menuOpen]);
+  /* Back (the phone's, or Escape) during a run pauses it, never quits it:
+     a stray edge swipe used to drop the whole run. Back again resumes. The
+     films and the end credits skip; the start and results screens leave. */
+  const inRun = !["intro", "over", "arrive", "ending", "credits"].includes(stage);
+  useBackLayer(inRun || menuOpen, () => (menuOpen ? closePauseRef.current() : openPause()));
 
   /* ---- Run flow ---- */
   /** Starts a run at the first floor of world `from` (0 is the bin, a full
@@ -528,6 +532,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
   const beginFloor = (f, eff) => {
     setFloor(f);
     setBossIn(false);
+    commandsRef.current = 0;
     /* Where this floor started, for the per-floor tuning numbers. */
     runRef.current.floorStart = { at: Date.now(), wrong: runRef.current.wrong, rushes: runRef.current.rushes, health: healthRef.current };
     /* Reaching a new world unlocks starting there. */
@@ -693,7 +698,12 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
       if (lead) {
         const from = sqOf(mFrom(lead)), to = sqOf(mTo(lead));
         const boss = bossOn(f);
-        if (boss && scene) { const arm = await boss.reach(scene.worldOf(from)); if (run !== runIdRef.current) return; boss.carry(arm, scene.worldOf(to), 420); }
+        if (boss && scene) {
+          const small = commandsRef.current++ > 0;
+          const arm = await boss.reach(scene.worldOf(from), { small });
+          if (run !== runIdRef.current) return;
+          boss.carry(arm, scene.worldOf(to), 420, { small, attack: eng.pieceAt(to) !== EMPTY });
+        }
         await scene?.animateMove(from, to, { knight: Math.abs(eng.pieceAt(from)) === KNIGHT, captured: eng.pieceAt(to) !== EMPTY ? to : null, follow: true, pace });
         if (run !== runIdRef.current) return;
         bossOn(f)?.rest();
@@ -741,7 +751,15 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
       /* His music stops on the blow that beats him; the fanfare comes with the card. */
       stopMusic(0.6);
       sceneRef.current?.moveCamera(new THREE.Vector3(0, 2.8, 9.2), new THREE.Vector3(0, 2.0, -5), 0.6);
+      /* The last blow: three heavy hits, the screen shakes and flashes
+         white, then he falls (his melt), and a beat of quiet. */
+      buzz([60, 40, 60, 40, 220]);
+      setTimeout(() => { if (fell === runIdRef.current) { setWhiteout(true); setTimeout(() => setWhiteout(false), 90); } }, 760);
+      await bossOn(floor).defeat?.();
+      if (fell !== runIdRef.current) return;
       await bossOn(floor).melt();
+      if (fell !== runIdRef.current) return;
+      await wait(600);
       if (fell !== runIdRef.current) return;
       const lines = BOSS_STORY[worldOf(floor).id];
       if (lines) { await showCard(`${worldOf(floor).boss} is beaten`, lines.won, "triumph"); if (fell !== runIdRef.current) return; }
@@ -875,7 +893,12 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
     const run = runIdRef.current;
     /* On a boss floor the boss moves the enemy's pieces with his own hand. */
     const boss = Math.sign(eng.pieceAt(from)) !== side ? bossOn(floor) : null;
-    if (boss && scene) { const arm = await boss.reach(scene.worldOf(from)); if (run !== runIdRef.current) return null; boss.carry(arm, scene.worldOf(to), 420); }
+    if (boss && scene) {
+      const small = commandsRef.current++ > 0;
+      const arm = await boss.reach(scene.worldOf(from), { small });
+      if (run !== runIdRef.current) return null;
+      boss.carry(arm, scene.worldOf(to), 420, { small, attack: captured != null });
+    }
     await scene?.animateMove(from, to, { knight, captured, follow: Math.sign(eng.pieceAt(from)) !== side, pace });
     boss?.rest();
     /* Quit (and maybe a new run started) while it played: the board is no
@@ -1074,6 +1097,8 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
       if (bond.levelUp) { sceneRef.current?.setBonds(levelsOf(bond.bonds)); playSound("shimmer", { volume: 0.8 }); say(levelUpText(bond.kind, bond.levelUp), "good"); }
       await animate(move);
       if (gone()) return;
+      /* On a boss floor every good move lands on him. */
+      bossOn(floor)?.hurt?.(verdict.solved ? 1.5 : 1);
       const afterMine = [...played, verdict.san];
       if (verdict.solved) {
         setPlayed(afterMine);
@@ -1296,6 +1321,9 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
           <button type="button" className="tc-link" onClick={onExit}>Back to the menu</button>
         </div>
       )}
+
+      {/* Fades out slowly after it snaps on (the transition runs only on the way out). */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-30 bg-white" style={{ opacity: whiteout ? 0.9 : 0, transition: whiteout ? "none" : "opacity 700ms ease-out" }} />
 
       {stage === "omen" && (
         <p role="status" className="tacticaNote tc-note tc-bad pointer-events-none absolute bottom-24 left-1/2 m-0 -translate-x-1/2 rounded-lg px-4 py-1.5 text-center text-sm whitespace-nowrap">{BOSS_STORY[worldOf(floor).id]?.omen}</p>

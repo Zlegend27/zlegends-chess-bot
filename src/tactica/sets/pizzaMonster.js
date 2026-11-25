@@ -18,9 +18,7 @@ import { track } from "./art.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { play as playSound } from "../sound.js";
 
-/* How high over a piece a boss's hand stays while it commands the piece to
-   move (bosses never touch the pieces). */
-const COMMAND_HEIGHT = 2.1;
+import { wrapBoss, commandPath, COMMAND_HEIGHT } from "./bossFx.js";
 
 /* A photographed pepperoni slice ("Pizza" by gatoperdido, CC BY 4.0,
    credited in public/tactica/models/CREDITS.txt and Settings > Credits)
@@ -209,7 +207,8 @@ export function buildPizzaMonster(ts) {
     return { side, rope, drips, hand, shoulder, home, at: home.clone(), goal: home.clone(), speed: 6 };
   });
 
-  ts.scene.add(group);
+  /* In a holder only the hit effects move (bossFx.js). */
+  const fx = wrapBoss(ts, group);
   ts.addSeeThrough?.(group);
 
   /* Lays an arm's rope along the curve from shoulder to hand. */
@@ -304,28 +303,31 @@ export function buildPizzaMonster(ts) {
     },
     get risen() { return riseGoal === 2; },
     /** A hand stretches out to a point just above the board. */
-    async reach(point) {
+    /** He never touches the pieces: a hand rises high over the piece
+     *  (`small`: staying back near him, once he's shown which piece). */
+    async reach(point, { small = false } = {}) {
       const arm = nearestArm(point);
       arm.speed = 9;
-      /* High over the piece, commanding it (he doesn't touch it). */
-      arm.goal = local(point.clone().setY(point.y + COMMAND_HEIGHT));
+      const over = point.clone().setY(point.y + COMMAND_HEIGHT);
+      arm.goal = local(small ? over.lerp(group.getWorldPosition(new THREE.Vector3()).setY(over.y), 0.55) : over);
       playSound("cloth2", { volume: 0.5, rate: 0.7 });
       await wait(330);
       return arm;
     },
     /** The reaching hand moves on to `point` over `ms`, as the piece does. */
-    carry(arm, point, ms) {
-      /* He never touches the pieces: the hand stays high over the board and
-       sweeps toward the square, with an angry shake, and the piece obeys. */
-      const from = arm.goal.clone(), target = local(point.clone().setY(point.y + COMMAND_HEIGHT));
-      const to = from.clone().lerp(target, 0.65);
-      playSound("swish", { volume: 0.55, rate: 0.8 });
-      return new Promise((resolve) => ts.tween(ms, (k) => {
-        arm.goal = from.clone().lerp(to, ease(k));
-        arm.goal.y += Math.sin(k * Math.PI) * 0.3;
-        arm.goal.x += Math.sin(k * Math.PI * 7) * 0.08 * (1 - k);
-      }, resolve));
+    carry(arm, point, ms, opts = {}) {
+      /* The hand sweeps toward the square, with an angry shake, and the piece
+         obeys; an attack ends in a jab at the victim. */
+      const path = commandPath(group.localToWorld(arm.goal.clone()), point, group.getWorldPosition(new THREE.Vector3()), opts);
+      playSound("swish", { volume: opts.small ? 0.35 : 0.55, rate: 0.8 });
+      if (opts.attack) playSound("punch", { volume: 0.7, delay: (ms * 0.8) / 1000 });
+      return new Promise((resolve) => ts.tween(ms, (k) => { arm.goal = local(path(k)); }, resolve));
     },
+    /** A good move lands on him: he's knocked back (bossFx.js). */
+    hurt(power = 1) { return fx.hurt(power); },
+    /** The winning blow, before he falls. */
+    defeat() { return fx.defeat(); },
+
     rest() { for (const arm of arms) { arm.goal = arm.home; arm.speed = 5; } },
     /** A fist comes down on the board at `point`. Resolves at the blow. */
     async slam(point) {
@@ -368,6 +370,6 @@ export function buildPizzaMonster(ts) {
       riseGoal = 0;
       await wait(500);
     },
-    dispose() { ts.scene.remove(group); ts.removeSeeThrough?.(group); },
+    dispose() { fx.dispose(); ts.removeSeeThrough?.(group); },
   };
 }

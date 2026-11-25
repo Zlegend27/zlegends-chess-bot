@@ -6,7 +6,7 @@ import { gameResult, resultSentence } from "../utils/gameResult";
 import { loadSetting, saveSetting } from "../utils/storage";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
-import { BrassButton, MapButton, MenuButton, PromotionPicker, useViewSource, LearnHints, useLostRebuild } from "./ui";
+import { BrassButton, MapButton, MenuButton, PromotionPicker, useViewSource, LearnHints, useLostRebuild, useBackLayer } from "./ui";
 import { play as playSound, sting } from "./sound";
 import { applyStory } from "./bonds";
 import { useBestMove, scoreLabel } from "../utils/useBestMove";
@@ -226,12 +226,9 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit, self = false 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, selected, chosen, moveList, stage, busy, thinking, dragging]);
 
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onKey = (e) => { if (e.key === "Escape") setMenuOpen(false); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [menuOpen]);
+  /* Back (the phone's, or Escape) opens the game menu during a game, and
+     closes it if open; elsewhere TacticaPage steps out. */
+  useBackLayer(stage === "playing" || menuOpen, () => setMenuOpen((o) => !o));
 
   /* ---- The game ---- */
   const animate = async (move, follow) => {

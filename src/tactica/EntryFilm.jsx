@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { play as playSound, setScore } from "./sound";
 import { borrow, camera } from "./film3d/kit";
 import { WORLD_FILMS, FILM_MOOD } from "./film3d/worldFilms";
+import { useBackLayer } from "./ui";
 
 /* A world's arrival film (and the ending), shot in 3D on the run's own
    scene: the world about to be played, its real boss, and the six heroes
@@ -106,6 +107,8 @@ export default function EntryFilm({ world, sceneRef, setRef, ready, onDone }) {
   }, [script, ready]);
 
   const skip = () => { playSound("tap", { volume: 0.4 }); doneRef.current(); };
+  /* Back (the phone's, or Escape) skips the film, like a tap. */
+  useBackLayer(true, () => doneRef.current());
   return (
     <button type="button" className="absolute inset-0 z-30 block cursor-default appearance-none overflow-hidden border-0 bg-transparent p-0" onClick={skip} aria-label="Skip the film">
       <canvas ref={linesRef} className="pointer-events-none absolute inset-0 block size-full" aria-hidden="true" />
