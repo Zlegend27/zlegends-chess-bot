@@ -263,18 +263,20 @@ function plate(points, depth, wrap = 0) {
 function lockGeometry(length, width, bend) {
   const pts = [];
   const n = 6;
-  for (let i = 0; i <= n; i++) { const t = i / n; pts.push([-(width / 2) * (1 - t) ** 0.8 + bend * t * t, length * t]); }
-  for (let i = n - 1; i >= 1; i--) { const t = i / n; pts.push([(width / 2) * (1 - t) ** 0.8 + bend * t * t, length * t]); }
-  const geo = plate(pts, width * 0.28);
-  geo.translate(0, 0, -width * 0.14);
+  /* Wide at the root, narrowing fast to a sharp point, like a stroke of flame. */
+  const half = (t) => (width / 2) * (1 - t) ** 1.5 * (1 + 0.35 * Math.sin(t * Math.PI) * (1 - t));
+  for (let i = 0; i <= n; i++) { const t = i / n; pts.push([-half(t) + bend * t * t, length * t]); }
+  for (let i = n - 1; i >= 1; i--) { const t = i / n; pts.push([half(t) + bend * t * t, length * t]); }
+  const geo = plate(pts, width * 0.2);
+  geo.translate(0, 0, -width * 0.1);
   /* The ridge: push the middle forward so the blade has two faces. */
   const pos = geo.attributes.position;
   for (let i = 0; i < pos.count; i++) {
     /* Clamped: at the tip, rounding can put t a hair past 1, and a
        fractional power of a negative number is NaN. */
     const x = pos.getX(i), y = pos.getY(i), t = Math.min(1, Math.max(0, y / length));
-    const centre = bend * t * t, half = Math.max(1e-3, (width / 2) * (1 - t) ** 0.8);
-    const k = 1 - Math.min(1, Math.abs(x - centre) / half);
+    const centre = bend * t * t, w = Math.max(1e-3, (width / 2) * (1 - t) ** 1.5);
+    const k = 1 - Math.min(1, Math.abs(x - centre) / w);
     pos.setZ(i, pos.getZ(i) + (pos.getZ(i) > 0 ? 1 : -1) * k * width * 0.12);
   }
   geo.computeVertexNormals();
@@ -355,55 +357,71 @@ export function buildZlegend() {
   }
   headGeo.computeVertexNormals();
   add(headGeo, M(ZC.face), [0, 2.25, 0.02], null, [1.02, 1.06, 0.98]);
-  /* Domino mask: a band across the eyes with pointed ends sweeping up, a
-     notch over the nose. */
-  add(plate([
-    [-0.3, 0.07], [-0.2, 0.05], [-0.06, 0.04], [0, 0.02], [0.06, 0.04], [0.2, 0.05], [0.3, 0.07],
-    [0.27, 0.0], [0.2, -0.05], [0.08, -0.05], [0, -0.02], [-0.08, -0.05], [-0.2, -0.05], [-0.27, 0.0],
-  ], 0.03, 0.22), M(ZC.mask), [0, 2.29, 0.276]);
-  /* Eyes: narrow and slanted up at the outer corners, glowing cyan. */
-  const eyeMat = new THREE.MeshBasicMaterial({ color: ZC.eye });
-  eyeMat.color.multiplyScalar(1.6);
+  /* His face, from the art (left and right here are as you look at him).
+     An eye patch over the left eye, dark navy, on a strap across the head. */
+  const navy = M("#1b2244");
+  add(plate([[-0.075, 0.045], [-0.02, 0.06], [0.04, 0.05], [0.07, 0.01], [0.055, -0.04], [0, -0.06], [-0.055, -0.045], [-0.08, 0.0]], 0.02, 0.22), navy, [-0.1, 2.29, 0.272]);
+  add(new THREE.CylinderGeometry(0.285, 0.285, 0.022, 14, 1, true), navy, [0, 2.31, 0.02], [0.05, 0, 0.32]);
+  /* The other eye, open and red as in the art: a white almond, a glowing
+     red iris; a hard brow over it, angled down to the nose. */
+  add(plate([[-0.05, 0.0], [-0.02, 0.028], [0.03, 0.032], [0.065, 0.012], [0.04, -0.02], [-0.01, -0.022]], 0.01, 0.22), M("#ffffff"), [0.1, 2.29, 0.276]).userData.ink = true;
+  const iris = new THREE.MeshBasicMaterial({ color: "#ff3b3b" });
+  iris.color.multiplyScalar(1.5);
+  add(new THREE.CylinderGeometry(0.022, 0.022, 0.01, 10), iris, [0.105, 2.292, 0.29], [Math.PI / 2, 0, 0]).userData.ink = true;
+  add(new THREE.CylinderGeometry(0.009, 0.009, 0.012, 8), new THREE.MeshBasicMaterial({ color: ZC.ink }), [0.105, 2.292, 0.296], [Math.PI / 2, 0, 0]).userData.ink = true;
+  add(plate([[-0.06, 0.0], [0.07, 0.03], [0.07, 0.05], [-0.06, 0.018]], 0.012, 0.22), M("#1d3f6e"), [0.1, 2.335, 0.274], [0, 0, -0.18]);
+  /* Pointed ears, like an elf's, sweeping out and back. */
   for (const side of [-1, 1]) {
-    const eye = add(plate([[0, 0], [0.04, 0.016], [0.09, 0.03], [0.07, 0.0], [0.03, -0.012]].map(([x, y]) => [x * side, y]), 0.01, 0.22), eyeMat, [side * 0.045, 2.29, 0.308]);
-    eye.userData.ink = true;
+    const ear = add(plate([[0, -0.05], [0.2, 0.06], [0.03, 0.05]], 0.025), M(ZC.face), [side * 0.25, 2.25, -0.01]);
+    ear.rotation.set(0, side === 1 ? -0.35 : Math.PI + 0.35, side * 0.15);
   }
-  /* A wide, toothy grin: a white crescent with the teeth marked. */
-  const grin = add(plate([[-0.13, 0.03], [-0.06, 0.012], [0, 0.008], [0.06, 0.012], [0.13, 0.03], [0.1, -0.02], [0.05, -0.05], [0, -0.058], [-0.05, -0.05], [-0.1, -0.02]], 0.012, 0.2), M(ZC.teeth), [0, 2.13, 0.252]);
+  /* A sharp, toothy grin, a little to one side. */
+  const grin = add(plate([[-0.11, 0.022], [-0.05, 0.01], [0, 0.008], [0.06, 0.014], [0.12, 0.034], [0.09, -0.018], [0.04, -0.045], [-0.01, -0.05], [-0.06, -0.04], [-0.09, -0.015]], 0.012, 0.2), M(ZC.teeth), [0.01, 2.13, 0.252]);
   grin.userData.ink = true;
-  for (const x of [-0.075, -0.035, 0.005, 0.045, 0.085]) add(new THREE.BoxGeometry(0.006, 0.05, 0.006), new THREE.MeshBasicMaterial({ color: ZC.ink }), [x, 2.115, 0.267 - (x * x) / 0.4]).userData.ink = true;
-  add(new THREE.BoxGeometry(0.2, 0.005, 0.006), new THREE.MeshBasicMaterial({ color: ZC.ink }), [0, 2.122, 0.266]).userData.ink = true;
-  /* Gold circlet with a round emblem and an amber centre on the forehead. */
-  add(new THREE.CylinderGeometry(0.29, 0.29, 0.04, 10, 1, true), gold, [0, 2.41, 0.01], [-0.12, 0, 0]);
-  add(new THREE.CylinderGeometry(0.062, 0.062, 0.025, 8), gold, [0, 2.43, 0.29], [Math.PI / 2 - 0.12, 0, 0]);
-  add(new THREE.CylinderGeometry(0.034, 0.034, 0.03, 8), M(ZC.amber, { emissive: ZC.amber, emissiveIntensity: 0.35 }), [0, 2.43, 0.3], [Math.PI / 2 - 0.12, 0, 0]);
+  for (const x of [-0.065, -0.03, 0.005, 0.04, 0.075]) add(new THREE.BoxGeometry(0.006, 0.046, 0.006), new THREE.MeshBasicMaterial({ color: ZC.ink }), [x + 0.01, 2.115, 0.267 - (x * x) / 0.4]).userData.ink = true;
+  add(new THREE.BoxGeometry(0.19, 0.005, 0.006), new THREE.MeshBasicMaterial({ color: ZC.ink }), [0.01, 2.122, 0.266]).userData.ink = true;
+  /* A thin gold band in the hair, its round emblem (amber centre) on the
+     left of the forehead, as in the art. */
+  add(new THREE.CylinderGeometry(0.29, 0.29, 0.03, 10, 1, true), gold, [0, 2.42, 0.01], [-0.14, 0, 0]);
+  add(new THREE.CylinderGeometry(0.056, 0.056, 0.025, 8), gold, [-0.13, 2.45, 0.255], [Math.PI / 2 - 0.14, -0.45, 0]);
+  add(new THREE.CylinderGeometry(0.03, 0.03, 0.03, 8), M(ZC.amber, { emissive: ZC.amber, emissiveIntensity: 0.35 }), [-0.135, 2.45, 0.265], [Math.PI / 2 - 0.14, -0.45, 0]);
 
-  /* Hair: a faceted cap, then the crest. Each lock: [x, y, z] root,
-     length, width, tilt forward/back (rx), lean left/right (rz), turn (ry),
-     bend of its tip, colour. Swept up and to his right; bangs to his left. */
-  add(new THREE.SphereGeometry(0.29, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.55), M(ZC.hair), [0, 2.33, -0.02]);
+  /* Hair, from the art: a big upswept crest like a flame, rising and
+     sweeping back; long locks flowing down behind the neck; a lock falling
+     across the forehead over the patch; locks at the temples. Each lock is
+     aimed by where its tip points, with its flat side turned outward. */
+  add(new THREE.SphereGeometry(0.3, 10, 5, 0, Math.PI * 2, 0, Math.PI * 0.4), M(ZC.hair), [0, 2.35, -0.02]);
+  const HEAD = new THREE.Vector3(0, 2.27, 0.02);
   const shades = { m: ZC.hair, d: ZC.hairDark, l: ZC.hairLight };
-  const locks = [
-    /* the crest: thick blades, together, swept up and over to one side */
-    [-0.04, 2.5, 0.05, 0.62, 0.27, -0.28, -0.32, 0, 0.16, "m"],
-    [0.09, 2.5, 0.0, 0.56, 0.25, -0.12, -0.72, 0, 0.12, "l"],
-    [-0.17, 2.48, 0.02, 0.5, 0.23, -0.16, -0.12, 0.2, 0.13, "d"],
-    [0.2, 2.44, -0.02, 0.42, 0.21, 0.0, -1.08, -0.2, 0.08, "m"],
-    [-0.26, 2.42, -0.04, 0.34, 0.19, 0.08, 0.25, 0.3, 0.1, "l"],
-    /* the back of the crest */
-    [0, 2.44, -0.16, 0.5, 0.25, 0.68, -0.42, 0, 0.1, "d"],
-    [-0.15, 2.4, -0.18, 0.4, 0.21, 0.8, 0.08, 0.4, 0.08, "m"],
-    [0.16, 2.4, -0.18, 0.42, 0.21, 0.8, -0.82, -0.4, 0.08, "d"],
-    [-0.29, 2.34, -0.06, 0.28, 0.17, 0.4, 1.0, 0.6, 0.05, "d"],
-    [0.3, 2.34, -0.06, 0.3, 0.17, 0.4, -1.3, -0.6, 0.05, "m"],
-    /* bangs falling over the forehead to the other side, above the circlet */
-    [0.06, 2.49, 0.24, 0.28, 0.15, -1.95, 0.75, 0, -0.06, "l"],
-    [-0.07, 2.49, 0.23, 0.24, 0.13, -2.1, 0.95, 0, -0.05, "m"],
-  ];
-  for (const [x, y, z, len, wid, rx, rz, ry, bend, shade] of locks) {
-    const lock = add(lockGeometry(len, wid, bend), M(shades[shade]), [x, y, z]);
-    lock.rotation.set(rx, ry, rz, "YXZ");
-  }
+  const lock = ([x, y, z], dir, len, wid, bend, shade, faceOut = null) => {
+    const mesh = new THREE.Mesh(lockGeometry(len, wid, bend), M(shades[shade]));
+    const root = new THREE.Vector3(x, y, z), d = new THREE.Vector3(...dir).normalize();
+    const align = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d);
+    const z0 = new THREE.Vector3(0, 0, 1).applyQuaternion(align);
+    const out = (faceOut ? new THREE.Vector3(...faceOut) : root.clone().sub(HEAD)).projectOnPlane(d).normalize();
+    const turn = Math.atan2(z0.clone().cross(out).dot(d), z0.dot(out));
+    mesh.quaternion.copy(new THREE.Quaternion().setFromAxisAngle(d, turn).multiply(align));
+    mesh.position.copy(root);
+    g.add(mesh);
+  };
+  /* the crest */
+  lock([0.0, 2.52, 0.14], [0.3, 1, -0.75], 0.85, 0.26, 0.18, "m");
+  lock([-0.12, 2.52, 0.1], [0.05, 1, -0.85], 0.7, 0.24, 0.16, "l");
+  lock([0.13, 2.5, 0.08], [0.7, 1, -0.6], 0.62, 0.23, 0.14, "d");
+  lock([-0.22, 2.46, 0.02], [-0.35, 1, -0.8], 0.52, 0.2, 0.12, "m");
+  lock([0.24, 2.44, 0.0], [1, 0.75, -0.6], 0.46, 0.2, 0.1, "l");
+  lock([0.06, 2.5, -0.06], [0.15, 0.8, -1], 0.7, 0.24, 0.14, "d");
+  /* flowing back, and down behind the neck */
+  lock([0.0, 2.46, -0.18], [0.1, 0.32, -1], 0.56, 0.28, 0.1, "d");
+  lock([0.12, 2.38, -0.22], [0.45, -0.3, -1], 0.66, 0.26, 0.12, "m");
+  lock([-0.12, 2.38, -0.22], [-0.3, -0.25, -1], 0.56, 0.24, 0.1, "d");
+  lock([0.05, 2.26, -0.25], [0.25, -1, -0.6], 0.72, 0.27, 0.12, "m");
+  /* at the temples, framing the face */
+  lock([-0.27, 2.36, 0.02], [-0.5, -0.6, 0.12], 0.3, 0.16, 0.05, "d");
+  lock([0.27, 2.36, 0.0], [0.5, -0.42, -0.2], 0.3, 0.16, 0.05, "m");
+  /* across the forehead, falling over the patch */
+  lock([-0.02, 2.49, 0.24], [-0.45, -1, 0.35], 0.33, 0.17, 0.05, "l", [0, 0.2, 1]);
+  lock([0.08, 2.49, 0.22], [0.3, -0.5, 0.6], 0.22, 0.14, 0.04, "m", [0, 0.3, 1]);
 
   /* Cape: a wide jagged sheet from the shoulders, curved round behind him
      with folds; green outside, teal lining (the side you see). */
