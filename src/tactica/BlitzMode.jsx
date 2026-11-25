@@ -66,6 +66,17 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
   const gameIdRef = useRef(0);
   /* The second last ticked, so each of the final ten ticks once. */
   const tickRef = useRef(null);
+  /* The clock stands still while moves animate and the next puzzle comes
+     in (holdRef: when it stopped), so only thinking time counts. */
+  const holdRef = useRef(null);
+  const hold = () => { if (holdRef.current == null) holdRef.current = performance.now(); };
+  const release = () => { if (holdRef.current != null) { deadlineRef.current += performance.now() - holdRef.current; holdRef.current = null; } };
+  const timeLeftNow = () => deadlineRef.current - (holdRef.current ?? performance.now());
+  /* A tap or drop on a square while a move was still animating: played as
+     soon as it's over, instead of being ignored (that felt sticky). */
+  const pendingRef = useRef(null);
+  /* The next puzzle, picked while this one is being solved. */
+  const nextPickRef = useRef(null);
 
   const [phase, setPhase] = useState("ready"); // ready | playing | done
   const [puzzle, setPuzzle] = useState(null);
@@ -133,9 +144,16 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
    *  enemy's opening move isn't shown here: this mode is against the clock. */
   const loadNext = async (solvedCount) => {
     const game = gameIdRef.current;
-    const next = await pickPuzzle(START_RATING + solvedCount * RATING_STEP, usedRef.current);
+    const rating = START_RATING + solvedCount * RATING_STEP;
+    const ready = nextPickRef.current?.rating === rating && nextPickRef.current.game === game ? nextPickRef.current.promise : null;
+    nextPickRef.current = null;
+    let next = ready ? await ready : null;
+    if (!next || usedRef.current.has(next.id)) next = await pickPuzzle(rating, usedRef.current);
     if (game !== gameIdRef.current) return;
     usedRef.current.add(next.id);
+    /* Pick the one after this now, so solving it goes straight on. */
+    const after = rating + RATING_STEP;
+    nextPickRef.current = { rating: after, game, promise: pickPuzzle(after, new Set([...usedRef.current])).catch(() => null) };
     eng.loadFen(next.fen);
     setPuzzle(next);
     setPlayed([]);
@@ -154,6 +172,9 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
     usedRef.current = new Set();
     setScore(0); setCombo(0); setBestCombo(0);
     deadlineRef.current = performance.now() + BLITZ_SECONDS * 1000;
+    holdRef.current = null;
+    pendingRef.current = null;
+    nextPickRef.current = null;
     tickRef.current = null;
     endedRef.current = false;
     setNewBest(false);
@@ -166,7 +187,7 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
   useEffect(() => {
     if (phase !== "playing") return;
     const id = setInterval(() => {
-      const left = deadlineRef.current - performance.now();
+      const left = timeLeftNow();
       setTimeLeft(left);
       if (left > 0 && left < 10000) {
         const sec = Math.ceil(left / 1000);
@@ -183,8 +204,8 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
     if (phase !== "playing") return;
     let leftWhenHidden = null;
     const onVisibility = () => {
-      if (document.hidden) leftWhenHidden = deadlineRef.current - performance.now();
-      else if (leftWhenHidden != null) { deadlineRef.current = performance.now() + leftWhenHidden; leftWhenHidden = null; }
+      if (document.hidden) leftWhenHidden = timeLeftNow();
+      else if (leftWhenHidden != null) { deadlineRef.current = (holdRef.current ?? performance.now()) + leftWhenHidden; leftWhenHidden = null; }
     };
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);
@@ -244,6 +265,7 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
       return;
     }
     busyRef.current = true;
+    hold();
     /* The piece that played it grows closer to you. */
     const bond = recordMove(eng.pieceAt(sqOf(mFrom(move))), { capture: eng.pieceAt(target) !== EMPTY, final: verdict.solved });
     if (bond.levelUp) { sceneRef.current?.setBonds(levelsOf(bond.bonds)); playSound("shimmer", { volume: 0.8 }); }
@@ -265,7 +287,7 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
         }
         else say("good", bondNote ?? "Solved");
         await new Promise((r) => setTimeout(r, NEXT_PUZZLE_MS));
-        if (game === gameIdRef.current && deadlineRef.current - performance.now() > 0) await loadNext(newScore);
+        if (game === gameIdRef.current && timeLeftNow() > 0) await loadNext(newScore);
         return;
       }
       await new Promise((r) => setTimeout(r, REPLY_DELAY_MS));
@@ -276,7 +298,7 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
       setPlayed([...afterMine, verdict.reply]);
       setTick((t) => t + 1);
     } finally {
-      if (game === gameIdRef.current) busyRef.current = false;
+      if (game === gameIdRef.current) { busyRef.current = false; release(); setTick((t) => t + 1); }
     }
   };
 
@@ -288,8 +310,9 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
   const tapRef = useRef(null);
   tapRef.current = (sq) => {
     if (phase !== "playing") return;
-    /* While a move is still animating you can already pick your next piece. */
-    if (busyRef.current) { if (friendAt(sq)) setSelected(sq); return; }
+    /* While a move is still animating you can already pick your next piece,
+       and a tap on where it goes is kept and played the moment it's over. */
+    if (busyRef.current) { if (friendAt(sq)) { setSelected(sq); pendingRef.current = null; } else if (selected != null) pendingRef.current = sq; return; }
     if (selected != null && targets.includes(sq)) { play(sq); return; }
     setSelected(friendAt(sq) ? sq : null);
   };
@@ -301,11 +324,21 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
   };
   const dropRef = useRef(null);
   dropRef.current = (sq) => {
+    if (sq != null && busyRef.current && sq !== selected) { pendingRef.current = sq; return false; }
     if (sq != null && targets.includes(sq) && !busyRef.current) { play(sq); return true; }
     return false;
   };
+  /* A tap kept from while a move was animating: play it now that it's over
+     (only if it's still a move for the piece picked). */
+  useEffect(() => {
+    const sq = pendingRef.current;
+    if (sq == null || busyRef.current || phase !== "playing") return;
+    pendingRef.current = null;
+    if (selected != null && targets.includes(sq)) play(sq);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  });
 
-  if (import.meta.env.DEV) window.__blitz = { eng, phase, busy: busyRef.current, tap: (sq) => tapRef.current(sq), start, scene: () => sceneRef.current };
+  if (import.meta.env.DEV) window.__blitz = { eng, phase, puzzle, played, busy: busyRef.current, timeLeft: () => timeLeftNow(), tap: (sq) => tapRef.current(sq), start, scene: () => sceneRef.current };
   const low = timeLeft < 30000;
   const toMove = side === 1 ? "White" : "Black";
   return (
@@ -334,7 +367,7 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
       {phase === "playing" && (
         <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/75 to-transparent px-4 pt-10 pb-[calc(0.9rem+env(safe-area-inset-bottom))]">
           <span className="text-sm text-[var(--tc-cream-dim)]">{selected == null ? "Tap a piece, then a glowing square" : "Tap a glowing square to play it"}</span>
-          <button type="button" className="tc-link" onClick={() => { gameIdRef.current++; busyRef.current = false; setPhase("done"); }}>End run</button>
+          <button type="button" className="tc-link" onClick={() => { gameIdRef.current++; busyRef.current = false; holdRef.current = null; pendingRef.current = null; setPhase("done"); }}>End run</button>
         </div>
       )}
 

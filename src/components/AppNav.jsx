@@ -199,12 +199,14 @@ export function BottomBar({ section, onSection, sweetheart, dark }) {
           type="button"
           onClick={() => onSection(s.id)}
           aria-current={section === s.id ? "page" : undefined}
-          className={`flex h-14 flex-1 flex-col items-center justify-center gap-0.5 border-0 bg-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 ${T.ring} ${section === s.id ? T.interactiveText : T.dimText}`}
+          className={`flex h-[66px] flex-1 flex-col items-center justify-center gap-1 border-0 bg-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 ${T.ring} ${section === s.id ? T.interactiveText : T.dimText}`}
         >
-          <Icon d={s.icon} />
+          {/* Bigger than the header's icons: the bottom bar is the thumb's
+              main way around on a phone (owner asked for it larger). */}
+          <Icon d={s.icon} size={26} />
           {/* The bar is narrow on a phone: a short name where there is one
               ("Review"), the full name for screen readers. */}
-          <span className="text-[10px] font-semibold tracking-wide" aria-hidden={s.short ? "true" : undefined}>{s.short ?? s.label}</span>
+          <span className="text-[11px] font-semibold tracking-wide" aria-hidden={s.short ? "true" : undefined}>{s.short ?? s.label}</span>
           {s.short && <span className="sr-only">{s.label}</span>}
         </button>
       ))}

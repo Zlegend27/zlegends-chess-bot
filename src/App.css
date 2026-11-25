@@ -29,7 +29,7 @@
    text color and font it would otherwise have passed down. */
 .appOverlays{ color:var(--white); font-family:var(--font-body); }
 @media (max-width:767px){
-  .appShell.hasBottomBar .root{ padding-bottom:calc(84px + env(safe-area-inset-bottom)); }
+  .appShell.hasBottomBar .root{ padding-bottom:calc(94px + env(safe-area-inset-bottom)); }
 }
 .starField{ position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:0; }
 .star{ position:absolute; border-radius:50%; background:#ffffff; box-shadow:0 0 4px 1px #ffffffaa;
