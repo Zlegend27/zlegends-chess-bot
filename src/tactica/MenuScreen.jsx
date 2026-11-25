@@ -275,7 +275,7 @@ export default function MenuScreen({ onPick, onExit, onOpening, blitzBest, sweet
                 Demon lord: &ldquo;Demon Lord &ndash; Ember-Cracked Corrupted Armor&rdquo; by Pigcraft (Sketchfab), CC BY 4.0, simplified.
                 Fire dragon: &ldquo;Dragon Rigged&rdquo; by na3ee1 (Poly Pizza), CC BY 4.0, recoloured and animated.
                 Textures, skies and props: Poly Haven and ambientCG, public domain.
-                Music: &ldquo;Woodland Fantasy&rdquo;, &ldquo;Wasteland Overdrive&rdquo;, &ldquo;Snowland&rdquo;, &ldquo;Dark Descent (Extended Cut)&rdquo; and &ldquo;Blackmoor Colossus&rdquo; by Matthew Pablo (www.matthewpablo.com), CC BY 3.0, re-encoded smaller; &ldquo;Imminent Threat&rdquo; by Matthew Pablo, CC BY-SA 3.0, cut to its action part (the cut is CC BY-SA 3.0 too).
+                Music: &ldquo;Woodland Fantasy&rdquo;, &ldquo;Wasteland Overdrive&rdquo;, &ldquo;Snowland&rdquo;, &ldquo;Dark Descent (Extended Cut)&rdquo;, &ldquo;Blackmoor Colossus&rdquo; and &ldquo;Welcome to Com-Mecha&rdquo; by Matthew Pablo (www.matthewpablo.com), CC BY 3.0, re-encoded smaller; &ldquo;Imminent Threat&rdquo; by Matthew Pablo, CC BY-SA 3.0, cut to its action part (the cut is CC BY-SA 3.0 too); &ldquo;HellDrake&rdquo; by Centurion_of_war, CC BY 4.0; &ldquo;Unfriendly Fire&rdquo; (electronic and orchestral), &ldquo;Deus Ex Tempus&rdquo; and &ldquo;Taking Poison&rdquo; by Trevor Lentz, CC BY-SA 3.0; &ldquo;The Boss Approaches&rdquo; by Umplix, CC0, outro trimmed. All from OpenGameArt.org.
               </p>}
             </div>
           </div>

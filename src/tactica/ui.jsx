@@ -269,15 +269,14 @@ export function LearnHints({ close }) {
  *  A mode keys its canvas on `epoch` (a lost canvas can't make a new
  *  context) and rebuilds its scene from its own game state, which is never
  *  touched. */
+// eslint-disable-next-line no-unused-vars -- callers pass their scene; kept for a later check
 export function useLostRebuild(sceneRef) {
   const [epoch, setEpoch] = useState(0);
+  /* Always rebuilt, even if the phone hands the 3D back by itself: a
+     handed-back context has lost its lighting, environment and effect
+     buffers, and drew a black screen (seen on an iPhone, 2026-11-25). */
   const onLost = () => {
-    setTimeout(() => {
-      const scene = sceneRef.current;
-      let lost = true;
-      try { lost = !scene || scene.renderer.getContext().isContextLost(); } catch { lost = true; }
-      if (lost) setEpoch((n) => n + 1);
-    }, 1200);
+    setTimeout(() => setEpoch((n) => n + 1), 600);
   };
   return { epoch, onLost };
 }

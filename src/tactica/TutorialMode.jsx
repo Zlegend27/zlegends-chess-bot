@@ -3,7 +3,7 @@ import { createEngine, mFrom, mPromo, mTo, M120TO64, EMPTY } from "../engine/che
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
 import { BrassButton, MapButton, MenuButton, useViewSource, useBackLayer } from "./ui";
-import { play as playSound } from "./sound";
+import { play as playSound, playMusic, stopMusic } from "./sound";
 import { applyStory } from "./bonds";
 
 /* Chess Tactica tutorial: the controls, one step at a time, on a practice
@@ -228,6 +228,8 @@ export default function TutorialMode({ pieceImgSrc, sweetheart, onExit }) {
 
   /* Back (the phone's, or Escape) opens the menu, and closes it if open. */
   useBackLayer(true, () => setMenuOpen((o) => !o));
+  /* The menu's theme, softer, for a new player's first moves (no extra download). */
+  useEffect(() => { playMusic("menu", { loop: true, volume: 0.28, fade: 1.5 }); return () => stopMusic(1); }, []);
 
   const squareName = (sq) => `${"abcdefgh"[sq % 8]}${((sq / 8) | 0) + 1}`;
   const pieceName = (sq) => ["", "Pawn", "Knight", "Bishop", "Rook", "Queen", "King"][Math.abs(eng.pieceAt(sq))] + ` on ${squareName(sq)}`;

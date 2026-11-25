@@ -8,7 +8,7 @@ import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin, placeEscapeProps } from "./sets/trashBin";
 import { artSettled } from "./sets/art";
 import { BrassButton, MapButton, MenuButton, useViewSource, LearnHints, useLostRebuild, useBackLayer } from "./ui";
-import { play as playSound, buzz, setScore as setMusicMood, playMusic, stopMusic, preloadMusic, prepareMusic, duckMusic } from "./sound";
+import { play as playSound, buzz, setScore as setMusicMood, playMusic, stopMusic, preloadMusic, prepareMusic, duckMusic, muffleMusic, musicNow } from "./sound";
 import { track } from "../utils/track";
 import { makeEscape, movesOf, apply, escaped, strikerOf, piecesOf, fenOf, escapeClock, closeRing, outerRing, ringSquares, allStuck } from "./escape";
 import { loadSetting, saveSetting } from "../utils/storage";
@@ -22,7 +22,7 @@ import {
   rushDamage, pickPuzzle, effectFloors, offer, choose, floorScore, maxPliesFor, minPliesFor, rememberSeen, isBonusAfter, HARD_MODE_RATING,
 } from "./binRun";
 import { loadStory, saveStory, isHard, beatStory } from "./story";
-import { WORLDS, FLOORS_PER_WORLD, BOSS_STORY, WORLD_STORY, LAST_FLOOR, worldIndex, worldOf, floorInWorld, firstFloorOf, isWorldStart, isBossFloor, isSnowFloor, isIntense, isIntensify, floorTrack } from "./worlds";
+import { WORLDS, FLOORS_PER_WORLD, BOSS_STORY, WORLD_STORY, LAST_FLOOR, worldIndex, worldOf, floorInWorld, firstFloorOf, isWorldStart, isBossFloor, isSnowFloor, isIntense, isIntensify, floorTrack, TRACK_START } from "./worlds";
 import { levelsOf, loadBonds, recordMove, levelUpText, applyStory } from "./bonds";
 import { poolNear, expandPuzzle, warmPool } from "./puzzlePool";
 
@@ -336,29 +336,44 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
 
   /* Music. On a floor (and its world card and reward choice) the floor's
      track plays (floorTrack in worlds.js), carrying on from floor to floor
-     in the same world. Story moments between floors fade it out for their
-     own music made in code: dread before a boss and at the omen, a fanfare
-     when one falls, sorrow when a run is lost. The arrival and ending films
-     choose their own. */
+     in the same world. The way into a harder half or a boss is blended, not
+     cut: at the omen, and from a boss floor's start through his card, the
+     playing track is muffled (distant, quieter), then the harder track
+     fades in clear, or the boss's track hits clear on his entrance. With
+     nothing playing, those moments get the music made in code (dread).
+     A fanfare when a boss falls, sorrow when a run is lost; the arrival and
+     ending films choose their own. */
   useEffect(() => {
-    if (stage === "arrive" || stage === "ending") { stopMusic(1.2); return; }
-    /* A boss floor's track waits for the fight itself (his entrance), not
-       the floor's opening screen or his card. */
-    const track = (isBossFloor(floor) ? bossIn && stage === "playing" : stage === "playing" || stage === "choice" || stage === "story") ? floorTrack(floor) : null;
+    if (stage === "arrive" || stage === "ending") { muffleMusic(false, 0.3); stopMusic(1.2); return; }
+    const bossFloor = isBossFloor(floor);
+    /* A boss floor's track waits for the fight itself (his entrance). */
+    const track = (bossFloor ? bossIn && stage === "playing" : stage === "playing" || stage === "choice" || stage === "story") ? floorTrack(floor) : null;
     if (track) {
       setMusicMood(null);
       /* A boss's track hits at once, on his entrance (the stage turns to
-         "playing" as he steps in); a world's fades in. */
-      const boss = isBossFloor(floor);
-      playMusic(track, { loop: true, volume: boss ? 0.45 : 0.38, fade: boss ? 0.02 : 1.5 });
+         "playing" as he steps in), from its first big hit; a world's track
+         fades in, and a muffled one clears over the same time. */
+      muffleMusic(false, bossFloor ? 0.05 : 1.5);
+      playMusic(track, { loop: true, volume: bossFloor ? 0.45 : 0.38, fade: bossFloor ? 0.02 : 1.5, startAt: TRACK_START[track] ?? 0 });
       /* The next floor's track, if it changes, starts downloading now. */
       const next = floor < LAST_FLOOR ? floorTrack(floor + 1) : null;
       if (next && next !== track) preloadMusic(next);
       return;
     }
+    const before = ["over", "defeat", "intro", "credits", "cursed"].includes(stage) ? null
+      : stage === "omen" ? "omen"
+      : bossFloor && !bossIn ? "boss" : null;
+    if (before && musicNow()?.playing) {
+      /* Into the harder half, or toward a boss: the track goes distant. */
+      setMusicMood(null);
+      muffleMusic(true, 1.2);
+      if (before === "boss" && floorTrack(floor)) prepareMusic(floorTrack(floor));
+      return;
+    }
     /* During a boss's card his track is unpacked, ready for his entrance. */
-    if (stage === "bossCard" && bossCard?.mood === "dread" && isBossFloor(floor) && floorTrack(floor)) prepareMusic(floorTrack(floor));
+    if (stage === "bossCard" && bossCard?.mood === "dread" && bossFloor && floorTrack(floor)) prepareMusic(floorTrack(floor));
     stopMusic(1.5);
+    muffleMusic(false, 1.5);
     const mood = stage === "omen" || stage === "cursed" ? "dread"
       : stage === "bossCard" ? bossCard?.mood ?? null
       : stage === "defeat" ? "sorrow"
@@ -369,7 +384,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage, bossCard, floor, bossIn]);
   /* Leaving the run stops whatever was playing. */
-  useEffect(() => () => { setMusicMood(null); stopMusic(1); duckMusic(false); }, []);
+  useEffect(() => () => { setMusicMood(null); stopMusic(1); duckMusic(false); muffleMusic(false, 0.1); }, []);
 
   /* Arriving in a new world: its short film (EntryFilm, film3d/worldFilms.js)
      plays while the world's scenery builds behind it, then the world's

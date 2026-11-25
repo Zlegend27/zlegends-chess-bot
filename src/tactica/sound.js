@@ -33,7 +33,7 @@ export const ATTACK_CUES = {
 /* Everything goes through `master` (the on/off switch and the volume);
    music (real tracks and the code-made score) also goes through `musicBus`,
    its own level, so players can keep the effects and quiet the music. */
-let ctx = null, master = null, musicBus = null;
+let ctx = null, master = null, musicBus = null, muffler = null, mufflerGain = null;
 const buffers = new Map();
 let enabled = loadSetting(KEY, true) !== false;
 let level = Math.min(1, Math.max(0, Number(loadSetting("tacticaVolume", 1)) || 0));
@@ -118,7 +118,13 @@ export function unlock() {
       master.connect(ctx.destination);
       musicBus = ctx.createGain();
       musicBus.gain.value = musicLevel;
-      musicBus.connect(master);
+      /* Through a low-pass and a level of their own, so the music can be
+         muffled and dropped (muffleMusic) as a boss is about to appear. */
+      muffler = ctx.createBiquadFilter();
+      muffler.type = "lowpass";
+      muffler.frequency.value = 20000;
+      mufflerGain = ctx.createGain();
+      musicBus.connect(muffler).connect(mufflerGain).connect(master);
       for (const name of NAMES) {
         fetch(`/tactica/sfx/${name}.mp3`)
           .then((r) => r.arrayBuffer())
@@ -251,10 +257,12 @@ function loopPoints(buf) {
   return loops.get(buf);
 }
 /** The track playing (or starting) now, or null: for checking on the dev server. */
-export const musicNow = () => (music ? { name: music.name, playing: !!music.src } : null);
+export const musicNow = () => (music ? { name: music.name, playing: !!music.src, muffled: !!muffler && muffler.frequency.value < 5000 } : null);
 /** Downloads and unpacks a track ahead (say, during a boss's card), so
  *  playMusic can start it on the exact moment. Nothing plays. */
 export function prepareMusic(name) {
+  preparedName = name;
+  keepOnly(music?.name, name);
   if (ctx) trackBuffer(name).catch(() => {});
   else trackFile(name).catch(() => {});
 }
@@ -270,6 +278,14 @@ export function duckMusic(on) {
 /** Starts downloading a track now (say, the next world's) so it can start
  *  at once later. Nothing plays. */
 export function preloadMusic(name) { trackFile(name).catch(() => {}); }
+/* A track unpacked for playing takes about 50 MB (2½ minutes of stereo),
+   which on a phone competes with the 3D for memory. So only the track
+   playing and the one prepared next are kept unpacked; the others keep
+   just their small downloaded file and unpack again when needed. */
+let preparedName = null;
+function keepOnly(...names) {
+  for (const n of [...trackBuffers.keys()]) if (!names.includes(n)) trackBuffers.delete(n);
+}
 const trackBuffer = (name) => {
   if (!trackBuffers.has(name)) {
     /* decodeAudioData takes the bytes over, so it gets its own copy. */
@@ -278,11 +294,28 @@ const trackBuffer = (name) => {
   }
   return trackBuffers.get(name);
 };
-export function playMusic(name, { volume = 0.55, loop = false, fade = 1.2 } = {}) {
+/** Muffles the music (a low-pass, and quieter) over `secs`, or brings it
+ *  back clear. Used as a boss is about to step in: the floor's track goes
+ *  distant and tense under his card, then his own track hits clear. */
+export function muffleMusic(on, secs = 1) {
+  if (!muffler || !ctx) return;
+  const now = ctx.currentTime;
+  muffler.frequency.cancelScheduledValues(now);
+  muffler.frequency.setValueAtTime(Math.max(40, muffler.frequency.value), now);
+  muffler.frequency.exponentialRampToValueAtTime(on ? 520 : 20000, now + Math.max(0.02, secs));
+  mufflerGain.gain.cancelScheduledValues(now);
+  mufflerGain.gain.setValueAtTime(mufflerGain.gain.value, now);
+  mufflerGain.gain.linearRampToValueAtTime(on ? 0.55 : 1, now + Math.max(0.02, secs));
+}
+/** Plays `name`, looping if `loop`. `startAt` (seconds) starts it part
+ *  way in (a boss's track on its first big hit); its loops still run whole. */
+export function playMusic(name, { volume = 0.55, loop = false, fade = 1.2, startAt = 0 } = {}) {
   /* Asked for again (the next floor of the same world): it carries on. */
   if (music?.name === name || pendingMusic?.name === name) return;
   stopMusic(fade);
-  if (!ctx) { pendingMusic = { name, volume, loop, fade }; trackFile(name).catch(() => {}); return; }
+  keepOnly(name, preparedName === name ? null : preparedName);
+  if (preparedName === name) preparedName = null;
+  if (!ctx) { pendingMusic = { name, volume, loop, fade, startAt }; trackFile(name).catch(() => {}); return; }
   const mine = (music = { name, gain: null, src: null });
   trackBuffer(name)
     .then((buf) => {
@@ -298,7 +331,7 @@ export function playMusic(name, { volume = 0.55, loop = false, fade = 1.2 } = {}
         mine.gain.gain.exponentialRampToValueAtTime(volume, ctx.currentTime + fade);
       }
       mine.src.connect(mine.gain).connect(musicBus);
-      mine.src.start(ctx.currentTime, loop ? mine.src.loopStart : 0);
+      mine.src.start(ctx.currentTime, Math.min(buf.duration - 0.05, (loop ? mine.src.loopStart : 0) + startAt));
       /* A real track replaces the music made in code. */
       setScore(null);
     })

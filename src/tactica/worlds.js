@@ -75,18 +75,21 @@ export const isBossFloor = (floor) => floorInWorld(floor) === FLOORS_PER_WORLD &
  *  is where the pizza monster is fought. */
 export const isSnowFloor = (floor) => worldIndex(floor) === 0 && floorInWorld(floor) >= 9;
 
-/* Music under play: a file in public/tactica/music/ (credits in
-   Settings > Credits and public/tactica/music/README.txt). The bin's first
-   half plays Wasteland Overdrive without its choir, the harder half (after
-   the omen) with it; the pizza monster has Dark Descent; the icy lake
-   Snowland, the polar bear the action part of Imminent Threat; the demon
-   Blackmoor Colossus. Worlds and bosses without a track yet (the volcano
-   and the fire dragon, the demon's realm before him) stay quiet under play. */
+/* Music under play: a file in public/tactica/music/ (credits in Settings >
+   Credits and public/tactica/music/README.txt). A world plays a calmer
+   track for floors 1-5 and a harder one after the omen (the same track
+   where there's only one), and its boss his own:
+     bin      Wasteland Overdrive, no choir / with choir; the pizza monster
+              Dark Descent
+     ice      Snowland; the polar bear Imminent Threat (its action part)
+     volcano  Welcome to Com-Mecha; the fire dragon HellDrake
+     demon    Blackmoor Colossus, no choir / with choir; the demon
+              The Boss Approaches */
 const FLOOR_MUSIC = {
   bin: { calm: "bin", intense: "bin-intense", boss: "boss-bin" },
   ice: { calm: "ice", intense: "ice", boss: "boss-ice" },
-  volcano: { calm: null, intense: null, boss: null },
-  demon: { calm: null, intense: null, boss: "boss-demon" },
+  volcano: { calm: "volcano", intense: "volcano", boss: "boss-volcano" },
+  demon: { calm: "demon", intense: "demon-intense", boss: "boss-demon" },
 };
 /** The track a floor plays under, or null for none. */
 export function floorTrack(floor) {
@@ -94,3 +97,6 @@ export function floorTrack(floor) {
   if (!m) return null;
   return isBossFloor(floor) ? m.boss : isIntense(floor) ? m.intense : m.calm;
 }
+/* Where a boss's track starts on his entrance: on its first big hit, past
+   a build-up (seconds). Its loops still run whole. */
+export const TRACK_START = { "boss-volcano": 20.64, "boss-demon": 6.47 };

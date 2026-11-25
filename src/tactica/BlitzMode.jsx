@@ -7,11 +7,14 @@ import { judgePuzzleMove } from "../utils/puzzleSession";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
 import { BrassButton, useLostRebuild, useBackLayer } from "./ui";
-import { play as playSound } from "./sound";
+import { play as playSound, playMusic, stopMusic, preloadMusic } from "./sound";
 import { track } from "../utils/track";
 import { submitRushScore, TACTICA_RUSH_SECONDS } from "../utils/leaderboard";
 import { levelsOf, recordMove, levelUpText, applyStory } from "./bonds";
 import { poolNear, expandPuzzle, warmPool } from "./puzzlePool";
+
+/* How many rush tracks there are to take turns (rush-1.mp3 ...). */
+const RUSH_TRACKS = 4;
 
 /* How much of a move's animation (and the next puzzle's loading) the clock
    still counts; see hold() in BlitzMode. */
@@ -93,6 +96,18 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
   /* During a rush, Back (a stray edge swipe) does nothing rather than end
      it; End run is on screen. Before and after, Back leaves. */
   useBackLayer(phase === "playing", () => {});
+  /* Music for a rush: one of four driving tracks by Trevor Lentz, a
+     different one each rush in turn (public/tactica/music/rush-1..4.mp3).
+     It starts with the rush and fades out when it ends. The next rush's
+     track starts downloading during this one. */
+  useEffect(() => {
+    if (phase !== "playing") return undefined;
+    const turn = (Number(loadSetting("tacticaRushTrack", 0)) || 0) % RUSH_TRACKS;
+    saveSetting("tacticaRushTrack", turn + 1);
+    playMusic(`rush-${turn + 1}`, { loop: true, volume: 0.4, fade: 0.8 });
+    const nextOne = setTimeout(() => preloadMusic(`rush-${((turn + 1) % RUSH_TRACKS) + 1}`), 20000);
+    return () => { clearTimeout(nextOne); stopMusic(1.2); };
+  }, [phase]);
   const [puzzle, setPuzzle] = useState(null);
   const [played, setPlayed] = useState([]);
   const [selected, setSelected] = useState(null);
