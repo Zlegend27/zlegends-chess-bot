@@ -90,3 +90,40 @@ export function partsNamed(root, test) {
   root.traverse((o) => { if (o.name && test(o.name)) found.push(o); });
   return found;
 }
+
+/* ---- Sharp style ----
+   For models that should read crisp rather than soft: flat-faceted cel
+   shading (each face lit as one flat panel, so edges stay sharp), and ink
+   along the creases as well as round the outside. Used by Zlegend2700
+   (sets/spaceRush.js); meant for the bosses too. */
+
+const sharpCache = new Map();
+/** A cel-shaded, flat-faceted material in `color`. */
+export function sharpMaterial(color, { emissive = null, emissiveIntensity = 1, side = THREE.FrontSide } = {}) {
+  const key = `${color}|${emissive}|${emissiveIntensity}|${side}`;
+  if (sharpCache.has(key)) return sharpCache.get(key);
+  const m = new THREE.MeshToonMaterial({ color, gradientMap: gradient(), flatShading: true, side });
+  if (emissive) { m.emissive = new THREE.Color(emissive); m.emissiveIntensity = emissiveIntensity; }
+  sharpCache.set(key, m);
+  return m;
+}
+
+const creaseCache = new Map();
+/** Ink lines along every sharp edge of the meshes under `root` (where the
+ *  faces meet at more than `angle` degrees), drawn as thin lines. */
+export function crease(root, { color = "#160a26", angle = 28, minSize = 0.03 } = {}) {
+  const ink = creaseCache.get(color) ?? new THREE.LineBasicMaterial({ color });
+  creaseCache.set(color, ink);
+  const parts = [];
+  root.traverse((o) => {
+    if (!o.isMesh || o.userData.ink || !o.geometry?.attributes?.position) return;
+    if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
+    if (o.geometry.boundingSphere.radius < minSize) return;
+    parts.push(o);
+  });
+  for (const o of parts) {
+    const lines = new THREE.LineSegments(new THREE.EdgesGeometry(o.geometry, angle), ink);
+    lines.userData.ink = true;
+    o.add(lines);
+  }
+}
