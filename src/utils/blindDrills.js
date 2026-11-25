@@ -150,7 +150,7 @@ function reachQuestion(level, rand) {
   if (!count) {
     const q = `On an empty board, name one square a ${piece} on ${from} can move to.`;
     return {
-      kind: "square", prompt: q, spoken: q, answer: reach[0],
+      kind: "square", prompt: q, spoken: q, answer: reach[0], accepts: reach,
       check: (text) => {
         const a = readSquare(text);
         if (!a) return { understood: false };
@@ -320,7 +320,7 @@ function openingsQuestion(level, rand) {
   choices.sort(() => rand() - 0.5);
   const names = choices.map((c) => c.name);
   return {
-    kind: "choice", moves, choices: names, answer: o.name,
+    kind: "choice", moves, choices: names, answer: o.name, fen: follow(moves).eng.fen(),
     prompt: `${movesText(moves)}. Which opening is this?`,
     spoken: `${movesSpoken(moves)} Which opening is this? ${names.map((c, i) => `${i + 1}: ${c}`).join(". ")}.`,
     check: (text) => {

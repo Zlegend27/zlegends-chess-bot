@@ -81,7 +81,10 @@ export default function BlindPuzzles({ sweetheart, pieceSetId = "classic" }) {
   const [puzzle, setPuzzle] = useState(() => pickPuzzle(loadSetting("textPuzzleRating", 700), seen.current));
   const engRef = useRef(null);
   const [played, setPlayed] = useState([]); // SANs so far, both sides
-  const [talk, setTalk] = useState([]);     // the bubble: lines of text
+  const [talk, setTalk] = useState([]);     // the bubble: Zlegend2700's lines
+  /* The position stays on screen in its own panel the whole time (a hint
+     or a remark used to replace it), updated after each reply. */
+  const [position, setPosition] = useState("");
   const [mood, setMood] = useState(null);   // "happy" | "angry" | null
   const [state, setState] = useState("playing"); // playing | solved | failed
   const [misses, setMisses] = useState(0);
@@ -106,9 +109,11 @@ export default function BlindPuzzles({ sweetheart, pieceSetId = "classic" }) {
     return () => { recRef.current?.stop(); speaker.cancel(); };
   }, [speaker]);
 
-  const say = (lines) => {
+  /* Shows Zlegend2700's lines; reads them (and the position, when given)
+     aloud if that's on. */
+  const say = (lines, alsoRead = "") => {
     setTalk(lines);
-    if (voiceOn) { speaker.cancel(); speaker.speak(lines.join(" ")); }
+    if (voiceOn) { speaker.cancel(); speaker.speak([...lines, alsoRead].join(" ")); }
   };
 
   /* A new puzzle: set up the engine and Zlegend2700 reads it out. */
@@ -118,7 +123,8 @@ export default function BlindPuzzles({ sweetheart, pieceSetId = "classic" }) {
     engRef.current = eng;
     seen.current.add(p.id);
     setPuzzle(p); setPlayed([]); setMisses(0); setState("playing"); setMood(null); setAnswer(""); setShowBoard(false);
-    say([intro, readPosition(p.fen), `Find the best move. (Puzzle rated ${p.rating}.)`]);
+    setPosition(readPosition(p.fen));
+    say([intro, `Find the best move. (Puzzle rated ${p.rating}.)`], readPosition(p.fen));
     setTimeout(() => inputRef.current?.focus(), 0);
   };
   useEffect(() => { begin(puzzle, pick(LINES.start)); /* first puzzle on open */ // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -163,8 +169,9 @@ export default function BlindPuzzles({ sweetheart, pieceSetId = "classic" }) {
     const reply = eng.legalMoves().find((m) => eng.sanOf(m) === verdict.reply);
     if (reply) eng.make(reply);
     setPlayed([...list, verdict.reply]);
+    setPosition(readPosition(eng.fen()));
     flash("happy");
-    say([`${verdict.san}. ${pick(LINES.right)}`, `I reply ${sanToSpeech(verdict.reply)} (${verdict.reply}). Your move.`]);
+    say([`${verdict.san}. ${pick(LINES.right)}`, `I reply ${sanToSpeech(verdict.reply)} (${verdict.reply}). Your move.`], readPosition(eng.fen()));
   };
   submitRef.current = submit;
 
@@ -194,7 +201,7 @@ export default function BlindPuzzles({ sweetheart, pieceSetId = "classic" }) {
   };
   const toggleVoice = () => {
     speaker.prime();
-    setVoiceOn((v) => { saveSetting("textPuzzleVoice", !v); if (v) speaker.cancel(); else speaker.speak(talk.join(" ")); return !v; });
+    setVoiceOn((v) => { saveSetting("textPuzzleVoice", !v); if (v) speaker.cancel(); else speaker.speak([...talk, position].join(" ")); return !v; });
   };
 
   /* The answer, marked on the board once the puzzle's over. */
@@ -221,8 +228,23 @@ export default function BlindPuzzles({ sweetheart, pieceSetId = "classic" }) {
         </div>
       </div>
 
-      {played.length > 0 && (
-        <p className={`m-0 font-mono text-sm ${T.dimText}`}>Moves so far: {played.join(" ")}</p>
+      <div className="textPuzzlePosition">
+        <span className="textPuzzleWho">The position</span>
+        <p>{position}</p>
+        {played.length > 0 && <p className="textPuzzleMoves">Moves so far: {played.join(" ")}</p>}
+      </div>
+
+      {/* A look at the board, any time: it doesn't solve anything, the
+          move still has to be typed. */}
+      {showBoard ? (
+        <>
+          <TapBoard fen={state === "playing" ? engRef.current?.fen() ?? puzzle.fen : puzzle.fen} coords pieceSetId={pieceSetId} colors={colors} disabled
+            flipped={puzzle.fen.split(" ")[1] === "b"} marks={state === "playing" ? {} : solutionMarks()}
+            label={state === "playing" ? "The position" : "The puzzle's position, with the first move marked"} />
+          <button type="button" onClick={() => setShowBoard(false)} className={`self-start border-0 bg-transparent p-0 py-1 text-sm font-bold underline ${T.interactiveText} ${focus}`}>Hide the board</button>
+        </>
+      ) : (
+        <button type="button" onClick={() => setShowBoard(true)} className={`self-start border-0 bg-transparent p-0 py-1 text-sm font-bold underline ${T.interactiveText} ${focus}`}>Show the board</button>
       )}
 
       {state === "playing" ? (
@@ -244,14 +266,7 @@ export default function BlindPuzzles({ sweetheart, pieceSetId = "classic" }) {
           </div>
         </>
       ) : (
-        <>
-          {showBoard ? (
-            <TapBoard fen={puzzle.fen} coords pieceSetId={pieceSetId} colors={colors} disabled marks={solutionMarks()} label="The puzzle's position, with the first move marked" />
-          ) : (
-            <button type="button" onClick={() => setShowBoard(true)} className={`self-start border-0 bg-transparent p-0 py-1 text-sm font-bold underline ${T.interactiveText} ${focus}`}>Show the board</button>
-          )}
-          <button type="button" className="btn gold" style={{ width: "100%" }} onClick={next} autoFocus>Next puzzle</button>
-        </>
+        <button type="button" className="btn gold" style={{ width: "100%" }} onClick={next} autoFocus>Next puzzle</button>
       )}
 
       <label className={`flex min-h-11 items-center justify-between gap-3 text-sm ${T.ink}`}>

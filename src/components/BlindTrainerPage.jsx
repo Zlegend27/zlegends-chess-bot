@@ -11,6 +11,7 @@ import { getUiTheme } from "../utils/uiTheme";
 import { getBoardColor } from "../utils/boardColors";
 import { loadSetting, saveSetting } from "../utils/storage";
 import { makeQuestion } from "../utils/blindDrills";
+import { createEngine, mFrom, mTo, M120TO64 } from "../engine/chessEngine";
 import { STAGES, SESSION, openStages, nextStage, afterSession, stepOf, VIEW_NAMES } from "../utils/blindPath";
 import { loadTraining, saveTraining, bumpStreak, liveStreak } from "../utils/blindTrainerStore";
 import { syncTraining } from "../utils/blindTrainerSync";
@@ -53,6 +54,16 @@ const CHANGE_TEXT = {
   down: "A step back, for a bit more practice.",
   done: "Stage complete!",
 };
+
+/* The from and to squares of a move question's answer. */
+function solutionSquares(q) {
+  if (!q.fen || !q.answer) return null;
+  const eng = createEngine(); eng.loadFen(q.fen);
+  const m = eng.legalMoves().find((x) => eng.sanOf(x) === q.answer);
+  if (!m) return null;
+  const name = (i120) => { const t = M120TO64[i120]; return "abcdefgh"[t % 8] + (((t / 8) | 0) + 1); };
+  return [name(mFrom(m)), name(mTo(m))];
+}
 
 /* What the board shows for a question, by step. */
 function boardFor(q, step) {
@@ -150,7 +161,13 @@ export default function BlindTrainerPage({ onBack, onRegisterBack, sweetheart, p
     speaker.prime();
     const st = stepOf(training.path, stageId);
     const stage = STAGES.find((s) => s.id === stageId);
-    const queue = Array.from({ length: SESSION }, () => makeQuestion(stage.drill, st.level));
+    /* Five different questions: random ones could repeat ("Tap c7" twice). */
+    const queue = [];
+    for (let tries = 0; queue.length < SESSION && tries < SESSION * 20; tries++) {
+      const cand = makeQuestion(stage.drill, st.level);
+      if (!queue.some((x) => x.prompt === cand.prompt)) queue.push(cand);
+    }
+    while (queue.length < SESSION) queue.push(makeQuestion(stage.drill, st.level));
     setRun({ stageId, step: st, queue, openBefore: openStages(training.path) });
     setIdx(0); setResults([]); setAnswer(""); setVerdict(null); setPicked(null); setShowBoard(false); setOutcome(null);
     setScreen("session");
@@ -163,10 +180,17 @@ export default function BlindTrainerPage({ onBack, onRegisterBack, sweetheart, p
     if (!q || !given) return {};
     const m = {};
     if (q.kind === "square" && /^[a-h][1-8]$/.test(given)) {
+      /* Every right square lights up (a knight has several), then the
+         tapped one on top: green if right, red if not. */
+      for (const s2 of q.accepts || (q.answer && /^[a-h][1-8]$/.test(q.answer) ? [q.answer] : [])) m[s2] = "right";
       m[given] = r.correct ? "right" : "wrong";
-      if (!r.correct && q.answer && /^[a-h][1-8]$/.test(q.answer)) m[q.answer] = "right";
     }
     if (q.kind === "move" && /^[a-h][1-8][a-h][1-8]$/.test(given)) {
+      if (!r.correct) {
+        /* The right move, so a miss shows what to play. */
+        const sol = solutionSquares(q);
+        if (sol) { m[sol[0]] = "right"; m[sol[1]] = "right"; }
+      }
       m[given.slice(0, 2)] = r.correct ? "right" : "wrong";
       m[given.slice(2)] = r.correct ? "right" : "wrong";
     }
