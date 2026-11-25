@@ -24,7 +24,7 @@ import { BrassButton } from "../ui";
 
    It opens on a title and Begin (phones only allow sound after a tap).
    `onDone(answer)` gets "yes", "refused" (no, twice), or null if skipped;
-   Skip is offered only when `skippable` (a rewatch). A real track in
+   Skip is offered when `skippable` (always, since 2026-11-24). A real track in
    public/tactica/music/opening.mp3 plays under it if there is one. */
 const COLORS = { light: SET_BOARD.light, dark: SET_BOARD.dark, background: "#050304", highlight: "#3EE7F5", target: "#F5D93E", attack: "#F05348", select: "#3EE7F5" };
 const HEROES = [

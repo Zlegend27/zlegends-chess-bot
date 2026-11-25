@@ -10,8 +10,7 @@
    carry, rest, slam, roar, melt (beaten: it falls into the lava) and
    finish(points) (you lost: fire over your pieces). */
 import * as THREE from "three";
-import { track } from "./art.js";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { track, glbLoader } from "./art.js";
 import { play as playSound } from "../sound.js";
 
 const MODEL = "/tactica/models/fire_dragon/dragon.glb";
@@ -76,7 +75,7 @@ export function buildFireDragon(ts) {
 
   /* The model, laid in when it loads. */
   let real = null;
-  track(new GLTFLoader().loadAsync(MODEL)).then((gltf) => {
+  track(glbLoader().loadAsync(MODEL)).then((gltf) => {
     const model = gltf.scene;
     const box = new THREE.Box3().setFromObject(model);
     const size = box.getSize(new THREE.Vector3());

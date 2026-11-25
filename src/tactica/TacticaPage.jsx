@@ -29,7 +29,8 @@ import "./tactica.css";
 
    The opening plays the first time Tactica's menu would be shown, and leads
    into the Tutorial. After that it never plays by itself: picking Tutorial
-   plays it again, now with a Skip. It is never put in front of a run. */
+   plays it again. It can always be skipped, a first visit too (players
+   arriving from a link want to play). It is never put in front of a run. */
 /* If the 3D can't start (the phone ran out of graphics memory, or too many
    tabs hold 3D views), Tactica says so in its own words with a way out,
    instead of the whole site's error screen. */
@@ -62,16 +63,17 @@ export default function TacticaPage(props) {
 function TacticaPageInner({ pieceImgSrc, sweetheart, player, start = null, onExit, onLeaderboard = null }) {
   /* A 1v1 game still on (a refresh mid-game) goes straight back to it. */
   const [screen, setScreen] = useState(() => (loadSetting("tacticaPvpActive", null) ? "versus" : start ?? (loadStory().seen ? "menu" : "opening")));
-  /* Whether the opening on screen is a rewatch (so it can be skipped). */
+  /* Whether the opening on screen is a rewatch (where Skip leads). */
   const [rewatch] = useState(() => loadStory().seen);
-  const [seenNow, setSeenNow] = useState(false);
   /* Every change of mode goes through the loading screen (TacticaLoading). */
   const veil = useVeil();
   const goTo = (next) => veil.go(() => setScreen(next), next === "opening");
   /* First load: the screen is already up; it comes down with the first picture. */
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { veil.arm(screen === "opening"); }, []);
-  const openingDone = (answer) => { saveStory(afterOpening(loadStory(), answer)); setSeenNow(true); goTo("tutorial"); };
+  /* Skipped on a first visit: straight to the menu (Tutorial is there, and
+     plays the opening again). Watched, or skipped on a rewatch: the Tutorial. */
+  const openingDone = (answer) => { saveStory(afterOpening(loadStory(), answer)); goTo(answer === null && !rewatch ? "menu" : "tutorial"); };
   const [blitzBest, setBlitzBest] = useState(() => loadSetting("tacticaBlitzBest", 0));
   const toMenu = () => goTo("menu");
   const leave = (mode) => (start === mode ? onExit : toMenu);
@@ -96,7 +98,7 @@ function TacticaPageInner({ pieceImgSrc, sweetheart, player, start = null, onExi
   };
 
   let page;
-  if (screen === "opening") page = <Suspense fallback={null}><Film3D skippable={(rewatch || seenNow) && loadStory().seen} onDone={openingDone} /></Suspense>;
+  if (screen === "opening") page = <Suspense fallback={null}><Film3D skippable onDone={openingDone} /></Suspense>;
   else if (screen === "tutorial") page = <TutorialMode pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} onExit={toMenu} />;
   else if (screen === "run") page = <RunMode creator={player?.session?.user?.app_metadata?.role === "creator"} pieceImgSrc={pieceImgSrc} sweetheart={sweetheart} best={runBest} onBest={recordRunBest} displayName={player?.displayName} onLeaderboard={onLeaderboard ? () => onLeaderboard("run") : null} onExit={toMenu} />;
   else if (screen === "memories") page = <MemoryMode onExit={toMenu} />;

@@ -5,6 +5,7 @@
 import * as THREE from "three";
 import { HDRLoader } from "three/examples/jsm/loaders/HDRLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 
 const textureLoader = new THREE.TextureLoader();
 
@@ -86,7 +87,11 @@ export function sky(ts, world, { background = false, intensity = 1, blur = 0 } =
   }));
 }
 
-const gltfLoader = new GLTFLoader();
+/** A model loader that also reads meshopt-compressed models (the demon,
+ *  polar bear and dragon were packed with gltfpack -cc -noq -kn -km -ke:
+ *  smaller files, the same names, materials and raw vertex data). */
+export const glbLoader = () => new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+const gltfLoader = glbLoader();
 const models = new Map();
 /** A photographed 3D model from public/tactica/models/<id>/, fetched once.
  *  Resolves to a template resting on y = 0, centred, at its real size

@@ -11,8 +11,7 @@
    the realm, so his lightning and the sky's share one look. */
 import * as THREE from "three";
 import { play as playSound } from "../sound.js";
-import { dress, track } from "./art.js";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { dress, track, glbLoader } from "./art.js";
 
 /* The demon lord himself: a photographed armoured figure ("Demon Lord –
    Ember-Cracked Corrupted Armor" by Pigcraft, CC BY 4.0, cut down from 1.9
@@ -151,7 +150,7 @@ export function buildDemon(ts, zap) {
 
   /* The real demon, laid in when he loads. */
   let real = null;
-  track(new GLTFLoader().loadAsync(REAL_DEMON)).then((gltf) => {
+  track(glbLoader().loadAsync(REAL_DEMON)).then((gltf) => {
     const model = gltf.scene;
     const box = new THREE.Box3().setFromObject(model);
     const k = REAL_HEIGHT / (box.max.y - box.min.y);
