@@ -40,7 +40,10 @@
   font-family: var(--tc-font-display); font-weight: 900; letter-spacing: 0.04em; color: var(--tc-cream);
   text-shadow: 0 2px 0 #5c3317, 0 0 18px rgba(255, 200, 100, 0.35);
 }
-.tactica .tc-label { font-family: var(--tc-font-display); font-weight: 700; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--tc-cream-dim); }
+/* Small capitals over the 3D: 12px, brighter and with a crisp (unblurred)
+   dark edge, so they stay sharp on a phone (at 11px in the dim cream they
+   looked soft over the scene). */
+.tactica .tc-label { font-family: var(--tc-font-display); font-weight: 700; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--tc-cream); text-shadow: 0 1px 0 rgba(0, 0, 0, 0.85); -webkit-font-smoothing: antialiased; }
 
 /* Every Tactica control: no native chrome, the site's cyan focus ring. */
 .tactica button { font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }

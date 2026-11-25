@@ -202,7 +202,7 @@ export default function YouTubeTv() {
                 src={`https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`}
                 alt=""
                 aria-hidden="true"
-                decoding="async"
+                fetchpriority="high"
                 style={FRAME_STYLE}
                 className={`object-cover transition-opacity duration-300 ${playing ? "opacity-0" : "opacity-100"}`}
               />

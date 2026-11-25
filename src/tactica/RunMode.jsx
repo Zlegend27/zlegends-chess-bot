@@ -1047,7 +1047,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
         runRef.current.wrong++;
         buzz(70);
         const left = takeDamage(cost);
-        if (left <= 0) { say("A guard struck · −" + cost + "%", "bad"); await wait(700); endRun(); return; }
+        if (left <= 0) { say("A guard struck · −" + cost + "%", "bad"); await wait(700); if (run === runIdRef.current) endRun(); return; }
         ending = [false, "A guard struck · −" + cost + "% · no bonus"];
         return;
       }
@@ -1164,9 +1164,12 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
       runRef.current.rushes++;
       left = takeDamage(rushDamage(effect));
     }
+    /* Out of health: the board stays shut while the run ends (it used to open
+       for that moment, so a move could still be played at 0%), and only this
+       run ends (one quit and restarted in that moment carries on). */
+    if (left <= 0) { await wait(700); if (run === runIdRef.current) endRun(); return; }
     busyRef.current = false;
     setBusy(false);
-    if (left <= 0) { await wait(700); endRun(); return; }
     resetTimer(puzzle, effect, escape?.start);
     resumeTimer();
   };

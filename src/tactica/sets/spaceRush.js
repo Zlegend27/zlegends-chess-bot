@@ -59,7 +59,10 @@ export function dressSpaceRush(ts) {
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     g.setAttribute("color", new THREE.BufferAttribute(col, 3));
-    const stars = new THREE.Points(g, new THREE.PointsMaterial({ size: 1.6, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 0.9, depthWrite: false }));
+    /* Added light, never painted over: a dim star painted after the violet
+       glow under the board showed as a black speck there (seen on an iPhone).
+       Added, a star can only brighten what is behind it. */
+    const stars = new THREE.Points(g, new THREE.PointsMaterial({ size: 1.6, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending }));
     stars.renderOrder = -2;
     add(stars);
   }
