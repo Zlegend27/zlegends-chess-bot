@@ -87,6 +87,7 @@ function Terms({ T }) {
       </Section>
       <Section title="Other sites and open source" T={T}>
         <p className="m-0">Links to other sites (Chess.com, Lichess, YouTube, Discord) follow those sites&apos; own terms. The site&apos;s code and the open-source parts it uses are listed with their licenses on <a href="https://github.com/Zlegend27/zlegends-chess-bot/blob/main/NOTICE.md" target="_blank" rel="noopener noreferrer">GitHub</a>.</p>
+        <p className="m-0 mt-2">Music: the Theme is &quot;A Short Walk With You&quot; by <a href="https://purrplecat.com" target="_blank" rel="noopener noreferrer">Purrple Cat</a>, licensed under <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a>.</p>
       </Section>
       <Section title="Contact and changes" T={T}>
         <p className="m-0">Questions: <a href={`mailto:${CONTACT}`}>{CONTACT}</a>. If these terms change, the date at the top changes too. See also the <a href="/privacy">Privacy Policy</a>.</p>

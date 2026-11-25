@@ -96,7 +96,8 @@ export default function useMusic({ musicOpen, blindOpen }) {
     if (!playlist) return;
     setMp3Loading(true);
     setMp3Tracks([]);
-    getSupabase().then(sb => loadPlaylistTracks(sb, playlist)).then(tracks => {
+    /* A fixed playlist (the Theme) needs no Supabase at all. */
+    (playlist.tracks ? Promise.resolve(playlist.tracks) : getSupabase().then(sb => loadPlaylistTracks(sb, playlist))).then(tracks => {
       setMp3Tracks(tracks);
       setMp3Loading(false);
     });

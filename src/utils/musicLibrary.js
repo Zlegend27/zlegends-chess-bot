@@ -24,7 +24,11 @@ export const THEME_ID = "theme";
    artists' music and were removed on 2026-11-16 ahead of the public launch;
    add a playlist back here only with the rights to stream it. */
 export const MP3_PLAYLISTS = [
-  { id: THEME_ID, label: "Theme", folder: "" },
+  /* Served by the site itself (public/music/), not the bucket: "A Short Walk
+     With You" by Purrple Cat, CC BY-SA 4.0 (purrplecat.itch.io/up-all-night),
+     credited in the player, on /terms and in NOTICE.md. Chosen by the owner
+     on 2026-11-24 to replace a track the site had no rights to. */
+  { id: THEME_ID, label: "Theme", tracks: [{ name: "A Short Walk With You · Purrple Cat", url: "/music/a-short-walk-with-you.mp3" }] },
 ];
 
 /** A saved choice that no longer exists (a removed playlist) falls back to
@@ -38,6 +42,7 @@ const trackCache = new Map();
  *  Supabase isn't configured -- an empty playlist should read as "nothing
  *  uploaded yet", not crash the Juice Box. */
 export async function loadPlaylistTracks(supabase, playlist) {
+  if (playlist.tracks) return playlist.tracks;
   if (!supabase) return [];
   if (trackCache.has(playlist.id)) return trackCache.get(playlist.id);
   try {

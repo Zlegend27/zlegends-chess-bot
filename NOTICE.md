@@ -26,11 +26,18 @@ following:
   Chess, and their logos.
 - The original artwork in this repository, including the images in `public/`
   and the Sweetheart piece set in `public/pieces/sweetheart/`.
-- Music streamed by the site, which is not part of this repository.
+- Music streamed by the site, which is not part of this repository (except
+  the track listed under Third-party components, which keeps its own license).
 
 All of those stay with their owners, and all rights in them are reserved.
 
 ## Third-party components
+
+- **"A Short Walk With You"** (`public/music/a-short-walk-with-you.mp3`), from
+  the album *Up All Night* (2018) by Purrple Cat (https://purrplecat.com),
+  Creative Commons Attribution-ShareAlike 4.0
+  (https://creativecommons.org/licenses/by-sa/4.0/). Source:
+  https://purrplecat.itch.io/up-all-night
 
 - **Maia3** (`public/maia3/maia3-5m.fp16.onnx`) by Daniel Monroe, George
   Eilender, Philip Chalmers, Zhenwei Tang and Ashton Anderson, CSSLab, University
