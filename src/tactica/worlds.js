@@ -79,12 +79,12 @@ export const isSnowFloor = (floor) => worldIndex(floor) === 0 && floorInWorld(fl
    Settings > Credits and public/tactica/music/README.txt). The bin's first
    half plays Wasteland Overdrive without its choir, the harder half (after
    the omen) with it; the pizza monster has Dark Descent; the icy lake
-   Snowland; the demon Blackmoor Colossus. Worlds and bosses without a track
-   yet (the polar bear, the volcano and the fire dragon, the demon's realm
-   before him) stay quiet under play, as before. */
+   Snowland, the polar bear the action part of Imminent Threat; the demon
+   Blackmoor Colossus. Worlds and bosses without a track yet (the volcano
+   and the fire dragon, the demon's realm before him) stay quiet under play. */
 const FLOOR_MUSIC = {
   bin: { calm: "bin", intense: "bin-intense", boss: "boss-bin" },
-  ice: { calm: "ice", intense: "ice", boss: null },
+  ice: { calm: "ice", intense: "ice", boss: "boss-ice" },
   volcano: { calm: null, intense: null, boss: null },
   demon: { calm: null, intense: null, boss: "boss-demon" },
 };

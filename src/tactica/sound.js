@@ -67,7 +67,7 @@ export const musicVolume = () => musicLevel;
 export function setMusicVolume(v) {
   musicLevel = Math.min(1, Math.max(0, Number(v) || 0));
   saveSetting("tacticaMusicVolume", musicLevel);
-  if (musicBus) musicBus.gain.value = musicLevel;
+  if (musicBus) musicBus.gain.value = musicLevel * (ducked ? 0.35 : 1);
 }
 
 /* Vibration. Android has the real thing (navigator.vibrate). iPhones don't,
@@ -252,6 +252,21 @@ function loopPoints(buf) {
 }
 /** The track playing (or starting) now, or null: for checking on the dev server. */
 export const musicNow = () => (music ? { name: music.name, playing: !!music.src } : null);
+/** Downloads and unpacks a track ahead (say, during a boss's card), so
+ *  playMusic can start it on the exact moment. Nothing plays. */
+export function prepareMusic(name) {
+  if (ctx) trackBuffer(name).catch(() => {});
+  else trackFile(name).catch(() => {});
+}
+/* Music quieter while the game is paused (the pause menu), back after. */
+let ducked = false;
+export function duckMusic(on) {
+  ducked = !!on;
+  if (!musicBus || !ctx) return;
+  musicBus.gain.cancelScheduledValues(ctx.currentTime);
+  musicBus.gain.setValueAtTime(musicBus.gain.value, ctx.currentTime);
+  musicBus.gain.linearRampToValueAtTime(musicLevel * (ducked ? 0.35 : 1), ctx.currentTime + 0.25);
+}
 /** Starts downloading a track now (say, the next world's) so it can start
  *  at once later. Nothing plays. */
 export function preloadMusic(name) { trackFile(name).catch(() => {}); }
@@ -277,8 +292,11 @@ export function playMusic(name, { volume = 0.55, loop = false, fade = 1.2 } = {}
       mine.src.loop = loop;
       if (loop) { const [a, b] = loopPoints(buf); mine.src.loopStart = a; mine.src.loopEnd = b; }
       mine.gain = ctx.createGain();
-      mine.gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-      mine.gain.gain.exponentialRampToValueAtTime(volume, ctx.currentTime + fade);
+      if (fade < 0.1) mine.gain.gain.setValueAtTime(volume, ctx.currentTime);
+      else {
+        mine.gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+        mine.gain.gain.exponentialRampToValueAtTime(volume, ctx.currentTime + fade);
+      }
       mine.src.connect(mine.gain).connect(musicBus);
       mine.src.start(ctx.currentTime, loop ? mine.src.loopStart : 0);
       /* A real track replaces the music made in code. */

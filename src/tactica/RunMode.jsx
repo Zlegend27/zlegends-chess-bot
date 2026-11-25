@@ -8,7 +8,7 @@ import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin, placeEscapeProps } from "./sets/trashBin";
 import { artSettled } from "./sets/art";
 import { BrassButton, MapButton, MenuButton, useViewSource, LearnHints, useLostRebuild } from "./ui";
-import { play as playSound, buzz, setScore as setMusicMood, playMusic, stopMusic, preloadMusic } from "./sound";
+import { play as playSound, buzz, setScore as setMusicMood, playMusic, stopMusic, preloadMusic, prepareMusic, duckMusic } from "./sound";
 import { track } from "../utils/track";
 import { makeEscape, movesOf, apply, escaped, strikerOf, piecesOf, fenOf, escapeClock, closeRing, outerRing, ringSquares, allStuck } from "./escape";
 import { loadSetting, saveSetting } from "../utils/storage";
@@ -157,6 +157,8 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
      every puzzle is harder and there are no rewards, only challenges. */
   const [hard] = useState(() => isHard(loadStory()));
   const [floor, setFloor] = useState(1);
+  /* The boss of this floor has made his entrance (his music starts then). */
+  const [bossIn, setBossIn] = useState(false);
   /* Which world's set is built. */
   const kindOf = (f) => ["bin", "ice", "volcano", "demon"][worldIndex(f)];
   const setKind = kindOf(floor);
@@ -331,15 +333,22 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
      choose their own. */
   useEffect(() => {
     if (stage === "arrive" || stage === "ending") { stopMusic(1.2); return; }
-    const track = stage === "playing" || stage === "choice" || stage === "story" ? floorTrack(floor) : null;
+    /* A boss floor's track waits for the fight itself (his entrance), not
+       the floor's opening screen or his card. */
+    const track = (isBossFloor(floor) ? bossIn && stage === "playing" : stage === "playing" || stage === "choice" || stage === "story") ? floorTrack(floor) : null;
     if (track) {
       setMusicMood(null);
-      playMusic(track, { loop: true, volume: 0.38, fade: 1.5 });
+      /* A boss's track hits at once, on his entrance (the stage turns to
+         "playing" as he steps in); a world's fades in. */
+      const boss = isBossFloor(floor);
+      playMusic(track, { loop: true, volume: boss ? 0.45 : 0.38, fade: boss ? 0.02 : 1.5 });
       /* The next floor's track, if it changes, starts downloading now. */
       const next = floor < LAST_FLOOR ? floorTrack(floor + 1) : null;
       if (next && next !== track) preloadMusic(next);
       return;
     }
+    /* During a boss's card his track is unpacked, ready for his entrance. */
+    if (stage === "bossCard" && bossCard?.mood === "dread" && isBossFloor(floor) && floorTrack(floor)) prepareMusic(floorTrack(floor));
     stopMusic(1.5);
     const mood = stage === "omen" || stage === "cursed" ? "dread"
       : stage === "bossCard" ? bossCard?.mood ?? null
@@ -349,9 +358,9 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
       : null;
     setMusicMood(mood);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, bossCard, floor]);
+  }, [stage, bossCard, floor, bossIn]);
   /* Leaving the run stops whatever was playing. */
-  useEffect(() => () => { setMusicMood(null); stopMusic(1); }, []);
+  useEffect(() => () => { setMusicMood(null); stopMusic(1); duckMusic(false); }, []);
 
   /* Arriving in a new world: its short film (EntryFilm, film3d/worldFilms.js)
      plays while the world's scenery builds behind it, then the world's
@@ -386,10 +395,12 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
     pausedWasRunning.current = timerRef.current.running;
     pauseTimer();
     runRef.current.pauses = (runRef.current.pauses ?? 0) + 1;
+    duckMusic(true);
     setMenuOpen(true);
   };
   const closePause = () => {
     pausedRef.current = false;
+    duckMusic(false);
     setMenuOpen(false);
     if (pausedWasRunning.current) resumeTimer();
     pausedWasRunning.current = false;
@@ -496,6 +507,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
 
   const beginFloor = (f, eff) => {
     setFloor(f);
+    setBossIn(false);
     /* Where this floor started, for the per-floor tuning numbers. */
     runRef.current.floorStart = { at: Date.now(), wrong: runRef.current.wrong, rushes: runRef.current.rushes, health: healthRef.current };
     /* Reaching a new world unlocks starting there. */
@@ -595,6 +607,11 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
       busyRef.current = true;
       setBusy(true);
       binRef.current.setBoss(2);
+      setBossIn(true);
+      /* His entrance lands with a hit, on the music's first beat. */
+      playSound("punchHeavy", { volume: 0.9 });
+      playSound("rumble", { volume: 0.7, rate: 0.8 });
+      buzz(80);
       sceneRef.current?.setMarks({});
       const [eye, look] = binRef.current.bossView ?? [[0, 2.8, 9.2], [0, 2.2, -5]];
       sceneRef.current?.moveCamera(new THREE.Vector3(...eye), new THREE.Vector3(...look), 0.6);
@@ -701,6 +718,8 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
     if (bossOn(floor)) {
       const fell = runIdRef.current;
       say(`${worldOf(floor).boss} is beaten`, "good");
+      /* His music stops on the blow that beats him; the fanfare comes with the card. */
+      stopMusic(0.6);
       sceneRef.current?.moveCamera(new THREE.Vector3(0, 2.8, 9.2), new THREE.Vector3(0, 2.0, -5), 0.6);
       await bossOn(floor).melt();
       if (fell !== runIdRef.current) return;
