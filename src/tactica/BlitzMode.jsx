@@ -5,7 +5,7 @@ import { loadSetting, saveSetting } from "../utils/storage";
 import { PUZZLES } from "../utils/puzzles";
 import { judgePuzzleMove } from "../utils/puzzleSession";
 import { TacticaScene, SET_BOARD } from "./scene";
-import { dressTrashBin } from "./sets/trashBin";
+import { dressSpaceRush } from "./sets/spaceRush";
 import { BrassButton, useLostRebuild, useBackLayer, CogButton, CogIcon, SettingsOverlay } from "./ui";
 import { play as playSound, playMusic, stopMusic, preloadMusic } from "./sound";
 import { track } from "../utils/track";
@@ -142,7 +142,7 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
   /* The first puzzles start loading as soon as the mode opens. */
   useEffect(() => { warmPool(START_RATING); }, []);
 
-  /* The scene, in the bin, seen whole. */
+  /* The scene: the board floating in space, Zlegend2700 watching (sets/spaceRush.js), seen whole. */
   /* If the phone drops the 3D, rebuild on a fresh canvas (useLostRebuild). */
   const { epoch, onLost } = useLostRebuild(sceneRef);
   useEffect(() => {
@@ -150,7 +150,7 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
       onLost,
       flipped: false,
       colors: {
-        light: SET_BOARD.light, dark: SET_BOARD.dark, background: sweetheart ? "#FFF2F6" : "#060507",
+        light: SET_BOARD.light, dark: SET_BOARD.dark, background: "#0E0620",
         highlight: "#3EE7F5", target: "#F5D93E", attack: "#F05348", select: "#3EE7F5",
       },
       onTap: (sq) => tapRef.current(sq),
@@ -160,13 +160,13 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
     });
     sceneRef.current = scene;
     applyStory(scene);
-    const bin = dressTrashBin(scene);
-    scene.everyFrame.push((dt) => bin.update(dt));
+    const space = dressSpaceRush(scene);
+    scene.everyFrame.push((dt) => space.update(dt));
     /* A rebuild mid-run puts the puzzle back as it was. */
     if (epoch > 0 && puzzle) { scene.setFlipped(puzzle.fen.split(" ")[1] === "b"); scene.setPieces(piecesNow()); }
     else scene.setPieces([]);
     scene.showBoard();
-    return () => { scene.dispose(); sceneRef.current = null; };
+    return () => { space.dispose(); scene.dispose(); sceneRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sweetheart, epoch]);
 
