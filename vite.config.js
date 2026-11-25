@@ -77,6 +77,19 @@ export default defineConfig({
             },
           },
           {
+            /* Chess Tactica's art (skies, textures, 3D models, music,
+               sounds): about 125 files a world, which otherwise get checked
+               with the server one by one on every visit before a scene
+               shows. Shown from the cache, refreshed behind, so a changed
+               file appears on the visit after. */
+            urlPattern: ({ url, sameOrigin }) => sameOrigin && /^\/tactica\/(env|models|music|sfx)\//.test(url.pathname),
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'tactica-art',
+              expiration: { maxEntries: 400, maxAgeSeconds: 60 * 60 * 24 * 60 },
+            },
+          },
+          {
             /* Maia's ~11MB model: same deal as Stockfish, so it isn't
                re-checked against the server on every visit. */
             urlPattern: /\/maia3\/.*\.onnx$/,

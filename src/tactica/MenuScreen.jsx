@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
+import { artSettled } from "./sets/art";
 import { BOND_KINDS, KIND_NAMES, LOOKS, MAX_LEVEL, loadBonds, levelsOf, progress } from "./bonds";
 import { Medal, useLostRebuild } from "./ui";
 import { playMusic, stopMusic, soundOn, setSoundOn, onSoundChange, soundLevel, setSoundLevel, canVibrate, vibrateOn, setVibrateOn, buzz, play } from "./sound";
@@ -70,7 +71,15 @@ export default function MenuScreen({ onPick, onExit, onOpening, blitzBest, sweet
   useEffect(() => onSoundChange(setSound), []);
   /* The front screen's theme: "The Old Tower Inn" by RandomMind (CC0,
      public/tactica/music/menu.mp3), looping. Never during play. */
-  useEffect(() => { playMusic("menu", { loop: true, volume: 0.4, fade: 1.5 }); return () => stopMusic(1); }, []);
+  useEffect(() => {
+    /* The track is 2.5 MB: it waits for the scene's art (skies, textures)
+       so it doesn't slow the first picture on a phone's connection. Once
+       downloaded it's kept, so coming back to the menu starts it at once. */
+    let live = true;
+    /* A tick first, so the scene (built by a later effect) has asked for its art. */
+    new Promise((r) => setTimeout(r, 0)).then(() => artSettled(4000)).then(() => { if (live) playMusic("menu", { loop: true, volume: 0.4, fade: 1.5 }); });
+    return () => { live = false; stopMusic(1); };
+  }, []);
 
   /* If the phone drops the 3D, rebuild on a fresh canvas (useLostRebuild). */
   const sceneRef = useRef(null);
