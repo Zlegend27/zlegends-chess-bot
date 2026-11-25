@@ -6,7 +6,7 @@ import { PUZZLES } from "../utils/puzzles";
 import { judgePuzzleMove } from "../utils/puzzleSession";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
-import { BrassButton, useLostRebuild, useBackLayer } from "./ui";
+import { BrassButton, useLostRebuild, useBackLayer, CogButton, CogIcon, SettingsOverlay } from "./ui";
 import { play as playSound, playMusic, stopMusic, preloadMusic } from "./sound";
 import { track } from "../utils/track";
 import { submitRushScore, TACTICA_RUSH_SECONDS } from "../utils/leaderboard";
@@ -93,6 +93,7 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
   const nextPickRef = useRef(null);
 
   const [phase, setPhase] = useState("ready"); // ready | playing | done
+  const [settingsOpen, setSettingsOpen] = useState(false);
   /* During a rush, Back (a stray edge swipe) does nothing rather than end
      it; End run is on screen. Before and after, Back leaves. */
   useBackLayer(phase === "playing", () => {});
@@ -372,7 +373,7 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
   const toMove = side === 1 ? "White" : "Black";
   return (
     <div className="relative mx-auto w-full max-w-[480px] overflow-hidden" style={{ height: "calc(100dvh - var(--headerH))" }}>
-      <canvas key={epoch} ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
+      <canvas key={"canvas" + epoch} ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
 
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-black/75 to-transparent p-3 pb-10">
         <div>
@@ -390,15 +391,18 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
       </div>
 
       {flash && (
-        <p key={flash.id} role="status" className={"tacticaNote fades tc-note pointer-events-none absolute top-28 left-1/2 m-0 -translate-x-1/2 rounded-lg px-4 py-1.5 text-sm whitespace-nowrap " + (flash.kind === "good" ? "tc-good" : "tc-bad")}>{flash.text}</p>
+        <p key={"flash" + flash.id} role="status" className={"tacticaNote fades tc-note pointer-events-none absolute top-28 left-1/2 m-0 -translate-x-1/2 rounded-lg px-4 py-1.5 text-sm whitespace-nowrap " + (flash.kind === "good" ? "tc-good" : "tc-bad")}>{flash.text}</p>
       )}
 
       {phase === "playing" && (
         <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/75 to-transparent px-4 pt-10 pb-[calc(0.9rem+env(safe-area-inset-bottom))]">
-          <span className="text-sm text-[var(--tc-cream-dim)]">{selected == null ? "Tap a piece, then a glowing square" : "Tap a glowing square to play it"}</span>
+          <CogButton onClick={() => setSettingsOpen(true)} />
+          <span className="flex-1 text-sm text-[var(--tc-cream-dim)]">{selected == null ? "Tap a piece, then a glowing square" : "Tap a glowing square to play it"}</span>
           <button type="button" className="tc-link" onClick={() => { gameIdRef.current++; busyRef.current = false; holdRef.current = null; pendingRef.current = null; setPhase("done"); }}>End run</button>
         </div>
       )}
+
+      {settingsOpen && <SettingsOverlay onClose={() => setSettingsOpen(false)} note={phase === "playing" ? "The clock keeps running." : null} />}
 
       {phase !== "playing" && (
         <div className="tc-scrim absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
@@ -416,6 +420,7 @@ export default function BlitzMode({ sweetheart, best, onBest, displayName, onExi
             </>
           )}
           <BrassButton onClick={start}>{phase === "ready" ? "Start" : "Play again"}</BrassButton>
+          <button type="button" className="tc-link gap-1.5" onClick={() => setSettingsOpen(true)}><CogIcon size={15} />Settings</button>
           <button type="button" className="tc-link" onClick={onExit}>{exitLabel}</button>
         </div>
       )}

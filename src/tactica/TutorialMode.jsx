@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createEngine, mFrom, mPromo, mTo, M120TO64, EMPTY } from "../engine/chessEngine";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
-import { BrassButton, MapButton, MenuButton, useViewSource, useBackLayer } from "./ui";
+import { BrassButton, MapButton, MenuButton, useViewSource, useBackLayer, SettingsPlank, InGameSettings } from "./ui";
 import { play as playSound, playMusic, stopMusic } from "./sound";
 import { applyStory } from "./bonds";
 
@@ -62,6 +62,9 @@ export default function TutorialMode({ pieceImgSrc, sweetheart, onExit }) {
   /* After the last step: free play on the same board. */
   const [practising, setPractising] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  /* The game menu's own Settings view (sound, volume, music, vibration). */
+  const [menuSettings, setMenuSettings] = useState(false);
+  useEffect(() => { if (!menuOpen) setMenuSettings(false); }, [menuOpen]);
   /* What the camera sees, for the map's view cone. */
   const viewSource = useViewSource();
   /* The tutorial plays the full attacks. */
@@ -256,7 +259,7 @@ export default function TutorialMode({ pieceImgSrc, sweetheart, onExit }) {
 
   return (
     <div className="relative mx-auto w-full max-w-[480px] overflow-hidden" style={{ height: "calc(100dvh - var(--headerH))" }}>
-      <canvas key={sceneKey} ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
+      <canvas key={"canvas" + sceneKey} ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
 
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3">
         <MenuButton open={menuOpen} onClick={() => setMenuOpen((o) => !o)} />
@@ -288,9 +291,12 @@ export default function TutorialMode({ pieceImgSrc, sweetheart, onExit }) {
         <>
           <button type="button" aria-label="Close the menu" className="absolute inset-0 cursor-default border-0 bg-transparent" onClick={() => setMenuOpen(false)} />
           <div className="tc-panel absolute top-16 left-3 flex w-60 flex-col gap-3 p-3">
+            {menuSettings ? <InGameSettings compact onBack={() => setMenuSettings(false)} /> : <>
             <button type="button" className="tc-plank tc-center tc-small" onClick={restart} disabled={busy}>Reset the board</button>
             <button type="button" className="tc-plank tc-center tc-small" onClick={startOver} disabled={busy}>Start the tutorial over</button>
+            <SettingsPlank onClick={() => setMenuSettings(true)} />
             <button type="button" className="tc-plank tc-center tc-small" onClick={onExit}>Back to the menu</button>
+          </>}
           </div>
         </>
       )}

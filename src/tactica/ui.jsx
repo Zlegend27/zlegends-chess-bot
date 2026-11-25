@@ -3,6 +3,7 @@ import { loadSetting, saveSetting } from "../utils/storage";
 import MiniBoard from "../components/MiniBoard";
 import { cburnettPieceSvgUrl } from "../utils/cburnettPieceSvg";
 import { SET_BOARD } from "./scene";
+import { soundOn, setSoundOn, onSoundChange, soundLevel, setSoundLevel, musicVolume, setMusicVolume, canVibrate, vibrateOn, setVibrateOn, buzz, play } from "./sound";
 
 /* Tactica's shared controls, in the carved wood and brass look of
    tactica.css. Every screen uses these, so they stay the same everywhere. */
@@ -279,4 +280,96 @@ export function useLostRebuild(sceneRef) {
     setTimeout(() => setEpoch((n) => n + 1), 600);
   };
   return { epoch, onLost };
+}
+
+/** The settings cog (Tactica's menu, and every in-game menu). */
+export function CogIcon({ size = 20 }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7 7 0 0 0-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.48.48 0 0 0-.48.41l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.87a.48.48 0 0 0 .12.61l2.03 1.58c-.05.3-.07.63-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61zM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2z" /></svg>;
+}
+
+/** Sound, Volume, Music and Vibration: one panel for Tactica's menu and for
+ *  every in-game menu, so they can be changed mid-game without leaving. */
+export function SoundSettings() {
+  const [sound, setSound] = useState(soundOn);
+  const [volume, setVolume] = useState(() => Math.round(soundLevel() * 100));
+  const [musicVol, setMusicVol] = useState(() => Math.round(musicVolume() * 100));
+  const [vibes, setVibes] = useState(vibrateOn);
+  useEffect(() => onSoundChange(setSound), []);
+  return (
+    <>
+      <div className="flex items-center justify-between gap-3">
+        <span className="tc-display text-sm">Sound</span>
+        <button type="button" className="tc-plank tc-center tc-small" style={{ width: 96 }} aria-pressed={sound} onClick={() => setSoundOn(!sound)}>{sound ? "On" : "Off"}</button>
+      </div>
+      <label className="flex items-center justify-between gap-3">
+        <span className="tc-display text-sm">Volume</span>
+        <input
+          type="range" min="0" max="100" step="5" value={volume} disabled={!sound}
+          className="tc-range flex-1" aria-valuetext={`${volume}%`}
+          onChange={(e) => { const v = Number(e.target.value); setVolume(v); setSoundLevel(v / 100); }}
+          onPointerUp={() => play("tap", { volume: 0.8 })}
+        />
+        <span className="w-10 text-right text-xs tabular-nums text-[var(--tc-cream-dim)]">{volume}%</span>
+      </label>
+      {/* Music on its own (under the main volume): some players want the
+          hits and no music, or the other way round. */}
+      <label className="flex items-center justify-between gap-3">
+        <span className="tc-display text-sm">Music</span>
+        <input
+          type="range" min="0" max="100" step="5" value={musicVol} disabled={!sound}
+          className="tc-range flex-1" aria-valuetext={`${musicVol}%`}
+          onChange={(e) => { const v = Number(e.target.value); setMusicVol(v); setMusicVolume(v / 100); }}
+        />
+        <span className="w-10 text-right text-xs tabular-nums text-[var(--tc-cream-dim)]">{musicVol}%</span>
+      </label>
+      {canVibrate() && (
+        <div className="flex items-center justify-between gap-3">
+          <span className="tc-display text-sm">Vibration</span>
+          <button type="button" className="tc-plank tc-center tc-small" style={{ width: 96 }} aria-pressed={vibes}
+            onClick={() => { const on = !vibes; setVibes(on); setVibrateOn(on); if (on) buzz(60); }}>{vibes ? "On" : "Off"}</button>
+        </div>
+      )}
+    </>
+  );
+}
+
+/** The Settings button in an in-game menu: a plank with the cog. */
+export function SettingsPlank({ onClick }) {
+  return (
+    <button type="button" className="tc-plank tc-center tc-small gap-2" onClick={onClick}>
+      <CogIcon size={18} />Settings
+    </button>
+  );
+}
+
+/** An in-game menu's settings view: the sound panel and Back (also the
+ *  phone's Back and Escape) to the menu it came from. */
+export function InGameSettings({ onBack, compact = false }) {
+  useBackLayer(true, onBack);
+  return (
+    <div className="flex w-full max-w-xs flex-col gap-3 text-left">
+      <h2 className={"tc-title m-0 text-center " + (compact ? "text-lg" : "text-[26px]")}>Settings</h2>
+      <div className="tc-panel flex flex-col gap-4 p-4"><SoundSettings /></div>
+      <button type="button" className="tc-plank tc-center tc-small" onClick={onBack}>Back</button>
+    </div>
+  );
+}
+
+/** A round cog for screens without a game menu (Puzzle Rush, Memories). */
+export function CogButton({ onClick, className = "" }) {
+  return (
+    <button type="button" className={"tc-round shrink-0 " + className} onClick={onClick} aria-label="Settings" title="Settings">
+      <CogIcon size={18} />
+    </button>
+  );
+}
+
+/** Settings over the whole screen, for screens without a game menu. */
+export function SettingsOverlay({ onClose, note = null }) {
+  return (
+    <div className="tc-scrim absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 overflow-y-auto p-6" role="dialog" aria-label="Settings">
+      <InGameSettings onBack={onClose} />
+      {note && <p className="m-0 max-w-[30ch] text-center text-xs text-[var(--tc-cream-dim)]">{note}</p>}
+    </div>
+  );
 }

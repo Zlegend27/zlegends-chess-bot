@@ -4,7 +4,7 @@ import { createEngine, mFrom, mPromo, mTo, M120TO64, EMPTY } from "../engine/che
 import { judgePuzzleMove } from "../utils/puzzleSession";
 import { loadSetting } from "../utils/storage";
 import { TacticaScene, SET_BOARD } from "./scene";
-import { BrassButton, useLostRebuild } from "./ui";
+import { BrassButton, useLostRebuild, CogButton, SettingsOverlay } from "./ui";
 import { play as playSound, setScore } from "./sound";
 import { track } from "../utils/track";
 import { WORLDS } from "./worlds";
@@ -21,6 +21,7 @@ const QUEEN = 5, KNIGHT = 2;
 const REPLY_MS = 650;
 
 export default function MemoryMode({ start = null, onExit }) {
+  const [settingsOpen, setSettingsOpen] = useState(false);
   /* Memories are story moments, so they get a soft, distant mood. */
   useEffect(() => { setScore("ghost"); return () => setScore(null); }, []);
   const canvasRef = useRef(null);
@@ -214,8 +215,9 @@ export default function MemoryMode({ start = null, onExit }) {
   const doneMoves = Math.ceil(played.length / 2);
   return (
     <div className="relative mx-auto w-full max-w-[480px] overflow-hidden" style={{ height: "calc(100dvh - var(--headerH))" }}>
-      <canvas key={epoch} ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
+      <canvas key={"canvas" + epoch} ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
 
+      {settingsOpen && <SettingsOverlay onClose={() => setSettingsOpen(false)} />}
       {stage === "playing" && memory && (
         <>
           <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-center gap-0.5 bg-gradient-to-b from-black/80 to-transparent p-3 pb-10 text-center">
@@ -225,7 +227,8 @@ export default function MemoryMode({ start = null, onExit }) {
           </div>
           {note && <p role="status" className="tc-note pointer-events-none absolute top-28 left-1/2 m-0 -translate-x-1/2 rounded-lg px-4 py-1.5 text-center text-sm">{note}</p>}
           <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/80 to-transparent px-4 pt-10 pb-[calc(0.9rem+env(safe-area-inset-bottom))]">
-            <span className="text-sm text-[var(--tc-cream-dim)]">{hintSq != null ? "The glowing piece moves next" : selected == null ? memory.play : "Tap a glowing square to play it"}</span>
+            <CogButton onClick={() => setSettingsOpen(true)} />
+            <span className="flex-1 text-sm text-[var(--tc-cream-dim)]">{hintSq != null ? "The glowing piece moves next" : selected == null ? memory.play : "Tap a glowing square to play it"}</span>
             <button type="button" className="tc-link" onClick={() => { runRef.current++; busyRef.current = false; setStage("list"); sceneRef.current?.setPieces([]); }}>Leave</button>
           </div>
         </>

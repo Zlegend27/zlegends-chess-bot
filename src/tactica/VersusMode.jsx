@@ -8,7 +8,7 @@ import { useLobby, useLobbyMe } from "../pvp/useLobby";
 import { usePvpMatch } from "../pvp/usePvpMatch";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
-import { BrassButton, MapButton, MenuButton, PromotionPicker, useViewSource, LearnHints, useLostRebuild, useBackLayer } from "./ui";
+import { BrassButton, MapButton, MenuButton, PromotionPicker, useViewSource, LearnHints, useLostRebuild, useBackLayer, SettingsPlank, InGameSettings } from "./ui";
 import { track } from "../utils/track";
 import { play as playSound, sting } from "./sound";
 import { applyStory } from "./bonds";
@@ -201,6 +201,9 @@ function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, on
   const [chosen, setChosen] = useState(null);
   const [view, setView] = useState("board");
   const [menuOpen, setMenuOpen] = useState(false);
+  /* The game menu's own Settings view (sound, volume, music, vibration). */
+  const [menuSettings, setMenuSettings] = useState(false);
+  useEffect(() => { if (!menuOpen) setMenuSettings(false); }, [menuOpen]);
   const viewSource = useViewSource();
   /* Analyse the game, once it's over. */
   const [reviewing, setReviewing] = useState(false);
@@ -425,7 +428,7 @@ function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, on
 
   return (
     <div className="relative mx-auto w-full max-w-[480px] overflow-hidden" style={{ height: "calc(100dvh - var(--headerH))" }}>
-      <canvas key={epoch} ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
+      <canvas key={"canvas" + epoch} ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
       <LearnHints close={!over && myTurn && view === "close"} />
 
       {!reviewing && <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-black/80 to-transparent p-3 pb-10">
@@ -458,13 +461,16 @@ function VersusGame({ supabase, me, match, signedIn, sweetheart, pieceImgSrc, on
         <>
           <button type="button" aria-label="Close the menu" className="absolute inset-0 cursor-default border-0 bg-transparent" onClick={() => setMenuOpen(false)} />
           <div className="tc-panel absolute top-16 left-3 flex w-56 flex-col gap-3 p-3">
+            {menuSettings ? <InGameSettings compact onBack={() => setMenuSettings(false)} /> : <>
             <button type="button" className="tc-plank tc-center tc-small" onClick={() => setMenuOpen(false)}>Resume</button>
+                <SettingsPlank onClick={() => setMenuSettings(true)} />
             {!result && (canAbort
               ? <button type="button" className="tc-plank tc-center tc-small" onClick={() => { setMenuOpen(false); game.abort(); }}>Abort</button>
               : <button type="button" className="tc-plank tc-center tc-small" onClick={() => { setMenuOpen(false); game.resign(); }}>Resign</button>)}
             {!result && !canAbort && !drawOffer && (
               <button type="button" className="tc-plank tc-center tc-small" onClick={() => { setMenuOpen(false); game.offerDraw(); }}>Offer a draw</button>
             )}
+          </>}
           </div>
         </>
       )}

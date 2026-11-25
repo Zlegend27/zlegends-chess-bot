@@ -762,7 +762,7 @@ export function dressTrashBin(ts) {
     else if (o.isDirectionalLight) o.intensity *= 0.12;
   });
   ts.renderer.shadowMap.enabled = true;
-  ts.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  ts.renderer.shadowMap.type = THREE.PCFShadowMap;
   ts.renderer.toneMappingExposure = 1.0;
   for (const t of ts.tiles) t.receiveShadow = true;
   scene.traverse((o) => { if (o.isMesh && o.geometry?.type === "BoxGeometry" && o.position.y < -0.1) o.receiveShadow = true; });

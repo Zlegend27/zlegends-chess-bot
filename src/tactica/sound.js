@@ -39,7 +39,30 @@ let enabled = loadSetting(KEY, true) !== false;
 let level = Math.min(1, Math.max(0, Number(loadSetting("tacticaVolume", 1)) || 0));
 let vibrate = loadSetting("tacticaVibrate", true) !== false;
 let musicLevel = Math.min(1, Math.max(0, Number(loadSetting("tacticaMusicVolume", 1)) || 0));
-const gainNow = () => (enabled ? MASTER * level : 0);
+let ducked = false;
+/* The sliders follow how loudness is heard: the gain is the slider's level
+   squared, so half way sounds about half as loud. (Straight-line sliders put
+   almost all the change in the bottom fifth and felt jumpy.) */
+const heard = (v) => v * v;
+const gainNow = () => (enabled ? MASTER * heard(level) : 0);
+const musicGainNow = () => heard(musicLevel) * (ducked ? 0.35 : 1);
+
+/* Every track is played at the same loudness: its measured integrated
+   loudness (LUFS, ffmpeg's ebur128 filter, 2026-11-25) against the bin's,
+   which the volumes in the game were tuned on. Re-measure when a file in
+   public/tactica/music changes; a track not listed plays as it is. */
+const TRACK_LUFS = {
+  "bin": -11.3, "bin-intense": -11.3, "boss-bin": -9.8, "ice": -15.1, "boss-ice": -11.6,
+  "volcano": -12.2, "volcano-intense": -12.2, "boss-volcano": -11.8, "demon": -12.0,
+  "demon-intense": -11.8, "boss-demon": -12.5, "menu": -15.5,
+  "rush-1": -13.9, "rush-2": -11.2, "rush-3": -9.1, "rush-4": -17.3,
+};
+const REFERENCE_LUFS = -11.3;
+const trackLevel = (name) => (TRACK_LUFS[name] == null ? 1 : Math.pow(10, (REFERENCE_LUFS - TRACK_LUFS[name]) / 20));
+/* The few effects recorded much quieter than the rest (measured the same
+   way), brought up so they can be heard: the sword draw, the crack of a
+   boss's last blow, cloth, the ghost. */
+const SFX_LIFT = { draw: 3.5, crack: 1.8, ghost: 1.5, cloth1: 1.4, cloth2: 1.6, cloth3: 1.8, tick: 1.6, brass: 1.5 };
 let flyTimer = null, fliesWanted = false;
 const listeners = new Set();
 
@@ -67,7 +90,7 @@ export const musicVolume = () => musicLevel;
 export function setMusicVolume(v) {
   musicLevel = Math.min(1, Math.max(0, Number(v) || 0));
   saveSetting("tacticaMusicVolume", musicLevel);
-  if (musicBus) musicBus.gain.value = musicLevel * (ducked ? 0.35 : 1);
+  if (musicBus) musicBus.gain.value = musicGainNow();
 }
 
 /* Vibration. Android has the real thing (navigator.vibrate). iPhones don't,
@@ -117,7 +140,7 @@ export function unlock() {
       master.gain.value = gainNow();
       master.connect(ctx.destination);
       musicBus = ctx.createGain();
-      musicBus.gain.value = musicLevel;
+      musicBus.gain.value = musicGainNow();
       /* Through a low-pass and a level of their own, so the music can be
          muffled and dropped (muffleMusic) as a boss is about to appear. */
       muffler = ctx.createBiquadFilter();
@@ -158,7 +181,7 @@ export function play(name, { volume = 1, rate = 1, delay = 0, pan = 0, ...rest }
     src.playbackRate.value = rate * (0.96 + Math.random() * 0.08);
     const gain = ctx.createGain();
     /* A touch of variety, so a sound heard often never repeats exactly. */
-    gain.gain.value = volume * (0.92 + Math.random() * 0.08);
+    gain.gain.value = volume * (SFX_LIFT[name] ?? 1) * (0.92 + Math.random() * 0.08);
     let node = src.connect(gain);
     if (pan && ctx.createStereoPanner) {
       const p = ctx.createStereoPanner();
@@ -267,13 +290,12 @@ export function prepareMusic(name) {
   else trackFile(name).catch(() => {});
 }
 /* Music quieter while the game is paused (the pause menu), back after. */
-let ducked = false;
 export function duckMusic(on) {
   ducked = !!on;
   if (!musicBus || !ctx) return;
   musicBus.gain.cancelScheduledValues(ctx.currentTime);
   musicBus.gain.setValueAtTime(musicBus.gain.value, ctx.currentTime);
-  musicBus.gain.linearRampToValueAtTime(musicLevel * (ducked ? 0.35 : 1), ctx.currentTime + 0.25);
+  musicBus.gain.linearRampToValueAtTime(musicGainNow(), ctx.currentTime + 0.25);
 }
 /** Starts downloading a track now (say, the next world's) so it can start
  *  at once later. Nothing plays. */
@@ -325,10 +347,12 @@ export function playMusic(name, { volume = 0.55, loop = false, fade = 1.2, start
       mine.src.loop = loop;
       if (loop) { const [a, b] = loopPoints(buf); mine.src.loopStart = a; mine.src.loopEnd = b; }
       mine.gain = ctx.createGain();
-      if (fade < 0.1) mine.gain.gain.setValueAtTime(volume, ctx.currentTime);
+      /* The asked-for level, at the same loudness as every other track. */
+      const level = volume * trackLevel(name);
+      if (fade < 0.1) mine.gain.gain.setValueAtTime(level, ctx.currentTime);
       else {
         mine.gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-        mine.gain.gain.exponentialRampToValueAtTime(volume, ctx.currentTime + fade);
+        mine.gain.gain.exponentialRampToValueAtTime(level, ctx.currentTime + fade);
       }
       mine.src.connect(mine.gain).connect(musicBus);
       mine.src.start(ctx.currentTime, Math.min(buf.duration - 0.05, (loop ? mine.src.loopStart : 0) + startAt));

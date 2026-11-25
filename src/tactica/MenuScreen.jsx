@@ -4,8 +4,8 @@ import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
 import { artSettled } from "./sets/art";
 import { BOND_KINDS, KIND_NAMES, LOOKS, MAX_LEVEL, loadBonds, levelsOf, progress } from "./bonds";
-import { Medal, useLostRebuild, useBackLayer } from "./ui";
-import { playMusic, stopMusic, soundOn, setSoundOn, onSoundChange, soundLevel, setSoundLevel, musicVolume, setMusicVolume, canVibrate, vibrateOn, setVibrateOn, buzz, play } from "./sound";
+import { Medal, useLostRebuild, useBackLayer, SoundSettings, CogIcon } from "./ui";
+import { playMusic, stopMusic } from "./sound";
 import { loadSetting } from "../utils/storage";
 import { loadStory, saveStory, bondsOpen, redEyes, isHard, hardLocked, canSwitchHard, setHardSwitch, resetBond } from "./story";
 
@@ -70,11 +70,6 @@ export default function MenuScreen({ onPick, onExit, onOpening, blitzBest, sweet
   const closePage = () => { setConfirmReset(false); setCreditsOpen(false); setPage("modes"); };
   useBackLayer(page !== "modes", closePage);
   const [bonds] = useState(loadBonds);
-  const [sound, setSound] = useState(soundOn);
-  const [volume, setVolume] = useState(() => Math.round(soundLevel() * 100));
-  const [musicVol, setMusicVol] = useState(() => Math.round(musicVolume() * 100));
-  const [vibes, setVibes] = useState(vibrateOn);
-  useEffect(() => onSoundChange(setSound), []);
   /* The front screen's theme: "Woodland Fantasy" by Matthew Pablo (CC BY
      3.0, public/tactica/music/menu.mp3), looping. */
   useEffect(() => {
@@ -127,7 +122,7 @@ export default function MenuScreen({ onPick, onExit, onOpening, blitzBest, sweet
 
   return (
     <div className="relative mx-auto w-full max-w-[480px] overflow-hidden" style={{ height: "calc(100dvh - var(--headerH))" }}>
-      <canvas key={epoch} ref={canvasRef} className="pointer-events-none absolute inset-0 block size-full" aria-hidden="true" />
+      <canvas key={"canvas" + epoch} ref={canvasRef} className="pointer-events-none absolute inset-0 block size-full" aria-hidden="true" />
       {/* The title keeps clear of the Bonds button in the corner, shrinking a little on narrow phones. */}
       <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/70 to-transparent px-16 pt-7 pb-14 text-center">
         <h1 className="tc-title m-0 leading-tight whitespace-nowrap" style={{ fontSize: "clamp(22px, calc((100vw - 136px) / 10), 32px)" }}>Chess Tactica</h1>
@@ -141,7 +136,7 @@ export default function MenuScreen({ onPick, onExit, onOpening, blitzBest, sweet
         aria-pressed={page === "settings"}
         title="Settings"
       >
-        <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7 7 0 0 0-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.48.48 0 0 0-.48.41l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.87a.48.48 0 0 0 .12.61l2.03 1.58c-.05.3-.07.63-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61zM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2z" /></svg>
+        <CogIcon size={22} />
       </button>
       {/* Bonds: a round wood and brass button in the top corner. */}
       <button
@@ -201,38 +196,7 @@ export default function MenuScreen({ onPick, onExit, onOpening, blitzBest, sweet
         <section aria-labelledby="tacticaSettingsTitle" className="absolute inset-x-0 bottom-0 z-[2] pointer-events-none [&>*]:pointer-events-auto flex max-h-[82%] flex-col gap-3 overflow-y-auto bg-gradient-to-t from-black/95 via-black/80 to-transparent px-4 pt-16 pb-[calc(1rem+env(safe-area-inset-bottom))]">
           <h2 id="tacticaSettingsTitle" className="tc-title m-0 text-2xl">Settings</h2>
           <div className="tc-panel flex flex-col gap-4 p-4">
-            <div className="flex items-center justify-between gap-3">
-              <span className="tc-display text-sm">Sound</span>
-              <button type="button" className="tc-plank tc-center tc-small" style={{ width: 96 }} aria-pressed={sound} onClick={() => setSoundOn(!sound)}>{sound ? "On" : "Off"}</button>
-            </div>
-            <label className="flex items-center justify-between gap-3">
-              <span className="tc-display text-sm">Volume</span>
-              <input
-                type="range" min="0" max="100" step="5" value={volume} disabled={!sound}
-                className="tc-range flex-1" aria-valuetext={`${volume}%`}
-                onChange={(e) => { const v = Number(e.target.value); setVolume(v); setSoundLevel(v / 100); }}
-                onPointerUp={() => play("tap", { volume: 0.8 })}
-              />
-              <span className="w-10 text-right text-xs tabular-nums text-[var(--tc-cream-dim)]">{volume}%</span>
-            </label>
-            {/* Music on its own (under the main volume): some players want the
-                hits and no music, or the other way round. */}
-            <label className="flex items-center justify-between gap-3">
-              <span className="tc-display text-sm">Music</span>
-              <input
-                type="range" min="0" max="100" step="5" value={musicVol} disabled={!sound}
-                className="tc-range flex-1" aria-valuetext={`${musicVol}%`}
-                onChange={(e) => { const v = Number(e.target.value); setMusicVol(v); setMusicVolume(v / 100); }}
-              />
-              <span className="w-10 text-right text-xs tabular-nums text-[var(--tc-cream-dim)]">{musicVol}%</span>
-            </label>
-            {canVibrate() && (
-              <div className="flex items-center justify-between gap-3">
-                <span className="tc-display text-sm">Vibration</span>
-                <button type="button" className="tc-plank tc-center tc-small" style={{ width: 96 }} aria-pressed={vibes}
-                  onClick={() => { const on = !vibes; setVibes(on); setVibrateOn(on); if (on) buzz(60); }}>{vibes ? "On" : "Off"}</button>
-              </div>
-            )}
+            <SoundSettings />
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between gap-3">
                 <span className="tc-display text-sm">Hard mode</span>

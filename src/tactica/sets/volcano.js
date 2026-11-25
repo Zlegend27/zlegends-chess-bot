@@ -107,7 +107,7 @@ export function dressVolcano(ts) {
     else if (o.isDirectionalLight) { o.intensity *= 0.3; o.color.set("#ffb58a"); }
   });
   ts.renderer.shadowMap.enabled = true;
-  ts.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  ts.renderer.shadowMap.type = THREE.PCFShadowMap;
   ts.renderer.toneMappingExposure = 0.85;
   for (const tile of ts.tiles) tile.receiveShadow = true;
   /* The lava lights everything from below and the sides. */

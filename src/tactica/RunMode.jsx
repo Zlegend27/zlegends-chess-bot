@@ -7,7 +7,7 @@ import { judgePuzzleMove } from "../utils/puzzleSession";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin, placeEscapeProps } from "./sets/trashBin";
 import { artSettled } from "./sets/art";
-import { BrassButton, MapButton, MenuButton, useViewSource, LearnHints, useLostRebuild, useBackLayer } from "./ui";
+import { BrassButton, MapButton, MenuButton, useViewSource, LearnHints, useLostRebuild, useBackLayer, SettingsPlank, InGameSettings } from "./ui";
 import { play as playSound, buzz, setScore as setMusicMood, playMusic, stopMusic, preloadMusic, prepareMusic, duckMusic, muffleMusic, musicNow } from "./sound";
 import { track } from "../utils/track";
 import { makeEscape, movesOf, apply, escaped, strikerOf, piecesOf, fenOf, escapeClock, closeRing, outerRing, ringSquares, allStuck } from "./escape";
@@ -211,6 +211,8 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
   /* The run always plays the full attacks. */
   const pace = "full";
   const [menuOpen, setMenuOpen] = useState(false);
+  /* The pause menu's own Settings view (sound, volume, music, vibration). */
+  const [menuSettings, setMenuSettings] = useState(false);
   /* What the camera sees, for the map's view cone. */
   const viewSource = useViewSource();
   /* An Escape floor in progress: { start, state, used } (moves used), or null
@@ -424,6 +426,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
     setMenuOpen(true);
   };
   const closePause = () => {
+    setMenuSettings(false);
     pausedRef.current = false;
     duckMusic(false);
     setMenuOpen(false);
@@ -1224,9 +1227,13 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
 
   return (
     <div className="relative mx-auto w-full max-w-[480px] overflow-hidden" style={{ height: "calc(100dvh - var(--headerH))" }}>
-      <canvas key={epoch} ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
+      {/* Keys here are named ("canvas1", "hurt1", "burst1"): plain counters
+          matched each other ("1" twice after a wrong move and a cleared floor),
+          and with a duplicate key Preact can swap or drop the wrong element,
+          up to the 3D canvas itself. */}
+      <canvas key={"canvas" + epoch} ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
       <LearnHints close={stage === "playing" && view === "close" && !busy} />
-      {hurt > 0 && <div key={hurt} className="tacticaNote fades pointer-events-none absolute inset-0 bg-[#b8322a]/30" />}
+      {hurt > 0 && <div key={"hurt" + hurt} className="tacticaNote fades pointer-events-none absolute inset-0 bg-[#b8322a]/30" />}
 
       {stage === "playing" && (
         <>
@@ -1270,11 +1277,13 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
           </div>
 
           {menuOpen && (
-            <div className="tc-scrim absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 p-6 text-center" style={{ background: "radial-gradient(circle at 50% 40%, #2a1a10, #0c0806)" }} role="dialog" aria-label="Paused">
+            <div className="tc-scrim absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 overflow-y-auto p-6 text-center" style={{ background: "radial-gradient(circle at 50% 40%, #2a1a10, #0c0806)" }} role="dialog" aria-label="Paused">
+              {menuSettings ? <InGameSettings onBack={() => setMenuSettings(false)} /> : <>
               <h2 className="tc-title m-0 text-[30px]">Paused</h2>
               <p className="m-0 text-sm text-[var(--tc-cream-dim)]">The clock is stopped. Floor {floor}, {worldOf(floor).name}.</p>
               <div className="flex w-56 flex-col gap-3">
                 <button type="button" className="tc-plank tc-center tc-small" onClick={closePause}>Resume</button>
+                <SettingsPlank onClick={() => setMenuSettings(true)} />
                 <button type="button" className="tc-plank tc-center tc-small" onClick={() => { pausedRef.current = false; setMenuOpen(false); endRun("quit"); }}>Quit run</button>
               </div>
               {fullRun && (
@@ -1282,11 +1291,12 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
                   {(runRef.current.pauses ?? 0) > 1 ? "This run has been paused more than once, so it won't go on the leaderboard." : "One pause per run is free. Pause again and this run won't go on the leaderboard."}
                 </p>
               )}
+              </>}
             </div>
           )}
 
           {banner && (
-            <p key={banner.id} role="status" className={"tacticaNote fades tc-note pointer-events-none absolute top-48 left-1/2 m-0 -translate-x-1/2 rounded-lg px-4 py-1.5 text-center text-sm whitespace-nowrap " + (banner.kind === "bad" ? "tc-bad" : banner.kind === "good" ? "tc-good" : "tc-info")}>{banner.text}</p>
+            <p key={"banner" + banner.id} role="status" className={"tacticaNote fades tc-note pointer-events-none absolute top-48 left-1/2 m-0 -translate-x-1/2 rounded-lg px-4 py-1.5 text-center text-sm whitespace-nowrap " + (banner.kind === "bad" ? "tc-bad" : banner.kind === "good" ? "tc-good" : "tc-info")}>{banner.text}</p>
           )}
 
           <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/80 to-transparent px-3 pt-10 pb-[calc(0.9rem+env(safe-area-inset-bottom))]">
@@ -1405,7 +1415,7 @@ export default function RunMode({ pieceImgSrc, sweetheart, best, onBest, display
         </div>
       )}
 
-      {burst > 0 && <SparkBurst key={burst} />}
+      {burst > 0 && <SparkBurst key={"burst" + burst} />}
       {builtKind !== setKind && (
         <div className="tc-scrim pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 text-center" role="status">
           <p className="tc-label m-0">Floor {floor}</p>

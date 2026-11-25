@@ -110,7 +110,7 @@ export function dressIcyLake(ts) {
     else if (o.isDirectionalLight) { o.intensity *= 0.35; o.color.set("#e9f1ff"); }
   });
   ts.renderer.shadowMap.enabled = true;
-  ts.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  ts.renderer.shadowMap.type = THREE.PCFShadowMap;
   ts.renderer.toneMappingExposure = 0.82;
   for (const tile of ts.tiles) tile.receiveShadow = true;
   const sun = new THREE.DirectionalLight("#f2f6ff", 1.05);

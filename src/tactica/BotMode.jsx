@@ -6,7 +6,7 @@ import { gameResult, resultSentence } from "../utils/gameResult";
 import { loadSetting, saveSetting } from "../utils/storage";
 import { TacticaScene, SET_BOARD } from "./scene";
 import { dressTrashBin } from "./sets/trashBin";
-import { BrassButton, MapButton, MenuButton, PromotionPicker, useViewSource, LearnHints, useLostRebuild, useBackLayer } from "./ui";
+import { BrassButton, MapButton, MenuButton, PromotionPicker, useViewSource, LearnHints, useLostRebuild, useBackLayer, SettingsPlank, InGameSettings } from "./ui";
 import { play as playSound, sting } from "./sound";
 import { applyStory } from "./bonds";
 import { useBestMove, scoreLabel } from "../utils/useBestMove";
@@ -122,6 +122,9 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit, self = false 
   const [thinking, setThinking] = useState(false);
   const [result, setResult] = useState(null); // { text, reason, winner?, resigned? }
   const [menuOpen, setMenuOpen] = useState(false);
+  /* The game menu's own Settings view (sound, volume, music, vibration). */
+  const [menuSettings, setMenuSettings] = useState(false);
+  useEffect(() => { if (!menuOpen) setMenuSettings(false); }, [menuOpen]);
   /* The square a pawn is promoting on, while the player picks the piece. */
   const [promoting, setPromoting] = useState(null);
   /* A game left unfinished, offered on the setup screen. */
@@ -530,7 +533,7 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit, self = false 
 
   return (
     <div className="relative mx-auto w-full max-w-[480px] overflow-hidden" style={{ height: "calc(100dvh - var(--headerH))" }}>
-      <canvas key={epoch} ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
+      <canvas key={"canvas" + epoch} ref={canvasRef} className="absolute inset-0 block size-full touch-none" />
       <LearnHints close={stage === "playing" && view === "close" && !busy && !thinking} />
 
       {stage === "playing" && (
@@ -569,7 +572,9 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit, self = false 
             <>
               <button type="button" aria-label="Close the menu" className="absolute inset-0 cursor-default border-0 bg-transparent" onClick={() => setMenuOpen(false)} />
               <div className="tc-panel absolute top-16 left-3 flex w-56 flex-col gap-3 p-3">
+            {menuSettings ? <InGameSettings compact onBack={() => setMenuSettings(false)} /> : <>
                 <button type="button" className="tc-plank tc-center tc-small" onClick={() => setMenuOpen(false)}>Resume</button>
+                <SettingsPlank onClick={() => setMenuSettings(true)} />
                 <button type="button" className="tc-plank tc-center tc-small" onClick={takeBack} disabled={!canTakeBack}>{self ? "Take back a move" : "Take back my move"}</button>
                 {self ? (
                   <>
@@ -601,7 +606,8 @@ export default function BotMode({ pieceImgSrc, sweetheart, onExit, self = false 
                   </div>
                 )}
                 <button type="button" className="tc-plank tc-center tc-small" onClick={() => { gameIdRef.current++; onExit(); }}>Back to the menu</button>
-              </div>
+              </>}
+          </div>
             </>
           )}
 
