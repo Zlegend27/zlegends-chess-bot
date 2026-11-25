@@ -336,9 +336,10 @@ self-promotion.
 
 ### 4.4 Posts to have ready
 
-- [Claude] I'll draft: the Discord announcement, the YouTube description,
-  a Reddit post, and a Show HN post with its first comment, when you're
-  ready.
+- [x] [Claude] Drafted in LAUNCH_POSTS.md (2026-11-24): the Discord
+  announcement, a YouTube Short script and description, Reddit posts for
+  r/chessbeginners and r/chess, and the Show HN post with its first
+  comment. Edit them before posting.
 
 ---
 
