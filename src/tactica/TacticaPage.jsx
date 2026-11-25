@@ -110,6 +110,18 @@ function TacticaPageInner({ pieceImgSrc, sweetheart, player, start = null, onExi
     onExit();
     return "moved";
   };
+  /* No pinch zoom in Tactica, anywhere on the screen (App.css html.noZoom).
+     Safari on iPhone also sends its own pinch gestures, stopped here. */
+  useEffect(() => {
+    const html = document.documentElement;
+    html.classList.add("noZoom");
+    const stop = (e) => e.preventDefault();
+    for (const type of ["gesturestart", "gesturechange", "gestureend"]) document.addEventListener(type, stop, { passive: false });
+    return () => {
+      html.classList.remove("noZoom");
+      for (const type of ["gesturestart", "gesturechange", "gestureend"]) document.removeEventListener(type, stop);
+    };
+  }, []);
   useEffect(() => {
     onRegisterBack?.(() => stepBack.current());
     const onKey = (e) => {

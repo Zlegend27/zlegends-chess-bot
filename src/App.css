@@ -743,6 +743,10 @@ select:hover{ border-color:var(--cyan); }
    no double-tap zoom (taps on the controls kept zooming the page). The
    board itself never zooms: .board is touch-action:none. */
 html.noPinch, html.noPinch body{ touch-action:manipulation; }
+/* Chess Tactica is a game screen end to end: no pinch zoom anywhere, not
+   even on its menus or the header (TacticaPage adds the class), and no
+   double-tap zoom. Scrolling (a long Settings sheet) still works. */
+html.noZoom, html.noZoom body, html.noZoom .tactica{ touch-action:pan-x pan-y; }
 /* A small phone held sideways: keep the board within the screen's height. */
 @media (max-width:700px) and (orientation:landscape){
   .board, .root.noEval .board{ width:min(calc(100vw - 28px), 460px, calc(100dvh - 32px)); }
