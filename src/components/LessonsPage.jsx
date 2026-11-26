@@ -7,6 +7,7 @@ import LessonPlayer from "./LessonPlayer";
 /* Lazy: the Opening Trainer and its move trees load only when opened. */
 const OpeningTrainer = lazy(() => import("./openings/OpeningTrainer"));
 import { LESSONS } from "../data/lessons";
+import { PUBLISHED_GUIDES } from "../data/guides";
 import { loadSetting } from "../utils/storage";
 import { warmUpStockfish } from "../engine/stockfishEngine";
 import { getUiTheme } from "../utils/uiTheme";
@@ -163,6 +164,14 @@ export default function LessonsPage({ onOpenings, onBlind, sweetheart }) {
             <div className={"font-bold " + T.ink}>Blind Chess Trainer</div>
             <div className={"mt-1 text-xs " + T.dimText}>See the board in your head: short drills with no board, by typing or by voice. Or play a whole game by voice.</div>
           </button>
+        )}
+        {/* Guides: shown once one is published (drafts only on the dev server). */}
+        {!lesson && (PUBLISHED_GUIDES.length > 0 || import.meta.env.DEV) && (
+          <a href="/guides"
+            className={`block rounded-2xl border ${T.cardBorder} ${T.panelBg} px-4 py-3 text-left no-underline backdrop-blur-sm transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 ${T.ring}`}>
+            <div className={"font-bold " + T.ink}>Guides</div>
+            <div className={"mt-1 text-xs " + T.dimText}>Short reads: how to play the openings, how to practise blindfold chess, how accuracy is worked out.</div>
+          </a>
         )}
         {!lesson ? (
           LESSONS.filter((l) => l.id !== "how-to-play").map((l) => courseCard(l))

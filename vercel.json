@@ -6,11 +6,11 @@
       "destination": "/api/g?c=:code"
     },
     {
-      "source": "/(play|game|puzzles|daily|leaderboard|review|lessons|blind|profile|openings|watch|ranked|rush|tactica|lobby|practice|history|avatar|privacy|terms|accessibility)",
+      "source": "/(play|game|puzzles|daily|leaderboard|review|lessons|blind|profile|openings|watch|ranked|rush|tactica|lobby|practice|history|avatar|privacy|terms|accessibility|guides)",
       "destination": "/"
     },
     {
-      "source": "/(play|game|puzzles|daily|leaderboard|review|lessons|blind|profile|openings|watch|ranked|rush|tactica|lobby|practice|history|avatar|privacy|terms|accessibility)/",
+      "source": "/(play|game|puzzles|daily|leaderboard|review|lessons|blind|profile|openings|watch|ranked|rush|tactica|lobby|practice|history|avatar|privacy|terms|accessibility|guides)/",
       "destination": "/"
     }
   ],

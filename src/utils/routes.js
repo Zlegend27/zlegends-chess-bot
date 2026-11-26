@@ -26,6 +26,7 @@ const VIEW_PATHS = {
   privacy: "/privacy",
   terms: "/terms",
   accessibility: "/accessibility",
+  guides: "/guides",
 };
 
 export const pathForView = (view) => VIEW_PATHS[view] ?? "/";
@@ -56,7 +57,7 @@ const TITLES = {
   playHub: "Play", play: "Game", puzzlesHome: "Puzzles", leaderboard: "Leaderboards", daily: "Daily chess puzzle", review: "Game Review",
   lessons: "Learn", blind: "Blind Chess Trainer", openings: "Openings", watch: "Watch bots play", ranked: "Ranked puzzles", rush: "Puzzle Rush",
   profile: "Profile", avatar: "Your avatar", history: "Game History", lobby: "1v1 lobby", practice: "Play with yourself", tactica: "Chess Tactica",
-  privacy: "Privacy Policy", terms: "Terms of Service", accessibility: "Accessibility",
+  privacy: "Privacy Policy", terms: "Terms of Service", accessibility: "Accessibility", guides: "Guides",
 };
 export const titleFor = (view) => (TITLES[view] ? `${TITLES[view]} · ${SITE}` : `${SITE} · Free chess: bots, puzzles and game review`);
 
@@ -64,6 +65,8 @@ export function viewForPath(path) {
   const clean = path.length > 1 ? path.replace(/\/+$/, "") : path;
   /* An opening's own page (/openings/vienna-game) is the trainer, in Learn. */
   if (courseForPath(clean)) return "lessons";
+  /* A guide's own page (/guides/how-to-play-the-vienna-gambit) is Guides. */
+  if (clean.startsWith("/guides/") && clean.length > 8) return "guides";
   return Object.keys(VIEW_PATHS).find((view) => VIEW_PATHS[view] === clean) ?? "home";
 }
 
@@ -71,7 +74,7 @@ export function viewForPath(path) {
  *  screen, but as far as the player knows they're still in that section. */
 export function sectionForView({ siteView, rushMode, activePuzzle, pastedGame }) {
   if (["puzzlesHome", "daily", "leaderboard", "ranked", "rush"].includes(siteView)) return "puzzles";
-  if (siteView === "lessons" || siteView === "openings" || siteView === "blind") return "learn";
+  if (siteView === "lessons" || siteView === "openings" || siteView === "blind" || siteView === "guides") return "learn";
   if (siteView === "review") return "review";
   if (siteView === "home") return "home";
   if (["profile", "avatar", "history", "privacy", "terms", "accessibility"].includes(siteView)) return "";

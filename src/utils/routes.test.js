@@ -10,6 +10,13 @@ describe("page addresses", () => {
     expect(viewForPath("/puzzles/")).toBe("puzzlesHome");
   });
 
+  test("Guides and each guide's own address open Guides", () => {
+    expect(viewForPath("/guides")).toBe("guides");
+    expect(viewForPath("/guides/how-to-play-the-vienna-gambit")).toBe("guides");
+    expect(viewForPath("/guides/how-to-play-the-vienna-gambit/")).toBe("guides");
+    expect(sectionForView({ siteView: "guides" })).toBe("learn");
+  });
+
   test("an unknown address opens Home", () => {
     expect(viewForPath("/nope")).toBe("home");
   });

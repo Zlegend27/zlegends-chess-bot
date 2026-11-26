@@ -8,6 +8,7 @@
 import { COURSES } from "./openingCourses.js";
 import { NOTES } from "./openingNotes.js";
 import { coursePath, OPENING_PATHS } from "./openingPages.js";
+import { PUBLISHED_GUIDES, guidePath, guideText } from "./guides.js";
 
 export const SITE = {
   name: "Zlegend2700",
@@ -212,9 +213,28 @@ SEO_PAGES.push(...OPENING_SEO);
 /* Learn and the openings library point to every opening page. */
 for (const p of SEO_PAGES) if (p.path === "/lessons" || p.path === "/openings") p.links.push(...OPENING_PATHS);
 
+/* Guides: the list, and each published guide with its whole text (drafts
+   get no page at all until the flag comes off in guides.js). */
+if (PUBLISHED_GUIDES.length) {
+  SEO_PAGES.push({
+    path: "/guides",
+    parent: "/lessons",
+    title: "Chess guides: openings, blindfold chess, accuracy",
+    description: "Short, practical chess guides: how to play the openings, how to practise blindfold chess, how accuracy is calculated, and how to use the free tools.",
+    heading: "Chess guides",
+    intro: ["Short, practical guides to getting better at chess, and how to use Zlegend2700's free tools to do it."],
+    links: PUBLISHED_GUIDES.map((g) => guidePath(g.slug)),
+  });
+  for (const g of PUBLISHED_GUIDES) {
+    SEO_PAGES.push({ path: guidePath(g.slug), parent: "/guides", title: g.title, description: g.description, heading: g.heading, intro: guideText(g), links: ["/guides", ...g.related] });
+  }
+}
+
 /** Link text for each page, for the "more on the site" links. */
 export const LINK_TEXT = {
   ...Object.fromEntries(COURSES.map((c) => [coursePath(c.id), c.name])),
+  ...Object.fromEntries(PUBLISHED_GUIDES.map((g) => [guidePath(g.slug), g.heading])),
+  "/guides": "Chess guides",
   "/": "Home",
   "/play": "Play chess",
   "/review": "Free game review",

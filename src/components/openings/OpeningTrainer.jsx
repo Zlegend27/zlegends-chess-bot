@@ -163,6 +163,12 @@ export default function OpeningTrainer({ sweetheart, pieceSetId, back = null, on
             </section>
           </>
         )}
+
+        {/* The opening in words, folded away for those who want it. It is in
+            the page itself (not only in the pre-built HTML, which the app
+            replaces), so search engines read it; folded text counts fully.
+            All of it is the coach's own checked notes (openingNotes.js). */}
+        <AboutOpening course={course} notes={notes} T={T} focus={focus} />
       </div>
     );
   }
@@ -211,6 +217,50 @@ export default function OpeningTrainer({ sweetheart, pieceSetId, back = null, on
         </button>
       )}
     </div>
+  );
+}
+
+/* "About the …": the summary, the idea, the plan after the opening, and the
+   coach's notes on the main replies, in a folded section. */
+function AboutOpening({ course, notes, T, focus }) {
+  const idea = (notes.idea ?? []).map((step) => step.text);
+  const replies = Object.entries(notes.moves ?? {})
+    .filter(([key]) => key.split(" ").length <= course.root.split(" ").length + 4)
+    .slice(0, 8)
+    .map(([key, text]) => ({ moves: movesText(key.split(" ")), text }));
+  if (!notes.summary && !idea.length && !notes.plan) return null;
+  return (
+    <details className={`group rounded-2xl border p-4 ${T.cardBorder} ${T.panelBg}`}>
+      <summary className={`flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-sm font-bold ${T.ink} ${focus}`}>
+        <h2 className="m-0 text-sm" style={{ fontFamily: "var(--font-display)" }}>About the {course.name}</h2>
+        <span aria-hidden="true" className={`transition-transform group-open:rotate-90 ${T.dimText}`}>▸</span>
+      </summary>
+      <div className={`mt-2 flex flex-col gap-3 text-sm leading-relaxed ${T.ink}`}>
+        <p className="m-0">The {course.name} starts {movesText(course.root.split(" "))} and is played by {course.side === "white" ? "White" : "Black"}. {notes.summary}</p>
+        {idea.length > 0 && (
+          <>
+            <h3 className="m-0 text-sm" style={{ fontFamily: "var(--font-display)" }}>The idea</h3>
+            {idea.map((t) => <p key={t} className="m-0">{t}</p>)}
+          </>
+        )}
+        {notes.plan && (
+          <>
+            <h3 className="m-0 text-sm" style={{ fontFamily: "var(--font-display)" }}>After the opening</h3>
+            <p className="m-0">{notes.plan}</p>
+          </>
+        )}
+        {replies.length > 0 && (
+          <>
+            <h3 className="m-0 text-sm" style={{ fontFamily: "var(--font-display)" }}>Key moves and replies</h3>
+            <ul className="m-0 flex list-none flex-col gap-2 p-0">
+              {replies.map((r) => (
+                <li key={r.moves}><b className="mr-1" style={{ fontFamily: "var(--font-mono)" }}>{r.moves}</b> {r.text}</li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
+    </details>
   );
 }
 

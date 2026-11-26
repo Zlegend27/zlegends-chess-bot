@@ -50,6 +50,7 @@ const AppPopups = lazy(() => import("./components/AppPopups"));
 const ModePages = lazy(() => import("./components/ModePages"));
 const ProfilePage = lazy(() => import("./components/ProfilePage"));
 const LegalPage = lazy(() => import("./components/LegalPage"));
+const GuidesPage = lazy(() => import("./components/GuidesPage"));
 const WelcomeSheet = lazy(() => import("./components/WelcomeSheet"));
 const GameHistoryPage = lazy(() => import("./components/GameHistoryPage"));
 const AvatarBuilderPage = lazy(() => import("./components/AvatarBuilderPage"));
@@ -351,7 +352,8 @@ export default function ZlegendsBot() {
   useEffect(() => {
     /* An opening's own address (/openings/vienna-game) is Learn too, and
        stays as it is: LessonsPage keeps it in step with the open course. */
-    const onCoursePage = siteView === "lessons" && !!courseForPath(window.location.pathname);
+    /* An opening's or a guide's own address stays as it is. */
+    const onCoursePage = (siteView === "lessons" && !!courseForPath(window.location.pathname)) || (siteView === "guides" && window.location.pathname.startsWith("/guides/"));
     const url = (onCoursePage ? window.location.pathname : pathForView(siteView)) + window.location.search + window.location.hash;
     const onSubPage = !!history.state?.subPage;
     if (firstRouteRef.current) {
@@ -371,7 +373,7 @@ export default function ZlegendsBot() {
   useEffect(() => {
     track("page", { view: siteView });
     /* A course page's title is the opening's (set by LessonsPage). */
-    if (!(siteView === "lessons" && courseForPath(window.location.pathname))) document.title = titleFor(siteView);
+    if (!(siteView === "lessons" && courseForPath(window.location.pathname)) && siteView !== "guides") document.title = titleFor(siteView);
   }, [siteView]);
   const signedInId = session?.user?.id;
   useEffect(() => {
@@ -2855,6 +2857,14 @@ export default function ZlegendsBot() {
           onRegisterBack={(fn) => { backInterceptRef.current = fn; innerViewRef.current = "tactica"; }}
           player={{ session, profile, displayName, avatar: avatarFromSession(session), onSignIn: openSignIn, rating: playerRating, onRated }}
         />
+      </Suspense>
+    );
+  }
+
+  if (siteView === "guides") {
+    return (
+      <Suspense fallback={null}>
+        <GuidesPage onBack={() => setSiteView("lessons")} sweetheart={sweetheart} />
       </Suspense>
     );
   }

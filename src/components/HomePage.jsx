@@ -1,4 +1,5 @@
 import { lazy, Suspense, useMemo, useState } from "react";
+import { PUBLISHED_GUIDES } from "../data/guides";
 import StarField from "./StarField";
 import SocialBanner from "./SocialBanner";
 import BotBubble from "./BotBubble";
@@ -112,6 +113,7 @@ export default function HomePage({ onEnter, onPlay, onQuickPlay, onTactica, hasL
       <footer className={"mt-3 text-center text-xs " + T.dimText}>
         {[
           ["Built by Zlegend27", "https://www.youtube.com/@Zlegend27", true],
+          ...(PUBLISHED_GUIDES.length > 0 || import.meta.env.DEV ? [["Guides", "/guides", false]] : []),
           ["Support the site", SUPPORT_URL, true],
           ["Legal & source", "/terms", false],
         ].map(([label, href, external], i) => (
