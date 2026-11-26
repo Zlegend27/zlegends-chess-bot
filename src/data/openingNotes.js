@@ -329,3 +329,10 @@ export const NOTES = {
     }),
   },
 };
+
+/* A line's own one-line summary, where a course has more than one line (the
+   course's summary covers its first line). Shown in the line's "About". */
+export const LINE_SUMMARIES = {
+  "vienna-gambit": "Strike with f2–f4 on move three: open the f-file, take the centre with e4–e5 or d4, and use your lead in development before Black untangles.",
+  "accelerated-dragon": "Play …Nc6, …cxd4 and …g6 early: the bishop goes to g7 on the long diagonal, and skipping …d6 keeps …d5 in one move as Black's freeing break.",
+};

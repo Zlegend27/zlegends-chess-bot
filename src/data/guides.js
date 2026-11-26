@@ -14,7 +14,7 @@
 export const GUIDES = [
   {
     slug: "how-chess-accuracy-is-calculated",
-    draft: true,
+    draft: false,
     title: "How chess accuracy is calculated (and how ours matches Chess.com)",
     description: "What an accuracy score really measures, why a 90% game can still be lost, and how Zlegend2700's free Game Review was tuned to land near Chess.com's number.",
     heading: "How chess accuracy is calculated",
@@ -44,7 +44,7 @@ export const GUIDES = [
   },
   {
     slug: "how-to-practise-blindfold-chess",
-    draft: true,
+    draft: false,
     title: "How to practise blindfold chess, step by step",
     description: "A step-by-step plan to see the board in your head: square names, colours, how pieces move, following moves, then small puzzles with no board at all.",
     heading: "How to practise blindfold chess",
@@ -76,7 +76,7 @@ export const GUIDES = [
   },
   {
     slug: "how-to-play-the-vienna-gambit",
-    draft: true,
+    draft: false,
     title: "How to play the Vienna Gambit: ideas, traps and a plan",
     description: "The Vienna Gambit for White (1.e4 e5 2.Nc3 then f4): the idea, Black's main replies, what to do after each, and the plan once the opening is over.",
     heading: "How to play the Vienna Gambit",

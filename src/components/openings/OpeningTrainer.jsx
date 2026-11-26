@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useState } from "react";
 import MiniBoard from "../MiniBoard";
 import { COURSES, LEVELS, courseById } from "../../data/openingCourses";
-import { NOTES } from "../../data/openingNotes";
+import { NOTES, LINE_SUMMARIES } from "../../data/openingNotes";
 import { getPieceSet } from "../../utils/pieceSets";
 import { getBoardColor } from "../../utils/boardColors";
 import { loadSetting, saveSetting } from "../../utils/storage";
@@ -168,7 +168,7 @@ export default function OpeningTrainer({ sweetheart, pieceSetId, back = null, on
             the page itself (not only in the pre-built HTML, which the app
             replaces), so search engines read it; folded text counts fully.
             All of it is the coach's own checked notes (openingNotes.js). */}
-        <AboutOpening course={course} notes={notes} T={T} focus={focus} />
+        <AboutOpening course={course} line={line} notes={notes} T={T} focus={focus} />
       </div>
     );
   }
@@ -222,21 +222,37 @@ export default function OpeningTrainer({ sweetheart, pieceSetId, back = null, on
 
 /* "About the …": the summary, the idea, the plan after the opening, and the
    coach's notes on the main replies, in a folded section. */
-function AboutOpening({ course, notes, T, focus }) {
-  const idea = (notes.idea ?? []).map((step) => step.text);
+function AboutOpening({ course, line, notes, T, focus }) {
+  /* Only what belongs to this line: a line forces some moves (the Vienna
+     Gambit's f4), and a note whose moves go another way at one of them is
+     another line's; and on a line with nothing forced, notes that take
+     another line's forced moves belong to that line instead. */
+  const others = course.lines.filter((l) => l.id !== line.id);
+  const inLine = (moves) => {
+    for (let i = 0; i < moves.length; i++) {
+      const at = moves.slice(0, i).join(" ");
+      if (line.forced[at] && line.forced[at] !== moves[i]) return false;
+      if (!line.forced[at] && others.some((o) => o.forced[at] === moves[i])) return false;
+    }
+    return true;
+  };
+  const root = course.root.split(" ");
+  const idea = (notes.idea ?? []).filter((step) => inLine([...root, ...(step.moves ? step.moves.split(" ") : [])])).map((step) => step.text);
+  const summary = course.lines[0].id === line.id ? notes.summary : LINE_SUMMARIES[line.id] ?? notes.summary;
   const replies = Object.entries(notes.moves ?? {})
-    .filter(([key]) => key.split(" ").length <= course.root.split(" ").length + 4)
+    .filter(([key]) => inLine(key.split(" ")))
+    .filter(([key]) => key.split(" ").length <= root.length + 4)
     .slice(0, 8)
     .map(([key, text]) => ({ moves: movesText(key.split(" ")), text }));
-  if (!notes.summary && !idea.length && !notes.plan) return null;
+  if (!summary && !idea.length && !notes.plan) return null;
   return (
-    <details className={`group rounded-2xl border p-4 ${T.cardBorder} ${T.panelBg}`}>
+    <details key={line.id} className={`group rounded-2xl border p-4 ${T.cardBorder} ${T.panelBg}`}>
       <summary className={`flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-sm font-bold ${T.ink} ${focus}`}>
-        <h2 className="m-0 text-sm" style={{ fontFamily: "var(--font-display)" }}>About the {course.name}</h2>
+        <h2 className="m-0 text-sm" style={{ fontFamily: "var(--font-display)" }}>About the {line.name}</h2>
         <span aria-hidden="true" className={`transition-transform group-open:rotate-90 ${T.dimText}`}>▸</span>
       </summary>
       <div className={`mt-2 flex flex-col gap-3 text-sm leading-relaxed ${T.ink}`}>
-        <p className="m-0">The {course.name} starts {movesText(course.root.split(" "))} and is played by {course.side === "white" ? "White" : "Black"}. {notes.summary}</p>
+        <p className="m-0">The {line.name} starts {movesText(root)} and is played by {course.side === "white" ? "White" : "Black"}. {summary}</p>
         {idea.length > 0 && (
           <>
             <h3 className="m-0 text-sm" style={{ fontFamily: "var(--font-display)" }}>The idea</h3>

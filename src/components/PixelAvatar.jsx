@@ -147,3 +147,27 @@ export default function PixelAvatar({ rows, pal, size, className }) {
     </svg>
   );
 }
+
+/* Zlegend2700's face, blindfolded, for the Blind Chess Trainer: drawn for
+   small sizes (his full avatar is mostly hood, and cropped that small it read
+   as a hat). Spiky green hair, the gold band with its amber gem, his blue
+   face, a dark blindfold knotted at the side, and his grin. */
+export const ZBLIND_PAL = { o: "#160a26", h: "#7fdc6a", H: "#4fae4a", l: "#b8f08a", g: "#f2c14a", a: "#ff9a1f", f: "#4fb4d4", F: "#3a8fae", b: "#1d1033", B: "#43306e", w: "#ffffff", m: "#6a1626" };
+export const ZBLIND = [
+  "...o.....o......",
+  "..olo...olo..o..",
+  ".olhho.olhhoolo.",
+  ".ohhhhohhhhhhho.",
+  "ohhlhhhhhlhhhhho",
+  "ohhhhHhhhhHhhhho",
+  "oggggggaagggggo.",
+  "offffffffffffffo",
+  "oBBBBBBBBBBBBBBoBo",
+  "obbbbbbbbbbbbbbbbo",
+  "offffffffffffffob.",
+  "offFfffffffffFfo..",
+  ".offwwwwwwwwffo...",
+  ".offfwmwmwmwffo...",
+  "..offfffffffoo....",
+  "...oooooooooo.....",
+];

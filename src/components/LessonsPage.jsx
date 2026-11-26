@@ -8,6 +8,21 @@ import LessonPlayer from "./LessonPlayer";
 const OpeningTrainer = lazy(() => import("./openings/OpeningTrainer"));
 import { LESSONS } from "../data/lessons";
 import { PUBLISHED_GUIDES } from "../data/guides";
+import PixelAvatar, { ZBLIND, ZBLIND_PAL } from "./PixelAvatar";
+
+/* The Opening Trainer's icon: a pawn stepping through an open door. */
+function OpeningDoorIcon() {
+  return (
+    <svg width="44" height="44" viewBox="0 0 24 24" aria-hidden="true" className="shrink-0">
+      <rect x="7" y="2.5" width="12" height="19" rx="1" fill="#1D1038" stroke="#C9C2E8" strokeWidth="1.4" />
+      <path d="M7 2.5 3 4.6v18.2l4-1.3z" fill="#8B2FC9" stroke="#C9C2E8" strokeWidth="1.2" strokeLinejoin="round" />
+      <circle cx="4.9" cy="13.6" r="0.6" fill="#F5D93E" />
+      <circle cx="13" cy="9.2" r="2.1" fill="#F5D93E" />
+      <path d="M11.3 12.2h3.4l1.1 4.6h-5.6z" fill="#F5D93E" />
+      <rect x="9.6" y="17.2" width="6.8" height="2" rx="0.6" fill="#F5D93E" />
+    </svg>
+  );
+}
 import { loadSetting } from "../utils/storage";
 import { warmUpStockfish } from "../engine/stockfishEngine";
 import { getUiTheme } from "../utils/uiTheme";
@@ -108,12 +123,9 @@ export default function LessonsPage({ onOpenings, onBlind, sweetheart }) {
         {l.cover && (
           <img src={l.cover} alt="" className={`h-14 w-14 flex-none rounded-xl border ${T.cardBorder} object-cover`} />
         )}
-        <div className="min-w-0">
-          <div className={"font-bold " + T.ink}>{l.title}</div>
-          <div className={"mt-1 text-xs " + T.dimText}>{l.desc}</div>
-          <div className={"mt-2 text-[11px] font-bold uppercase tracking-[0.14em] " + T.interactiveText}>
-            {ready < l.chapters.length ? `Coming soon · ${ready === 1 ? "chapter 1" : `${ready} chapters`} open now` : `${ready} chapters`}
-          </div>
+        <div className={"min-w-0 flex-1 font-bold " + T.ink}>{l.title}</div>
+        <div className={"shrink-0 text-right text-[11px] font-bold uppercase tracking-[0.14em] " + T.interactiveText}>
+          {ready < l.chapters.length ? `${ready === 1 ? "1 chapter" : `${ready} chapters`} open` : `${ready} chapters`}
         </div>
       </button>
     );
@@ -154,27 +166,29 @@ export default function LessonsPage({ onOpenings, onBlind, sweetheart }) {
             onClick={() => setTrainerOpen(true)}
             className={`rounded-2xl border ${featureBorder} bg-transparent bg-gradient-to-br ${featureGradientFrom} ${featureGradientTo} px-4 py-3 text-left backdrop-blur-sm transition hover:-translate-y-0.5 ${featureBorderHover} focus-visible:outline-none focus-visible:ring-2 ${T.ring}`}
           >
-            <div className={"font-bold " + T.ink}>Opening Trainer</div>
-            <div className={"mt-1 text-xs " + T.dimText}>Learn 12 openings the right way: the ideas, the replies players at your level make, and how to punish their mistakes. The openings library is in here too.</div>
+            <span className="flex items-center gap-3">
+              <OpeningDoorIcon />
+              <span className={"font-bold " + T.ink}>Opening Trainer</span>
+            </span>
           </button>
         )}
         {!lesson && onBlind && (
           <button type="button" onClick={onBlind}
             className={`rounded-2xl border ${T.cardBorder} ${T.panelBg} px-4 py-3 text-left backdrop-blur-sm transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 ${T.ring}`}>
-            <div className={"font-bold " + T.ink}>Blind Chess Trainer</div>
-            <div className={"mt-1 text-xs " + T.dimText}>See the board in your head: short drills with no board, by typing or by voice. Or play a whole game by voice.</div>
+            <span className="flex items-center gap-3">
+              <PixelAvatar rows={ZBLIND} pal={ZBLIND_PAL} size={44} className="shrink-0" />
+              <span className={"font-bold " + T.ink}>Blind Chess Trainer</span>
+            </span>
           </button>
         )}
-        {/* Guides: shown once one is published (drafts only on the dev server). */}
-        {!lesson && (PUBLISHED_GUIDES.length > 0 || import.meta.env.DEV) && (
-          <a href="/guides"
-            className={`block rounded-2xl border ${T.cardBorder} ${T.panelBg} px-4 py-3 text-left no-underline backdrop-blur-sm transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 ${T.ring}`}>
-            <div className={"font-bold " + T.ink}>Guides</div>
-            <div className={"mt-1 text-xs " + T.dimText}>Short reads: how to play the openings, how to practise blindfold chess, how accuracy is worked out.</div>
-          </a>
-        )}
         {!lesson ? (
-          LESSONS.filter((l) => l.id !== "how-to-play").map((l) => courseCard(l))
+          <>
+            {LESSONS.filter((l) => l.id !== "how-to-play").map((l) => courseCard(l))}
+            {/* Guides: a plain link, shown once one is published (drafts: dev only). */}
+            {!lesson && (PUBLISHED_GUIDES.length > 0 || import.meta.env.DEV) && (
+              <a href="/guides" className={`self-center py-2 text-sm font-bold underline-offset-4 hover:underline ${T.interactiveText} focus-visible:outline-none focus-visible:ring-2 ${T.ring}`}>Guides</a>
+            )}
+          </>
         ) : (
           <>
             {lesson.chapters.map(c => (
