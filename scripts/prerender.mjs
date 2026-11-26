@@ -55,11 +55,14 @@ function render(page) {
   };
   swap(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`);
   swap(/<meta name="description" content="[^"]*" \/>/, `<meta name="description" content="${esc(page.description)}" />`);
-  swap(/<meta property="og:title" content="[^"]*" \/>/, `<meta property="og:title" content="${esc(title)}" />`);
-  swap(/<meta property="og:description" content="[^"]*" \/>/, `<meta property="og:description" content="${esc(page.description)}" />`);
-  swap(/<meta name="twitter:title" content="[^"]*" \/>/, `<meta name="twitter:title" content="${esc(title)}" />`);
-  swap(/<meta name="twitter:description" content="[^"]*" \/>/, `<meta name="twitter:description" content="${esc(page.description)}" />`);
-  /* Each page's own preview picture (api/page-card.js); Home keeps og.jpg. */
+  /* A shared link's title and line: a page's own share text if it has one
+     (Home: the name and its two main features), else its title. */
+  const shareTitle = page.share?.title ?? title, shareText = page.share?.description ?? page.description;
+  swap(/<meta property="og:title" content="[^"]*" \/>/, `<meta property="og:title" content="${esc(shareTitle)}" />`);
+  swap(/<meta property="og:description" content="[^"]*" \/>/, `<meta property="og:description" content="${esc(shareText)}" />`);
+  swap(/<meta name="twitter:title" content="[^"]*" \/>/, `<meta name="twitter:title" content="${esc(shareTitle)}" />`);
+  swap(/<meta name="twitter:description" content="[^"]*" \/>/, `<meta name="twitter:description" content="${esc(shareText)}" />`);
+  /* Each page's own preview picture (api/page-card.js); Home has og-2700.jpg (scripts/make-og.mjs). */
   if (page.path !== "/") {
     const card = `${SITE.url}/api/page-card?p=${encodeURIComponent(page.path)}`;
     swap(/<meta property="og:image" content="[^"]*" \/>/, `<meta property="og:image" content="${card}" />`);

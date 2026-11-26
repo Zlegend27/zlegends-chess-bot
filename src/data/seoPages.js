@@ -13,7 +13,7 @@ import { PUBLISHED_GUIDES, guidePath, guideText } from "./guides.js";
 export const SITE = {
   name: "Zlegend2700",
   url: "https://www.zlegend2700.com",
-  image: "https://www.zlegend2700.com/og.jpg",
+  image: "https://www.zlegend2700.com/og-2700.jpg",
   /* For the "who runs this" structured data. */
   sameAs: [
     "https://www.youtube.com/@Zlegend27",
@@ -34,6 +34,9 @@ export const SEO_PAGES = [
     title: "Free chess: bots, puzzles and game review",
     description: "Free chess in your browser: play bots that play like people, review your Chess.com or Lichess games move by move, solve puzzles and learn openings. No ads.",
     heading: "Free chess in your browser",
+    /* What a shared link shows (its title and line under it): the name, and
+       the two main features. Search results keep the title above. */
+    share: { title: "Zlegend2700", description: "Face Rank Bot, the chess bot that adapts to your level, and get free game reviews." },
     intro: [
       "Zlegend2700 is a free chess site with no ads and no account needed. Play bots that play like real people at your level, get every move of your games graded, solve puzzles, learn openings, and play Chess Tactica, a 3D story adventure with living chess pieces.",
     ],

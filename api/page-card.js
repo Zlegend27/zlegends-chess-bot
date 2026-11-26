@@ -2,7 +2,7 @@
    the page's heading and description beside a board, 1200x630. An
    opening's page shows that opening's position, from its side. Pages
    point here from their og:image (scripts/prerender.mjs); Home keeps its
-   own og.jpg. The text comes from src/data/seoPages.js, so it changes with
+   own og-2700.jpg (scripts/make-og.mjs). The text comes from src/data/seoPages.js, so it changes with
    a deploy: cached for a day. */
 import { ImageResponse } from "@vercel/og";
 import { createEngine } from "../src/engine/chessEngine.js";
