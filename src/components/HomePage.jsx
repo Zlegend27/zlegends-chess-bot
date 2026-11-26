@@ -106,10 +106,20 @@ export default function HomePage({ onEnter, onPlay, onQuickPlay, onTactica, hasL
 
       <SocialBanner />
 
+      {/* One line: who made it, how to support it, and everything legal
+          (terms, privacy, accessibility, licenses and source code) behind
+          one link to the legal pages. */}
       <footer className={"mt-3 text-center text-xs " + T.dimText}>
-        Built by <a href="https://www.youtube.com/@Zlegend27" target="_blank" rel="noopener noreferrer" className={(sweetheart ? "text-sh-lteal" : "text-cyan") + " inline-block py-2 hover:underline"}>Zlegend27</a> · <a href="https://github.com/Zlegend27/zlegends-chess-bot" target="_blank" rel="noopener noreferrer" className={(sweetheart ? "text-sh-lteal" : "text-cyan") + " inline-block py-2 hover:underline"}>Source code</a> · <a href="https://github.com/Zlegend27/zlegends-chess-bot/blob/main/NOTICE.md" target="_blank" rel="noopener noreferrer" className={(sweetheart ? "text-sh-lteal" : "text-cyan") + " inline-block py-2 hover:underline"}>Licenses</a>
-        <br />
-        <a href={SUPPORT_URL} target="_blank" rel="noopener noreferrer" className={(sweetheart ? "text-sh-lteal" : "text-cyan") + " inline-block py-2 hover:underline"}>Support the site</a> · <a href="/privacy" className={(sweetheart ? "text-sh-lteal" : "text-cyan") + " inline-block py-2 hover:underline"}>Privacy</a> · <a href="/terms" className={(sweetheart ? "text-sh-lteal" : "text-cyan") + " inline-block py-2 hover:underline"}>Terms</a> · <a href="/accessibility" className={(sweetheart ? "text-sh-lteal" : "text-cyan") + " inline-block py-2 hover:underline"}>Accessibility</a>
+        {[
+          ["Built by Zlegend27", "https://www.youtube.com/@Zlegend27", true],
+          ["Support the site", SUPPORT_URL, true],
+          ["Legal & source", "/terms", false],
+        ].map(([label, href, external], i) => (
+          <span key={label}>
+            {i > 0 && " · "}
+            <a href={href} {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})} className={(sweetheart ? "text-sh-lteal" : "text-cyan") + " inline-block py-2 hover:underline"}>{label}</a>
+          </span>
+        ))}
       </footer>
     </div>
   );

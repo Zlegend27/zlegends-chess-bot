@@ -276,7 +276,8 @@ export default function BlindTrainerPage({ onBack, onRegisterBack, sweetheart, p
     const tapToAnswer = !blind && (q.kind === "square" || q.kind === "move");
     const showChoices = q.choices && (!blind || q.kind === "choice" || q.kind === "colour" || q.kind === "yesno");
     return (
-      <section className={card + " flex flex-col gap-3 p-4"} aria-live="polite">
+      <section className={card + " trainerLayout p-4"} aria-live="polite">
+        <div className="tHead">
         <div className="qDots" role="img" aria-label={`Question ${idx + 1} of ${run.queue.length}`}>
           {run.queue.map((_, i) => <span key={i} className={i < results.length ? (results[i] ? "right" : "wrong") : i === idx ? "now" : ""} />)}
         </div>
@@ -286,9 +287,10 @@ export default function BlindTrainerPage({ onBack, onRegisterBack, sweetheart, p
         </div>
         <p className={`m-0 text-lg font-bold leading-snug ${T.ink}`}>{q.prompt}</p>
         {blind && voiceOn && <button type="button" onClick={() => { speaker.prime(); speaker.cancel(); speaker.speak(q.spoken); }} className={`self-start border-0 bg-transparent p-0 py-1 text-sm font-bold underline ${T.interactiveText} ${focus}`}>Hear it again</button>}
+        </div>
 
         {!blind && (
-          <>
+          <div className="tBoard">
             <TapBoard
               fen={answered && step.view === "bare" ? revealFor(q) : b.fen}
               coords={b.coords} colored={b.colored || answered} flipped={b.flipped} pieceSetId={pieceSetId} colors={colors}
@@ -299,9 +301,10 @@ export default function BlindTrainerPage({ onBack, onRegisterBack, sweetheart, p
             {tapToAnswer && !answered && (
               <p className={`m-0 text-center text-xs ${T.dimText}`}>{q.kind === "move" ? (picked ? `${picked} picked: now tap where it goes (tap it again to undo)` : "Tap the piece, then the square it goes to.") : "Tap the square."}</p>
             )}
-          </>
+          </div>
         )}
 
+        <div className="tBody">
         {!answered && (
           <>
             {showChoices && (
@@ -344,6 +347,7 @@ export default function BlindTrainerPage({ onBack, onRegisterBack, sweetheart, p
             </button>
           </>
         )}
+        </div>
       </section>
     );
   };
@@ -421,7 +425,9 @@ export default function BlindTrainerPage({ onBack, onRegisterBack, sweetheart, p
   return (
     <div className="root">
       <StarField sweetheart={sweetheart} />
-      <div className="relative z-10 flex w-full max-w-md flex-col gap-3">
+      {/* Wide on a laptop only while a question shows a board (the board
+          then sits beside the question: App.css .trainerPage). */}
+      <div className={"trainerPage relative z-10 flex flex-col gap-3" + (screen === "session" && q && !blind ? " wide" : "")}>
         {screen === "puzzles" ? (
           <>
             {back("Blind Chess Trainer", () => setScreen("home"))}

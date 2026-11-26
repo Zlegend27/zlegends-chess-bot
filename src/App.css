@@ -987,3 +987,21 @@ html.noZoom, html.noZoom body, html.noZoom .tactica{ touch-action:pan-x pan-y; }
 .textPuzzlePosition p{ margin:0; }
 .textPuzzleMoves{ margin-top:6px !important; font-family:var(--font-mono); font-size:13px; color:var(--liliac); }
 :root[data-theme="sweetheart"] .textPuzzlePosition{ background:#FFF6E9; border-color:#F06BAE88; color:var(--sh-link); }
+
+/* Trainer screens (Opening Trainer sessions, Blind Chess Trainer questions).
+   Three blocks: tHead (back, title, prompt), tBoard, tBody (coach, answers,
+   buttons). On a phone they stack: head, board, body. On a laptop or desktop
+   held wide, the board goes on the left, as big as the screen's height
+   allows, with head and body beside it, so Next never sits below the fold
+   (it did at 1366 by 768: the stacked phone layout ran 70px past the screen). */
+.trainerPage{ width:100%; max-width:28rem; }
+.trainerLayout{ display:grid; grid-template-columns:minmax(0,1fr); grid-template-areas:"head" "board" "body"; gap:12px; width:100%; }
+.trainerLayout > .tHead, .trainerLayout > .tBody{ display:flex; flex-direction:column; gap:12px; min-width:0; }
+.trainerLayout > .tHead{ grid-area:head; }
+.trainerLayout > .tBoard{ grid-area:board; min-width:0; display:flex; flex-direction:column; gap:8px; }
+.trainerLayout > .tBody{ grid-area:body; }
+@media (min-width:900px) and (min-aspect-ratio:5/4){
+  .trainerPage.wide{ --tb:min(580px, calc(100dvh - var(--headerH) - 182px)); max-width:calc(var(--tb) + 28px + 400px); }
+  .trainerPage.wide .trainerLayout{ grid-template-columns:var(--tb) minmax(280px, 400px); grid-template-areas:"board head" "board body"; grid-template-rows:auto 1fr; column-gap:28px; align-items:start; }
+  .trainerPage.wide .tBoard .board, .trainerPage.wide .tBoard .tapBoard{ width:100%; }
+}

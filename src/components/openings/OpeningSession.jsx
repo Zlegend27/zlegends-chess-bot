@@ -415,7 +415,8 @@ export default function OpeningSession({ mode, course: startCourse, line: startL
   const showNext = !waiting && !busy && !missed && !done && (mode === "idea" || mode === "scenarios" || mode === "review") && coach;
   const dots = Math.min(total, 12);
   return (
-    <div className="flex w-full max-w-md flex-col gap-3">
+    <div className="trainerPage wide"><div className="trainerLayout">
+      <div className="tHead">
       <button onClick={onExit} className={`self-start border-0 bg-transparent p-0 text-sm font-bold ${T.dimText} ${focus}`}>← {course.name}</button>
       <div className="flex items-center justify-between gap-3">
         <h2 className={`m-0 text-[17px] ${T.ink}`} style={{ fontFamily: "var(--font-display)" }}>
@@ -428,9 +429,13 @@ export default function OpeningSession({ mode, course: startCourse, line: startL
         )}
       </div>
 
-      <div className="overflow-hidden rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,.45)]">
+      </div>
+
+      <div className="tBoard overflow-hidden rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,.45)]">
         <LessonBoard eng={eng} orientation={course.side} selected={selected} targets={targets} lastMove={lastMove} onSquare={onSquare} pieceSetId={pieceSetId} arrows={arrows} />
       </div>
+
+      <div className="tBody">
 
       {done ? (
         <section className={`rounded-2xl border p-4 ${T.cardBorder} ${T.panelBg}`}>
@@ -458,7 +463,8 @@ export default function OpeningSession({ mode, course: startCourse, line: startL
       )}
       {/* Keeps the buttons in view on short screens (clear of the bottom bar). */}
       <div ref={endRef} style={{ scrollMarginBottom: 96 }} aria-hidden="true" />
-    </div>
+      </div>
+    </div></div>
   );
 }
 

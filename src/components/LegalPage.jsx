@@ -135,6 +135,16 @@ export default function LegalPage({ doc, onBack, sweetheart }) {
   const T = getUiTheme(sweetheart);
   return (
     <SubPage onBack={onBack} sweetheart={sweetheart}>
+      {/* One "Legal" link in the footer lands here; all four parts are a
+          tap apart. The source code stays one tap from every page, as the
+          AGPL (Maia3) asks. */}
+      <nav aria-label="Legal pages" className="flex flex-wrap gap-x-4 gap-y-1 text-sm font-bold">
+        {[["terms", "Terms", "/terms"], ["privacy", "Privacy", "/privacy"], ["accessibility", "Accessibility", "/accessibility"]].map(([id, label, href]) => (
+          <a key={id} href={href} aria-current={doc === id ? "page" : undefined}
+            className={"inline-flex min-h-11 items-center " + (doc === id ? T.ink + " underline underline-offset-4" : T.interactiveText + " hover:underline")}>{label}</a>
+        ))}
+        <a href="https://github.com/Zlegend27/zlegends-chess-bot/blob/main/NOTICE.md" target="_blank" rel="noopener noreferrer" className={"inline-flex min-h-11 items-center hover:underline " + T.interactiveText}>Licenses &amp; source code</a>
+      </nav>
       <h1 className="boxHead m-0">{DOC_TITLES[doc] ?? DOC_TITLES.privacy}</h1>
       <p className={"m-0 text-xs " + T.dimText}>Last updated {UPDATED}</p>
       {doc === "terms" ? <Terms T={T} /> : doc === "accessibility" ? <Accessibility T={T} /> : <Privacy T={T} />}
